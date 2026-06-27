@@ -1092,6 +1092,10 @@ let teleporters = {}; // "y,x" -> { x, y } partner pad for warp tiles
 let groundKey = null; // { x, y } of the vault key on this floor, if any
 let hasKey = false;   // whether the player is currently carrying a vault key
 let startPos = { x: 5, y: 5 }; // this floor's safe entry tile (where death sends you)
+// Optional mini-quest on this floor: { type, npc:{x,y,emoji,name,following?}, done }
+let quest = null;
+const QUEST_NPCS  = ['🧑‍🌾','🧓','🧝','🧙‍♀️','👨‍🔧','🧕','👩‍🌾','🤴','👸','🧑‍🎓'];
+const QUEST_NAMES = ['Elara','Old Tomas','Bram','Sera','the Scholar','Mira','Captain Doran','the Stranger','Wren','Father Aldric'];
 let enemies = [];
 let currentTab = 'inv';
 let selectedItem = null;
@@ -1399,6 +1403,7 @@ function generateMap() {
   teleporters = {};
   groundKey = null;
   hasKey = false;
+  quest = null;
 
   // Start as solid rock; rooms and passages are carved out of it.
   mapData = [];
@@ -1520,6 +1525,116 @@ function generateMap() {
   spawnMystic();
   // Vault is built last so its chest survives spawnGroundLoot resetting the list.
   if (Math.random() < 0.5) tryBuildVault(reach);
+  // A mini-quest may take over the floor (after enemies/loot are placed).
+  maybeSpawnQuest(reach);
+}
+
+// Build a standard floor-level foe at a tile (used for quest hordes).
+function makeQuestFoe(x, y) {
+  const bandIdx = Math.min(Math.floor((dungeonLevel - 1) / 3), ENEMY_POOL.length - 1);
+  const hp = Math.round((14 + dungeonLevel * 8) * (floorMod.hpMult || 1));
+  const dmg = Math.round((4 + dungeonLevel * 1.7 + bandIdx) * (floorMod.dmgMult || 1));
+  return { x, y, hp, maxHp: hp, type: pick(ENEMY_POOL[bandIdx]), level: dungeonLevel, dmg, dead: false };
+}
+
+// Hand out a scaled gold + XP reward for finishing a quest.
+function questReward() {
+  const gold = 30 + dungeonLevel * 10;
+  const xp = 20 * dungeonLevel;
+  player.gold += gold; player.xp += xp;
+  return { gold, xp };
+}
+
+// Wrap up the active quest: reward, a bonus chest where the NPC stood, fanfare.
+function completeQuest(verb) {
+  if (!quest) return;
+  const r = questReward();
+  groundItems.push({ x: quest.npc.x, y: quest.npc.y, luck: 4, ilvl: dungeonLevel + 1 });
+  log(`✅ ${quest.npc.name} ${verb} +${r.gold}g, +${r.xp} XP, and a chest appears!`, 'important');
+  screenFlash('#22cc66');
+  sfx('levelup');
+  quest = null;
+  checkLevelUp();
+  updateBars();
+}
+
+// Seal a prisoner in a rock cell with a single cracked-wall entrance to smash.
+function tryBuildCell(reach, who) {
+  for (let tries = 0; tries < 150; tries++) {
+    const x = rnd(2, MAP_W-3), y = rnd(2, MAP_H-3);
+    if (mapData[y][x] !== 1) continue;
+    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+      const wx = x + dx, wy = y + dy, fx = x + 2*dx, fy = y + 2*dy;
+      if (fx < 0 || fy < 0 || fx >= MAP_W || fy >= MAP_H) continue;
+      if (mapData[wy][wx] !== 1 || mapData[fy][fx] !== 0) continue;
+      if (reach && !reach.has(fy + ',' + fx)) continue;
+      mapData[y][x] = 0;       // cell interior
+      mapData[wy][wx] = 10;    // cracked wall — smash to break in
+      quest = { type: 'jailbreak', npc: { x, y, emoji: who.emoji, name: who.name }, done: false };
+      log(`⛓️ ${who.name} is locked in a cell — smash through the cracked wall to free them!`, 'important');
+      return true;
+    }
+  }
+  return false;
+}
+
+// Roughly a third of mid/deep floors get a mini-quest: rescue, escort, or jailbreak.
+function maybeSpawnQuest(reach) {
+  quest = null;
+  if (dungeonLevel < 2 || dungeonLevel % 5 === 0) return; // skip floor 1 and boss floors
+  if (Math.random() >= 0.3) return;
+  const kind = pick(['rescue', 'escort', 'jailbreak']);
+  const who = { emoji: pick(QUEST_NPCS), name: pick(QUEST_NAMES) };
+
+  if (kind === 'jailbreak') { tryBuildCell(reach, who); return; }
+
+  // rescue & escort both need an open NPC tile.
+  let spot = null, bestD = -1;
+  for (let i = 0; i < 50; i++) {
+    const c = randomFloorTile(reach); if (!c) break;
+    const d = Math.abs(c.x - player.x) + Math.abs(c.y - player.y);
+    if (kind === 'rescue') { if (d > bestD) { bestD = d; spot = c; } }       // captive far away
+    else { if (d >= 2 && d <= 7) { spot = c; break; } if (!spot) spot = c; } // escortee nearer
+  }
+  if (!spot) return;
+
+  if (kind === 'rescue') {
+    quest = { type: 'rescue', npc: { x: spot.x, y: spot.y, emoji: who.emoji, name: who.name }, done: false };
+    // Ring the captive with a horde to fight through.
+    let placed = 0;
+    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,-1],[1,-1],[-1,1]]) {
+      if (placed >= 5) break;
+      const hx = spot.x + dx, hy = spot.y + dy;
+      if (hx < 1 || hy < 1 || hx >= MAP_W-1 || hy >= MAP_H-1) continue;
+      if (mapData[hy][hx] !== 0 || getEnemyAt(hx, hy)) continue;
+      enemies.push(makeQuestFoe(hx, hy));
+      placed++;
+    }
+    log(`🆘 ${who.name} is surrounded by a horde! Cut through and reach them.`, 'important');
+  } else {
+    quest = { type: 'escort', npc: { x: spot.x, y: spot.y, emoji: who.emoji, name: who.name, following: false }, done: false };
+    log(`🧭 ${who.name} begs for an escort to the stairs. Reach them, then lead the way.`, 'important');
+  }
+}
+
+// While following, the escortee trails the player one step per turn.
+function moveEscort() {
+  if (!quest || quest.type !== 'escort' || !quest.npc.following) return;
+  const n = quest.npc;
+  const dist = Math.abs(n.x - player.x) + Math.abs(n.y - player.y);
+  if (dist <= 1) return; // already on the player's heels
+  const stepX = Math.sign(player.x - n.x), stepY = Math.sign(player.y - n.y);
+  const opts = [];
+  if (stepX !== 0) opts.push([stepX, 0]);
+  if (stepY !== 0) opts.push([0, stepY]);
+  for (const [dx, dy] of opts) {
+    const nx = n.x + dx, ny = n.y + dy;
+    if (nx < 0 || ny < 0 || nx >= MAP_W || ny >= MAP_H) continue;
+    if (!isFloorPassable(mapData[ny][nx])) continue;
+    if (nx === player.x && ny === player.y) continue;
+    if (getEnemyAt(nx, ny)) continue;
+    n.x = nx; n.y = ny; return;
+  }
 }
 
 function spawnMerchant() {
@@ -2644,6 +2759,26 @@ function draw() {
     }
   });
 
+  // Quest NPC — a friendly soul ringed in green with a quest marker.
+  if (quest && quest.npc) {
+    const n = quest.npc;
+    const nx2 = offX + n.x * tw, ny2 = offY + n.y * th;
+    const sp = 0.5 + 0.5*Math.sin(Date.now()/300);
+    ctx.save();
+    ctx.fillStyle = `rgba(80,220,120,${0.18 + 0.14*sp})`;
+    ctx.beginPath();
+    ctx.arc(nx2 + tw/2, ny2 + th/2, tw*0.5, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+    ctx.font = `${Math.round(tw * 0.74)}px serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(n.emoji, nx2 + tw/2, ny2 + th/2 + th*0.04);
+    ctx.font = `bold ${Math.round(tw * 0.4)}px serif`;
+    ctx.fillStyle = '#7CFFB0';
+    ctx.fillText((quest.type === 'escort' && n.following) ? '⬆' : '❗', nx2 + tw/2, ny2 - th*0.02);
+  }
+
   // Player
   const px = offX + player.x * tw, py = offY + player.y * th;
   // glowing aura ring
@@ -2962,6 +3097,20 @@ function move(dx, dy) {
 
   // Stairs
   if (tile === 2) {
+    // Resolve an escort quest before leaving the floor.
+    if (quest && quest.type === 'escort') {
+      const near = (Math.abs(quest.npc.x - player.x) + Math.abs(quest.npc.y - player.y)) <= 3;
+      if (quest.npc.following && near) {
+        const r = questReward();
+        const reward = generateItem(4, dungeonLevel + 1);
+        inventory.push(reward);
+        log(`✅ ${quest.npc.name} reached the stairs safely! +${r.gold}g, +${r.xp} XP, reward: ${logItem(reward)}`, 'important');
+        screenFlash('#22cc66'); sfx('levelup'); checkLevelUp();
+      } else {
+        log(`😟 You descended without ${quest.npc.name} — the escort failed.`);
+      }
+      quest = null;
+    }
     dungeonLevel++;
     statusEffects = [];
     tickBuffs();
@@ -2995,6 +3144,16 @@ function move(dx, dy) {
 
   player.x = nx;
   player.y = ny;
+
+  // Quest NPC contact: rescue/free them, or pick up an escort.
+  if (quest && quest.npc.x === nx && quest.npc.y === ny) {
+    if (quest.type === 'rescue') completeQuest('is safe and slips away with thanks!');
+    else if (quest.type === 'jailbreak') completeQuest('is free and flees for the surface!');
+    else if (quest.type === 'escort' && !quest.npc.following) {
+      quest.npc.following = true;
+      log(`🧭 ${quest.npc.name} falls in behind you — lead them to the stairs!`, 'important');
+    }
+  }
 
   // Auto-pickup food
   const fi = groundFood.findIndex(f => f.x === nx && f.y === ny);
@@ -3056,6 +3215,7 @@ function move(dx, dy) {
     const dist = Math.abs(e.x - player.x) + Math.abs(e.y - player.y);
     if (dist <= 6) enemyMove(e);
   });
+  moveEscort();
 
   checkPickupProximity();
   draw();
@@ -3266,6 +3426,7 @@ function passTurn() {
     const dist = Math.abs(e.x - player.x) + Math.abs(e.y - player.y);
     if (dist <= 6) enemyMove(e);
   });
+  moveEscort();
   draw();
   saveGame();
 }
@@ -3969,7 +4130,7 @@ let lastPulse = 0;
 function pulseLoop(ts) {
   const hasElite = enemies.some(e => !e.dead && e.isElite);
   const hasShrine = Object.keys(shrineData).length > 0;
-  if ((merchant || mystic || hasFountain || hasShrine || floatingTexts.length || statusEffects.length || hasElite) && ts - lastPulse > 60) { lastPulse = ts; draw(); }
+  if ((merchant || mystic || hasFountain || hasShrine || quest || floatingTexts.length || statusEffects.length || hasElite) && ts - lastPulse > 60) { lastPulse = ts; draw(); }
   requestAnimationFrame(pulseLoop);
 }
 requestAnimationFrame(pulseLoop);
