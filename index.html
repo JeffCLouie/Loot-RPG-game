@@ -227,6 +227,40 @@
   .settings-item .action-icon { font-size: 18px; }
   .settings-item .action-label { font-size: 12px; }
 
+  /* Movement-pad controls tucked into the settings popup. The floating d-pad
+     only exists on touch devices, so these controls are hidden unless the
+     pointer is coarse (i.e. on mobile). */
+  #dpad-settings {
+    display: none;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 2px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+  }
+  @media (pointer: coarse) { #dpad-settings { display: flex; } }
+  .settings-dpad-label {
+    font-family: 'Courier New', monospace;
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: #9a8fb0;
+  }
+  .settings-dpad-row { display: flex; gap: 4px; }
+  .dpad-cfg-btn {
+    flex: 1;
+    padding: 6px 4px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: #221b38;
+    color: #cfc6e0;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  .dpad-cfg-btn.sel { background: #4a3a78; color: #fff; border-color: var(--frame); }
+
   .heal-btn {
     background: #6a1a2a;
     border-color: #a03048;
@@ -1428,6 +1462,14 @@
         <button class="settings-item newgame-action" onclick="confirmNewGame()">
           <span class="action-icon">↻</span><span class="action-label">NEW</span>
         </button>
+        <!-- Movement-pad position & opacity. Hidden on desktop (no touch d-pad);
+             populated by renderDpadControls() when the menu opens. -->
+        <div id="dpad-settings">
+          <div class="settings-dpad-label">MOVE PAD</div>
+          <div class="settings-dpad-row" id="dpad-pos-row"></div>
+          <div class="settings-dpad-label">OPACITY</div>
+          <div class="settings-dpad-row" id="dpad-op-row"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -3217,7 +3259,7 @@ function toggleSettingsMenu(e) {
   if (e) e.stopPropagation();
   const menu = document.getElementById('settings-menu');
   if (!menu) return;
-  if (menu.classList.toggle('open')) sfx('click');
+  if (menu.classList.toggle('open')) { sfx('click'); renderDpadControls(); }
 }
 document.addEventListener('click', (e) => {
   const menu = document.getElementById('settings-menu');
@@ -4480,30 +4522,26 @@ function openTownService(kind) {
   if (kind === 'gambler') { openGambler(); return; }
   if (kind === 'enchanter') { openEnchanter(); return; }
   if (kind === 'stash')   { openStash();   return; }
-  if (kind === 'settings'){ openSettings();return; }
   if (kind === 'gate')    { openGate();    return; }
 }
 
-// ── SETTINGS — movement-pad position & opacity ──
-function openSettings() { openTownModal('⚙️ Settings'); renderSettings(); }
-function setDpadPos(p) { dpadCfg.pos = p; saveDpadCfg(); applyDpadSettings(); renderSettings(); }
-function setDpadOpacity(v) { dpadCfg.opacity = v; saveDpadCfg(); applyDpadSettings(); renderSettings(); }
-function renderSettings() {
+// ── SETTINGS — movement-pad position & opacity, shown in the ⚙️ popup ──
+// These controls live in the settings wheel (touch devices only) rather than a
+// town building. setDpad* save + re-apply immediately and re-render the popup
+// so the selected button reflects the new choice.
+function setDpadPos(p) { dpadCfg.pos = p; saveDpadCfg(); applyDpadSettings(); renderDpadControls(); }
+function setDpadOpacity(v) { dpadCfg.opacity = v; saveDpadCfg(); applyDpadSettings(); renderDpadControls(); }
+function renderDpadControls() {
+  const posRow = document.getElementById('dpad-pos-row');
+  const opRow  = document.getElementById('dpad-op-row');
+  if (!posRow || !opRow) return;
   const pos = dpadCfg.pos, op = dpadCfg.opacity;
   const posBtn = (val, label) =>
-    `<button class="shop-buy-btn" ${pos === val ? 'disabled' : ''} onclick="setDpadPos('${val}')">${pos === val ? '✓ ' : ''}${label}</button>`;
+    `<button class="dpad-cfg-btn ${pos === val ? 'sel' : ''}" onclick="setDpadPos('${val}')">${label}</button>`;
   const opBtn = (val, label) =>
-    `<button class="shop-buy-btn" ${Math.abs(op - val) < 0.001 ? 'disabled' : ''} onclick="setDpadOpacity(${val})">${Math.abs(op - val) < 0.001 ? '✓ ' : ''}${label}</button>`;
-  setTownContent(`
-    <div class="town-blurb">Customise the on-screen movement pad (touch devices). Changes save automatically and apply the next time you're in the dungeon.</div>
-    <div class="hc-line" style="margin-top:8px;font-weight:bold">Position</div>
-    <div class="shop-row" style="gap:6px;flex-wrap:wrap">
-      ${posBtn('left', 'Left')}${posBtn('center', 'Centre')}${posBtn('right', 'Right')}
-    </div>
-    <div class="hc-line" style="margin-top:10px;font-weight:bold">Opacity</div>
-    <div class="shop-row" style="gap:6px;flex-wrap:wrap">
-      ${opBtn(1, 'Full')}${opBtn(0.66, '66%')}${opBtn(0.33, '33%')}${opBtn(0, 'Hidden')}
-    </div>`);
+    `<button class="dpad-cfg-btn ${Math.abs(op - val) < 0.001 ? 'sel' : ''}" onclick="setDpadOpacity(${val})">${label}</button>`;
+  posRow.innerHTML = posBtn('left', 'Left') + posBtn('center', 'Centre') + posBtn('right', 'Right');
+  opRow.innerHTML  = opBtn(1, 'Full') + opBtn(0.66, '66%') + opBtn(0.33, '33%') + opBtn(0, 'Off');
 }
 
 // ── TOWN HUB MENU — the town itself is a menu of services ──
@@ -4519,7 +4557,6 @@ const TOWN_MENU = [
   { kind: 'enchanter', icon: '🪄', name: 'Enchanter',   desc: 'Add & reroll affixes' },
   { kind: 'stash',     icon: '🏦', name: 'Stash Vault', desc: 'Store gold & gear safe' },
   { kind: 'gambler',   icon: '🎲', name: 'Gambler',     desc: 'Wager gold for loot' },
-  { kind: 'settings',  icon: '⚙️', name: 'Settings',    desc: 'Move-pad position & opacity' },
 ];
 function openTownHub() {
   townView = 'hub';
