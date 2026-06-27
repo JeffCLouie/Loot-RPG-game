@@ -1840,17 +1840,30 @@ function questReward() {
   return { gold, xp };
 }
 
-// Wrap up the active quest: reward, a bonus chest where the NPC stood, fanfare.
-function completeQuest(verb) {
+// Wrap up the active quest: reward, a bonus chest at the hero's feet, fanfare.
+function completeQuest(msg) {
   if (!quest) return;
   const r = questReward();
-  groundItems.push({ x: quest.npc.x, y: quest.npc.y, luck: 4, ilvl: dungeonLevel + 1 });
-  log(`✅ ${quest.npc.name} ${verb} +${r.gold}g, +${r.xp} XP, and a chest appears!`, 'important');
+  groundItems.push({ x: player.x, y: player.y, luck: 4, ilvl: dungeonLevel + 1 });
+  log(`✅ ${msg} +${r.gold}g, +${r.xp} XP, and a chest appears!`, 'important');
   screenFlash('#22cc66');
   sfx('levelup');
   quest = null;
   checkLevelUp();
   updateBars();
+}
+
+// Grab up to n distinct reachable floor tiles for quest objectives/markers.
+function questTiles(reach, n, minDist = 0) {
+  const out = [];
+  for (let i = 0; i < 250 && out.length < n; i++) {
+    const c = randomFloorTile(reach);
+    if (!c) break;
+    if (out.some(o => o.x === c.x && o.y === c.y)) continue;
+    if (minDist && (Math.abs(c.x - player.x) + Math.abs(c.y - player.y)) < minDist) continue;
+    out.push(c);
+  }
+  return out;
 }
 
 // Seal a prisoner in a rock cell with a single cracked-wall entrance to smash.
@@ -1882,62 +1895,197 @@ function tryBuildCell(reach, who) {
   return false;
 }
 
-// Roughly a third of mid/deep floors get a mini-quest: rescue, escort, or jailbreak.
+// Roughly a third of mid/deep floors get one of many mini-quests.
 function maybeSpawnQuest(reach) {
   quest = null;
   if (dungeonLevel < 2 || dungeonLevel % 5 === 0) return; // skip floor 1 and boss floors
-  if (Math.random() >= 0.3) return;
-  const kind = pick(['rescue', 'escort', 'jailbreak']);
+  if (Math.random() >= 0.32) return;
+  const kind = pick(['rescue','escort','jailbreak','hunt','cleanse','fetch',
+                     'lostpet','tribute','forage','grave','wounded','beacons','courier']);
   const who = { emoji: pick(QUEST_NPCS), name: pick(QUEST_NAMES) };
 
   if (kind === 'jailbreak') { tryBuildCell(reach, who); return; }
 
-  // rescue & escort both need an open NPC tile.
+  // ── Kill-based quests ──
+  if (kind === 'hunt') {
+    const targets = enemies.filter(e => !e.dead && !e.isGoblin && !e.isBoss);
+    if (!targets.length) return;
+    const t = pick(targets);
+    t.questTarget = true;
+    t.name = 'Wanted ' + who.name;
+    t.hp = Math.round(t.hp * 1.5); t.maxHp = t.hp; // a sturdier bounty
+    quest = { type: 'hunt', name: t.name, done: false };
+    log(`🎯 Bounty posted! Hunt down ${t.name} ${t.type} on this floor.`, 'important');
+    return;
+  }
+  if (kind === 'cleanse') {
+    quest = { type: 'cleanse', done: false };
+    log('🧹 Cleanse the floor — slay every monster here for a reward!', 'important');
+    return;
+  }
+
+  // ── Multi-marker quests ──
+  if (kind === 'forage' || kind === 'beacons') {
+    const need = kind === 'beacons' ? 2 : 3;
+    const tiles = questTiles(reach, need, 2);
+    if (tiles.length < need) return;
+    quest = { type: kind, markers: tiles.map(t => ({ x: t.x, y: t.y, done: false })), collected: 0, need, done: false };
+    log(kind === 'beacons'
+      ? '🔥 Light all the dormant beacons scattered across the floor!'
+      : '🍄 Forage all the glowing herbs scattered across the floor!', 'important');
+    return;
+  }
+
+  // ── Fetch: grab a relic, return it to an NPC ──
+  if (kind === 'fetch') {
+    const tiles = questTiles(reach, 2, 3);
+    if (tiles.length < 2) return;
+    quest = { type: 'fetch', item: { x: tiles[0].x, y: tiles[0].y },
+              npc: { x: tiles[1].x, y: tiles[1].y, emoji: who.emoji, name: who.name },
+              hasItem: false, done: false };
+    log(`🏺 ${who.name} wants a lost relic recovered and returned.`, 'important');
+    return;
+  }
+
+  // ── Single-spot objectives: altar / grave ──
+  if (kind === 'tribute' || kind === 'grave') {
+    const c = randomFloorTile(reach); if (!c) return;
+    if (kind === 'tribute') {
+      quest = { type: 'tribute', spot: { x: c.x, y: c.y }, spotEmoji: '🗿', cost: 40 + dungeonLevel * 15, done: false };
+      log(`🗿 An offering altar hums on this floor — pay ${quest.cost}g for a windfall.`, 'important');
+    } else {
+      quest = { type: 'grave', spot: { x: c.x, y: c.y }, spotEmoji: '🪦', done: false };
+      log('🪦 A grave glints with buried treasure... disturbing it may wake the dead.', 'important');
+    }
+    return;
+  }
+
+  // ── NPC-at-a-spot quests: rescue, escort, lostpet, wounded, courier ──
   let spot = null, bestD = -1;
+  const wantFar = (kind === 'rescue');
   for (let i = 0; i < 50; i++) {
     const c = randomFloorTile(reach); if (!c) break;
     const d = Math.abs(c.x - player.x) + Math.abs(c.y - player.y);
-    if (kind === 'rescue') { if (d > bestD) { bestD = d; spot = c; } }       // captive far away
-    else { if (d >= 2 && d <= 7) { spot = c; break; } if (!spot) spot = c; } // escortee nearer
+    if (wantFar) { if (d > bestD) { bestD = d; spot = c; } }
+    else { if (d >= 2 && d <= 8) { spot = c; break; } if (!spot) spot = c; }
   }
   if (!spot) return;
+  const npc = { x: spot.x, y: spot.y, emoji: who.emoji, name: who.name };
 
   if (kind === 'rescue') {
-    quest = { type: 'rescue', npc: { x: spot.x, y: spot.y, emoji: who.emoji, name: who.name }, done: false };
-    // Ring the captive with a horde to fight through.
+    quest = { type: 'rescue', npc, done: false };
     let placed = 0;
     for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,-1],[1,-1],[-1,1]]) {
       if (placed >= 5) break;
       const hx = spot.x + dx, hy = spot.y + dy;
       if (hx < 1 || hy < 1 || hx >= MAP_W-1 || hy >= MAP_H-1) continue;
       if (mapData[hy][hx] !== 0 || getEnemyAt(hx, hy)) continue;
-      enemies.push(makeQuestFoe(hx, hy));
-      placed++;
+      enemies.push(makeQuestFoe(hx, hy)); placed++;
     }
     log(`🆘 ${who.name} is surrounded by a horde! Cut through and reach them.`, 'important');
-  } else {
-    quest = { type: 'escort', npc: { x: spot.x, y: spot.y, emoji: who.emoji, name: who.name, following: false }, done: false };
+  } else if (kind === 'escort') {
+    npc.following = false;
+    quest = { type: 'escort', npc, done: false };
     log(`🧭 ${who.name} begs for an escort to the stairs. Reach them, then lead the way.`, 'important');
+  } else if (kind === 'lostpet') {
+    npc.emoji = pick(['🐕','🐈','🐐','🐖','🦜','🐇']);
+    quest = { type: 'lostpet', npc, done: false };
+    log(`🐾 A frightened ${npc.emoji} skitters around the floor — catch it to return it!`, 'important');
+  } else if (kind === 'wounded') {
+    npc.emoji = '🤕';
+    quest = { type: 'wounded', npc, done: false };
+    log(`🤕 ${who.name} lies wounded — reach them carrying a Health Potion to spare.`, 'important');
+  } else if (kind === 'courier') {
+    quest = { type: 'courier', npc, done: false };
+    log(`✉️ You're entrusted with a sealed parcel — deliver it to ${who.name} on this floor.`, 'important');
   }
 }
 
-// While following, the escortee trails the player one step per turn.
-function moveEscort() {
-  if (!quest || quest.type !== 'escort' || !quest.npc.following) return;
-  const n = quest.npc;
-  const dist = Math.abs(n.x - player.x) + Math.abs(n.y - player.y);
-  if (dist <= 1) return; // already on the player's heels
-  const stepX = Math.sign(player.x - n.x), stepY = Math.sign(player.y - n.y);
-  const opts = [];
-  if (stepX !== 0) opts.push([stepX, 0]);
-  if (stepY !== 0) opts.push([0, stepY]);
-  for (const [dx, dy] of opts) {
-    const nx = n.x + dx, ny = n.y + dy;
-    if (nx < 0 || ny < 0 || nx >= MAP_W || ny >= MAP_H) continue;
-    if (!isFloorPassable(mapData[ny][nx])) continue;
-    if (nx === player.x && ny === player.y) continue;
-    if (getEnemyAt(nx, ny)) continue;
-    n.x = nx; n.y = ny; return;
+// Per-turn movement for quest entities: escorts follow, lost pets wander.
+function moveQuestEntities() {
+  if (!quest) return;
+  if (quest.type === 'escort' && quest.npc.following) {
+    const n = quest.npc;
+    if (Math.abs(n.x - player.x) + Math.abs(n.y - player.y) <= 1) return; // on your heels
+    const stepX = Math.sign(player.x - n.x), stepY = Math.sign(player.y - n.y);
+    const opts = [];
+    if (stepX !== 0) opts.push([stepX, 0]);
+    if (stepY !== 0) opts.push([0, stepY]);
+    for (const [dx, dy] of opts) {
+      const nx = n.x + dx, ny = n.y + dy;
+      if (nx < 0 || ny < 0 || nx >= MAP_W || ny >= MAP_H) continue;
+      if (!isFloorPassable(mapData[ny][nx])) continue;
+      if (nx === player.x && ny === player.y) continue;
+      if (getEnemyAt(nx, ny)) continue;
+      n.x = nx; n.y = ny; return;
+    }
+  } else if (quest.type === 'lostpet' && Math.random() < 0.6) {
+    const n = quest.npc;
+    const dirs = [[1,0],[-1,0],[0,1],[0,-1]].sort(() => Math.random() - 0.5);
+    for (const [dx, dy] of dirs) {
+      const nx = n.x + dx, ny = n.y + dy;
+      if (nx < 0 || ny < 0 || nx >= MAP_W || ny >= MAP_H) continue;
+      if (!isFloorPassable(mapData[ny][nx])) continue;
+      if (nx === player.x && ny === player.y) continue;
+      if (getEnemyAt(nx, ny)) continue;
+      n.x = nx; n.y = ny; break;
+    }
+  }
+}
+
+// Resolve quest progress when the player steps onto tile (nx, ny).
+function handleQuestStep(nx, ny) {
+  if (!quest) return;
+  const q = quest;
+  const onNpc = q.npc && q.npc.x === nx && q.npc.y === ny;
+  switch (q.type) {
+    case 'rescue':    if (onNpc) completeQuest(`${q.npc.name} is safe and slips away with thanks!`); break;
+    case 'jailbreak': if (onNpc) completeQuest(`${q.npc.name} is free and flees for the surface!`); break;
+    case 'lostpet':   if (onNpc) completeQuest(`The ${q.npc.emoji} is caught and scampers home!`); break;
+    case 'courier':   if (onNpc) completeQuest(`${q.npc.name} accepts the parcel — delivered!`); break;
+    case 'escort':
+      if (onNpc && !q.npc.following) { q.npc.following = true; log(`🧭 ${q.npc.name} falls in behind you — lead them to the stairs!`, 'important'); }
+      break;
+    case 'wounded':
+      if (onNpc) {
+        if (player.healPotions > 0) { player.healPotions--; completeQuest(`${q.npc.name} drinks your potion and recovers!`); }
+        else log(`🤕 ${q.npc.name} needs a Health Potion — return with one.`);
+      }
+      break;
+    case 'fetch':
+      if (!q.hasItem && q.item.x === nx && q.item.y === ny) { q.hasItem = true; log(`🏺 You recover the relic — bring it to ${q.npc.name}.`, 'loot'); }
+      else if (q.hasItem && onNpc) completeQuest(`${q.npc.name} receives the relic with gratitude!`);
+      break;
+    case 'tribute':
+      if (q.spot.x === nx && q.spot.y === ny) {
+        if (player.gold >= q.cost) { player.gold -= q.cost; groundItems.push({ x: nx, y: ny, luck: 6, ilvl: dungeonLevel + 1 }); completeQuest(`The altar accepts your ${q.cost}g offering — riches answer!`); }
+        else log(`🗿 The altar demands ${q.cost}g — you can't afford it yet.`);
+      }
+      break;
+    case 'grave':
+      if (q.spot.x === nx && q.spot.y === ny) {
+        let placed = 0;
+        for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+          if (placed >= 3) break;
+          const ax = nx + dx, ay = ny + dy;
+          if (ax < 1 || ay < 1 || ax >= MAP_W-1 || ay >= MAP_H-1) continue;
+          if (mapData[ay][ax] !== 0 || getEnemyAt(ax, ay)) continue;
+          const foe = makeQuestFoe(ax, ay); foe.type = '🧟'; enemies.push(foe); placed++;
+        }
+        screenFlash('#cc0000');
+        completeQuest('You loot the grave — but the dead claw their way up around you!');
+      }
+      break;
+    case 'forage':
+    case 'beacons': {
+      const m = q.markers.find(mk => !mk.done && mk.x === nx && mk.y === ny);
+      if (m) {
+        m.done = true; q.collected++;
+        if (q.collected >= q.need) completeQuest(q.type === 'beacons' ? 'Every beacon blazes — the floor is hallowed!' : 'All the herbs are gathered!');
+        else log(`${q.type === 'beacons' ? '🔥 Lit' : '🍄 Gathered'} ${q.collected}/${q.need}.`, 'loot');
+      }
+      break;
+    }
   }
 }
 
@@ -3360,10 +3508,11 @@ function draw() {
     ctx.fillText(e.type, px + tw/2, py + th/2 + th*0.04);
     ctx.filter = 'none';
 
-    // Affix badge (Tough/Fierce/Venomous) or goblin loot tag, floated above.
-    if (e.affixIcon || e.isGoblin) {
+    // Affix badge, goblin loot tag, or bounty marker, floated above.
+    if (e.questTarget || e.affixIcon || e.isGoblin) {
       ctx.font = `${Math.round(tw * 0.34)}px serif`;
-      ctx.fillText(e.isGoblin ? '💰' : e.affixIcon, px + tw/2, py - th*0.02);
+      ctx.textAlign = 'center';
+      ctx.fillText(e.questTarget ? '🎯' : (e.isGoblin ? '💰' : e.affixIcon), px + tw/2, py - th*0.02);
     }
 
     // HP bar
@@ -3378,24 +3527,33 @@ function draw() {
     }
   });
 
-  // Quest NPC — a friendly soul ringed in green with a quest marker.
-  if (quest && quest.npc) {
-    const n = quest.npc;
-    const nx2 = offX + n.x * tw, ny2 = offY + n.y * th;
+  // Quest markers — NPCs, objectives, and pickups, each ringed to stand out.
+  if (quest) {
     const sp = 0.5 + 0.5*Math.sin(Date.now()/300);
-    ctx.save();
-    ctx.fillStyle = `rgba(80,220,120,${0.18 + 0.14*sp})`;
-    ctx.beginPath();
-    ctx.arc(nx2 + tw/2, ny2 + th/2, tw*0.5, 0, Math.PI*2);
-    ctx.fill();
-    ctx.restore();
-    ctx.font = `${Math.round(tw * 0.74)}px serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(n.emoji, nx2 + tw/2, ny2 + th/2 + th*0.04);
-    ctx.font = `bold ${Math.round(tw * 0.4)}px serif`;
-    ctx.fillStyle = '#7CFFB0';
-    ctx.fillText((quest.type === 'escort' && n.following) ? '⬆' : '❗', nx2 + tw/2, ny2 - th*0.02);
+    const drawMark = (mx, my, emoji, ring) => {
+      const dx0 = offX + mx * tw, dy0 = offY + my * th;
+      ctx.save();
+      ctx.fillStyle = `rgba(${ring},${0.16 + 0.14*sp})`;
+      ctx.beginPath();
+      ctx.arc(dx0 + tw/2, dy0 + th/2, tw*0.5, 0, Math.PI*2);
+      ctx.fill();
+      ctx.restore();
+      ctx.font = `${Math.round(tw * 0.72)}px serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(emoji, dx0 + tw/2, dy0 + th/2 + th*0.04);
+    };
+    const GREEN = '80,220,120', GOLD = '255,210,80';
+    if (quest.npc) {
+      drawMark(quest.npc.x, quest.npc.y, quest.npc.emoji, GREEN);
+      const dx0 = offX + quest.npc.x * tw, dy0 = offY + quest.npc.y * th;
+      ctx.font = `bold ${Math.round(tw * 0.4)}px serif`;
+      ctx.fillStyle = '#7CFFB0';
+      ctx.fillText((quest.type === 'escort' && quest.npc.following) ? '⬆' : '❗', dx0 + tw/2, dy0 - th*0.02);
+    }
+    if (quest.item && !quest.hasItem) drawMark(quest.item.x, quest.item.y, '🏺', GOLD);
+    if (quest.spot) drawMark(quest.spot.x, quest.spot.y, quest.spotEmoji, GOLD);
+    if (quest.markers) quest.markers.forEach(m => { if (!m.done) drawMark(m.x, m.y, quest.type === 'beacons' ? '🔥' : '🍄', GOLD); });
   }
 
   // Player
@@ -3785,15 +3943,8 @@ function move(dx, dy) {
   player.x = nx;
   player.y = ny;
 
-  // Quest NPC contact: rescue/free them, or pick up an escort.
-  if (quest && quest.npc.x === nx && quest.npc.y === ny) {
-    if (quest.type === 'rescue') completeQuest('is safe and slips away with thanks!');
-    else if (quest.type === 'jailbreak') completeQuest('is free and flees for the surface!');
-    else if (quest.type === 'escort' && !quest.npc.following) {
-      quest.npc.following = true;
-      log(`🧭 ${quest.npc.name} falls in behind you — lead them to the stairs!`, 'important');
-    }
-  }
+  // Quest progress for whatever the player just stepped on.
+  handleQuestStep(nx, ny);
 
   // Auto-pickup food
   const fi = groundFood.findIndex(f => f.x === nx && f.y === ny);
@@ -3852,7 +4003,7 @@ function move(dx, dy) {
 
   // Enemy AI — every step is a turn for the foes too.
   runEnemyTurn();
-  moveEscort();
+  moveQuestEntities();
 
   checkPickupProximity();
   draw();
@@ -3981,6 +4132,11 @@ function onEnemyDefeated(e) {
     groundItems.push({ x: e.x, y: e.y, luck: 6, ilvl: (e.level || dungeonLevel) + 1 });
     log('✨ The air shimmers — a fabled chest materializes!', 'important');
     screenFlash('#ffd24b');
+  }
+  // Kill-based quest hooks: bounty target slain, or whole floor cleansed.
+  if (quest) {
+    if (quest.type === 'hunt' && e.questTarget) completeQuest(`${e.name} is slain — bounty claimed!`);
+    else if (quest.type === 'cleanse' && enemies.every(en => en.dead || en.isGoblin)) completeQuest('The floor is cleansed of monsters!');
   }
   checkLevelUp();
 }
@@ -4366,7 +4522,7 @@ function passTurn() {
   tickStatusEffects();
   applyRegen();
   runEnemyTurn();
-  moveEscort();
+  moveQuestEntities();
   draw();
   saveGame();
 }
