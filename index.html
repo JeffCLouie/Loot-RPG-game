@@ -547,7 +547,7 @@ const SLOT_WEIGHTS = { weapon:22, chest:15, head:13, hands:13, legs:13, ring:12,
 const POTIONS = ['Health Potion','Mana Potion','Elixir'];
 
 const TIERS = {
-  junk:      { color: '#6b6b6b', weight: 30 },
+  junk:      { color: '#6b6b6b', weight: 8  },
   normal:    { color: '#e8e8e8', weight: 35 },
   uncommon:  { color: '#44bb44', weight: 20 },
   rare:      { color: '#4488ff', weight: 10 },
@@ -975,8 +975,12 @@ function rollTier(rolls = 1) {
 }
 
 function generateItem(rolls = 1) {
-  const tier = rollTier(rolls);
+  let tier = rollTier(rolls);
   const slot = weighted(SLOT_WEIGHTS);
+  // Jewelry has no headline stat, so a grey (junk) ring/amulet would carry a
+  // single tiny bonus and feel like nothing dropped. Bump junk jewelry to
+  // normal so rings/amulets are always at least worth a look.
+  if ((slot === 'ring' || slot === 'amulet') && tier === 'junk') tier = 'normal';
   const baseName = pick(SLOTS[slot].names);
 
   let name = baseName;
