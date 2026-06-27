@@ -297,25 +297,54 @@
   .attr-plus:active { background: #44bb44; }
   .attr-plus:disabled { background: #2a2a3a; color: #555; cursor: not-allowed; }
 
-  /* ── SKILL TREE (SKILLS tab) ── */
-  .sk-node { border: 1px solid var(--border); border-radius: 6px; padding: 6px 7px; margin-bottom: 6px; background: #14140f; }
-  .sk-node.owned { border-color: #6b8f4a; background: #161a10; }
-  .sk-node.locked { opacity: 0.55; }
-  .sk-top { display: flex; align-items: flex-start; gap: 6px; }
-  .sk-icon { font-size: 17px; line-height: 1.2; flex-shrink: 0; }
-  .sk-titles { flex: 1; min-width: 0; }
-  .sk-name { font-size: 11px; font-weight: bold; color: #e8d5b5; display: flex; align-items: center; gap: 5px; }
-  .sk-rank { font-size: 9px; color: #ffd24b; font-weight: bold; }
-  .sk-meta { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
-  .sk-type { font-size: 8px; font-weight: bold; letter-spacing: 0.5px; padding: 1px 4px; border-radius: 3px; }
-  .sk-type.act { background: #2a1f4a; color: #cbb8ff; }
-  .sk-type.pas { background: #20301c; color: #9fd07a; }
-  .sk-req { font-size: 8px; color: #998; align-self: center; }
-  .sk-desc { font-size: 9px; color: #9a937e; line-height: 1.4; margin-top: 4px; }
-  .sk-buy { flex-shrink: 0; width: 28px; height: 28px; border: none; border-radius: 5px; background: #4a3a7a; color: #fff; font-size: 17px; font-weight: bold; cursor: pointer; line-height: 1; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
-  .sk-buy:active { background: #6a55a8; }
-  .sk-buy:disabled { background: #2a2a3a; color: #555; cursor: not-allowed; }
-  .sk-buy.maxed { background: #2e7d32; color: #cdebcf; }
+  /* ── SKILL TREE (SKILLS tab) — branching node graph ── */
+  /* Two labelled trunks (offense / defense) over a fixed-height canvas. Nodes are
+     hand-placed by SKILL_TREE_LAYOUT; SVG draws the glowing branch connectors. */
+  .sk-trunks { display: flex; justify-content: space-between; padding: 0 8px; margin: 10px 2px 0; }
+  .sk-trunk { font-size: 9px; letter-spacing: 2px; color: #7a6fa8; }
+  .sk-trunk.off { color: #e0855a; }
+  .sk-trunk.def { color: #5a9be0; }
+  .sk-tree { position: relative; width: 100%; height: 470px; margin-top: 2px; }
+  .sk-tree svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .sk-tnode { position: absolute; width: 54px; height: 54px; transform: translate(-50%, -50%);
+    border-radius: 10px; border: 2px solid #33304a; background: #211c2a; display: flex;
+    flex-direction: column; align-items: center; justify-content: center; cursor: pointer;
+    -webkit-tap-highlight-color: transparent; touch-action: manipulation; transition: transform .08s; }
+  .sk-tnode:active { transform: translate(-50%, -50%) scale(1.06); }
+  .sk-tnode .ic { font-size: 21px; line-height: 1; }
+  .sk-tnode .nm { font-size: 7px; margin-top: 1px; letter-spacing: .3px; color: #cdbfff; max-width: 50px;
+    text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sk-tnode .pips { display: flex; gap: 2px; margin-top: 2px; }
+  .sk-tnode .pip { width: 5px; height: 5px; border-radius: 50%; background: #4a4360; }
+  .sk-tnode .pip.on { background: var(--gold); box-shadow: 0 0 3px var(--gold); }
+  .sk-tnode .badge { position: absolute; top: -7px; right: -7px; width: 18px; height: 18px;
+    border-radius: 50%; font-size: 11px; line-height: 18px; text-align: center; font-weight: bold; }
+  .sk-tnode.locked { opacity: .45; filter: grayscale(.6); }
+  .sk-tnode.locked .badge { background: #1a1626; color: #6a647a; border: 1px solid #33304a; }
+  .sk-tnode.avail { border-color: #8c6eff; background: #2a1f4a; box-shadow: 0 0 10px rgba(140,110,255,.55); }
+  .sk-tnode.avail .badge { background: #8c6eff; color: #fff; }
+  .sk-tnode.owned { border-color: var(--gold); background: #2c2440; }
+  .sk-tnode.owned .badge { background: var(--gold); color: #231a08; }
+  .sk-tnode.maxed { border-color: #6b8f4a; background: #1c2416; }
+  .sk-tnode.maxed .badge { background: #3a6a3a; color: #dfffe0; }
+  .sk-tnode.act .ic { filter: drop-shadow(0 0 4px #8c6eff); }
+  .sk-tnode.sel { outline: 2px solid var(--gold); outline-offset: 2px; z-index: 6; }
+  /* Tap a node → this popover with its full detail + a Learn button. */
+  .sk-pop { position: absolute; z-index: 20; width: 168px; background: #15101f; border: 1px solid #8c6eff;
+    border-radius: 8px; padding: 8px 9px; font-size: 10px; line-height: 1.5; color: #e8def8;
+    box-shadow: 0 6px 20px rgba(0,0,0,.6); }
+  .sk-pop b { color: var(--gold); }
+  .sk-pop .ty { color: #9a8fd0; font-size: 9px; margin-top: 1px; }
+  .sk-pop .ds { margin-top: 3px; color: #cdc2e8; }
+  .sk-pop .rq { font-size: 9px; margin-top: 3px; }
+  .sk-pop .rq.no { color: #e08a8a; }
+  .sk-pop .rq.ok { color: #7ad08a; }
+  .sk-pop .pop-buy { width: 100%; margin-top: 6px; padding: 5px; border: none; border-radius: 5px;
+    background: #4a3a7a; color: #fff; font-family: inherit; font-size: 10px; font-weight: bold;
+    cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+  .sk-pop .pop-buy:active { background: #6a55a8; }
+  .sk-pop .pop-buy:disabled { background: #2a2a3a; color: #666; cursor: not-allowed; }
+  .sk-pop .pop-buy.maxed { background: #2e7d32; color: #cdebcf; }
 
   /* ── SKILL BAR (learned actives, above the control bar) ── */
   #skill-bar { display: flex; gap: 5px; justify-content: center; flex-wrap: wrap; padding: 4px 6px; }
@@ -2055,6 +2084,38 @@ const SKILL_TREES = {
   ],
 };
 
+// Hand-placed node positions for the visual skill tree, as [x, y] fractions of the
+// canvas (0–1). The two Lv1 passives root an OFFENSE trunk (left) and a DEFENSE
+// trunk (right); branches flow downward to the Lv12 capstone. Connector lines are
+// derived from each node's `req`, so only positions live here. Keep an entry for
+// every node id in SKILL_TREES above.
+const SKILL_TREE_LAYOUT = {
+  warrior: {
+    brutality:[0.27,0.07], toughness:[0.73,0.07],
+    warcry:[0.13,0.27], bloodthirst:[0.40,0.27], ironhide:[0.60,0.27], secondwind:[0.87,0.27],
+    whirlwind:[0.13,0.50], executioner:[0.40,0.52], juggernaut:[0.735,0.52],
+    berserk:[0.13,0.78],
+  },
+  rogue: {
+    precision:[0.27,0.07], evasion:[0.73,0.07],
+    lethality:[0.13,0.27], poisonstrike:[0.40,0.27], shadowstep:[0.60,0.27], fleetfoot:[0.87,0.27],
+    opportunist:[0.13,0.50], fanofknives:[0.40,0.50],
+    assassinate:[0.13,0.73], deathmark:[0.50,0.73],
+  },
+  mage: {
+    spellpower:[0.27,0.07], arcanemind:[0.73,0.07],
+    frostnova:[0.13,0.27], pyromancy:[0.40,0.27], manashield:[0.60,0.27], attunement:[0.87,0.27],
+    chainlightning:[0.13,0.50], archmage:[0.40,0.50], wardflesh:[0.73,0.50],
+    meteor:[0.27,0.74],
+  },
+  templar: {
+    divinevigor:[0.27,0.07], aegis:[0.73,0.07],
+    zeal:[0.13,0.27], holysmite:[0.40,0.27], retribution:[0.60,0.27], sanctuary:[0.87,0.27],
+    consecration:[0.13,0.50], bulwark:[0.65,0.50],
+    fervor:[0.13,0.72], judgment:[0.62,0.74],
+  },
+};
+
 // The current class's tree (empty array for a classless legacy save).
 function classSkillTree() { return (player.class && SKILL_TREES[player.class]) || []; }
 function skillNode(id) { return classSkillTree().find(n => n.id === id) || null; }
@@ -2299,6 +2360,7 @@ const QUEST_NAMES = ['Elara','Old Tomas','Bram','Sera','the Scholar','Mira','Cap
 let enemies = [];
 let currentTab = 'inv';
 let selectedItem = null;
+let selectedSkillId = null; // skill-tree node whose detail popover is open (null = none)
 let mapData = [];
 let dungeonLevel = 1;
 
@@ -7668,41 +7730,82 @@ function renderHero(el) {
     ${rows}`;
 }
 
-// SKILLS tab: the class skill tree. Each node shows its type, rank, prerequisites,
-// and a + to buy it with a skill point (greyed until its level/prereqs are met).
+// SKILLS tab: the class skill tree, drawn as a branching node graph. Two trunks
+// (offense / defense) root in the Lv1 passives and flow down to the capstone.
+// Tiles are hand-placed via SKILL_TREE_LAYOUT; SVG draws the branch connectors,
+// which light up once their prerequisite is owned. Tapping a node opens a detail
+// popover with a Learn button (buySkill) — see selectSkill / positionSkillPop.
 function renderSkills(el) {
   const cls = playerClass();
-  if (!cls) { el.innerHTML = '<div class="hero-sub" style="padding:12px">Pick a class to unlock its skill tree.</div>'; return; }
+  if (!cls) { el.innerHTML = '<div class="hero-sub" style="padding:12px">Pick a class to unlock its skill tree.</div>'; selectedSkillId = null; return; }
   const pts = player.skillPoints || 0;
-  const nodes = classSkillTree().map(n => {
+  const tree = classSkillTree();
+  const layout = SKILL_TREE_LAYOUT[player.class] || {};
+
+  // Branch connectors: one line per node→prerequisite. Lit (bright purple) once
+  // the prerequisite has any rank, dim grey while still locked. A wider faint line
+  // under each lit line fakes a glow; non-scaling-stroke keeps widths even though
+  // the viewBox is stretched non-uniformly to fill the canvas.
+  let lines = '';
+  for (const n of tree) {
+    const p = layout[n.id]; if (!p || !n.req) continue;
+    for (const [rid] of n.req) {
+      const q = layout[rid]; if (!q) continue;
+      const x1 = (q[0] * 100).toFixed(1), y1 = (q[1] * 100).toFixed(1);
+      const x2 = (p[0] * 100).toFixed(1), y2 = (p[1] * 100).toFixed(1);
+      if (skillRank(rid) > 0) {
+        lines += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#8c6eff" stroke-opacity="0.28" stroke-width="6" vector-effect="non-scaling-stroke"/>`;
+        lines += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#a98cff" stroke-width="2.5" vector-effect="non-scaling-stroke"/>`;
+      } else {
+        lines += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#332b4a" stroke-width="2" vector-effect="non-scaling-stroke"/>`;
+      }
+    }
+  }
+
+  // Node tiles. State precedence: maxed > available-to-buy > owned > locked, so a
+  // partly-ranked node you can still spend on glows purple to draw the eye there.
+  const tiles = tree.map(n => {
+    const p = layout[n.id]; if (!p) return '';
     const rank = skillRank(n.id);
+    const maxd = skillMaxed(n);
     const owned = rank > 0;
-    const maxed = rank >= (n.max || 1);
-    const locked = !skillReqMet(n);
-    const reqBits = [];
-    if ((n.lvl || 1) > 1) reqBits.push(`Lv${n.lvl}`);
-    if (n.req) for (const [rid, rk] of n.req) { const rn = skillNode(rid); reqBits.push(`${rn ? rn.name : rid}${rk > 1 ? ` ${rk}` : ''}`); }
-    const typeTag = n.type === 'active'
-      ? `<span class="sk-type act">⚡ ACTIVE · ${n.mp}MP · ${n.cd}cd</span>`
-      : `<span class="sk-type pas">PASSIVE</span>`;
-    const rankTag = (n.max || 1) > 1
-      ? `<span class="sk-rank">${rank}/${n.max}</span>`
-      : (owned ? `<span class="sk-rank">✓</span>` : '');
-    const btn = maxed
-      ? `<button class="sk-buy maxed" disabled>✓</button>`
-      : `<button class="sk-buy" ${canBuySkill(n) ? '' : 'disabled'} onclick="buySkill('${n.id}')">+</button>`;
-    return `<div class="sk-node${owned ? ' owned' : ''}${locked && !owned ? ' locked' : ''}">
-      <div class="sk-top">
-        <span class="sk-icon">${n.icon}</span>
-        <div class="sk-titles">
-          <div class="sk-name">${n.name} ${rankTag}</div>
-          <div class="sk-meta">${typeTag}${reqBits.length ? ` <span class="sk-req">${locked && !owned ? '🔒 ' : ''}${reqBits.join(' · ')}</span>` : ''}</div>
-        </div>
-        ${btn}
-      </div>
-      <div class="sk-desc">${n.desc}</div>
-    </div>`;
+    const avail = canBuySkill(n);
+    const state = maxd ? 'maxed' : avail ? 'avail' : owned ? 'owned' : 'locked';
+    const badge = maxd ? '✓' : avail ? '+' : owned ? '✓' : '🔒';
+    const pips = (n.max || 1) > 1
+      ? `<div class="pips">${Array.from({ length: n.max }, (_, i) => `<span class="pip${i < rank ? ' on' : ''}"></span>`).join('')}</div>`
+      : '';
+    return `<button class="sk-tnode ${state}${n.type === 'active' ? ' act' : ''}${selectedSkillId === n.id ? ' sel' : ''}" id="sknode-${n.id}"
+        style="left:${(p[0] * 100).toFixed(2)}%;top:${(p[1] * 100).toFixed(2)}%" onclick="selectSkill('${n.id}')">
+      <span class="badge">${badge}</span><span class="ic">${n.icon}</span>
+      <span class="nm">${n.name}</span>${pips}
+    </button>`;
   }).join('');
+
+  // Detail popover for the selected node (placed by positionSkillPop after layout).
+  let pop = '';
+  const sn = selectedSkillId ? skillNode(selectedSkillId) : null;
+  if (sn && layout[sn.id]) {
+    const rank = skillRank(sn.id);
+    const typeTxt = sn.type === 'active' ? `⚡ ACTIVE · ${sn.mp}MP · ${sn.cd}cd` : 'PASSIVE';
+    const rankTxt = (sn.max || 1) > 1 ? ` <span style="color:#e8c267">${rank}/${sn.max}</span>` : (rank > 0 ? ' ✓' : '');
+    const bits = [];
+    if ((sn.lvl || 1) > 1) bits.push(`Lv${sn.lvl}`);
+    if (sn.req) for (const [rid, rk] of sn.req) { const rn = skillNode(rid); bits.push(`${rn ? rn.name : rid}${rk > 1 ? ` ${rk}` : ''}`); }
+    const reqMet = skillReqMet(sn);
+    const reqHtml = bits.length ? `<div class="rq ${reqMet ? 'ok' : 'no'}">${reqMet ? '✓ ' : '🔒 '}${bits.join(' · ')}</div>` : '';
+    const buyBtn = skillMaxed(sn)
+      ? `<button class="pop-buy maxed" disabled>✓ Maxed</button>`
+      : `<button class="pop-buy" ${canBuySkill(sn) ? '' : 'disabled'} onclick="buySkill('${sn.id}')">${(sn.max || 1) > 1 ? `Learn (rank ${rank + 1}/${sn.max})` : 'Learn'}</button>`;
+    pop = `<div class="sk-pop" id="sk-pop">
+      <b>${sn.icon} ${sn.name}</b>${rankTxt}
+      <div class="ty">${typeTxt}</div>
+      <div class="ds">${sn.desc}</div>
+      ${reqHtml}
+      ${buyBtn}
+    </div>`;
+  }
+
   el.innerHTML = `
     <div class="hero-power">
       <div class="hp-label">🌟 SKILL POINTS</div>
@@ -7710,7 +7813,37 @@ function renderSkills(el) {
     </div>
     <div class="hero-sub">${cls.icon} ${cls.name} · ${spentSkillPoints()} learned</div>
     <div class="hero-points">${pts > 0 ? `${pts} point${pts > 1 ? 's' : ''} to spend!` : 'Level up to earn more skill points.'}</div>
-    ${nodes}`;
+    <div class="sk-trunks"><span class="sk-trunk off">◆ OFFENSE</span><span class="sk-trunk def">DEFENSE ◆</span></div>
+    <div class="sk-tree" id="sk-tree" onclick="if(event.target.id==='sk-tree'){selectedSkillId=null;renderPanel();}">
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none">${lines}</svg>
+      ${tiles}
+      ${pop}
+    </div>`;
+  positionSkillPop();
+}
+
+// Toggle the detail popover for a skill node (tap the open node again to close).
+function selectSkill(id) {
+  selectedSkillId = (selectedSkillId === id) ? null : id;
+  renderPanel();
+}
+
+// Place the selected node's popover just below it, flipping above and clamping
+// horizontally so it always stays inside the tree canvas.
+function positionSkillPop() {
+  const pop = document.getElementById('sk-pop');
+  const node = selectedSkillId && document.getElementById('sknode-' + selectedSkillId);
+  const tree = document.getElementById('sk-tree');
+  if (!pop || !node || !tree) return;
+  const tw = tree.clientWidth, th = tree.clientHeight;
+  const cx = node.offsetLeft, cy = node.offsetTop; // node center (CSS translate is visual only)
+  const pw = pop.offsetWidth, ph = pop.offsetHeight;
+  let left = Math.max(2, Math.min(cx - pw / 2, tw - pw - 2));
+  let top = cy + 34;                          // default: below the node
+  if (top + ph > th - 2) top = cy - 34 - ph;  // flip above if it would overflow
+  if (top < 2) top = 2;
+  pop.style.left = left + 'px';
+  pop.style.top = top + 'px';
 }
 
 // The on-screen bar of LEARNED active skills (everything beyond the baseline class
