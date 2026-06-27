@@ -1112,20 +1112,24 @@ const ATTR_KEYS = Object.keys(ATTRIBUTES);
 const ATTR_POINTS_PER_LEVEL = 3;
 
 // ── DEPTH THREAT ──
-// The single most important difficulty lever: enemy power compounds with depth.
-// On top of the linear (per-floor) base stats, every floor multiplies enemy HP
-// and damage by a growing factor, so danger accelerates faster than the player
-// can ever grind. Linear player growth (level, attributes, gear) can keep pace
-// for a while, then falls behind — which is the whole point: you should hit
-// floors you simply cannot clear yet, retreat, and come back stronger. Because
-// the curve is tied to DEPTH (not your level), grinding shallow floors stays
-// safe and lucrative while the deep stays deadly.
+// The single most important difficulty lever: enemy power keeps climbing with
+// depth. On top of the linear (per-floor) base stats, every floor multiplies
+// enemy HP and damage by a growing factor.
 //
-// The curve starts gentle (the first few floors are an easy on-ramp) but
-// compounds steeply, so the deep end ramps up fast:
-//   floor 1 → 1.00x   floor 10 → ~2.6x   floor 20 → ~7.3x   floor 30 → ~21x
+// This curve is *polynomial*, not exponential — a deliberate choice. It starts
+// gentle (an easy on-ramp), rises forever so every floor is strictly harder
+// than the last, but grows slowly enough that the player's (linear) level,
+// attribute, and gear growth can always catch up with enough grinding. The gap
+// you must close keeps widening, so it gets harder and harder to push the next
+// floor — but there is intentionally NO hard wall: a pure exponential curve
+// would eventually outrun any possible build and make some floor mathematically
+// impossible, whereas this one stays beatable at every depth given the effort.
+//   floor 1 → 1.0x   floor 10 → ~1.9x   floor 20 → ~3.3x   floor 30 → ~4.8x
+//   floor 50 → ~8x   floor 100 → ~18x   (keeps rising, no ceiling)
 function depthThreat(level) {
-  return Math.pow(1.11, Math.max(0, (level || 1) - 1));
+  // 1 + (depth-1)^1.2 / 15 — gentle start, steady polynomial climb, no cap.
+  const d = Math.max(0, (level || 1) - 1);
+  return 1 + Math.pow(d, 1.2) / 15;
 }
 
 // Total power of a single item: weighted sum of its stats + a rarity bonus.
@@ -3045,8 +3049,14 @@ function spawnEnemies() {
 
   // Difficulty tracks the hero, not just the floor: once you out-level the depth
   // (e.g. by grinding lower floors from town), foes toughen so fights stay real.
+  // Anti-grind: out-leveling a floor toughens its foes so fights stay real.
+  // Capped, though — left uncapped this scales enemies up in lockstep with your
+  // level forever, so grinding never gains ground and even the polynomial depth
+  // curve would wall out. The cap lets dedicated grinding eventually overpower
+  // any single floor, which is what keeps the dungeon endless rather than a dead
+  // end (deep floors just demand a lot more grinding to get over).
   const lvlGap = Math.max(0, player.level - dungeonLevel);
-  const threatScale = 1 + lvlGap * 0.06;
+  const threatScale = Math.min(2, 1 + lvlGap * 0.06);
 
   for (let i = 0; i < count; i++) {
     let ex, ey;
