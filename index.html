@@ -1750,7 +1750,6 @@ function attackEnemy(e) {
   e.hp -= dmg;
   spawnFloatingText(e.x, e.y, isCrit ? `${dmg}!` : `${dmg}`, isCrit ? '#ffdd55' : '#fff');
   log(isCrit ? `💥 CRITICAL! ${HERO} hits ${label} for ${dmg}!` : `${HERO} hits ${label} for ${dmg} damage!`, isCrit ? 'important' : '');
-  if (isCrit) screenFlash('#ffdd55');
   if (e.hp <= 0) {
     e.dead = true;
     const xpMult = e.isBoss ? 5 : (e.isElite ? 2 : 1);
