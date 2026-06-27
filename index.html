@@ -1562,7 +1562,7 @@ const TIER_POWER_BONUS = { junk:0, normal:1, uncommon:2, rare:4, epic:7, legenda
 // points per level, and each point is correspondingly small, so the per-level
 // power gain — and thus the difficulty curve — stays close to the old design.
 const ATTRIBUTES = {
-  might:    { label: '💪 Might',    short: 'MIG', desc: 'raises Attack power' },
+  might:    { label: '💪 Might',    short: 'MIG', desc: 'raises Attack power (most for Warrior & Rogue)' },
   vitality: { label: '❤️ Vitality', short: 'VIT', desc: 'raises max HP, Defense & HP regen' },
   agility:  { label: '🎯 Agility',  short: 'AGI', desc: 'raises Speed (dodge)' },
   spirit:   { label: '✨ Spirit',   short: 'SPR', desc: 'raises max MP, MP regen & spell power' },
@@ -1582,6 +1582,7 @@ const ATTR_POINTS_PER_LEVEL = 5;
 // the old design's 3 points did, keeping the difficulty curve intact. Damage is
 // NOT here — it scales per class via CLASSES[*].dmgAttrs and ATTR_DMG_*.
 const ATTR_FX = {
+  atkPerMight:   0.6,    // Might → flat Attack power for EVERY class (see attrDamage)
   hpPerVit:      11,     // Vitality → max HP
   defPerVit:     0.5,    // Vitality → Defense
   hpRegenPerVit: 0.16,   // Vitality → HP regen / turn
@@ -1666,11 +1667,17 @@ function classDmgAttrs() {
   const cls = playerClass();
   return (cls && cls.dmgAttrs) || { primary: 'might', secondary: null };
 }
-// Bonus attack damage contributed by the class's damage attributes.
+// Bonus attack damage contributed by the class's damage attributes — plus a
+// small universal Might bonus so no class ever has a fully dead attribute.
 function attrDamage() {
   const { primary, secondary } = classDmgAttrs();
   let d = totalAttr(primary) * ATTR_DMG_PRIMARY;
   if (secondary) d += totalAttr(secondary) * ATTR_DMG_SECONDARY;
+  // Might always lends a little raw Attack power to EVERY class. Classes that
+  // already scale damage off Might (Warrior primary / Rogue secondary) get far
+  // more from it above, so this only matters when Might is otherwise off-class
+  // (Mage, Templar) — there it's a weak-but-real contribution instead of zero.
+  if (primary !== 'might' && secondary !== 'might') d += totalAttr('might') * ATTR_FX.atkPerMight;
   return d;
 }
 // Crit damage multiplier — equipment-only beyond the base, so gear (CRITDMG)
@@ -1730,6 +1737,17 @@ function recomputeMaxStats() {
   player.maxMp = baseMaxMp();
   if (player.hp > player.maxHp) player.hp = player.maxHp;
   if (player.mp > player.maxMp) player.mp = player.maxMp;
+}
+
+// Per-turn HP/MP regeneration. Defined here as the single source of truth so the
+// Stats panel can display the exact value applyRegen() applies each turn.
+function hpRegenPerTurn() {
+  let r = totalStat('REGEN') + Math.floor(totalAttr('vitality') * ATTR_FX.hpRegenPerVit);
+  if (player.class === 'templar') r += 2; // Templar mends faster between fights
+  return r;
+}
+function mpRegenPerTurn() {
+  return 1 + Math.floor(totalAttr('spirit') * ATTR_FX.mpRegenPerSpr);
 }
 
 const FOODS = [
@@ -5792,14 +5810,13 @@ function tickPact() {
 // Heal a little each turn based on equipped REGEN, up to max HP.
 function applyRegen() {
   // Vitality grants passive HP regen on top of any REGEN rolled on gear.
-  let r = totalStat('REGEN') + Math.floor(totalAttr('vitality') * ATTR_FX.hpRegenPerVit);
-  if (player.class === 'templar') r += 2; // Templar mends faster between fights
+  const r = hpRegenPerTurn();
   if (r > 0 && player.hp > 0 && player.hp < player.maxHp) {
     player.hp = Math.min(player.maxHp, player.hp + r);
     updateBars();
   }
   // Mana trickles back each turn (faster with Spirit) so staff bolts stay usable.
-  const mr = 1 + Math.floor(totalAttr('spirit') * ATTR_FX.mpRegenPerSpr);
+  const mr = mpRegenPerTurn();
   if (player.hp > 0 && player.mp < player.maxMp) {
     player.mp = Math.min(player.maxMp, player.mp + mr);
     updateBars();
@@ -7025,6 +7042,8 @@ function renderHero(el) {
       ${stat('🛡 Defense', Math.round(playerDefense()))}
       ${stat('❤️ Max HP', player.maxHp)}
       ${stat('✨ Max MP', player.maxMp)}
+      ${stat('💚 HP regen', '+' + hpRegenPerTurn() + '/turn')}
+      ${stat('🔷 MP regen', '+' + mpRegenPerTurn() + '/turn')}
       ${stat('🎯 Crit chance', Math.round(playerCritChance()*100) + '%')}
       ${stat('💥 Crit damage', Math.round(critDamageMult()*100) + '%')}
       ${stat('💨 Dodge', Math.round(playerDodge()*100) + '%')}
