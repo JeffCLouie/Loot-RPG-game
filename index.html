@@ -2697,6 +2697,7 @@ function buildTown() {
     { x: 2,  y: 10, w: 3, h: 2, kind: 'mystic',   roof: '#3a5a9a', sign: '🔮' },
     { x: 8,  y: 10, w: 3, h: 2, kind: 'trainer',  roof: '#3a7a4a', sign: '🎓' },
     { x: 14, y: 10, w: 3, h: 2, kind: 'gate',     roof: '#5a4a7a', sign: '🌀' },
+    { x: 8,  y: 6,  w: 3, h: 2, kind: 'gambler',  roof: '#b88a2a', sign: '🎲' },
   ];
 
   // Stamp each building footprint into the map as solid tiles.
@@ -2714,6 +2715,7 @@ function buildTown() {
     mystic:   { emoji: '🔮',   name: 'Mystic',       tag: '🔮' },
     trainer:  { emoji: '🎓',   name: 'Trainer',      tag: '✨' },
     gate:     { emoji: '🌀',   name: 'Dungeon Gate', tag: '⬇️' },
+    gambler:  { emoji: '🎲',   name: 'Gambler',      tag: '💰' },
   };
   townNpcs = townBuildings.map(b => ({
     x: b.x + Math.floor(b.w / 2),
@@ -2761,6 +2763,7 @@ function openTownService(kind) {
   if (kind === 'smith')   { openSmith();   return; }
   if (kind === 'healer')  { openHealer();  return; }
   if (kind === 'trainer') { openTrainer(); return; }
+  if (kind === 'gambler') { openGambler(); return; }
   if (kind === 'gate')    { openGate();    return; }
 }
 
@@ -2938,6 +2941,92 @@ function enterDungeonAt(f) {
   sfx('stairs');
   log(`🌀 You step through the gate onto dungeon floor ${f}.`, 'important');
   updateBars(); draw(); saveGame();
+}
+
+// ── GAMBLER — wager gold for a random piece of loot ──
+// The gambler sells a single thrill: pay gold, get a random item geared near
+// your deepest floor. Prices climb the deeper you've delved, and so do the
+// possible rewards. The item level is rolled within -10/+3 of your deepest
+// floor, weighted to land at (or just below) your depth, with a thin tail
+// reaching above it. The rarity is rolled bottom-heavy so most pulls are
+// humble — yet every tier, up to a leveled-up legendary or unique, is on the
+// table, so a lucky wager can hand you something far beyond your reach.
+let gambleLast = null;
+
+function gambleDeepest() { return Math.max(1, dungeonReturn || 1, player.maxFloor || 1); }
+
+function gambleCost() {
+  const d = gambleDeepest();
+  // Linear base plus a gentle quadratic so deep wagers cost meaningfully more,
+  // mirroring how much more valuable deep gear is.
+  return Math.round(50 + d * 12 + d * d * 0.4);
+}
+
+// Item-level offset distribution, relative to your deepest floor. Peaks at -1/0
+// (at or just below depth), with a long, thinning tail down to -10 and a short,
+// thin tail up to +3 — so most pulls are at/below level, a few rise above.
+const GAMBLE_ILVL_WEIGHTS = {
+  '-10': 1.5, '-9': 2, '-8': 2.5, '-7': 3, '-6': 4, '-5': 5, '-4': 6,
+  '-3': 8, '-2': 10, '-1': 11, '0': 10, '1': 5, '2': 2.5, '3': 1,
+};
+
+// Rarity distribution for a wager: bottom-heavy (lower rarity far more likely),
+// but every tier is reachable — including a slim shot at legendary / unique.
+const GAMBLE_TIER_WEIGHTS = {
+  normal: 40, uncommon: 26, rare: 14, epic: 6, legendary: 2, unique: 0.7,
+};
+
+function gambleRollIlvl() {
+  const off = Number(weighted(GAMBLE_ILVL_WEIGHTS));
+  return Math.max(1, gambleDeepest() + off);
+}
+
+function openGambler() { gambleLast = null; openTownModal('🎲 Gambler'); renderGambler(); }
+
+function renderGambler() {
+  const d = gambleDeepest();
+  const cost = gambleCost();
+  const afford = player.gold >= cost;
+  let resultRow = '';
+  if (gambleLast) {
+    const it = gambleLast.item;
+    const above = (it.ilvl > d) ? ' <span style="color:#ffd24b">(above your depth!)</span>' : '';
+    resultRow = `<div class="town-blurb" style="margin-top:10px">Your last wager (${gambleLast.cost}g) turned up:</div>
+      <div class="shop-row">
+        <span class="loot-icon">${itemIcon(it)}</span>
+        <div class="shop-row-info item-${it.tier}">
+          <div class="shop-row-name">${it.name}</div>
+          <div class="shop-row-stats">ilvl ${it.ilvl}${above} · ${itemStatLine(it)}</div>
+        </div>
+      </div>`;
+  }
+  setTownContent(`
+    <div class="town-blurb">The gambler shoves a heap of mystery loot across the table. Throw down your gold and she'll pull a random piece of gear geared near your deepest floor (${d}). Most pulls land at — or a little below — your depth at a humble rarity, but fortune is fickle: a single wager can turn up something legendary from far beyond your reach.</div>
+    <div class="shop-row">
+      <span class="loot-icon">🎲</span>
+      <div class="shop-row-info"><div class="shop-row-name">Wager for Loot</div>
+        <div class="shop-row-sub">Item level ${Math.max(1, d - 10)}–${d + 3} · any rarity · the deeper you've delved, the higher the stakes</div></div>
+      <span class="shop-price">${cost}g</span>
+      <button class="shop-buy-btn" ${afford ? '' : 'disabled'} onclick="gambleRoll()">ROLL</button>
+    </div>
+    ${resultRow}`);
+}
+
+function gambleRoll() {
+  const cost = gambleCost();
+  if (player.gold < cost) return;
+  player.gold -= cost;
+  const ilvl = gambleRollIlvl();
+  const tier = weighted(GAMBLE_TIER_WEIGHTS);
+  const item = generateItem(1, ilvl, tier);
+  inventory.push(item);
+  recordWardrobe(item);
+  gambleLast = { item, cost };
+  const rank = Object.keys(TIERS).indexOf(tier);
+  const jackpot = rank >= 4; // legendary or unique
+  sfx(jackpot ? 'levelup' : 'loot');
+  log(`🎲 You wager ${cost}g and the dice favor you — ${logItem(item)}!`, jackpot ? 'important' : 'loot');
+  updateBars(); renderPanel(); renderGambler(); saveGame();
 }
 
 // Warm cobblestone plaza tile — clearly a town square, not a dungeon floor.
@@ -3290,8 +3379,10 @@ function rollTier(rolls = 1) {
   return best;
 }
 
-function generateItem(rolls = 1, ilvl = null) {
-  const tier = rollTier(rolls);
+function generateItem(rolls = 1, ilvl = null, forceTier = null) {
+  // forceTier pins the rarity (used by the town gambler, which rolls its own
+  // rarity distribution); otherwise rarity comes from the usual luck rolls.
+  const tier = forceTier || rollTier(rolls);
   const slot = weighted(SLOT_WEIGHTS);
   const baseName = pick(SLOTS[slot].names);
   // Item level: how deep this drop is geared for. Higher item level means
