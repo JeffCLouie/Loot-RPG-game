@@ -93,6 +93,9 @@
     background: var(--panel);
     border-top: 1px solid var(--border);
     flex-shrink: 0;
+    /* Stay above the bag overlay so the d-pad and action buttons remain usable. */
+    position: relative;
+    z-index: 210;
   }
 
   #action-buttons {
@@ -145,20 +148,27 @@
   .newgame-action.armed { background: var(--hp); color: #fff; border-color: #fff; }
 
   /* ── SIDE PANEL ── */
+  /* Overlays the map (absolutely positioned) so opening it doesn't resize the
+     game canvas. The control bar sits above it via a higher z-index. */
   #side-panel {
-    width: 142px;
-    flex-shrink: 0;
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 160px;
+    z-index: 200;
     background: var(--panel);
     border-left: 1px solid var(--border);
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    transition: width 0.18s ease, opacity 0.18s ease;
+    box-shadow: -4px 0 14px rgba(0,0,0,0.45);
+    transition: transform 0.18s ease, opacity 0.18s ease;
   }
   #side-panel.collapsed {
-    width: 0;
+    transform: translateX(100%);
     opacity: 0;
-    border-left: none;
+    pointer-events: none;
   }
 
   .panel-tab {
@@ -584,9 +594,12 @@ const FOODS = [
 // Enemy rosters by depth band. Each floor draws a few types from one band so
 // floors feel varied but enemies stay around the same power level.
 const ENEMY_POOL = [
-  ['🐀','🦇','🐍','🐛'],   // upper floors
-  ['👹','🧟','👻','🐺'],   // middle floors
-  ['💀','🐉','👺','🦂'],   // deep floors
+  // upper floors — vermin and small creatures
+  ['🐀','🐁','🦇','🐍','🐛','🐜','🦗','🦎','🐸','🐌','🪲','🪳','🦔','🐝'],
+  // middle floors — beasts and undead
+  ['👹','👺','🧟','👻','🧛','🐺','🐗','🐻','🦂','🦟','🦅','🐊','🦨','🐅'],
+  // deep floors — demons and horrors
+  ['🐉','👿','😈','🧌','🦖','🦕','🐙','🦑','👾','🧞','🦏','🦬','🐲','🦞'],
 ];
 
 const BOSSES = [
@@ -639,9 +652,10 @@ function togglePanel() {
   btn.classList.toggle('open', panelOpen);
   btn.querySelector('.action-label').textContent = panelOpen ? 'CLOSE' : 'BAG';
   if (panelOpen) renderPanel();
-  // Canvas width changes with the panel; resize + redraw after the CSS transition.
-  setTimeout(() => { resizeCanvas(); draw(); }, 200);
 }
+
+// Tapping the map closes the bag overlay if it's open.
+canvas.addEventListener('click', () => { if (panelOpen) togglePanel(); });
 
 // ══════════════════════════════════════════
 // MAP GENERATION
@@ -843,7 +857,9 @@ function sellItem(i) {
 function spawnEnemies() {
   enemies = [];
   const isBossFloor = dungeonLevel % 5 === 0;
-  const count = isBossFloor ? 1 + Math.floor(dungeonLevel / 5) : 4 + dungeonLevel * 2;
+  const count = isBossFloor
+    ? 1 + Math.floor(dungeonLevel / 5)
+    : Math.min(3 + Math.floor(dungeonLevel * 0.7), 10);
 
   // Pick 2-3 enemy types for this floor from the depth-appropriate band, so
   // each floor has variety while every monster stays around the same level.
@@ -919,9 +935,10 @@ function spawnGroundLoot() {
     } while (mapData[gy][gx] !== 0 && tries < 100);
     if (tries < 100) groundItems.push({ x: gx, y: gy });
   }
-  // Spawn food
+  // Spawn food — now a rare find: most floors have none.
   groundFood = [];
-  const foodCount = rnd(1, 3);
+  let foodCount = 0;
+  if (Math.random() < 0.35) foodCount = 1;
   for (let i = 0; i < foodCount; i++) {
     let fx, fy, tries = 0;
     do {
@@ -1580,7 +1597,7 @@ function attackEnemy(e) {
       log(`❤️ ${label} dropped a Health Potion! (${player.healPotions} held)`, 'loot');
       updateBars();
     }
-    if (Math.random() < 0.25) {
+    if (Math.random() < 0.06) {
       const f = pick(FOODS);
       groundFood.push({ x: e.x, y: e.y, ...f });
       log(`${f.emoji} ${label} dropped ${f.name}!`, 'loot');
@@ -1662,9 +1679,22 @@ function checkPickupProximity() {
   // Loot underfoot is shown on the map; no need to nag about it.
 }
 
+// Advance the world one turn without the player moving: status ticks, regen,
+// then nearby enemies act. Lets you stand still and let enemies close in.
+function passTurn() {
+  tickStatusEffects();
+  applyRegen();
+  enemies.filter(e => !e.dead).forEach(e => {
+    const dist = Math.abs(e.x - player.x) + Math.abs(e.y - player.y);
+    if (dist <= 6) enemyMove(e);
+  });
+  draw();
+  saveGame();
+}
+
 function pickup() {
   const idx = groundItems.findIndex(g => g.x===player.x && g.y===player.y);
-  if (idx === -1) { log('Nothing here to use.'); return; }
+  if (idx === -1) { log('You wait...'); passTurn(); return; }
   const chest = groundItems.splice(idx, 1)[0];
 
   // Very small chance the chest is trapped.
@@ -1748,7 +1778,18 @@ function renderPanel() {
       el.innerHTML = '<div id="empty-panel">No items yet.<br>Explore!</div>';
       return;
     }
-    el.innerHTML = inventory.map((item, i) => {
+    // Sort the displayed list by slot (head, chest, hands, …) while keeping each
+    // row's original inventory index so equip/select still target the right item.
+    const slotOrder = {};
+    SLOT_KEYS.forEach((s, idx) => { slotOrder[s] = idx; });
+    const rows = inventory
+      .map((item, i) => ({ item, i }))
+      .sort((a, b) => {
+        const oa = a.item.slot in slotOrder ? slotOrder[a.item.slot] : 99;
+        const ob = b.item.slot in slotOrder ? slotOrder[b.item.slot] : 99;
+        return oa - ob;
+      });
+    el.innerHTML = rows.map(({ item, i }) => {
       const equipable = !!item.slot;
       const slotName = item.slot ? SLOTS[item.slot].label.replace(/^\S+\s/, '') : 'potion';
       return `
