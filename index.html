@@ -1127,7 +1127,7 @@ function draw() {
     const alpha = 1 - t * t;
     ctx.save();
     ctx.globalAlpha = Math.max(0, alpha);
-    ctx.font = `bold ${Math.round(tw * 0.44)}px 'Courier New', monospace`;
+    ctx.font = `bold ${Math.round(tw * 0.44)}px sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.strokeStyle = '#000';
@@ -1228,7 +1228,7 @@ function totalStat(name) {
 function attackEnemy(e) {
   const dmg = getWeaponDamage() + player.level * 2 + totalStat('ATK');
   e.hp -= dmg;
-  spawnFloatingText(e.x, e.y, `-${dmg}`, '#fff');
+  spawnFloatingText(e.x, e.y, `${dmg}`, '#fff');
   log(`${HERO} hits ${e.type} for ${dmg} damage!`);
   if (e.hp <= 0) {
     e.dead = true;
@@ -1256,7 +1256,7 @@ function attackEnemy(e) {
     const raw = Math.round(e.dmg * rnd(80, 120) / 100);
     const edm = Math.max(1, raw - Math.floor(totalStat('DEF') / 2));
     player.hp = Math.max(0, player.hp - edm);
-    spawnFloatingText(player.x, player.y, `-${edm}`, '#ff3344');
+    spawnFloatingText(player.x, player.y, `${edm}`, '#ff3344');
     log(`${e.type} hits ${HERO} back for ${edm}!`);
     updateBars();
     if (player.hp === 0) handleDeath();
@@ -1291,7 +1291,7 @@ function enemyMove(e) {
       const raw = Math.round(e.dmg * rnd(80, 120) / 100);
       const dmg = Math.max(1, raw - Math.floor(totalStat('DEF') / 2));
       player.hp = Math.max(0, player.hp-dmg);
-      spawnFloatingText(player.x, player.y, `-${dmg}`, '#ff3344');
+      spawnFloatingText(player.x, player.y, `${dmg}`, '#ff3344');
       log(`${e.type} attacks ${HERO} for ${dmg}!`);
       updateBars();
       if (player.hp === 0) handleDeath();
