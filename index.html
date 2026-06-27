@@ -3139,12 +3139,20 @@ function isWalkThrough(t) {
 
 // Flood-fill the tiles reachable on foot, with stairs and teleporters acting as
 // dead-ends: you can walk up to one but not past it.
+//
+// The start tile is the exception: it's where the player already stands, so the
+// flood must always expand out of it even when it's terminal. On every floor
+// below the first the player spawns *on* the entry-stair tile (a stair is
+// terminal), so without this the flood would dead-end immediately and report
+// nothing reachable — quietly disabling ensureFootConnected and letting a foe
+// strand behind the sealed exit.
 function reachableOnFoot(sx, sy) {
   const seen = new Set([sy + ',' + sx]);
   const stack = [[sx, sy]];
   while (stack.length) {
     const [x, y] = stack.pop();
-    if (!isWalkThrough(mapData[y][x])) continue;     // terminal tile: don't pass through
+    const isStart = x === sx && y === sy;
+    if (!isStart && !isWalkThrough(mapData[y][x])) continue;  // terminal tile: don't pass through
     for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
       const nx = x + dx, ny = y + dy;
       if (nx < 0 || ny < 0 || nx >= MAP_W || ny >= MAP_H) continue;
@@ -3183,6 +3191,34 @@ function ensureFootConnected() {
     }
     if (!near) return;
     tunnel(target.x, target.y, near.x, near.y);
+  }
+}
+
+// Safety net against an unwinnable floor: the exit stays sealed until every
+// hostile is dead, so a foe walled off behind the sealed stairs (or any other
+// terminal pinch point) can never be reached and the floor can never clear.
+// After all foes are placed, relocate any hostile the player can't walk to onto
+// a guaranteed-reachable open floor tile. ensureFootConnected normally carves a
+// detour to every pocket, so this only fires in rare residual cases — but a
+// deadlock is bad enough to be worth the belt-and-suspenders check.
+function ensureHostilesReachable() {
+  const foot = reachableOnFoot(player.x, player.y);
+  // Goblins flee and don't gate the exit, so they're allowed to be unreachable.
+  const stranded = (enemies || []).filter(e => !e.dead && !e.isGoblin && !foot.has(e.y + ',' + e.x));
+  if (!stranded.length) return;
+  // Open, reachable floor tiles we can move a stranded foe onto.
+  const spots = [];
+  for (const key of foot) {
+    const c = key.indexOf(',');
+    const y = +key.slice(0, c), x = +key.slice(c + 1);
+    if (mapData[y][x] !== 0) continue;               // plain floor only
+    if (x === player.x && y === player.y) continue;
+    spots.push({ x, y });
+  }
+  for (const e of stranded) {
+    const spot = spots.find(s => !getEnemyAt(s.x, s.y));
+    if (!spot) break;                                // no room left — give up
+    e.x = spot.x; e.y = spot.y;
   }
 }
 
@@ -3415,6 +3451,10 @@ function generateMap() {
   if (Math.random() < 0.5) tryBuildVault(reach);
   // A mini-quest may take over the floor (after enemies/loot are placed).
   maybeSpawnQuest(reach);
+
+  // With every foe (including any quest horde) now placed, make sure none is
+  // stranded behind the sealed exit — otherwise the floor could never clear.
+  ensureHostilesReachable();
 
   // ── CLEAR CONDITION ── seal the stairs until the floor's hostiles are down.
   // (A handful of floors can spawn with no blockers — those open immediately.)
