@@ -1296,6 +1296,7 @@ function hostilesRemaining() {
 function updateFloorClear() {
   if (!floorCleared && hostilesRemaining() === 0) {
     floorCleared = true;
+    if (player.clearedFloors) player.clearedFloors[dungeonLevel] = true;
     log('🔓 The floor is clear — the stairs down unseal!', 'important');
     sfx('stairs');
     updateBars();
@@ -1379,6 +1380,10 @@ let player = { x: 5, y: 5, hp: 100, maxHp: 100, mp: 60, maxMp: 60, gold: 0, leve
   // Deepest dungeon floor reached — the Dungeon Gate in town lets you re-enter
   // on any floor up to this, so you can backtrack to grind levels and gear.
   maxFloor: 1,
+  // Floors the player has already cleared of foes, keyed by floor number. Once a
+  // floor is here its stairs never re-seal — backtracking via the Dungeon Gate or
+  // the up-stairs drops you onto an already-open floor with no unlock conditions.
+  clearedFloors: {},
   // Hero attributes raised by spending points earned on level up.
   attributes: { might: 0, vitality: 0, agility: 0, spirit: 0 }, attrPoints: 0,
   // Chosen cosmetic looks per visual slot (null = mirror equipped gear), plus the
@@ -1651,9 +1656,9 @@ const FLOOR_TINTS = [
   'rgba(40,180,120,0.10)',   // sickly green
   'rgba(200,40,60,0.10)',    // bloody red
 ];
-// Tile legend: 0 floor · 1 wall · 2 stairs · 3 fountain · 5 shrine ·
+// Tile legend: 0 floor · 1 wall · 2 stairs down · 3 fountain · 5 shrine ·
 // 6 water (impassable) · 7 lava (passable, burns) · 8 spikes (passable, stabs) ·
-// 9 teleporter · 10 cracked wall (breakable) · 11 locked door.
+// 9 teleporter · 10 cracked wall (breakable) · 11 locked door · 12 stairs up.
 
 // Carve an L-shaped corridor of floor between two interior points.
 function carveCorridor(x1, y1, x2, y2) {
@@ -1667,7 +1672,7 @@ function carveCorridor(x1, y1, x2, y2) {
 
 // Tiles the player can actually stand on / path through (for reachability).
 function isFloorPassable(t) {
-  return t === 0 || t === 2 || t === 3 || t === 5 || t === 7 || t === 8 || t === 9;
+  return t === 0 || t === 2 || t === 3 || t === 5 || t === 7 || t === 8 || t === 9 || t === 12;
 }
 
 // Flood-fill the set of "y,x" tiles reachable from a start point.
@@ -1856,6 +1861,11 @@ function generateMap() {
   if (best) mapData[best.y][best.x] = 2;
   else mapData[player.y][Math.min(MAP_W-2, player.x+1)] = 2; // safety fallback
 
+  // ── STAIRS UP ── back the way you came. They sit on the entry tile (where you
+  // arrive), so walking back onto them returns you to the previous floor. Floor 1
+  // has no floor above, so it gets none — use TOWN to leave the first floor.
+  if (dungeonLevel > 1) mapData[startPos.y][startPos.x] = 12;
+
   // ── LAVA (passable, burns) ──
   if (dungeonLevel >= 2 && Math.random() < 0.5) {
     const n = rnd(2, 5);
@@ -1915,9 +1925,17 @@ function generateMap() {
 
   // ── CLEAR CONDITION ── seal the stairs until the floor's hostiles are down.
   // (A handful of floors can spawn with no blockers — those open immediately.)
+  // A floor you've already cleared stays open: backtracking here via the gate or
+  // the up-stairs never re-imposes an unlock condition.
   floorCleared = false;
-  if (hostilesRemaining() === 0) floorCleared = true;
-  else log(`🔒 The stairs down are sealed. ${clearConditionLabel()}`, 'important');
+  if (player.clearedFloors && player.clearedFloors[dungeonLevel]) {
+    floorCleared = true;
+  } else if (hostilesRemaining() === 0) {
+    floorCleared = true;
+    if (player.clearedFloors) player.clearedFloors[dungeonLevel] = true;
+  } else {
+    log(`🔒 The stairs down are sealed. ${clearConditionLabel()}`, 'important');
+  }
 }
 
 // Build a standard floor-level foe at a tile (used for quest hordes).
@@ -3454,6 +3472,38 @@ function draw() {
           ctx.font = `${Math.round(tw*0.4)}px serif`;
           ctx.fillText('🔒', px + tw/2, py + th*0.42);
         }
+      } else if (t === 12) {
+        // Stairs up — the way back to the previous floor. Never sealed, so they
+        // always wear the inviting gold glow; a ▲ and a top-lit pit distinguish
+        // them from the downward stairs.
+        ctx.fillStyle = '#0d0d14';
+        ctx.fillRect(px, py, tw, th);
+        // ascending steps — mirror of the down-stairs, narrowing toward the top
+        const upSteps = 4;
+        for (let s = 0; s < upSteps; s++) {
+          const shade = 20 + s * 14;
+          ctx.fillStyle = `rgb(${shade+30},${shade+22},${Math.floor(shade*0.4)})`;
+          const inset = (s / upSteps) * tw * 0.4;
+          const sy = py + th*0.5 - (s / upSteps) * th * 0.5;
+          ctx.fillRect(px + inset, sy, tw - inset*2, th * (0.5/upSteps) + 1);
+        }
+        const upGlow = C.stairsGlow;
+        ctx.fillStyle = upGlow + '33';
+        ctx.fillRect(px, py, tw, th*0.45);
+        ctx.fillStyle = upGlow;
+        ctx.font = `bold ${Math.round(tw*0.42)}px serif`;
+        ctx.textAlign = 'center';
+        ctx.fillText('▲', px + tw/2, py + th*0.42);
+        // Pulsing ring so the way back is easy to spot too.
+        const up = 0.5 + 0.5*Math.sin(Date.now()/350);
+        ctx.save();
+        ctx.strokeStyle = upGlow;
+        ctx.globalAlpha = 0.35 + 0.4*up;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(px + tw/2, py + th/2, tw*(0.4 + 0.08*up), 0, Math.PI*2);
+        ctx.stroke();
+        ctx.restore();
       } else if (t === 3) {
         // Fountain of Healing — stone basin with glowing blue water
         ctx.fillStyle = (x+y)%2===0 ? C.floor : C.floorAlt;
@@ -4142,6 +4192,24 @@ function move(dx, dy) {
   // Shrine → activate it (grants a buff or instant effect), then stand on it.
   if (tile === 5) {
     activateShrine(nx, ny);
+    return;
+  }
+
+  // Stairs up → climb back to the previous floor. Always open (the floor above
+  // is one you've already been through), so there's never an unlock condition.
+  if (tile === 12) {
+    if (dungeonLevel <= 1) { player.x = nx; player.y = ny; draw(); return; }
+    dungeonLevel--;
+    statusEffects = [];
+    tickBuffs();
+    sfx('stairs');
+    log(`Ascended to dungeon level ${dungeonLevel}. You return to ${currentTheme().name}.`, 'important');
+    player.x = 5; player.y = 5;
+    generateMap();
+    maybeFloorEvent();
+    updateBars();
+    saveGame();
+    draw();
     return;
   }
 
@@ -5421,6 +5489,8 @@ function loadGame() {
     if (player.attrPoints == null) player.attrPoints = 0;
     // Migrate saves that predate the deepest-floor tracker / town hub.
     if (player.maxFloor == null) player.maxFloor = data.dungeonLevel || 1;
+    // Migrate saves that predate cleared-floor tracking.
+    if (!player.clearedFloors || typeof player.clearedFloors !== 'object') player.clearedFloors = {};
     inTown = !!data.inTown;
     dungeonReturn = data.dungeonReturn || data.dungeonLevel || 1;
     inventory = (data.inventory || []).filter(it => it && it.slot); // drop legacy typeKey-only items
