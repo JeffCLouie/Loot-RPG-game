@@ -997,6 +997,35 @@ const SLOT_KEYS = Object.keys(SLOTS);
 // Roll weights for which slot a dropped item belongs to.
 const SLOT_WEIGHTS = { weapon:22, chest:15, head:13, hands:13, legs:13, ring:12, amulet:12 };
 
+// ── AFFIX SYSTEM ──
+// Beyond its headline (weapon DMG / armor DEF), an item carries up to a
+// rarity-gated number of bonus affixes, split into two independent pools: gear
+// STATS (+ATK, +Crit %, …) and ATTRIBUTES (+Might, +Luck, …). The caps below are
+// MAXIMUMS — the real count is rolled up to them, so a legendary *can* land 4
+// stats + 2 attributes but usually rolls fewer. No stat or attribute is ever
+// duplicated on one item, and an affix can't repeat the slot's headline.
+const TIER_AFFIX_CAPS = {
+  junk:      { stat: 0, attr: 0 },
+  normal:    { stat: 1, attr: 0 },
+  uncommon:  { stat: 1, attr: 1 },
+  rare:      { stat: 2, attr: 1 },
+  epic:      { stat: 3, attr: 1 },
+  legendary: { stat: 4, attr: 2 },
+  unique:    { stat: 4, attr: 2 },
+};
+// Which stats / attributes each slot is allowed to roll. A slot can never roll
+// anything outside its pool (no Attack on boots, no Defense on a ring), which is
+// what gives each piece a recognisable identity.
+const SLOT_AFFIX_POOLS = {
+  head:   { stats: ['DEF','HP','MP','REGEN','CRIT'],      attrs: ['vitality','spirit','luck'] },
+  chest:  { stats: ['DEF','HP','REGEN','MP'],             attrs: ['vitality','spirit'] },
+  hands:  { stats: ['ATK','CRIT','CRITDMG','SPD'],        attrs: ['might','agility'] },
+  legs:   { stats: ['DEF','SPD','HP','REGEN'],            attrs: ['agility','vitality'] },
+  weapon: { stats: ['ATK','CRIT','CRITDMG','LCK'],        attrs: ['might','agility','spirit'] },
+  ring:   { stats: ['CRIT','CRITDMG','LCK','ATK','MP'],   attrs: ['might','agility','luck','spirit','vitality'] },
+  amulet: { stats: ['MP','HP','LCK','REGEN','CRIT'],      attrs: ['spirit','luck','vitality','might'] },
+};
+
 // ── ITEM ICONS ──
 // Every base item name maps to a vector-icon *key* (see ICON_PATHS below) so loot
 // can be *seen*: a small picture next to each bag row, and — for head/chest/weapon
@@ -1197,31 +1226,81 @@ const FLAVOR = {
   unique:    ['Only one exists. You found it.','The world trembles.','Destiny has chosen you.'],
 };
 
-const STAT_NAMES = ['ATK','DEF','SPD','LCK','HP','MP','CRIT','REGEN'];
+// Gear stats. These are no longer the *only* source of these numbers — every one
+// of them is now a derived player stat fed by attributes too (see derivedStat /
+// the playerXxx helpers). CRITDMG (bonus crit damage %) is an equipment-only
+// stat: nothing but gear raises it, so loot drives the crit-damage side of a build.
+const STAT_NAMES = ['ATK','DEF','SPD','LCK','HP','MP','CRIT','CRITDMG','REGEN'];
+// Friendly labels for stats in tooltips/the hero sheet (CRIT/CRITDMG read as %).
+const STAT_LABELS = { ATK:'Attack', DEF:'Defense', SPD:'Speed', LCK:'Luck', HP:'Max HP',
+  MP:'Max MP', CRIT:'Crit %', CRITDMG:'Crit Dmg %', REGEN:'Regen', DMG:'Damage' };
 const HERO = '🧙';
 
 // ── POWER & ATTRIBUTES ──
 // Every equippable item has a single "power" number summarising how strong it is:
 // each stat is worth a weighted amount, plus a flat bonus for its rarity tier.
 // The player's overall power is built from their level, attributes, and gear.
-const STAT_POWER_WEIGHTS = { ATK:3, DEF:2, SPD:2, LCK:2, HP:1, MP:1, CRIT:4, REGEN:5, DMG:3 };
+const STAT_POWER_WEIGHTS = { ATK:3, DEF:2, SPD:2, LCK:2, HP:1, MP:1, CRIT:4, CRITDMG:1, REGEN:5, DMG:3 };
+// Per-point power weight of a raised attribute carried on an item (e.g. +13 Might).
+const ATTR_POWER_WEIGHT = 6;
 // A small flat nudge per rarity — kept low on purpose so an item's power is
 // driven mostly by its (item-level-scaled) stats. This is what lets a deep
 // common eventually out-power an early legendary instead of the tier bonus
 // permanently outranking it.
 const TIER_POWER_BONUS = { junk:0, normal:1, uncommon:2, rare:4, epic:7, legendary:11, unique:16 };
 
-// Hero attributes — raised by spending points earned on each level up. Levels
-// are slow and precious now (see checkLevelUp), so each point hits hard: a
-// single level's worth of points is a meaningful, build-defining jump.
+// Hero attributes — the only thing you spend points on. Every class now starts
+// with the SAME spread (ATTR_BASE in each) and differs only in how its points
+// convert into power: each attribute feeds a family of derived stats (see
+// derivedStat), and damage in particular scales off each class's primary/
+// secondary attribute (see CLASSES[*].dmgAttrs). You earn a generous handful of
+// points per level, and each point is correspondingly small, so the per-level
+// power gain — and thus the difficulty curve — stays close to the old design.
 const ATTRIBUTES = {
-  might:    { label: '💪 Might',    short: 'MIG', desc: '+4 attack damage per point' },
-  vitality: { label: '❤️ Vitality', short: 'VIT', desc: '+18 max HP & regen per point' },
-  agility:  { label: '🎯 Agility',  short: 'AGI', desc: '+1.5% crit & +1.2% dodge per point' },
-  spirit:   { label: '✨ Spirit',   short: 'SPR', desc: '+10 max MP, regen & spell power per point' },
+  might:    { label: '💪 Might',    short: 'MIG', desc: 'raises Attack power' },
+  vitality: { label: '❤️ Vitality', short: 'VIT', desc: 'raises max HP, Defense & HP regen' },
+  agility:  { label: '🎯 Agility',  short: 'AGI', desc: 'raises Speed (dodge)' },
+  spirit:   { label: '✨ Spirit',   short: 'SPR', desc: 'raises max MP, MP regen & spell power' },
+  luck:     { label: '🍀 Luck',     short: 'LCK', desc: 'raises Crit chance & loot quality' },
 };
 const ATTR_KEYS = Object.keys(ATTRIBUTES);
-const ATTR_POINTS_PER_LEVEL = 3;
+// Every hero starts with this many points already in each attribute, so a fresh
+// character has a real stat baseline rather than near-zero attributes.
+const ATTR_BASE = 10;
+// Points granted per level. Higher than the old 3 (paired with smaller per-point
+// effects) so the power-per-level slope matches the old curve while giving more
+// to spread across the five attributes.
+const ATTR_POINTS_PER_LEVEL = 5;
+
+// How one point in an attribute converts into each derived stat. Tuned so that
+// dumping a level's worth of points (5) into one attribute grants roughly what
+// the old design's 3 points did, keeping the difficulty curve intact. Damage is
+// NOT here — it scales per class via CLASSES[*].dmgAttrs and ATTR_DMG_*.
+const ATTR_FX = {
+  hpPerVit:      11,     // Vitality → max HP
+  defPerVit:     0.5,    // Vitality → Defense
+  hpRegenPerVit: 0.16,   // Vitality → HP regen / turn
+  mpPerSpr:      6,      // Spirit → max MP
+  mpRegenPerSpr: 0.16,   // Spirit → MP regen / turn
+  spellPerSpr:   3,      // Spirit → spell skill power (Firebolt/Mend)
+  dodgePerAgi:   0.0072, // Agility → dodge chance
+  critPerLuck:   0.009,  // Luck → crit chance
+};
+// Damage scaling off the class's primary / secondary attribute (per point).
+const ATTR_DMG_PRIMARY   = 2.4;
+const ATTR_DMG_SECONDARY = 0.8;
+// A fresh attribute block — every attribute starts at ATTR_BASE. Used for new
+// heroes, respecs (reset to base), and migrating older saves.
+function baseAttributes() {
+  const a = {};
+  for (const k of ATTR_KEYS) a[k] = ATTR_BASE;
+  return a;
+}
+// Points the player has actually spent (everything above the starting ATTR_BASE).
+// This is what a respec refunds — the base block is never given back.
+function spentAttrPoints() {
+  return ATTR_KEYS.reduce((s, k) => s + Math.max(0, (player.attributes?.[k] || 0) - ATTR_BASE), 0);
+}
 
 // ── DEPTH THREAT ──
 // The single most important difficulty lever: enemy power keeps climbing with
@@ -1256,36 +1335,84 @@ function itemPower(item) {
       p += v * (STAT_POWER_WEIGHTS[k] || 1);
     }
   }
+  // Attribute affixes (+Might, +Luck, …) add to an item's power too.
+  if (item.attrs) for (const v of Object.values(item.attrs)) {
+    if (typeof v === 'number') p += v * ATTR_POWER_WEIGHT;
+  }
   p += TIER_POWER_BONUS[item.tier] || 0;
   return Math.max(0, Math.round(p));
 }
+
+// Effective value of an attribute: the points spent (including the ATTR_BASE
+// every hero starts with) plus any bonus carried on equipped gear (+13 Might,
+// etc.). This — not the raw spent value — is what every derived stat reads.
+function totalAttr(key) {
+  let sum = (player.attributes?.[key] || 0);
+  for (const slot of SLOT_KEYS) {
+    const it = equipped[slot];
+    if (it && it.attrs && typeof it.attrs[key] === 'number') sum += it.attrs[key];
+  }
+  return sum;
+}
+
+// The primary/secondary attributes a class deals damage with. Classless heroes
+// (legacy saves mid-prompt) fall back to Might.
+function classDmgAttrs() {
+  const cls = playerClass();
+  return (cls && cls.dmgAttrs) || { primary: 'might', secondary: null };
+}
+// Bonus attack damage contributed by the class's damage attributes.
+function attrDamage() {
+  const { primary, secondary } = classDmgAttrs();
+  let d = totalAttr(primary) * ATTR_DMG_PRIMARY;
+  if (secondary) d += totalAttr(secondary) * ATTR_DMG_SECONDARY;
+  return d;
+}
+// Crit damage multiplier — equipment-only beyond the base, so gear (CRITDMG)
+// drives how hard your crits land.
+function critDamageMult() { return 2.0 + totalStat('CRITDMG') / 100; }
 
 // The player's overall power: a blend of level, spent attributes, and equipped gear.
 function playerPower() {
   let p = player.level * 10;
   for (const slot of SLOT_KEYS) if (equipped[slot]) p += itemPower(equipped[slot]);
-  const a = player.attributes || {};
-  p += (a.might||0)*7 + (a.vitality||0)*4 + (a.agility||0)*5 + (a.spirit||0)*3;
+  const spent = ATTR_KEYS.reduce((s, k) => s + (player.attributes?.[k] || 0), 0);
+  p += spent * 3;
   return Math.round(p);
 }
 
 // Max HP/MP are derived from level + attributes so the formula stays consistent
-// across level ups, attribute spends, and loading an older save.
+// across level ups, attribute spends, and loading an older save. Vitality drives
+// HP and Spirit drives MP (each via ATTR_FX), and gear HP/MP add on top.
 function baseMaxHp() {
-  let hp = 92 + player.level*8 + (player.attributes?.vitality||0)*18;
-  if (player.class === 'templar') hp = Math.round(hp * 1.20); // Templar: hardier body
-  return hp;
+  let hp = player.level*8 + totalAttr('vitality') * ATTR_FX.hpPerVit + totalStat('HP');
+  if (player.class === 'templar') hp = hp * 1.20; // Templar: hardier body
+  return Math.max(1, Math.round(hp));
 }
 function baseMaxMp() {
-  let mp = 56 + player.level*4 + (player.attributes?.spirit||0)*10;
-  if (player.class === 'mage') mp = Math.round(mp * 1.30); // Mage: deeper mana pool
-  return mp;
+  let mp = player.level*4 + totalAttr('spirit') * ATTR_FX.mpPerSpr + totalStat('MP');
+  if (player.class === 'mage') mp = mp * 1.30; // Mage: deeper mana pool
+  return Math.max(0, Math.round(mp));
+}
+
+// Total Defense: gear DEF plus a contribution from Vitality.
+function playerDefense() {
+  return totalStat('DEF') + totalAttr('vitality') * ATTR_FX.defPerVit;
+}
+
+// Crit chance — driven by Luck (and gear CRIT/LCK). Capped so you can't become a
+// guaranteed-crit machine.
+function playerCritChance() {
+  const rogueCrit = player.class === 'rogue' ? 0.08 : 0;
+  return Math.min(0.6, 0.04 + rogueCrit
+    + (totalStat('CRIT') + totalStat('LCK')) * 0.01
+    + totalAttr('luck') * ATTR_FX.critPerLuck);
 }
 
 // Chance to completely avoid an incoming hit, driven by Agility and gear SPD.
 // Capped so you can never become untouchable — depth threat still outpaces it.
 function playerDodge() {
-  const base = (player.attributes?.agility||0) * 0.012 + totalStat('SPD') * 0.006;
+  const base = totalAttr('agility') * ATTR_FX.dodgePerAgi + totalStat('SPD') * 0.006;
   // Rogues are slipperier: a flat dodge bump and a slightly higher ceiling.
   if (player.class === 'rogue') return Math.min(0.45, base + 0.08);
   return Math.min(0.35, base);
@@ -1394,17 +1521,19 @@ function weaponStyle() {
 }
 
 // ── CHARACTER CLASSES ──
-// Each class gives a starting attribute bias, a passive identity, an MP-fueled
-// active skill (cast with the ⚡ button / R key), and the set of weapon types it
-// is allowed to wield. Off-class weapons still drop and sell, but can't be
-// equipped (a hard lock — see canEquipItem). Class is chosen on a new game and
+// Every class now starts with the SAME attributes (ATTR_BASE in each). A class's
+// identity instead lives in `dmgAttrs` — the primary/secondary attributes its
+// attacks scale off, so a Mage hits with Spirit while a Rogue hits with Agility —
+// plus its passive, MP-fueled active skill (cast with the ⚡ button / R key), and
+// the weapon types it can wield. Off-class weapons still drop and sell, but can't
+// be equipped (a hard lock — see canEquipItem). Class is chosen on a new game and
 // can be re-picked at the town Trainer.
 const CLASSES = {
   warrior: {
     name: 'Warrior', icon: '⚔️', color: '#e08a3c',
     blurb: 'A frontline bruiser — hits harder and shrugs off blows.',
     passive: '+10% damage dealt · −15% damage taken',
-    startAttrs: { might: 3, vitality: 1 },
+    dmgAttrs: { primary: 'might', secondary: 'vitality' },
     weapons: ['Sword','Axe','Mace','Spear','Scythe'],
     skill: { id:'cleave', name:'Cleave', icon:'🪓', mp:12, cd:3,
              desc:'A sweeping blow strikes every adjacent foe hard.' },
@@ -1413,7 +1542,7 @@ const CLASSES = {
     name: 'Rogue', icon: '🗡️', color: '#5ec27a',
     blurb: 'A nimble striker — more crits and harder to pin down.',
     passive: '+8% crit chance · +8% dodge',
-    startAttrs: { agility: 3, might: 1 },
+    dmgAttrs: { primary: 'agility', secondary: 'might' },
     weapons: ['Dagger','Sword','Bow'],
     skill: { id:'backstab', name:'Backstab', icon:'🎯', mp:10, cd:3,
              desc:'A guaranteed, devastating critical on an adjacent foe.' },
@@ -1422,7 +1551,7 @@ const CLASSES = {
     name: 'Mage', icon: '🔮', color: '#7d9bff',
     blurb: 'A glass-cannon caster — a deep mana pool and ranged fire.',
     passive: '+30% max MP · spell-powered Firebolt',
-    startAttrs: { spirit: 3, agility: 1 },
+    dmgAttrs: { primary: 'spirit', secondary: 'luck' },
     weapons: ['Staff','Dagger'],
     skill: { id:'firebolt', name:'Firebolt', icon:'🔥', mp:14, cd:2,
              desc:'Hurl fire at the nearest foe in range — it can\'t retaliate.' },
@@ -1431,7 +1560,7 @@ const CLASSES = {
     name: 'Templar', icon: '🛡️', color: '#e8c95a',
     blurb: 'A holy bulwark — sturdier, and able to mend its own wounds.',
     passive: '+20% max HP · stronger regen',
-    startAttrs: { vitality: 3, spirit: 1 },
+    dmgAttrs: { primary: 'vitality', secondary: 'spirit' },
     weapons: ['Sword','Mace','Spear'],
     skill: { id:'mend', name:'Mend', icon:'✨', mp:12, cd:3,
              desc:'Channel spirit to restore a burst of health.' },
@@ -1590,11 +1719,14 @@ let player = { x: 5, y: 5, hp: 100, maxHp: 100, mp: 60, maxMp: 60, gold: 0, leve
   // floor is here its stairs never re-seal — backtracking via the Dungeon Gate or
   // the up-stairs drops you onto an already-open floor with no unlock conditions.
   clearedFloors: {},
-  // Chosen character class (null until picked on a new game). Drives starting
-  // attributes, passives, the active skill, and which weapons can be equipped.
+  // Chosen character class (null until picked on a new game). Drives how
+  // attributes convert into damage, passives, the active skill, and which weapons
+  // can be equipped.
   class: null, skillCd: 0,
-  // Hero attributes raised by spending points earned on level up.
-  attributes: { might: 0, vitality: 0, agility: 0, spirit: 0 }, attrPoints: 0,
+  // Hero attributes — every one starts at ATTR_BASE and is raised by spending
+  // points earned on level up. attrSchema marks the attribute-driven-stats model
+  // (v2) so older saves can be migrated on load.
+  attributes: baseAttributes(), attrPoints: 0, attrSchema: 2,
   // Chosen cosmetic looks per visual slot (null = mirror equipped gear), plus the
   // wardrobe of every look the player has ever found.
   cosmetics: { head: null, chest: null, weapon: null },
@@ -2579,11 +2711,14 @@ function stockPrice(s) {
   return Math.max(1, Math.round(s.price * sale));
 }
 
-// Compact one-line summary of an item's stats, e.g. "⚡14 · 8-12 DMG · +3 ATK".
+// Compact one-line summary of an item's stats & attributes, e.g.
+// "⚡14 · 8-12 DMG · +3 ATK · +5 MIG".
 function itemStatLine(item) {
-  const body = Object.entries(item.stats).map(([k, v]) =>
+  const parts = Object.entries(item.stats).map(([k, v]) =>
     (typeof v === 'string') ? `${v} ${k}` : `${v < 0 ? '' : '+'}${v} ${k}`
-  ).join(' · ');
+  );
+  if (item.attrs) for (const [k, v] of Object.entries(item.attrs)) parts.push(`+${v} ${ATTRIBUTES[k].short}`);
+  const body = parts.join(' · ');
   return item.slot ? `⚡${itemPower(item)}${body ? ' · ' + body : ''}` : body;
 }
 
@@ -2849,6 +2984,7 @@ function buildTown() {
     { x: 8,  y: 10, w: 3, h: 2, kind: 'trainer',  roof: '#3a7a4a', sign: '🎓' },
     { x: 14, y: 10, w: 3, h: 2, kind: 'gate',     roof: '#5a4a7a', sign: '🌀' },
     { x: 8,  y: 6,  w: 3, h: 2, kind: 'gambler',  roof: '#b88a2a', sign: '🎲' },
+    { x: 2,  y: 6,  w: 3, h: 2, kind: 'enchanter',roof: '#6a3a8a', sign: '🪄' },
   ];
 
   // Stamp each building footprint into the map as solid tiles.
@@ -2867,6 +3003,7 @@ function buildTown() {
     trainer:  { emoji: '🎓',   name: 'Trainer',      tag: '✨' },
     gate:     { emoji: '🌀',   name: 'Dungeon Gate', tag: '⬇️' },
     gambler:  { emoji: '🎲',   name: 'Gambler',      tag: '💰' },
+    enchanter:{ emoji: '🪄',   name: 'Enchanter',    tag: '✨' },
   };
   townNpcs = townBuildings.map(b => ({
     x: b.x + Math.floor(b.w / 2),
@@ -2915,6 +3052,7 @@ function openTownService(kind) {
   if (kind === 'healer')  { openHealer();  return; }
   if (kind === 'trainer') { openTrainer(); return; }
   if (kind === 'gambler') { openGambler(); return; }
+  if (kind === 'enchanter') { openEnchanter(); return; }
   if (kind === 'gate')    { openGate();    return; }
 }
 
@@ -2975,9 +3113,14 @@ function upgradeEquipped(slot) {
       it.stats[k] = `${lo + Math.max(1, Math.round(lo * 0.15))}-${hi + Math.max(1, Math.round(hi * 0.15))}`;
     }
   }
+  // Attribute affixes get the same ~15% (min +1) boost.
+  if (it.attrs) for (const k of Object.keys(it.attrs)) {
+    it.attrs[k] = it.attrs[k] + Math.max(1, Math.round(it.attrs[k] * 0.15));
+  }
   it.value = Math.round((it.value || 1) * 1.3);
   sfx('equip');
   log(`⚒️ The smith reforges your ${it.name} to +${it.upgrades}!`, 'loot');
+  if (equipped[slot]) recomputeMaxStats();
   updateBars(); renderPanel(); renderSmith(); saveGame();
 }
 
@@ -3030,13 +3173,13 @@ function buyTownPotion(which, cost) {
 
 // ── TRAINER — respec spent attribute points ──
 function respecCost() {
-  const spent = ATTR_KEYS.reduce((s, k) => s + (player.attributes?.[k] || 0), 0);
+  const spent = spentAttrPoints();
   return 50 + spent * 20 + player.level * 5;
 }
 function openTrainer() { openTownModal('🎓 Trainer'); renderTrainer(); }
 function renderTrainer() {
   const a = player.attributes || {};
-  const spent = ATTR_KEYS.reduce((s, k) => s + (a[k] || 0), 0);
+  const spent = spentAttrPoints();
   const cost = respecCost();
   const rows = ATTR_KEYS.map(k => `<div class="shop-row">
       <div class="shop-row-info"><div class="shop-row-name">${ATTRIBUTES[k].label}: ${a[k] || 0}</div>
@@ -3047,7 +3190,7 @@ function renderTrainer() {
     <div class="shop-row">
       <span class="loot-icon">🔄</span>
       <div class="shop-row-info"><div class="shop-row-name">Respec Attributes</div>
-        <div class="shop-row-sub">Refund every point you've spent</div></div>
+        <div class="shop-row-sub">Refund every point spent above the base ${ATTR_BASE}</div></div>
       <span class="shop-price">${cost}g</span>
       <button class="shop-buy-btn" ${(player.gold >= cost && spent > 0) ? '' : 'disabled'} onclick="respecAttrs()">RESET</button>
     </div>
@@ -3065,18 +3208,190 @@ function renderTrainer() {
     }).join('')}`);
 }
 function respecAttrs() {
-  const spent = ATTR_KEYS.reduce((s, k) => s + (player.attributes?.[k] || 0), 0);
+  const spent = spentAttrPoints();
   const cost = respecCost();
   if (spent <= 0 || player.gold < cost) return;
   player.gold -= cost;
   player.attrPoints = (player.attrPoints || 0) + spent;
-  player.attributes = { might: 0, vitality: 0, agility: 0, spirit: 0 };
+  player.attributes = baseAttributes();
   recomputeMaxStats();
   if (player.hp > player.maxHp) player.hp = player.maxHp;
   if (player.mp > player.maxMp) player.mp = player.maxMp;
   sfx('shrine');
   log(`🎓 You unlearn your attributes — ${spent} point${spent === 1 ? '' : 's'} returned to spend.`, 'important');
   updateBars(); renderPanel(); renderTrainer(); saveGame();
+}
+
+// ── ENCHANTER — fill in & reroll item affixes ──
+// Lets the player gamble gold to add a missing affix (Augment), reroll every
+// bonus affix at once (Reroll), or reroll a single chosen affix. Headlines
+// (weapon DMG / armor DEF/ATK) are untouched; rerolls respect the slot's pool,
+// the rarity caps, and the no-duplicate rule, all via the shared affix helpers.
+let enchantSel = null; // id of the item currently being worked on, or null
+
+// Every gear item the player owns (equipped first, then bag).
+function allGear() {
+  const list = [];
+  for (const s of SLOT_KEYS) if (equipped[s]) list.push({ item: equipped[s], where: 'equipped', slot: s });
+  inventory.forEach((it, i) => { if (it && it.slot) list.push({ item: it, where: 'bag', idx: i }); });
+  return list;
+}
+function findGear(id) { return allGear().find(g => g.item.id == id) || null; }
+
+// Cost helpers scale with item level and rarity.
+function enchTierFactor(item) { return 1 + Object.keys(TIERS).indexOf(item.tier) * 0.3; }
+function augmentCost(item)   { return Math.round((60 + (item.ilvl||1) * 9) * enchTierFactor(item)); }
+function rerollAllCost(item) { return Math.round((90 + (item.ilvl||1) * 13) * enchTierFactor(item)); }
+function rerollOneCost(item) { return Math.round((35 + (item.ilvl||1) * 6) * enchTierFactor(item)); }
+
+// Affixes currently available to ADD (slot pool minus what's already present).
+function availStatAffixes(item) {
+  return (SLOT_AFFIX_POOLS[item.slot]?.stats || []).filter(s => !(s in item.stats));
+}
+function availAttrAffixes(item) {
+  return (SLOT_AFFIX_POOLS[item.slot]?.attrs || []).filter(a => !(a in (item.attrs || {})));
+}
+// Count of bonus (non-headline) affixes the item carries.
+function itemAffixCounts(item) {
+  const head = headlineStats(item);
+  return {
+    statN: Object.keys(item.stats).filter(s => !head.includes(s)).length,
+    attrN: Object.keys(item.attrs || {}).length,
+  };
+}
+function canAddStat(item) {
+  const caps = TIER_AFFIX_CAPS[item.tier] || { stat:0, attr:0 };
+  return itemAffixCounts(item).statN < caps.stat && availStatAffixes(item).length > 0;
+}
+function canAddAttr(item) {
+  const caps = TIER_AFFIX_CAPS[item.tier] || { stat:0, attr:0 };
+  return itemAffixCounts(item).attrN < caps.attr && availAttrAffixes(item).length > 0;
+}
+
+function openEnchanter() { enchantSel = null; openTownModal('🪄 Enchanter'); renderEnchanter(); }
+
+// After any enchant: refresh derived stats if the piece is worn, then re-render.
+function afterEnchant(item) {
+  if (Object.values(equipped).includes(item)) { recomputeMaxStats(); if (player.hp > player.maxHp) player.hp = player.maxHp; if (player.mp > player.maxMp) player.mp = player.maxMp; }
+  sfx('shrine');
+  updateBars(); renderPanel(); saveGame(); renderEnchanter();
+}
+
+function enchantAugment(id) {
+  const g = findGear(id); if (!g) return;
+  const item = g.item;
+  const cost = augmentCost(item);
+  const stat = canAddStat(item), attr = canAddAttr(item);
+  if ((!stat && !attr) || player.gold < cost) return;
+  const mult = tierMult(item.tier);
+  // If both kinds have room, lean toward stats (attrs are the rarer, stronger slot).
+  const addAttr = attr && (!stat || Math.random() < 0.4);
+  if (addAttr) addAttrAffixes(item, item.ilvl, mult, 1);
+  else         addStatAffixes(item, item.ilvl, mult, 1);
+  player.gold -= cost;
+  log(`🪄 The enchanter augments your ${item.name} with a new property.`, 'loot');
+  afterEnchant(item);
+}
+
+function enchantRerollAll(id) {
+  const g = findGear(id); if (!g) return;
+  const item = g.item;
+  const cost = rerollAllCost(item);
+  const caps = TIER_AFFIX_CAPS[item.tier] || { stat:0, attr:0 };
+  if (player.gold < cost || (caps.stat + caps.attr) === 0) return;
+  const head = headlineStats(item);
+  for (const k of Object.keys(item.stats)) if (!head.includes(k)) delete item.stats[k];
+  item.attrs = {};
+  const mult = tierMult(item.tier);
+  addStatAffixes(item, item.ilvl, mult, rollAffixCount(caps.stat));
+  addAttrAffixes(item, item.ilvl, mult, rollAffixCount(caps.attr));
+  player.gold -= cost;
+  log(`🪄 The enchanter reforges every property on your ${item.name}.`, 'loot');
+  afterEnchant(item);
+}
+
+// Reroll one affix into a fresh random one of the same kind (stat or attribute).
+function enchantRerollOne(id, kind, key) {
+  const g = findGear(id); if (!g) return;
+  const item = g.item;
+  const cost = rerollOneCost(item);
+  if (player.gold < cost) return;
+  const mult = tierMult(item.tier);
+  if (kind === 'stat') {
+    if (headlineStats(item).includes(key) || !(key in item.stats)) return;
+    delete item.stats[key];
+    addStatAffixes(item, item.ilvl, mult, 1);
+  } else {
+    if (!item.attrs || !(key in item.attrs)) return;
+    delete item.attrs[key];
+    addAttrAffixes(item, item.ilvl, mult, 1);
+  }
+  player.gold -= cost;
+  log(`🪄 The enchanter rerolls a property on your ${item.name}.`, 'loot');
+  afterEnchant(item);
+}
+
+function renderEnchanter() {
+  // Detail view for a chosen item, else the pick list.
+  if (enchantSel != null && findGear(enchantSel)) { renderEnchantItem(findGear(enchantSel).item); return; }
+  enchantSel = null;
+  const gear = allGear();
+  if (!gear.length) {
+    setTownContent(`<div class="town-blurb">The enchanter can add and reroll properties on your gear — but you have none to work on.</div>`);
+    return;
+  }
+  const rows = gear.map(g => {
+    const it = g.item;
+    return `<div class="shop-row">
+      <span class="loot-icon">${itemIcon(it)}</span>
+      <div class="shop-row-info item-${it.tier}">
+        <div class="shop-row-name">${it.name}${g.where === 'equipped' ? ' <span style="color:#7fb0ff;font-size:9px">[worn]</span>' : ''}</div>
+        <div class="shop-row-stats">${itemStatLine(it)}</div>
+      </div>
+      <button class="shop-buy-btn" onclick="enchantPick(${it.id})">WORK</button>
+    </div>`;
+  }).join('');
+  setTownContent(`<div class="town-blurb">The enchanter tinkers with your gear: <b>Augment</b> adds a missing property, <b>Reroll</b> gambles all bonus properties at once, and you can reroll a single property too. Rarity sets how many properties a piece can hold.</div>${rows}`);
+}
+
+function enchantPick(id) { enchantSel = id; renderEnchanter(); }
+function enchantBack()   { enchantSel = null; renderEnchanter(); }
+
+function renderEnchantItem(item) {
+  const caps = TIER_AFFIX_CAPS[item.tier] || { stat:0, attr:0 };
+  const { statN, attrN } = itemAffixCounts(item);
+  const head = headlineStats(item);
+  // Headline (locked) lines.
+  const headRows = head.filter(k => k in item.stats).map(k =>
+    `<div class="hc-line" style="opacity:0.6">🔒 ${(typeof item.stats[k]==='string')?item.stats[k]:'+'+item.stats[k]} ${STAT_LABELS[k]||k} <span style="font-size:9px">(headline)</span></div>`
+  ).join('');
+  const oneCost = rerollOneCost(item);
+  const canOne = player.gold >= oneCost;
+  // Rerollable stat affixes.
+  const statRows = Object.keys(item.stats).filter(k => !head.includes(k)).map(k =>
+    `<div class="shop-row"><div class="shop-row-info"><div class="shop-row-name">${item.stats[k] < 0 ? '' : '+'}${item.stats[k]} ${STAT_LABELS[k]||k}</div></div>
+      <button class="shop-buy-btn" ${canOne?'':'disabled'} onclick="enchantRerollOne(${item.id},'stat','${k}')">🔄 ${oneCost}g</button></div>`
+  ).join('');
+  // Rerollable attribute affixes.
+  const attrRows = Object.keys(item.attrs || {}).map(k =>
+    `<div class="shop-row"><div class="shop-row-info"><div class="shop-row-name" style="color:#e6c34a">+${item.attrs[k]} ${ATTRIBUTES[k].label}</div></div>
+      <button class="shop-buy-btn" ${canOne?'':'disabled'} onclick="enchantRerollOne(${item.id},'attr','${k}')">🔄 ${oneCost}g</button></div>`
+  ).join('');
+  const empty = (!statRows && !attrRows) ? `<div class="hc-line" style="opacity:0.6">No bonus properties yet.</div>` : '';
+  // Action buttons.
+  const augCost = augmentCost(item);
+  const canAug = canAddStat(item) || canAddAttr(item);
+  const allCost = rerollAllCost(item);
+  const augBtn = `<button class="shop-buy-btn" ${(canAug && player.gold>=augCost)?'':'disabled'} onclick="enchantAugment(${item.id})">✨ Augment ${augCost}g</button>`;
+  const allBtn = `<button class="shop-buy-btn" ${(player.gold>=allCost && (caps.stat+caps.attr)>0)?'':'disabled'} onclick="enchantRerollAll(${item.id})">🔄 Reroll all ${allCost}g</button>`;
+  setTownContent(`
+    <div class="shop-row"><button class="shop-buy-btn" onclick="enchantBack()">← Back</button>
+      <div class="shop-row-info item-${item.tier}" style="margin-left:8px"><div class="shop-row-name">${item.name}</div>
+      <div class="shop-row-sub">${SLOTS[item.slot].label.replace(/^\S+\s/,'')} · ilvl ${item.ilvl} · ${statN}/${caps.stat} stats · ${attrN}/${caps.attr} attrs</div></div></div>
+    ${headRows}
+    ${empty}${statRows}${attrRows}
+    <div class="shop-row" style="margin-top:6px;gap:6px">${augBtn}${allBtn}</div>
+    ${canAug ? '' : '<div class="hc-line" style="opacity:0.6;margin-top:4px">All property slots for this rarity are full.</div>'}`);
 }
 
 // ── DUNGEON GATE — choose any reached floor to re-enter ──
@@ -3515,7 +3830,10 @@ function spawnGroundLoot() {
 // higher your level, the more rolls every drop gets (and keeps the best),
 // so rarer loot steadily becomes more common. Capped so it stays sane.
 function progressionRolls() {
-  return Math.min(6, Math.floor(dungeonLevel / 4) + Math.floor((player.level - 1) / 5));
+  const depth = Math.min(6, Math.floor(dungeonLevel / 4) + Math.floor((player.level - 1) / 5));
+  // The Luck attribute sweetens every drop with extra rarity rolls (capped).
+  const luck = Math.min(3, Math.floor(Math.max(0, totalAttr('luck') - ATTR_BASE) / 12));
+  return depth + luck;
 }
 
 function rollTier(rolls = 1) {
@@ -3542,6 +3860,68 @@ function rollTier(rolls = 1) {
   return best;
 }
 
+// Rarity multiplier applied to every rolled value. Deliberately compressed (~4x
+// from junk to unique) so that item level — not rarity — is the dominant driver.
+const TIER_MULT = { junk:0.6, normal:0.85, uncommon:1.1, rare:1.45, epic:1.9, legendary:2.5, unique:3.2 };
+function tierMult(tier) { return TIER_MULT[tier] || 1; }
+
+// Value of one rolled gear-stat affix, scaled by item level and rarity. A few
+// stats get bespoke scaling: regen ticks every step so it stays small; crit/luck
+// are percentage-ish so they're gentler; HP/MP are flat pools so they're lifted
+// to stay relevant next to the HP/MP that Vitality/Spirit grant; CRITDMG is a
+// straight crit-damage % bonus on its own curve.
+function affixStatValue(stat, lvl, mult) {
+  let v = (1 + lvl * 0.6 + rnd(0,2)) * mult;
+  if (stat === 'REGEN')        v *= 0.4;
+  else if (stat === 'CRIT')    v *= 0.5;
+  else if (stat === 'LCK')     v *= 0.6;
+  else if (stat === 'HP')      v *= 6;
+  else if (stat === 'MP')      v *= 4;
+  else if (stat === 'CRITDMG') v = (5 + lvl * 0.8) * mult; // % crit damage
+  return Math.max(1, Math.round(v));
+}
+// Value of one rolled attribute affix (+Might, +Luck, …).
+function affixAttrValue(lvl, mult) {
+  return Math.max(1, Math.round((2 + lvl * 0.5) * mult * 0.5));
+}
+// Roll how many of a pool's affix slots actually fill — up to `max`, biased high
+// so rarer gear tends to be fuller, but a sparse roll is always possible.
+function rollAffixCount(max) {
+  let n = 0;
+  for (let i = 0; i < Math.max(0, max); i++) if (Math.random() < 0.72) n++;
+  return n;
+}
+// Add up to `count` non-duplicate gear-stat affixes drawn from the slot's pool,
+// skipping any stat already on the item (including its headline).
+function addStatAffixes(item, lvl, mult, count) {
+  const pool = (SLOT_AFFIX_POOLS[item.slot]?.stats || [])
+    .filter(s => !(s in item.stats))
+    .sort(() => Math.random() - 0.5);
+  for (let i = 0; i < count && pool.length; i++) {
+    const s = pool.shift();
+    item.stats[s] = affixStatValue(s, lvl, mult);
+  }
+}
+// Add up to `count` non-duplicate attribute affixes drawn from the slot's pool.
+function addAttrAffixes(item, lvl, mult, count) {
+  if (!item.attrs) item.attrs = {};
+  const pool = (SLOT_AFFIX_POOLS[item.slot]?.attrs || [])
+    .filter(a => !(a in item.attrs))
+    .sort(() => Math.random() - 0.5);
+  for (let i = 0; i < count && pool.length; i++) {
+    const a = pool.shift();
+    item.attrs[a] = affixAttrValue(lvl, mult);
+  }
+}
+// The set of stats that count as an item's headline (never rerolled/removed):
+// weapon damage, and the armor DEF/ATK granted by the slot itself.
+function headlineStats(item) {
+  if (item.slot === 'weapon') return ['DMG'];
+  if (item.slot === 'hands')  return ['DEF','ATK'];
+  if (item.slot === 'head' || item.slot === 'chest' || item.slot === 'legs') return ['DEF'];
+  return []; // ring / amulet are pure-affix
+}
+
 function generateItem(rolls = 1, ilvl = null, forceTier = null) {
   // forceTier pins the rarity (used by the town gambler, which rolls its own
   // rarity distribution); otherwise rarity comes from the usual luck rolls.
@@ -3560,19 +3940,15 @@ function generateItem(rolls = 1, ilvl = null, forceTier = null) {
   if (tier === 'legendary') name = pick(PREFIXES) + ' ' + baseName + ' ' + pick(SUFFIXES);
   if (tier === 'unique')   name = 'The ' + pick(PREFIXES) + ' ' + baseName;
 
-  // Stats per item are smaller now, since a full loadout has 7 slots.
-  const statCount = { junk:0, normal:1, uncommon:1, rare:2, epic:3, legendary:3, unique:4 }[tier];
   const stats = {};
-  // Rarity multiplier. Deliberately compressed (~4x from junk to unique, vs the
-  // old ~11x) so that item level — not rarity — is the dominant driver. With a
-  // gentler rarity spread, a high-item-level common eventually out-stats a
-  // low-item-level legendary, while rarity still clearly matters at equal depth.
-  const mult = { junk:0.6, normal:0.85, uncommon:1.1, rare:1.45, epic:1.9, legendary:2.5, unique:3.2 }[tier];
+  const attrs = {};
+  const mult = tierMult(tier);
   // Weapon damage uses a slightly gentler curve so epic+ weapons aren't overpowered.
   const dmgMult = { junk:0.55, normal:0.8, uncommon:1, rare:1.3, epic:1.65, legendary:2.1, unique:2.6 }[tier];
 
-  // Headline stat by slot: weapons deal damage, armor gives defense, jewelry gives utility.
-  // Each headline scales linearly with item level, so depth steadily lifts raw power.
+  // Headline stat by slot: weapons deal damage, armor gives defense, jewelry gives
+  // pure affixes. Each headline scales linearly with item level, so depth steadily
+  // lifts raw power. The headline is never an affix, so it's never duplicated below.
   if (slot === 'weapon') {
     const base = Math.max(1, Math.floor((2 + lvl * 1.2 + rnd(0,2)) * dmgMult));
     const spread = Math.max(1, Math.floor(base * 0.4));
@@ -3586,35 +3962,29 @@ function generateItem(rolls = 1, ilvl = null, forceTier = null) {
       stats.ATK = Math.max(1, Math.floor((1 + lvl * 0.35) * mult * 0.6));
     }
   }
-  // ring/amulet have no fixed headline — they roll pure bonus stats below.
-
-  const extraCount = (slot === 'ring' || slot === 'amulet')
-    ? statCount + 1        // jewelry gets an extra rolled stat instead of a headline
-    : Math.max(0, statCount - 1);
-  const statPool = STAT_NAMES.filter(s => !(s in stats))
-    .sort(() => Math.random()-0.5).slice(0, extraCount);
-  statPool.forEach(s => {
-    let v = Math.max(1, Math.floor((1 + lvl * 0.6 + rnd(0,2)) * mult));
-    // Regen is applied every step, so keep the per-item value modest.
-    if (s === 'REGEN') v = Math.max(1, Math.round(v * 0.4));
-    stats[s] = v;
-  });
 
   // Base value by rarity, lifted by item level so deeper gear is worth more.
   const baseValue = { junk:1, normal:5, uncommon:20, rare:80, epic:300, legendary:1200, unique:5000 }[tier];
   let value = Math.round(baseValue * (1 + lvl * 0.12));
 
-  const item = { id: Math.random(), name, tier, slot, ilvl: lvl, stats, value,
+  const item = { id: Math.random(), name, tier, slot, ilvl: lvl, stats, attrs, value,
     flavor: pick(FLAVOR[tier]), icon: ITEM_ICONS[baseName] || SLOT_ICONS[slot] };
+
+  // Roll bonus affixes — stats and attributes from the slot's pools, each up to
+  // its rarity cap, never duplicating a stat/attribute or the headline.
+  const caps = TIER_AFFIX_CAPS[tier] || { stat: 0, attr: 0 };
+  addStatAffixes(item, lvl, mult, rollAffixCount(caps.stat));
+  addAttrAffixes(item, lvl, mult, rollAffixCount(caps.attr));
 
   // Cursed items (~12% of uncommon+): a big stat boost paired with a penalty.
   // The negative stat flows straight through totalStat(), so the drawback is real.
   const tierRank = Object.keys(TIERS).indexOf(tier);
   if (tierRank >= 2 && Math.random() < 0.12) {
-    const boostStat = pick(STAT_NAMES.filter(s => s !== 'DMG'));
-    const curseStat = pick(STAT_NAMES.filter(s => s !== boostStat && s !== 'DMG'));
+    const pool = (SLOT_AFFIX_POOLS[slot]?.stats || STAT_NAMES.filter(s => s !== 'DMG'));
+    const boostStat = pick(pool);
+    const curseStat = pick(pool.filter(s => s !== boostStat));
     stats[boostStat] = (stats[boostStat] || 0) + Math.round((10 + lvl*2) * mult);
-    stats[curseStat] = -(Math.round((6 + lvl) * mult)); // negative = penalty
+    if (curseStat) stats[curseStat] = -(Math.round((6 + lvl) * mult)); // negative = penalty
     item.cursed = true;
     item.name = '☠ ' + item.name;
     item.flavor = 'Cursed: great power at a price.';
@@ -4579,16 +4949,15 @@ function tickPact() {
 
 // Heal a little each turn based on equipped REGEN, up to max HP.
 function applyRegen() {
-  // Spirit and Vitality grant passive regen on top of any REGEN rolled on gear.
-  let r = totalStat('REGEN') + Math.floor((player.attributes?.spirit||0) / 2)
-            + Math.floor((player.attributes?.vitality||0) / 3);
+  // Vitality grants passive HP regen on top of any REGEN rolled on gear.
+  let r = totalStat('REGEN') + Math.floor(totalAttr('vitality') * ATTR_FX.hpRegenPerVit);
   if (player.class === 'templar') r += 2; // Templar mends faster between fights
   if (r > 0 && player.hp > 0 && player.hp < player.maxHp) {
     player.hp = Math.min(player.maxHp, player.hp + r);
     updateBars();
   }
   // Mana trickles back each turn (faster with Spirit) so staff bolts stay usable.
-  const mr = 1 + Math.floor((player.attributes?.spirit||0) / 4);
+  const mr = 1 + Math.floor(totalAttr('spirit') * ATTR_FX.mpRegenPerSpr);
   if (player.hp > 0 && player.mp < player.maxMp) {
     player.mp = Math.min(player.maxMp, player.mp + mr);
     updateBars();
@@ -4828,7 +5197,7 @@ function totalStat(name) {
 // you were never threatened at depth; this keeps armor valuable while ensuring
 // deeper, higher-level foes always land a real blow. Returns final damage (≥1).
 function mitigateDamage(raw, lvl) {
-  const def = totalStat('DEF');
+  const def = playerDefense();
   const mitigation = def / (def + 18 + (lvl || dungeonLevel) * 6);
   // Warrior passive: shrug off a flat slice of every incoming blow.
   return Math.max(1, Math.round(raw * (1 - mitigation) * classDmgTakenMult()));
@@ -4851,22 +5220,21 @@ function adjacentEnemies(e) {
   return enemies.filter(o => !o.dead && o !== e && Math.abs(o.x - e.x) <= 1 && Math.abs(o.y - e.y) <= 1);
 }
 
-// Roll one player swing: weapon damage + level + gear ATK + Might, capped so a
-// plain hit can't exceed a fraction of the foe's max HP; crits and the Power
-// buff punch through that cap. Tougher foes resist burst more (elites take 6
+// Roll one player swing: weapon damage + level + gear ATK + class damage attrs,
+// capped so a plain hit can't exceed a fraction of the foe's max HP; crits and the
+// Power buff punch through that cap. Tougher foes resist burst more (elites take 6
 // hits, bosses 9, vs the normal 4), so each kill is more turns of exposure to
-// retaliation rather than a bigger one-shot. Returns { dmg, isCrit }.
+// retaliation rather than a bigger one-shot. Crit damage scales with gear CRITDMG.
+// Returns { dmg, isCrit }.
 function rollPlayerHit(e) {
-  const rogueCrit = player.class === 'rogue' ? 0.08 : 0;
-  const critChance = Math.min(0.6, 0.05 + rogueCrit + (totalStat('CRIT') + totalStat('LCK')) * 0.01 + (player.attributes?.agility||0) * 0.015);
-  const isCrit = Math.random() < critChance;
-  let dmg = getWeaponDamage() + player.level * 2 + totalStat('ATK') + (player.attributes?.might||0) * 4;
+  const isCrit = Math.random() < playerCritChance();
+  let dmg = getWeaponDamage() + player.level * 2 + totalStat('ATK') + attrDamage();
   const hitDivisor = e.isBoss ? 9 : (e.isElite ? 6 : 4);
   const hitCap = Math.max(1, Math.floor(e.maxHp / hitDivisor));
   if (dmg > hitCap) dmg = Math.max(1, Math.round(hitCap * (rnd(80, 100) / 100)));
   if (buffs.power) dmg = Math.round(dmg * 1.5);
   dmg = Math.round(dmg * classDmgDealtMult()); // Warrior hits harder
-  if (isCrit) dmg = Math.round(dmg * 2.2);
+  if (isCrit) dmg = Math.round(dmg * critDamageMult());
   return { dmg: Math.max(1, dmg), isCrit };
 }
 
@@ -5099,7 +5467,7 @@ function skillBackstab() {
   const adj = adjacentToPlayer().sort((a, b) => a.hp - b.hp);
   if (!adj.length) { log('🎯 No foe adjacent to backstab.'); return false; }
   const e = adj[0];
-  let dmg = getWeaponDamage() + player.level * 2 + totalStat('ATK') + (player.attributes?.might || 0) * 4;
+  let dmg = getWeaponDamage() + player.level * 2 + totalStat('ATK') + attrDamage();
   dmg = Math.round(dmg * 3.0 * classDmgDealtMult());
   if (buffs.power) dmg = Math.round(dmg * 1.5);
   dmg = Math.max(1, Math.min(dmg, Math.ceil(e.maxHp * 0.6))); // big, but no instant boss delete
@@ -5117,8 +5485,7 @@ function skillFirebolt() {
     .sort((a, b) => (Math.abs(a.x - player.x) + Math.abs(a.y - player.y)) - (Math.abs(b.x - player.x) + Math.abs(b.y - player.y)));
   if (!inRange.length) { log('🔥 No foe within range of your Firebolt.'); return false; }
   const e = inRange[0];
-  const spirit = player.attributes?.spirit || 0;
-  let dmg = 16 + player.level * 3 + spirit * 6;
+  let dmg = 16 + player.level * 3 + totalAttr('spirit') * ATTR_FX.spellPerSpr;
   if (buffs.power) dmg = Math.round(dmg * 1.5);
   dmg = Math.max(1, Math.round(dmg));
   sfx('attack');
@@ -5131,8 +5498,7 @@ function skillFirebolt() {
 // Templar — Mend: spend mana to restore a burst of health.
 function skillMend() {
   if (player.hp >= player.maxHp) { log('✨ Already at full health.'); return false; }
-  const spirit = player.attributes?.spirit || 0;
-  const heal = Math.min(player.maxHp - player.hp, 40 + player.level * 4 + spirit * 8);
+  const heal = Math.min(player.maxHp - player.hp, 40 + player.level * 4 + totalAttr('spirit') * (ATTR_FX.spellPerSpr + 1));
   player.hp += heal;
   sfx('potion');
   spawnFloatingText(player.x, player.y, `+${heal}`, '#7fffaa');
@@ -5568,7 +5934,7 @@ function checkLevelUp() {
 function spendAttr(key) {
   if (!ATTRIBUTES[key]) return;
   if (!player.attrPoints || player.attrPoints <= 0) { log('No attribute points to spend.'); return; }
-  if (!player.attributes) player.attributes = { might:0, vitality:0, agility:0, spirit:0 };
+  if (!player.attributes) player.attributes = baseAttributes();
   player.attributes[key] = (player.attributes[key] || 0) + 1;
   player.attrPoints--;
   // Raising Vitality/Spirit immediately grants the extra HP/MP it unlocks.
@@ -5755,28 +6121,48 @@ function renderPanel() {
   }
 }
 
-// HERO tab: overall power, attribute points, and the attributes you can raise.
+// HERO tab: overall power, derived stats, and the attributes you can raise.
 function renderHero(el) {
-  const a = player.attributes || { might:0, vitality:0, agility:0, spirit:0 };
   const pts = player.attrPoints || 0;
   const gearPower = SLOT_KEYS.reduce((s, k) => s + (equipped[k] ? itemPower(equipped[k]) : 0), 0);
+  const dmgA = classDmgAttrs();
+  // Each attribute row shows base+spent plus any gear bonus, tags the class's
+  // damage attributes, and offers a + to raise it.
   const rows = ATTR_KEYS.map(key => {
     const at = ATTRIBUTES[key];
+    const own = player.attributes?.[key] || 0;
+    const gear = totalAttr(key) - own;
+    const tag = key === dmgA.primary ? ' <span style="color:#ffd24b">★dmg</span>'
+              : key === dmgA.secondary ? ' <span style="color:#c8a84b">☆dmg</span>' : '';
+    const gearStr = gear ? ` <span style="color:#5ee08a">+${gear}</span>` : '';
     return `<div class="attr-row">
       <div class="attr-info">
-        <div class="attr-name">${at.label}</div>
+        <div class="attr-name">${at.label}${tag}</div>
         <div class="attr-desc">${at.desc}</div>
       </div>
-      <span class="attr-val">${a[key] || 0}</span>
+      <span class="attr-val">${own}${gearStr}</span>
       <button class="attr-plus" ${pts > 0 ? '' : 'disabled'} onclick="spendAttr('${key}')">+</button>
     </div>`;
   }).join('');
+  // Derived combat stats so the player can see what their attributes/gear produce.
+  const stat = (label, val) => `<div class="hc-line" style="display:flex;justify-content:space-between"><span style="opacity:0.8">${label}</span><b>${val}</b></div>`;
+  const derived = `<div class="hero-class" style="border-color:#445">
+      <div class="hc-head"><span class="hc-name">📊 Stats</span></div>
+      ${stat('⚔️ Attack power', Math.round(totalStat('ATK') + attrDamage()))}
+      ${stat('🛡 Defense', Math.round(playerDefense()))}
+      ${stat('❤️ Max HP', player.maxHp)}
+      ${stat('✨ Max MP', player.maxMp)}
+      ${stat('🎯 Crit chance', Math.round(playerCritChance()*100) + '%')}
+      ${stat('💥 Crit damage', Math.round(critDamageMult()*100) + '%')}
+      ${stat('💨 Dodge', Math.round(playerDodge()*100) + '%')}
+    </div>`;
   const cls = playerClass();
   const classBlock = cls ? `
     <div class="hero-class" style="border-color:${cls.color}">
       <div class="hc-head"><span class="hc-icon">${cls.icon}</span>
         <span class="hc-name" style="color:${cls.color}">${cls.name}</span></div>
       <div class="hc-line">${cls.passive}</div>
+      <div class="hc-line">⚔️ Damage scales with <b>${ATTRIBUTES[dmgA.primary].label}</b>${dmgA.secondary ? ` & ${ATTRIBUTES[dmgA.secondary].label}` : ''}</div>
       <div class="hc-line">${cls.skill.icon} <b>${cls.skill.name}</b> — ${cls.skill.desc} <span style="opacity:0.7">(${cls.skill.mp} MP)</span></div>
       <div class="hc-line" style="opacity:0.75">Weapons: ${cls.weapons.join(', ')}</div>
       <div class="hc-line" style="opacity:0.6">Change class at the town Trainer 🎓</div>
@@ -5786,8 +6172,9 @@ function renderHero(el) {
       <div class="hp-label">⚡ POWER</div>
       <div class="hp-value">${playerPower()}</div>
     </div>
-    <div class="hero-sub">Level ${player.level} · ${gearPower} from gear<br>Power = level + attributes + gear</div>
+    <div class="hero-sub">Level ${player.level} · ${gearPower} from gear</div>
     ${classBlock}
+    ${derived}
     <div class="hero-points">${pts > 0 ? `${pts} point${pts>1?'s':''} to spend!` : 'No points to spend — level up for more.'}</div>
     ${rows}`;
 }
@@ -5800,7 +6187,7 @@ function showClassPick() {
   const sub = document.getElementById('class-sub');
   const cards = document.getElementById('class-cards');
   if (!ov) return;
-  sub.textContent = 'Pick a class — it shapes your starting stats, the weapons you can wield, and the special skill you cast. You can retrain later at the town Trainer.';
+  sub.textContent = 'Pick a class — it shapes which attributes your damage scales off, the weapons you can wield, and the special skill you cast. You can retrain later at the town Trainer.';
   cards.innerHTML = CLASS_KEYS.map(k => {
     const c = CLASSES[k];
     return `<button class="class-card" style="border-left-color:${c.color}" onclick="chooseClass('${k}')">
@@ -5812,17 +6199,13 @@ function showClassPick() {
   ov.classList.add('open');
 }
 
-// Lock in a class from the new-game pick. A brand-new hero (level 1, nothing
-// invested) also gets the class's starting attribute bias baked in.
+// Lock in a class from the new-game pick. All classes start with the same
+// attributes (ATTR_BASE in each) — class identity comes from how those points
+// scale into damage (dmgAttrs), not a starting stat bias.
 function chooseClass(key) {
   const cls = CLASSES[key];
   if (!cls) return;
-  const spent = ATTR_KEYS.reduce((s, k) => s + (player.attributes?.[k] || 0), 0);
-  const isNew = player.level === 1 && spent === 0 && (player.attrPoints || 0) === 0;
   player.class = key;
-  if (isNew) {
-    for (const [k, v] of Object.entries(cls.startAttrs)) player.attributes[k] = (player.attributes[k] || 0) + v;
-  }
   player.skillCd = 0;
   recomputeMaxStats();
   player.hp = player.maxHp;
@@ -6042,13 +6425,18 @@ function positionTooltip(anchor) {
 function showTooltipForItem(item, anchor) {
   if (!item) return;
   const tier = TIERS[item.tier];
-  const stats = Object.entries(item.stats).map(([k,v]) => {
+  const statRows = Object.entries(item.stats).map(([k,v]) => {
     // DMG is a range string like "8-12"; others are flat numbers (negative on a curse).
     const negative = (typeof v === 'number') && v < 0;
     const val = (typeof v === 'string') ? v : (v < 0 ? '' : '+') + v;
     const style = negative ? ' style="color:#e0556b"' : '';
-    return `<div class="tt-stat"${style}>${val} ${k}</div>`;
-  }).join('') || '<div class="tt-stat" style="color:#666">No bonuses</div>';
+    return `<div class="tt-stat"${style}>${val} ${STAT_LABELS[k] || k}</div>`;
+  });
+  // Attribute affixes (+Might, +Luck, …) get their own coloured rows.
+  if (item.attrs) for (const [k, v] of Object.entries(item.attrs)) {
+    statRows.push(`<div class="tt-stat" style="color:#e6c34a">+${v} ${ATTRIBUTES[k].label}</div>`);
+  }
+  const stats = statRows.join('') || '<div class="tt-stat" style="color:#666">No bonuses</div>';
   const power = item.slot ? itemPower(item) : 0;
   // Compare against the currently-equipped piece in the same slot, if any.
   let powerDelta = '';
@@ -6176,9 +6564,22 @@ function loadGame() {
     if (player.healthPotionsBought == null) player.healthPotionsBought = 0;
     if (player.manaPotions == null) player.manaPotions = 0;
     // Migrate saves that predate hero attributes.
-    if (!player.attributes) player.attributes = { might:0, vitality:0, agility:0, spirit:0 };
-    for (const k of ['might','vitality','agility','spirit']) if (player.attributes[k] == null) player.attributes[k] = 0;
+    if (!player.attributes) player.attributes = baseAttributes();
     if (player.attrPoints == null) player.attrPoints = 0;
+    // Migrate to the attribute-driven-stats schema (v2): every attribute now
+    // starts at ATTR_BASE and there's a new Luck attribute, and the derived-stat
+    // formulas are completely different. Old saves stored attributes with a zero
+    // base, so we refund all previously-spent points, reset everyone to the base
+    // block (including Luck), and let the player re-allocate under the new rules.
+    if (player.attrSchema !== 2) {
+      let refund = 0;
+      for (const k of ['might','vitality','agility','spirit','luck']) refund += (player.attributes[k] || 0);
+      player.attributes = baseAttributes();
+      player.attrPoints = (player.attrPoints || 0) + refund;
+      player.attrSchema = 2;
+    }
+    // Defensive: ensure every attribute key exists (incl. Luck on any save).
+    for (const k of ATTR_KEYS) if (player.attributes[k] == null) player.attributes[k] = ATTR_BASE;
     // Migrate saves that predate the class system. A null class is fine — the
     // init flow prompts the player to choose one. Drop any unknown class id.
     if (player.class && !CLASSES[player.class]) player.class = null;
@@ -6211,6 +6612,10 @@ function loadGame() {
     // any chosen cosmetic. Gear without a recognised key heals on next access.
     inventory.forEach(it => { if (it.slot) it.icon = itemIcon(it); });
     Object.values(equipped).forEach(it => { if (it && it.slot) it.icon = itemIcon(it); });
+    // Older items predate attribute affixes — give them an empty attrs block so
+    // the affix/enchant code can treat every item uniformly.
+    inventory.forEach(it => { if (it && !it.attrs) it.attrs = {}; });
+    Object.values(equipped).forEach(it => { if (it && !it.attrs) it.attrs = {}; });
     for (const slot of VISUAL_SLOTS) {
       const seen = new Set();
       player.wardrobe[slot] = (player.wardrobe[slot] || [])
