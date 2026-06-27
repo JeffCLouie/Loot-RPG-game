@@ -551,6 +551,15 @@ const FLAVOR = {
 const STAT_NAMES = ['ATK','DEF','SPD','LCK','HP','MP','CRIT'];
 const HERO = '🧙';
 
+const FOODS = [
+  { emoji: '🍖', name: 'Drumstick',   heal: 15 },
+  { emoji: '🍎', name: 'Apple',       heal: 10 },
+  { emoji: '🧀', name: 'Cheese',      heal: 12 },
+  { emoji: '🍞', name: 'Bread',       heal: 8  },
+  { emoji: '🍗', name: 'Roast Leg',   heal: 20 },
+  { emoji: '🥧', name: 'Meat Pie',    heal: 25 },
+];
+
 const BOSSES = [
   { type: '👑', name: 'Rat King',      floor: 5  },
   { type: '🔥', name: 'Inferno Demon', floor: 10 },
@@ -571,6 +580,7 @@ let merchant = null;  // { x, y, stock: [...] } when present
 let hasFountain = false;
 let floatingTexts = [];
 let statusEffects = [];
+let groundFood = [];
 let enemies = [];
 let currentTab = 'inv';
 let selectedItem = null;
@@ -834,6 +844,16 @@ function spawnGroundLoot() {
     } while (mapData[gy][gx] !== 0 && tries < 100);
     if (tries < 100) groundItems.push({ x: gx, y: gy, item: generateItem() });
   }
+  // Spawn food
+  groundFood = [];
+  const foodCount = rnd(1, 3);
+  for (let i = 0; i < foodCount; i++) {
+    let fx, fy, tries = 0;
+    do {
+      fx = rnd(1, MAP_W-1); fy = rnd(1, MAP_H-1); tries++;
+    } while ((mapData[fy][fx] !== 0 || (fx === player.x && fy === player.y)) && tries < 100);
+    if (tries < 100) groundFood.push({ x: fx, y: fy, ...pick(FOODS) });
+  }
 }
 
 // ══════════════════════════════════════════
@@ -1067,6 +1087,15 @@ function draw() {
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(px + tw/2 - s*0.12, py + th/2 - s*0.12, s*0.24, s*0.24);
     ctx.shadowBlur = 0;
+  });
+
+  // Ground food
+  groundFood.forEach(f => {
+    const px = offX + f.x * tw, py = offY + f.y * th;
+    ctx.font = `${Math.round(tw * 0.6)}px serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(f.emoji, px + tw/2, py + th/2);
   });
 
   // Merchant (roaming trader in bright robes)
@@ -1324,6 +1353,17 @@ function move(dx, dy) {
   player.x = nx;
   player.y = ny;
 
+  // Auto-pickup food
+  const fi = groundFood.findIndex(f => f.x === nx && f.y === ny);
+  if (fi !== -1) {
+    const f = groundFood.splice(fi, 1)[0];
+    const healed = Math.min(f.heal, player.maxHp - player.hp);
+    player.hp = Math.min(player.maxHp, player.hp + f.heal);
+    if (healed > 0) spawnFloatingText(player.x, player.y, `+${healed}`, '#44dd44');
+    log(`${f.emoji} Ate ${f.name}! +${healed} HP`, 'loot');
+    updateBars();
+  }
+
   // Enemy AI
   enemies.filter(e => !e.dead).forEach(e => {
     const dist = Math.abs(e.x - player.x) + Math.abs(e.y - player.y);
@@ -1379,6 +1419,11 @@ function attackEnemy(e) {
       player.healPotions++;
       log(`❤️ ${label} dropped a Health Potion! (${player.healPotions} held)`, 'loot');
       updateBars();
+    }
+    if (Math.random() < 0.25) {
+      const f = pick(FOODS);
+      groundFood.push({ x: e.x, y: e.y, ...f });
+      log(`${f.emoji} ${label} dropped ${f.name}!`, 'loot');
     }
     checkLevelUp();
   } else {
