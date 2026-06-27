@@ -3,7 +3,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Dungeon Loot</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -17,6 +17,10 @@
     --gold: #e8c267;
     --hp: #ff3b4e;
     --mp: #3a8bff;
+
+    /* Height of the mobile bottom navigation bar. The bag/stats drawer stops
+       above this so its lower rows are never hidden behind the buttons. */
+    --bar-h: 60px;
 
     /* Loot tiers */
     --junk:      #6b6b6b;
@@ -296,6 +300,69 @@
   .attr-plus { flex-shrink: 0; width: 30px; height: 30px; border: none; border-radius: 5px; background: #2e7d32; color: #fff; font-size: 18px; font-weight: bold; cursor: pointer; line-height: 1; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
   .attr-plus:active { background: #44bb44; }
   .attr-plus:disabled { background: #2a2a3a; color: #555; cursor: not-allowed; }
+
+  /* ── SKILL TREE (SKILLS tab) — branching node graph ── */
+  /* Two labelled trunks (offense / defense) over a fixed-height canvas. Nodes are
+     hand-placed by SKILL_TREE_LAYOUT; SVG draws the glowing branch connectors. */
+  .sk-trunks { display: flex; justify-content: space-between; padding: 0 8px; margin: 10px 2px 0; }
+  .sk-trunk { font-size: 9px; letter-spacing: 2px; color: #7a6fa8; }
+  .sk-trunk.off { color: #e0855a; }
+  .sk-trunk.def { color: #5a9be0; }
+  .sk-tree { position: relative; width: 100%; height: 470px; margin-top: 2px; }
+  .sk-tree svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .sk-tnode { position: absolute; width: 54px; height: 54px; transform: translate(-50%, -50%);
+    border-radius: 10px; border: 2px solid #33304a; background: #211c2a; display: flex;
+    flex-direction: column; align-items: center; justify-content: center; cursor: pointer;
+    -webkit-tap-highlight-color: transparent; touch-action: manipulation; transition: transform .08s; }
+  .sk-tnode:active { transform: translate(-50%, -50%) scale(1.06); }
+  .sk-tnode .ic { font-size: 21px; line-height: 1; }
+  .sk-tnode .nm { font-size: 7px; margin-top: 1px; letter-spacing: .3px; color: #cdbfff; max-width: 50px;
+    text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sk-tnode .pips { display: flex; gap: 2px; margin-top: 2px; }
+  .sk-tnode .pip { width: 5px; height: 5px; border-radius: 50%; background: #4a4360; }
+  .sk-tnode .pip.on { background: var(--gold); box-shadow: 0 0 3px var(--gold); }
+  .sk-tnode .badge { position: absolute; top: -7px; right: -7px; width: 18px; height: 18px;
+    border-radius: 50%; font-size: 11px; line-height: 18px; text-align: center; font-weight: bold; }
+  .sk-tnode.locked { opacity: .45; filter: grayscale(.6); }
+  .sk-tnode.locked .badge { background: #1a1626; color: #6a647a; border: 1px solid #33304a; }
+  .sk-tnode.avail { border-color: #8c6eff; background: #2a1f4a; box-shadow: 0 0 10px rgba(140,110,255,.55); }
+  .sk-tnode.avail .badge { background: #8c6eff; color: #fff; }
+  .sk-tnode.owned { border-color: var(--gold); background: #2c2440; }
+  .sk-tnode.owned .badge { background: var(--gold); color: #231a08; }
+  .sk-tnode.maxed { border-color: #6b8f4a; background: #1c2416; }
+  .sk-tnode.maxed .badge { background: #3a6a3a; color: #dfffe0; }
+  .sk-tnode.act .ic { filter: drop-shadow(0 0 4px #8c6eff); }
+  .sk-tnode.sel { outline: 2px solid var(--gold); outline-offset: 2px; z-index: 6; }
+  /* Tap a node → this popover with its full detail + a Learn button. */
+  .sk-pop { position: absolute; z-index: 20; width: 168px; background: #15101f; border: 1px solid #8c6eff;
+    border-radius: 8px; padding: 8px 9px; font-size: 10px; line-height: 1.5; color: #e8def8;
+    box-shadow: 0 6px 20px rgba(0,0,0,.6); }
+  .sk-pop b { color: var(--gold); }
+  .sk-pop .ty { color: #9a8fd0; font-size: 9px; margin-top: 1px; }
+  .sk-pop .ds { margin-top: 3px; color: #cdc2e8; }
+  .sk-pop .rq { font-size: 9px; margin-top: 3px; }
+  .sk-pop .rq.no { color: #e08a8a; }
+  .sk-pop .rq.ok { color: #7ad08a; }
+  .sk-pop .pop-buy { width: 100%; margin-top: 6px; padding: 5px; border: none; border-radius: 5px;
+    background: #4a3a7a; color: #fff; font-family: inherit; font-size: 10px; font-weight: bold;
+    cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+  .sk-pop .pop-buy:active { background: #6a55a8; }
+  .sk-pop .pop-buy:disabled { background: #2a2a3a; color: #666; cursor: not-allowed; }
+  .sk-pop .pop-buy.maxed { background: #2e7d32; color: #cdebcf; }
+
+  /* ── SKILL BAR (baseline class skill + learned actives) ── */
+  #skill-bar { display: flex; gap: 5px; justify-content: center; flex-wrap: wrap; padding: 4px 6px; }
+  .skillbar-btn { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; min-width: 42px; padding: 3px 5px; border-radius: 7px; border: 1px solid #4a3a7a; background: #2a1f4a; color: #cbb8ff; cursor: pointer; font-family: 'Courier New', monospace; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+  /* The baseline class skill is marked off in gold so it reads as the primary, always-available ability. */
+  .skillbar-btn.baseline { border-color: var(--frame); background: #3a2f1a; color: #f0e0b8; }
+  .skillbar-btn.baseline .sb-key { color: var(--gold); }
+  .skillbar-btn.baseline.disabled { background: #211c2a; border-color: #33304a; color: #6a647a; }
+  .skillbar-btn .sb-key { position: absolute; top: 1px; left: 3px; font-size: 8px; color: #8a7fc0; }
+  .skillbar-btn .sb-icon { font-size: 17px; line-height: 1; }
+  .skillbar-btn .sb-info { font-size: 8px; letter-spacing: 0.5px; }
+  .skillbar-btn.ready { box-shadow: 0 0 7px rgba(140,110,255,0.5); }
+  .skillbar-btn.ready:active { background: #4a3a7a; }
+  .skillbar-btn.disabled { background: #211c2a; border-color: #33304a; color: #6a647a; }
 
   #panel-content { flex: 1; overflow-y: auto; padding: 6px; }
   #panel-content::-webkit-scrollbar { width: 4px; }
@@ -592,6 +659,10 @@
     background: none; border: none; color: #c8b5e8;
     font-size: 18px; cursor: pointer; padding: 0 4px;
   }
+  #shop-back {
+    background: none; border: none; color: #c8b5e8;
+    font-size: 18px; cursor: pointer; padding: 0 8px 0 0; line-height: 1;
+  }
   #shop-gold {
     padding: 8px 12px; font-size: 12px; color: var(--gold);
     border-bottom: 1px solid var(--border);
@@ -673,6 +744,10 @@
   #mystic-close {
     background: none; border: none; color: #a5e8e0;
     font-size: 18px; cursor: pointer; padding: 0 4px;
+  }
+  #mystic-back {
+    background: none; border: none; color: #a5e8e0;
+    font-size: 18px; cursor: pointer; padding: 0 8px 0 0; line-height: 1;
   }
   #mystic-gold {
     padding: 8px 12px; font-size: 12px; color: var(--gold);
@@ -947,73 +1022,264 @@
     .bag-btn { display: none; }
   }
 
-  /* ── MOBILE LANDSCAPE LAYOUT ──
-     On a touch device held sideways the vertical stack wastes the width and
-     squashes the map, so mirror the roomy web layout instead: the log becomes
-     a full-height LEFT column, the largest possible SQUARE map fills the
-     middle, and the controls move into a RIGHT-hand column rather than a
-     bottom bar. Unlike the web layout (which leans on a keyboard) the move
-     d-pad is KEPT here so the game stays fully thumb-playable. The loot drawer
-     remains an overlay toggled by BAG — a phone has no room to spare for a
-     permanent panel column. Gated to pointer:coarse so it never touches the
-     desktop/web layout (which requires pointer:fine). */
+  /* ── FORCE PORTRAIT ON MOBILE ──
+     Landscape on a phone squashes the map and scatters the controls, so the
+     game is portrait-only on touch devices. A held-sideways phone gets a
+     full-screen "rotate" prompt that covers everything (including the class
+     picker) until it's turned upright. True orientation locking isn't
+     available to web pages on iOS, so this prompt is the reliable mechanism. */
+  #rotate-overlay { display: none; }
   @media (orientation: landscape) and (pointer: coarse) {
-    #game-wrap {
-      display: grid;
-      /* Log column on the left, map takes the remaining middle, controls
-         size to their content on the right. */
-      grid-template-columns: clamp(110px, 20vw, 240px) 1fr auto;
-      grid-template-rows: 1fr;
-    }
-    /* Log: full-height left column instead of a short bottom strip. */
-    #bottom-row {
-      grid-column: 1;
-      grid-row: 1;
-      flex: none;
-      max-height: none;
-      min-height: 0;
-      border-top: none;
-      border-right: 1px solid var(--border);
-    }
-    /* Map: the largest square that fits its cell, centered. */
-    canvas {
-      grid-column: 2;
-      grid-row: 1;
-      width: auto;
-      height: 100%;
-      max-width: 100%;
-      max-height: 100%;
-      aspect-ratio: 1 / 1;
-      justify-self: center;
-      align-self: center;
-      flex: none;
-    }
-    /* Controls: a vertical right-hand column (d-pad on top, actions below)
-       instead of the full-width bottom bar. */
-    #control-bar {
-      grid-column: 3;
-      grid-row: 1;
+    #rotate-overlay {
+      display: flex;
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 8px;
-      border-top: none;
-      border-left: 2px solid var(--frame);
-      box-shadow: inset 1px 0 0 rgba(232,194,103,0.2), -2px 0 6px rgba(0,0,0,0.5);
-      overflow-y: auto;
+      gap: 14px;
+      padding: 24px;
+      text-align: center;
+      background: radial-gradient(circle at 50% 40%, #221a3a 0%, #140f26 70%, #0b0814 100%);
+      color: var(--text);
     }
-    /* Slightly smaller d-pad so it plus the action buttons fit a short screen. */
-    #dpad {
-      grid-template-columns: repeat(3, 46px);
-      grid-template-rows: repeat(3, 46px);
+    #rotate-overlay .rot-icon { font-size: 54px; animation: rotNudge 2s ease-in-out infinite; }
+    #rotate-overlay .rot-title { font-size: 16px; color: var(--gold); letter-spacing: 1px; }
+    #rotate-overlay .rot-sub { font-size: 12px; color: #9a90b8; max-width: 320px; line-height: 1.5; }
+  }
+  @keyframes rotNudge {
+    0%, 60%, 100% { transform: rotate(0deg); }
+    80% { transform: rotate(-90deg); }
+  }
+
+  /* ── MOBILE PORTRAIT LAYOUT ──
+     A phone held upright. The old design crammed a 3×3 d-pad plus a tall column
+     of action buttons into the bottom, and the loot/stats drawer ran the full
+     height of the play area so its lower rows hid behind that control block.
+     The redesign: movement is a small translucent d-pad floated over the bottom
+     of the map (see #touch-dpad), and the bottom becomes a single fixed-height
+     navigation bar of evenly-spaced buttons — a normal mobile app tab bar.
+     The drawer stops ABOVE that bar so
+     nothing it shows (bag rows, HERO attributes) is ever covered, and it opens
+     full-width over the dungeon, leaving only the bar visible.
+     Gated to portrait + coarse so the web and landscape layouts are untouched. */
+  @media (orientation: portrait) and (pointer: coarse) {
+    /* Reserve room for the iOS home indicator / Android gesture bar. */
+    :root { --bar-h: calc(58px + env(safe-area-inset-bottom)); }
+
+    /* Bottom navigation bar: one full-width row of equal buttons. */
+    #control-bar {
+      height: var(--bar-h);
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      padding: 4px 6px;
+      padding-bottom: calc(4px + env(safe-area-inset-bottom));
     }
-    /* Action buttons pack into a compact 3-wide grid under the d-pad. */
     #action-buttons {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 6px;
+      flex: 1;
+      flex-direction: row;
+      align-items: stretch;
+      justify-content: space-around;
+      gap: 5px;
+      height: 100%;
     }
-    .action-btn { width: 46px; flex: none; }
+    .action-btn {
+      flex: 1 1 0;
+      width: auto;
+      min-width: 0;
+      max-width: 96px;
+      height: 100%;
+      gap: 2px;
+    }
+    .action-icon { font-size: 21px; }
+    .action-label { font-size: 9px; }
+    /* The class skill now lives on the skill bar (above the log), so drop the
+       redundant ⚡ button from the bottom nav to keep it uncluttered. */
+    .skill-btn { display: none !important; }
+
+    /* Drawer: full-width sheet over the dungeon, stopping above the nav bar so
+       its bottom rows stay readable instead of slipping behind the buttons. */
+    #side-panel {
+      left: 0;
+      right: auto;
+      width: 100%;
+      bottom: var(--bar-h);
+      border-left: none;
+      box-shadow: 0 -4px 16px rgba(0,0,0,0.6);
+    }
+  }
+
+  /* The old control-bar d-pad is dropped on touch; movement is the floating
+     #touch-dpad instead. A narrow desktop window keeps the old one as a mouse
+     fallback (alongside the keyboard). */
+  @media (pointer: coarse) { #dpad { display: none; } }
+
+  /* ── FLOATING MOVEMENT PAD (touch) ──
+     A small, mostly-transparent d-pad pinned over the bottom of the map by JS
+     (positionTouchDpad keeps it on the canvas's bottom-centre). Direction is
+     read from the pad itself — up/down/left/right around a central USE button —
+     so it's obvious which way you're heading, unlike tapping relative to the
+     hero. Reuses the .dpad-btn / data-dir wiring, so no extra movement JS.
+     z-index sits above the map but below the drawer / menus, which simply
+     cover it when open. Shown only on touch; hidden on the keyboard web layout. */
+  #touch-dpad {
+    display: none;
+    position: fixed;
+    left: 50%;
+    bottom: 200px;
+    transform: translateX(-50%);
+    grid-template-columns: repeat(3, 46px);
+    grid-template-rows: repeat(3, 46px);
+    gap: 5px;
+    z-index: 50;
+    touch-action: manipulation;
+  }
+  @media (pointer: coarse) { #touch-dpad { display: grid; } }
+  /* Cross layout: arrows on the edges, USE in the middle, corners empty. */
+  #touch-dpad .dpad-btn[data-dir="up"]     { grid-area: 1 / 2; }
+  #touch-dpad .dpad-btn[data-dir="left"]   { grid-area: 2 / 1; }
+  #touch-dpad .dpad-btn[data-dir="pickup"] { grid-area: 2 / 2; }
+  #touch-dpad .dpad-btn[data-dir="right"]  { grid-area: 2 / 3; }
+  #touch-dpad .dpad-btn[data-dir="down"]   { grid-area: 3 / 2; }
+  #touch-dpad .dpad-btn {
+    background: rgba(20, 16, 32, 0.34);
+    border: 1px solid rgba(232, 194, 103, 0.45);
+    border-radius: 11px;
+    color: rgba(255, 246, 224, 0.78);
+    font-size: 20px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(1px);
+    -webkit-backdrop-filter: blur(1px);
+  }
+  #touch-dpad .dpad-btn:active {
+    background: rgba(232, 194, 103, 0.5);
+    color: #fff;
+  }
+  #touch-dpad .dpad-center {
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: rgba(232, 194, 103, 0.85);
+    border-color: rgba(232, 194, 103, 0.6);
+  }
+
+  /* One-time hint that teaches the movement pad after the d-pad's removal.
+     Floats just above the bottom bar and fades itself out. */
+  #move-hint {
+    position: fixed;
+    left: 50%;
+    bottom: calc(var(--bar-h) + 14px);
+    transform: translateX(-50%);
+    z-index: 215;
+    max-width: 86vw;
+    padding: 7px 13px;
+    border-radius: 16px;
+    background: rgba(20,16,32,0.92);
+    border: 1px solid var(--frame);
+    color: var(--text);
+    font-size: 11px;
+    text-align: center;
+    line-height: 1.4;
+    pointer-events: none;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.6);
+    animation: moveHintFade 5.5s ease-in-out forwards;
+  }
+  @keyframes moveHintFade {
+    0%   { opacity: 0; transform: translateX(-50%) translateY(8px); }
+    10%  { opacity: 1; transform: translateX(-50%) translateY(0); }
+    80%  { opacity: 1; transform: translateX(-50%) translateY(0); }
+    100% { opacity: 0; transform: translateX(-50%) translateY(8px); }
+  }
+
+  /* ── MOBILE PORTRAIT LAYOUT ──
+     A phone held upright. The old design crammed a 3×3 d-pad plus a tall column
+     of action buttons into the bottom, and the loot/stats drawer ran the full
+     height of the play area so its lower rows hid behind that control block.
+     The redesign: movement is by tapping / swiping the map (no d-pad), and the
+     bottom becomes a single fixed-height navigation bar of evenly-spaced
+     buttons — a normal mobile app tab bar. The drawer stops ABOVE that bar so
+     nothing it shows (bag rows, HERO attributes) is ever covered, and it opens
+     full-width over the dungeon, leaving only the bar visible.
+     Gated to portrait + coarse so the web and landscape layouts are untouched. */
+  @media (orientation: portrait) and (pointer: coarse) {
+    /* Reserve room for the iOS home indicator / Android gesture bar. */
+    :root { --bar-h: calc(58px + env(safe-area-inset-bottom)); }
+
+    /* Bottom navigation bar: one full-width row of equal buttons. */
+    #control-bar {
+      height: var(--bar-h);
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      padding: 4px 6px;
+      padding-bottom: calc(4px + env(safe-area-inset-bottom));
+    }
+    #action-buttons {
+      flex: 1;
+      flex-direction: row;
+      align-items: stretch;
+      justify-content: space-around;
+      gap: 5px;
+      height: 100%;
+    }
+    .action-btn {
+      flex: 1 1 0;
+      width: auto;
+      min-width: 0;
+      max-width: 96px;
+      height: 100%;
+      gap: 2px;
+    }
+    .action-icon { font-size: 21px; }
+    .action-label { font-size: 9px; }
+    /* The class skill now lives on the skill bar (above the log), so drop the
+       redundant ⚡ button from the bottom nav to keep it uncluttered. */
+    .skill-btn { display: none !important; }
+
+    /* Drawer: full-width sheet over the dungeon, stopping above the nav bar so
+       its bottom rows stay readable instead of slipping behind the buttons. */
+    #side-panel {
+      left: 0;
+      right: auto;
+      width: 100%;
+      bottom: var(--bar-h);
+      border-left: none;
+      box-shadow: 0 -4px 16px rgba(0,0,0,0.6);
+    }
+  }
+
+  /* Touch devices drive movement by tapping / swiping the map, so the on-screen
+     d-pad is dropped entirely (it only ever existed for thumbs). A narrow
+     desktop window keeps it as a mouse fallback. */
+  @media (pointer: coarse) { #dpad { display: none; } }
+
+  /* One-time hint that teaches the tap/swipe controls after the d-pad's removal.
+     Floats just above the bottom bar and fades itself out. */
+  #move-hint {
+    position: fixed;
+    left: 50%;
+    bottom: calc(var(--bar-h) + 14px);
+    transform: translateX(-50%);
+    z-index: 215;
+    max-width: 86vw;
+    padding: 7px 13px;
+    border-radius: 16px;
+    background: rgba(20,16,32,0.92);
+    border: 1px solid var(--frame);
+    color: var(--text);
+    font-size: 11px;
+    text-align: center;
+    line-height: 1.4;
+    pointer-events: none;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.6);
+    animation: moveHintFade 5.5s ease-in-out forwards;
+  }
+  @keyframes moveHintFade {
+    0%   { opacity: 0; transform: translateX(-50%) translateY(8px); }
+    10%  { opacity: 1; transform: translateX(-50%) translateY(0); }
+    80%  { opacity: 1; transform: translateX(-50%) translateY(0); }
+    100% { opacity: 0; transform: translateX(-50%) translateY(8px); }
   }
 </style>
 </head>
@@ -1022,31 +1288,36 @@
 <!-- HEADER -->
 <div id="header">
   <div id="stats">
-    <div class="stat-bar">
+    <div class="stat-bar" data-tip="<div class='ht-name' style='color:var(--hp)'>❤️ Health (HP)</div><div class='ht-line'>Your life. When it hits 0 you die. Restore it with potions, resting in town, and levelling up.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
       <span style="color:var(--hp);font-size:11px;font-weight:bold;text-shadow:0 0 5px var(--hp)">HP</span>
       <div class="bar-track"><div class="bar-fill hp-fill" id="hp-bar" style="width:100%"></div></div>
       <span id="hp-text" style="font-size:10px">100</span>
     </div>
-    <div class="stat-bar">
+    <div class="stat-bar" data-tip="<div class='ht-name' style='color:var(--mp)'>🔷 Mana (MP)</div><div class='ht-line'>Spent to cast class skills and spells. Regenerates over time and refills when you level up.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
       <span style="color:var(--mp);font-size:11px;font-weight:bold;text-shadow:0 0 5px var(--mp)">MP</span>
       <div class="bar-track"><div class="bar-fill mp-fill" id="mp-bar" style="width:100%"></div></div>
       <span id="mp-text" style="font-size:10px">60/60</span>
     </div>
   </div>
-  <div class="hud-item" id="floor-hud">🗺️ <span class="hud-val" id="floor-num">1</span></div>
-  <div class="hud-item" id="level-hud">Lv <span class="hud-val" id="level-num">1</span>
+  <div class="hud-item" id="floor-hud" data-tip="<div class='ht-name'>🗺️ Dungeon Depth</div><div class='ht-line'>The floor you're on. Each floor down is tougher — but the loot gets richer too.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">🗺️ <span class="hud-val" id="floor-num">1</span></div>
+  <div class="hud-item" id="level-hud" data-tip="<div class='ht-name'>⭐ Hero Level</div><div class='ht-line'>Fill the XP bar by slaying foes to level up. Each level boosts your stats and grants an attribute point.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">Lv <span class="hud-val" id="level-num">1</span>
     <div class="xp-track"><div class="xp-fill" id="xp-bar" style="width:0%"></div></div>
   </div>
-  <div class="hud-item" id="enemies-hud" title="Foes remaining — the stairs down stay sealed until the floor is clear">⚔️ <span class="hud-val" id="enemies-num">0</span> <span id="clear-status">🔒</span></div>
-  <div class="hud-item" id="power-hud">⚡ <span class="hud-val" id="power-num">0</span></div>
-  <div class="hud-item" id="pact-hud" style="display:none">🔮 <span class="hud-val" id="pact-num"></span></div>
-  <div id="gold-display">💰 <span id="gold-count">0</span>g</div>
+  <div class="hud-item" id="enemies-hud" data-tip="<div class='ht-name'>⚔️ Foes Remaining</div><div class='ht-line'>How many enemies are still alive on this floor. The stairs down stay sealed (🔒) until every foe is cleared (🔓).</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">⚔️ <span class="hud-val" id="enemies-num">0</span> <span id="clear-status">🔒</span></div>
+  <div class="hud-item" id="power-hud" data-tip="<div class='ht-name'>⚡ Power</div><div class='ht-line'>A rough measure of your overall strength, combining your level, equipped gear, spent attributes and skills.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">⚡ <span class="hud-val" id="power-num">0</span></div>
+  <div class="hud-item" id="pact-hud" style="display:none" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">🔮 <span class="hud-val" id="pact-num"></span></div>
+  <div id="gold-display" data-tip="<div class='ht-name' style='color:var(--gold)'>💰 Gold</div><div class='ht-line'>The dungeon's main currency. Spend it at the town shops, the Forge, the Enchanter, and the Stash.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">💰 <span id="gold-count">0</span>g</div>
 </div>
 
 <!-- MAIN -->
 <div id="main">
   <div id="game-wrap">
     <canvas id="canvas"></canvas>
+    <!-- Active skills (baseline class skill + any learned tree actives). Sits
+         between the map and the log so it's reachable in the thumb zone on
+         mobile. Populated by renderSkillBar(); hidden in town / before a class
+         is chosen. -->
+    <div id="skill-bar" style="display:none"></div>
     <div id="bottom-row">
       <div id="log"></div>
     </div>
@@ -1110,11 +1381,22 @@
     </div>
   </div>
 
+  <!-- Floating movement pad (touch only). Pinned over the bottom of the map by
+       positionTouchDpad(); reuses the .dpad-btn / data-dir movement wiring. -->
+  <div id="touch-dpad">
+    <button class="dpad-btn" data-dir="up" aria-label="Move up">▲</button>
+    <button class="dpad-btn" data-dir="left" aria-label="Move left">◀</button>
+    <button class="dpad-btn dpad-center" data-dir="pickup" aria-label="Use / pick up">USE</button>
+    <button class="dpad-btn" data-dir="right" aria-label="Move right">▶</button>
+    <button class="dpad-btn" data-dir="down" aria-label="Move down">▼</button>
+  </div>
+
   <div id="side-panel" class="collapsed">
     <div class="panel-tab">
       <button class="tab-btn active" id="tab-inv" onclick="switchTab('inv')">LOOT</button>
       <button class="tab-btn" id="tab-equip" onclick="switchTab('equip')">GEAR</button>
       <button class="tab-btn" id="tab-hero" onclick="switchTab('hero')">HERO</button>
+      <button class="tab-btn" id="tab-skills" onclick="switchTab('skills')">SKILLS</button>
     </div>
     <div id="panel-content"></div>
   </div>
@@ -1126,8 +1408,9 @@
   <div id="shop-overlay" onclick="if(event.target===this)closeShop()">
     <div id="shop-modal">
       <div id="shop-header">
+        <button id="shop-back" onclick="shopBack()" style="display:none" title="Back to town menu">←</button>
         <span id="shop-title">🧙‍♂️ Wandering Merchant</span>
-        <button id="shop-close" onclick="closeShop()">✕</button>
+        <button id="shop-close" onclick="shopClose()" title="Close">✕</button>
       </div>
       <div id="shop-gold">Your gold: <span id="shop-gold-count">0</span>g</div>
       <div id="shop-tabs">
@@ -1141,8 +1424,9 @@
   <div id="mystic-overlay" onclick="if(event.target===this)closeMystic()">
     <div id="mystic-modal">
       <div id="mystic-header">
+        <button id="mystic-back" onclick="mysticBack()" style="display:none" title="Back to town menu">←</button>
         <span id="mystic-title">🔮 Wandering Mystic</span>
-        <button id="mystic-close" onclick="closeMystic()">✕</button>
+        <button id="mystic-close" onclick="mysticClose()" title="Close">✕</button>
       </div>
       <div id="mystic-gold">Your gold: <span id="mystic-gold-count">0</span>g</div>
       <div id="mystic-active" style="display:none"></div>
@@ -1166,6 +1450,13 @@
 
 <div id="tooltip"></div>
 <div id="hovertip"></div>
+
+<!-- Shown only on a touch device held in landscape — the game is portrait-only. -->
+<div id="rotate-overlay">
+  <div class="rot-icon">📱</div>
+  <div class="rot-title">Please rotate your device</div>
+  <div class="rot-sub">Dungeon Loot plays best upright — turn your phone back to portrait to keep delving.</div>
+</div>
 
 <div id="screen-flash"></div>
 
@@ -1214,14 +1505,16 @@ const SLOT_WEIGHTS = { weapon:22, chest:15, head:13, hands:13, legs:13, ring:12,
 // MAXIMUMS — the real count is rolled up to them, so a legendary *can* land 4
 // stats + 2 attributes but usually rolls fewer. No stat or attribute is ever
 // duplicated on one item, and an affix can't repeat the slot's headline.
+// An item carries at most ONE attribute modifier and up to FIVE stat modifiers,
+// reached at legendary/unique. Lower rarities ramp up to that ceiling.
 const TIER_AFFIX_CAPS = {
   junk:      { stat: 0, attr: 0 },
   normal:    { stat: 1, attr: 0 },
-  uncommon:  { stat: 1, attr: 1 },
-  rare:      { stat: 2, attr: 1 },
-  epic:      { stat: 3, attr: 1 },
-  legendary: { stat: 4, attr: 2 },
-  unique:    { stat: 4, attr: 2 },
+  uncommon:  { stat: 2, attr: 0 },
+  rare:      { stat: 3, attr: 1 },
+  epic:      { stat: 4, attr: 1 },
+  legendary: { stat: 5, attr: 1 },
+  unique:    { stat: 5, attr: 1 },
 };
 // Which stats / attributes each slot is allowed to roll. A slot can never roll
 // anything outside its pool (no Attack on boots, no Defense on a ring), which is
@@ -1229,14 +1522,19 @@ const TIER_AFFIX_CAPS = {
 // Note: Luck is now an *attribute*, not a gear stat — the old LCK stat is kept
 // only so legacy items keep working, and never appears in these pools, so "Luck"
 // in the UI always refers to the attribute.
+// Each pool is intentionally LARGER than the rarity cap (5 stats / 1 attr at the
+// top), so even a fully-rolled item always has spare types to transmute into —
+// that keeps the Enchanter's modifier (🔄) reroll alive on every property. A
+// slot's own headline (weapon DMG, armor DEF/ATK) is never listed here, since the
+// headline already occupies that stat and would only waste a pool slot.
 const SLOT_AFFIX_POOLS = {
-  head:   { stats: ['DEF','HP','MP','REGEN','CRIT'],      attrs: ['vitality','spirit','luck'] },
-  chest:  { stats: ['DEF','HP','REGEN','MP'],             attrs: ['vitality','spirit'] },
-  hands:  { stats: ['ATK','CRIT','CRITDMG','SPD'],        attrs: ['might','agility'] },
-  legs:   { stats: ['DEF','SPD','HP','REGEN'],            attrs: ['agility','vitality'] },
-  weapon: { stats: ['ATK','CRIT','CRITDMG'],             attrs: ['might','agility','spirit'] },
-  ring:   { stats: ['CRIT','CRITDMG','ATK','MP'],         attrs: ['might','agility','luck','spirit','vitality'] },
-  amulet: { stats: ['MP','HP','REGEN','CRIT'],            attrs: ['spirit','luck','vitality','might'] },
+  weapon: { stats: ['ATK','CRIT','CRITDMG','IDMG','DBLSTRIKE','CLEAVE','BOSSDMG','EXEC','PEN','LEECH','MPLEECH','SPELLPWR'], attrs: ['might','agility','spirit'] },
+  head:   { stats: ['HP','MP','REGEN','CRIT','CRITDMG','SPD','MAGICFIND','XPGAIN','SPELLPWR','CDR','MCR','DODGE','MPKILL','MATFIND'], attrs: ['vitality','spirit','luck'] },
+  chest:  { stats: ['HP','REGEN','MP','DR','BLOCK','THORNS','HPKILL','DODGE','MAGICFIND'], attrs: ['vitality','spirit','luck'] },
+  hands:  { stats: ['CRIT','CRITDMG','IDMG','DBLSTRIKE','SPD','PEN','LEECH','EXEC','CDR','CLEAVE','BLOCK','THORNS'], attrs: ['might','agility','spirit'] },
+  legs:   { stats: ['SPD','HP','REGEN','DODGE','DR','BLOCK','MP','GOLDFIND','XPGAIN','HPKILL'], attrs: ['agility','vitality','luck'] },
+  ring:   { stats: ['CRIT','CRITDMG','ATK','IDMG','LEECH','MPLEECH','GOLDFIND','MAGICFIND','MATFIND','HP','MP','DEF','DBLSTRIKE','BOSSDMG','EXEC','PEN','MCR','MPKILL','CLEAVE'], attrs: ['might','agility','luck','spirit','vitality'] },
+  amulet: { stats: ['MP','HP','REGEN','SPELLPWR','CDR','MCR','MPLEECH','MPKILL','HPKILL','THORNS','MAGICFIND','DR','ATK','DEF','BOSSDMG','GOLDFIND','XPGAIN','MATFIND'], attrs: ['spirit','luck','vitality','might','agility'] },
 };
 
 // ── ITEM ICONS ──
@@ -1627,9 +1925,12 @@ function gainMaterial(k, n) {
 // Compact inline display of all four material counts, used in the bag and town.
 function matStripHTML() {
   const m = player.materials || {};
-  const chips = CRAFT_MAT_KEYS.map(k =>
-    `<span class="mat-chip" title="${CRAFT_MATERIALS[k].name} — ${CRAFT_MATERIALS[k].desc}" style="color:${CRAFT_MATERIALS[k].color}">${CRAFT_MATERIALS[k].emoji} ${m[k] || 0}</span>`
-  ).join('');
+  const chips = CRAFT_MAT_KEYS.map(k => {
+    const mat = CRAFT_MATERIALS[k];
+    // Gear-style hover card instead of a native title box, escaped for the attr.
+    const tip = `<div class='ht-name' style='color:${mat.color}'>${mat.emoji} ${mat.name}</div><div class='ht-line'>${mat.desc}</div>`.replace(/"/g, '&quot;');
+    return `<span class="mat-chip" data-tip="${tip}" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()" style="color:${mat.color}">${mat.emoji} ${m[k] || 0}</span>`;
+  }).join('');
   return `<div class="mat-strip">${chips}</div>`;
 }
 // Small badge marking player-forged gear so it always reads as crafted, on top
@@ -1661,14 +1962,40 @@ const STAT_NAMES = ['ATK','DEF','SPD','LCK','HP','MP','CRIT','CRITDMG','REGEN'];
 // "Fortune" so it never reads as the new Luck *attribute*; it no longer rolls on
 // new gear and survives only on older items.
 const STAT_LABELS = { ATK:'Attack', DEF:'Defense', SPD:'Speed', LCK:'Fortune', HP:'Max HP',
-  MP:'Max MP', CRIT:'Crit %', CRITDMG:'Crit Dmg %', REGEN:'Regen', DMG:'Damage' };
+  MP:'Max MP', CRIT:'Crit %', CRITDMG:'Crit Dmg %', REGEN:'Regen', DMG:'Damage',
+  // ── new stats ── leech & on-kill sustain, defensive layers, offensive %s,
+  // utility/economy %s, and caster %s. Percent stats carry a "%" in their label
+  // so every display (tooltip, enchanter, hero pane) reads correctly for free.
+  LEECH:'Life Leech %', MPLEECH:'Mana Leech %', HPKILL:'Life on Kill', MPKILL:'Mana on Kill',
+  THORNS:'Thorns', DR:'Damage Reduction %', BLOCK:'Block %', DODGE:'Dodge %',
+  IDMG:'Increased Dmg %', DBLSTRIKE:'Double Strike %', CLEAVE:'Cleave %', BOSSDMG:'Dmg vs Bosses %',
+  EXEC:'Execute %', PEN:'Armor Pen %', GOLDFIND:'Gold Find %', XPGAIN:'XP Gain %',
+  MAGICFIND:'Magic Find %', MATFIND:'Material Find %', SPELLPWR:'Spell Power %',
+  CDR:'Cooldown Reduc %', MCR:'Mana Cost Reduc %' };
+// Short codes for the compact one-line item summary (the tooltip/enchanter use the
+// full STAT_LABELS above). Anything missing falls back to its raw key.
+const STAT_SHORT = { ATK:'ATK', DEF:'DEF', SPD:'SPD', LCK:'FOR', HP:'HP', MP:'MP', CRIT:'CRIT',
+  CRITDMG:'CDMG', REGEN:'REG', LEECH:'LCH', MPLEECH:'MLC', HPKILL:'HoK', MPKILL:'MoK',
+  THORNS:'THN', DR:'DR', BLOCK:'BLK', DODGE:'DGE', IDMG:'IDMG', DBLSTRIKE:'2X', CLEAVE:'CLV',
+  BOSSDMG:'vsB', EXEC:'EXE', PEN:'PEN', GOLDFIND:'GF', XPGAIN:'XP', MAGICFIND:'MF', MATFIND:'MTF',
+  SPELLPWR:'SP', CDR:'CDR', MCR:'MCR' };
+// Stats whose value is a percentage — shown with a trailing % and consumed as /100
+// throughout combat. (CRIT/CRITDMG were always percentages; they're listed too so
+// the compact line shows their unit.)
+const PCT_STATS = new Set(['CRIT','CRITDMG','LEECH','MPLEECH','DR','BLOCK','DODGE','IDMG',
+  'DBLSTRIKE','CLEAVE','BOSSDMG','EXEC','PEN','GOLDFIND','XPGAIN','MAGICFIND','MATFIND',
+  'SPELLPWR','CDR','MCR']);
 const HERO = '🧙';
 
 // ── POWER & ATTRIBUTES ──
 // Every equippable item has a single "power" number summarising how strong it is:
 // each stat is worth a weighted amount, plus a flat bonus for its rarity tier.
 // The player's overall power is built from their level, attributes, and gear.
-const STAT_POWER_WEIGHTS = { ATK:3, DEF:2, SPD:2, LCK:2, HP:1, MP:1, CRIT:4, CRITDMG:1, REGEN:5, DMG:3 };
+const STAT_POWER_WEIGHTS = { ATK:3, DEF:2, SPD:2, LCK:2, HP:1, MP:1, CRIT:4, CRITDMG:1, REGEN:5, DMG:3,
+  // New stats weighted by rough combat value per point so item Power stays sane.
+  LEECH:5, MPLEECH:3, HPKILL:1, MPKILL:1, THORNS:1, DR:6, BLOCK:4, DODGE:5, IDMG:4, DBLSTRIKE:5,
+  CLEAVE:2, BOSSDMG:2, EXEC:2, PEN:2, GOLDFIND:1, XPGAIN:1, MAGICFIND:2, MATFIND:1, SPELLPWR:3,
+  CDR:4, MCR:3 };
 // Per-point power weight of a raised attribute carried on an item (e.g. +13 Might).
 const ATTR_POWER_WEIGHT = 6;
 // A small flat nudge per rarity — kept low on purpose so an item's power is
@@ -1806,7 +2133,7 @@ function attrDamage() {
 // Crit damage multiplier — equipment-only beyond the base, so gear (CRITDMG)
 // drives how hard your crits land. Crit damage can swing freely up or down, but
 // the multiplier never drops below 0 (no stat should ever read negative).
-function critDamageMult() { return Math.max(0, 2.0 + totalStat('CRITDMG') / 100); }
+function critDamageMult() { return Math.max(0, 2.0 + totalStat('CRITDMG') / 100 + skillBonus('critDmg')); }
 
 // The player's overall power: a blend of level, spent attributes, and equipped gear.
 function playerPower() {
@@ -1814,6 +2141,7 @@ function playerPower() {
   for (const slot of SLOT_KEYS) if (equipped[slot]) p += itemPower(equipped[slot]);
   const spent = ATTR_KEYS.reduce((s, k) => s + (player.attributes?.[k] || 0), 0);
   p += spent * 3;
+  p += spentSkillPoints() * 5; // skill-tree investment shows up in Power too
   return Math.round(p);
 }
 
@@ -1823,11 +2151,13 @@ function playerPower() {
 function baseMaxHp() {
   let hp = player.level*8 + totalAttr('vitality') * ATTR_FX.hpPerVit + totalStat('HP');
   if (player.class === 'templar') hp = hp * 1.20; // Templar: hardier body
+  hp = hp * (1 + skillBonus('maxHpPct')); // Toughness / Divine Vigor / capstones
   return Math.max(1, Math.round(hp));
 }
 function baseMaxMp() {
   let mp = player.level*4 + totalAttr('spirit') * ATTR_FX.mpPerSpr + totalStat('MP');
   if (player.class === 'mage') mp = mp * 1.30; // Mage: deeper mana pool
+  mp = mp * (1 + skillBonus('maxMpPct')); // Arcane Mind / Attunement / Ward Flesh
   return Math.max(0, Math.round(mp));
 }
 
@@ -1842,7 +2172,7 @@ function playerDefense() {
 // negative (no stat should ever read below 0).
 function playerCritChance() {
   const rogueCrit = player.class === 'rogue' ? 0.08 : 0;
-  return Math.max(0, Math.min(0.6, 0.04 + rogueCrit
+  return Math.max(0, Math.min(0.6, 0.04 + rogueCrit + skillBonus('crit')
     + (totalStat('CRIT') + totalStat('LCK')) * 0.01
     + totalAttr('luck') * ATTR_FX.critPerLuck));
 }
@@ -1850,7 +2180,8 @@ function playerCritChance() {
 // Chance to completely avoid an incoming hit, driven by Agility and gear SPD.
 // Capped so you can never become untouchable — depth threat still outpaces it.
 function playerDodge() {
-  const base = totalAttr('agility') * ATTR_FX.dodgePerAgi + totalStat('SPD') * 0.006;
+  const base = totalAttr('agility') * ATTR_FX.dodgePerAgi + totalStat('SPD') * 0.006
+    + totalStat('DODGE') / 100 + skillBonus('dodge');
   // Rogues are slipperier: a flat dodge bump and a slightly higher ceiling.
   if (player.class === 'rogue') return Math.min(0.45, base + 0.08);
   return Math.min(0.35, base);
@@ -1867,10 +2198,11 @@ function recomputeMaxStats() {
 function hpRegenPerTurn() {
   let r = totalStat('REGEN') + Math.floor(totalAttr('vitality') * ATTR_FX.hpRegenPerVit);
   if (player.class === 'templar') r += 2; // Templar mends faster between fights
+  r += skillBonus('hpRegen'); // Second Wind / Divine Vigor
   return r;
 }
 function mpRegenPerTurn() {
-  return 1 + Math.floor(totalAttr('spirit') * ATTR_FX.mpRegenPerSpr);
+  return 1 + Math.floor(totalAttr('spirit') * ATTR_FX.mpRegenPerSpr) + skillBonus('mpRegen');
 }
 
 const FOODS = [
@@ -2039,9 +2371,173 @@ function canEquipItem(item) {
   return !t || cls.weapons.includes(t);
 }
 
-// Combat passives keyed off the chosen class.
-function classDmgDealtMult() { return player.class === 'warrior' ? 1.10 : 1; }
-function classDmgTakenMult() { return player.class === 'warrior' ? 0.85 : 1; }
+// Combat passives keyed off the chosen class — now also folding in any damage
+// passives bought on the skill tree (see skillBonus).
+function classDmgDealtMult() {
+  const base = player.class === 'warrior' ? 1.10 : 1;
+  return base * (1 + skillBonus('dmgDealt'));
+}
+function classDmgTakenMult() {
+  const base = player.class === 'warrior' ? 0.85 : 1;
+  // Iron Hide / Aegis / Juggernaut etc. shave a slice off every blow; clamp so a
+  // fully-stacked defence build can never reach zero (no free invulnerability).
+  return Math.max(0.1, base * (1 - skillBonus('dmgTaken')));
+}
+
+// ── SKILL TREES ──
+// A per-class tree of passive and active skills. Leveling grants 1 skill point
+// (separate from the 5 attribute points), spent here in the bag's SKILLS tab.
+// Nodes branch via `req` (prerequisite node ids + the rank each needs) and a
+// minimum character `lvl`. PASSIVE nodes carry an `fx` map summed across their
+// ranks (see skillBonus) and feed the derived-stat formulas; ACTIVE nodes carry
+// an `active` id cast from the on-screen skill bar / number keys (castSkillById).
+const SKILL_POINTS_PER_LEVEL = 1;
+const SKILL_TREES = {
+  warrior: [
+    { id:'brutality',   name:'Brutality',   icon:'💢', type:'passive', max:3, lvl:1,  fx:{ dmgDealt:0.04 },              desc:'+4% damage dealt per rank.' },
+    { id:'toughness',   name:'Toughness',   icon:'🪨', type:'passive', max:3, lvl:1,  fx:{ maxHpPct:0.05 },             desc:'+5% max HP per rank.' },
+    { id:'warcry',      name:'War Cry',     icon:'📣', type:'active',  active:'warcry',    max:1, lvl:2, req:[['brutality',1]], mp:14, cd:6, desc:'Roar for +50% damage dealt for 5 turns.' },
+    { id:'ironhide',    name:'Iron Hide',   icon:'🛡️', type:'passive', max:3, lvl:3,  req:[['toughness',1]], fx:{ dmgTaken:0.04 }, desc:'-4% damage taken per rank.' },
+    { id:'bloodthirst', name:'Bloodthirst', icon:'🩸', type:'passive', max:2, lvl:4,  req:[['brutality',2]], fx:{ lifesteal:0.06 }, desc:'Heal 6% of the damage you deal, per rank.' },
+    { id:'whirlwind',   name:'Whirlwind',   icon:'🌀', type:'active',  active:'whirlwind', max:1, lvl:5, req:[['warcry',1]],   mp:16, cd:4, desc:'Strike every adjacent foe for 180% — chance to stun.' },
+    { id:'secondwind',  name:'Second Wind', icon:'💚', type:'passive', max:2, lvl:6,  req:[['toughness',2]], fx:{ hpRegen:1 },     desc:'+1 HP regen per turn, per rank.' },
+    { id:'juggernaut',  name:'Juggernaut',  icon:'🏰', type:'passive', max:1, lvl:9,  req:[['ironhide',3],['secondwind',1]], fx:{ dmgTaken:0.08, maxHpPct:0.10 }, desc:'-8% damage taken and +10% max HP.' },
+    { id:'executioner', name:'Executioner', icon:'☠️', type:'passive', max:1, lvl:10, req:[['bloodthirst',1]], fx:{ lowHpDmg:0.5 }, desc:'+50% damage to foes below 35% HP.' },
+    { id:'berserk',     name:'Berserk',     icon:'💥', type:'active',  active:'berserk',   max:1, lvl:12, req:[['whirlwind',1]],  mp:24, cd:8, desc:'Devastate every foe within 2 tiles for 220%.' },
+  ],
+  rogue: [
+    { id:'precision',   name:'Precision',     icon:'🎯', type:'passive', max:3, lvl:1,  fx:{ crit:0.03 },     desc:'+3% crit chance per rank.' },
+    { id:'evasion',     name:'Evasion',       icon:'💨', type:'passive', max:3, lvl:1,  fx:{ dodge:0.03 },    desc:'+3% dodge per rank.' },
+    { id:'poisonstrike',name:'Poison Strike', icon:'🧪', type:'active',  active:'poisonstrike', max:1, lvl:2, req:[['precision',1]], mp:10, cd:3, desc:'Stab an adjacent foe and inflict heavy poison.' },
+    { id:'lethality',   name:'Lethality',     icon:'🔪', type:'passive', max:3, lvl:3,  req:[['precision',1]], fx:{ critDmg:0.15 }, desc:'+15% crit damage per rank.' },
+    { id:'shadowstep',  name:'Shadowstep',    icon:'🌑', type:'active',  active:'shadowstep',   max:1, lvl:4, req:[['evasion',1]],  mp:12, cd:5, desc:'Blink to the nearest foe and land a guaranteed crit.' },
+    { id:'opportunist', name:'Opportunist',   icon:'🗡️', type:'passive', max:2, lvl:6,  req:[['lethality',1]], fx:{ lowHpDmg:0.2 }, desc:'+20% damage to foes below 35% HP, per rank.' },
+    { id:'fleetfoot',   name:'Fleet Foot',    icon:'🍃', type:'passive', max:2, lvl:6,  req:[['evasion',2]],   fx:{ dodge:0.03 },   desc:'+3% dodge per rank.' },
+    { id:'fanofknives', name:'Fan of Knives', icon:'🔅', type:'active',  active:'fanofknives',  max:1, lvl:8, req:[['poisonstrike',1]], mp:16, cd:4, desc:'Spray blades at every adjacent foe and poison them.' },
+    { id:'assassinate', name:'Assassinate',   icon:'☠️', type:'passive', max:1, lvl:10, req:[['lethality',3],['opportunist',1]], fx:{ critDmg:0.5 }, desc:'+50% crit damage.' },
+    { id:'deathmark',   name:'Death Mark',    icon:'🎯', type:'active',  active:'deathmark',    max:1, lvl:12, req:[['shadowstep',1],['fanofknives',1]], mp:22, cd:7, desc:'A huge guaranteed crit on one foe in range.' },
+  ],
+  mage: [
+    { id:'arcanemind',   name:'Arcane Mind',     icon:'🔵', type:'passive', max:3, lvl:1,  fx:{ maxMpPct:0.08, mpRegen:1 }, desc:'+8% max MP and +1 MP regen per rank.' },
+    { id:'spellpower',   name:'Spell Power',     icon:'✨', type:'passive', max:3, lvl:1,  fx:{ spell:0.10 },               desc:'+10% spell damage per rank.' },
+    { id:'frostnova',    name:'Frost Nova',      icon:'❄️', type:'active',  active:'frostnova',     max:1, lvl:2, req:[['spellpower',1]], mp:14, cd:5, desc:'Freeze every foe within 2 tiles, stunning them.' },
+    { id:'pyromancy',    name:'Pyromancy',       icon:'🔥', type:'passive', max:2, lvl:3,  req:[['spellpower',1]], fx:{ spell:0.08 }, desc:'+8% spell damage per rank.' },
+    { id:'manashield',   name:'Mana Shield',     icon:'🔮', type:'passive', max:2, lvl:4,  req:[['arcanemind',1]], fx:{ manaShield:0.25 }, desc:'Absorb 25% of incoming damage with MP, per rank.' },
+    { id:'chainlightning',name:'Chain Lightning',icon:'⚡', type:'active',  active:'chainlightning',max:1, lvl:5, req:[['frostnova',1]], mp:18, cd:4, desc:'Lightning arcs between up to 3 nearby foes.' },
+    { id:'attunement',   name:'Attunement',      icon:'🌀', type:'passive', max:2, lvl:6,  req:[['arcanemind',2]], fx:{ mpRegen:1, maxMpPct:0.06 }, desc:'+1 MP regen and +6% max MP per rank.' },
+    { id:'archmage',     name:'Archmage',        icon:'📜', type:'passive', max:1, lvl:9,  req:[['spellpower',3],['pyromancy',1]], fx:{ spell:0.30 }, desc:'+30% spell damage.' },
+    { id:'wardflesh',    name:'Ward Flesh',      icon:'🛡️', type:'passive', max:1, lvl:10, req:[['manashield',2]], fx:{ manaShield:0.20, maxMpPct:0.10 }, desc:'+20% mana shield and +10% max MP.' },
+    { id:'meteor',       name:'Meteor',          icon:'☄️', type:'active',  active:'meteor',        max:1, lvl:12, req:[['chainlightning',1],['archmage',1]], mp:28, cd:8, desc:'Call a meteor onto the nearest foe, scorching all around it.' },
+  ],
+  templar: [
+    { id:'divinevigor',  name:'Divine Vigor', icon:'💛', type:'passive', max:3, lvl:1,  fx:{ maxHpPct:0.05, hpRegen:1 }, desc:'+5% max HP and +1 HP regen per rank.' },
+    { id:'aegis',        name:'Aegis',        icon:'🛡️', type:'passive', max:3, lvl:1,  fx:{ dmgTaken:0.04 },            desc:'-4% damage taken per rank.' },
+    { id:'holysmite',    name:'Holy Smite',   icon:'🔆', type:'active',  active:'holysmite', max:1, lvl:2, req:[['divinevigor',1]], mp:12, cd:3, desc:'Smite a nearby foe and heal yourself.' },
+    { id:'zeal',         name:'Zeal',         icon:'⚔️', type:'passive', max:3, lvl:3,  req:[['divinevigor',1]], fx:{ zeal:0.10 }, desc:'Up to +10% damage per rank as your HP drops.' },
+    { id:'retribution',  name:'Retribution',  icon:'↩️', type:'passive', max:2, lvl:4,  req:[['aegis',1]], fx:{ reflect:0.15 }, desc:'Reflect 15% of melee damage taken, per rank.' },
+    { id:'sanctuary',    name:'Sanctuary',    icon:'⛪', type:'active',  active:'sanctuary', max:1, lvl:5, req:[['aegis',1]], mp:16, cd:6, desc:'Hallow the ground: -50% damage taken for 4 turns, and heal.' },
+    { id:'consecration', name:'Consecration', icon:'✝️', type:'passive', max:2, lvl:6,  req:[['zeal',2]], fx:{ dmgDealt:0.05 }, desc:'+5% damage dealt per rank.' },
+    { id:'bulwark',      name:'Bulwark',      icon:'🏰', type:'passive', max:1, lvl:9,  req:[['aegis',3],['retribution',1]], fx:{ dmgTaken:0.08, maxHpPct:0.10 }, desc:'-8% damage taken and +10% max HP.' },
+    { id:'fervor',       name:'Fervor',       icon:'🔥', type:'passive', max:1, lvl:10, req:[['zeal',3],['consecration',1]], fx:{ zeal:0.30 }, desc:'Up to +30% more damage as your HP drops.' },
+    { id:'judgment',     name:'Judgment',     icon:'⚖️', type:'active',  active:'judgment',  max:1, lvl:12, req:[['holysmite',1],['sanctuary',1]], mp:26, cd:8, desc:'Smite all nearby foes and restore a burst of health.' },
+  ],
+};
+
+// Hand-placed node positions for the visual skill tree, as [x, y] fractions of the
+// canvas (0–1). The two Lv1 passives root an OFFENSE trunk (left) and a DEFENSE
+// trunk (right); branches flow downward to the Lv12 capstone. Connector lines are
+// derived from each node's `req`, so only positions live here. Keep an entry for
+// every node id in SKILL_TREES above.
+const SKILL_TREE_LAYOUT = {
+  warrior: {
+    brutality:[0.27,0.07], toughness:[0.73,0.07],
+    warcry:[0.13,0.27], bloodthirst:[0.40,0.27], ironhide:[0.60,0.27], secondwind:[0.87,0.27],
+    whirlwind:[0.13,0.50], executioner:[0.40,0.52], juggernaut:[0.735,0.52],
+    berserk:[0.13,0.78],
+  },
+  rogue: {
+    precision:[0.27,0.07], evasion:[0.73,0.07],
+    lethality:[0.13,0.27], poisonstrike:[0.40,0.27], shadowstep:[0.60,0.27], fleetfoot:[0.87,0.27],
+    opportunist:[0.13,0.50], fanofknives:[0.40,0.50],
+    assassinate:[0.13,0.73], deathmark:[0.50,0.73],
+  },
+  mage: {
+    spellpower:[0.27,0.07], arcanemind:[0.73,0.07],
+    frostnova:[0.13,0.27], pyromancy:[0.40,0.27], manashield:[0.60,0.27], attunement:[0.87,0.27],
+    chainlightning:[0.13,0.50], archmage:[0.40,0.50], wardflesh:[0.73,0.50],
+    meteor:[0.27,0.74],
+  },
+  templar: {
+    divinevigor:[0.27,0.07], aegis:[0.73,0.07],
+    zeal:[0.13,0.27], holysmite:[0.40,0.27], retribution:[0.60,0.27], sanctuary:[0.87,0.27],
+    consecration:[0.13,0.50], bulwark:[0.65,0.50],
+    fervor:[0.13,0.72], judgment:[0.62,0.74],
+  },
+};
+
+// The current class's tree (empty array for a classless legacy save).
+function classSkillTree() { return (player.class && SKILL_TREES[player.class]) || []; }
+function skillNode(id) { return classSkillTree().find(n => n.id === id) || null; }
+function skillRank(id) { return (player.skills && player.skills[id]) || 0; }
+// Sum a passive bonus key across every owned node rank in the current tree. This
+// is the single hook every derived-stat formula reads, so a passive is "live"
+// the instant it's bought with no per-stat bookkeeping.
+function skillBonus(key) {
+  if (!player.skills) return 0;
+  let sum = 0;
+  for (const n of classSkillTree()) {
+    if (n.type === 'passive' && n.fx && n.fx[key]) sum += n.fx[key] * skillRank(n.id);
+  }
+  return sum;
+}
+// Spell-damage multiplier from Spell Power / Pyromancy / Archmage (Mage tree).
+function spellPowerMult() { return 1 + skillBonus('spell') + totalStat('SPELLPWR') / 100; }
+// Prereqs satisfied? (high enough level AND every required node at its rank).
+function skillReqMet(node) {
+  if (!node) return false;
+  if (player.level < (node.lvl || 1)) return false;
+  if (node.req) for (const [rid, rk] of node.req) if (skillRank(rid) < rk) return false;
+  return true;
+}
+function skillMaxed(node) { return skillRank(node.id) >= (node.max || 1); }
+function canBuySkill(node) {
+  return !!node && (player.skillPoints || 0) > 0 && !skillMaxed(node) && skillReqMet(node);
+}
+function spentSkillPoints() {
+  return classSkillTree().reduce((s, n) => s + skillRank(n.id), 0);
+}
+// Castable actives: the always-available baseline class skill first, then every
+// unlocked active node — each keyed by its own id for an independent cooldown.
+function activeSkillList() {
+  const cls = playerClass();
+  const list = [];
+  if (cls && cls.skill) list.push({ ...cls.skill, baseline: true });
+  for (const n of classSkillTree()) {
+    if (n.type === 'active' && skillRank(n.id) > 0) {
+      list.push({ id: n.active, name: n.name, icon: n.icon, mp: n.mp, cd: n.cd, desc: n.desc });
+    }
+  }
+  return list;
+}
+function skillCd(id) { return (player.skillCds && player.skillCds[id]) || 0; }
+function setSkillCd(id, v) { if (!player.skillCds) player.skillCds = {}; player.skillCds[id] = v; }
+// Buy / rank up a skill node, spending one skill point.
+function buySkill(id) {
+  const node = skillNode(id);
+  if (!node) return;
+  if (!canBuySkill(node)) { log('You can\'t learn that yet — check its level and prerequisites.'); return; }
+  if (!player.skills) player.skills = {};
+  player.skills[id] = (player.skills[id] || 0) + 1;
+  player.skillPoints--;
+  // Passives that raise max HP/MP grant the new headroom immediately.
+  const beforeHp = player.maxHp, beforeMp = player.maxMp;
+  recomputeMaxStats();
+  player.hp += Math.max(0, player.maxHp - beforeHp);
+  player.mp += Math.max(0, player.maxMp - beforeMp);
+  sfx('levelup');
+  log(`✨ Learned ${node.icon} ${node.name}${(node.max || 1) > 1 ? ` (rank ${player.skills[id]}/${node.max})` : ''}.`, 'important');
+  updateBars(); renderPanel(); renderSkillBar(); saveGame();
+}
 
 // Names rolled for elite (named) enemies and mimics, so a glowing foe feels
 // like a personality rather than just a tougher sprite.
@@ -2172,6 +2668,10 @@ let player = { x: 5, y: 5, hp: 100, maxHp: 100, mp: 60, maxMp: 60, gold: 0, leve
   // attributes convert into damage, passives, the active skill, and which weapons
   // can be equipped.
   class: null, skillCd: 0,
+  // Skill tree — 1 skill point earned per level (separate from attribute points),
+  // spent on the class's passive/active nodes. `skills` maps node id → rank;
+  // `skillCds` holds each active skill's independent cooldown.
+  skillPoints: 0, skills: {}, skillCds: {},
   // Hero attributes — every one starts at ATTR_BASE and is raised by spending
   // points earned on level up. attrSchema marks the attribute-driven-stats model
   // (v2) so older saves can be migrated on load.
@@ -2198,6 +2698,11 @@ let shrineData = {};  // "y,x" -> { kind } for shrine tiles on this floor
 const SHRINE_KINDS = ['power','guard','fortune','blood','wisdom'];
 // Temporary shrine buffs, each counts down a number of floors.
 let buffs = { power: 0, guard: 0, fortune: 0 };
+// Transient combat buffs from active skills (War Cry, Sanctuary, …), keyed by id
+// to a remaining-turn count and ticked down each turn in runEnemyTurn. Purely
+// in-combat and short-lived, so it is intentionally NOT saved.
+let combatBuffs = {};
+function hasBuff(id) { return (combatBuffs[id] || 0) > 0; }
 let floatingTexts = [];
 let statusEffects = [];
 let groundFood = [];
@@ -2207,6 +2712,11 @@ let teleporters = {}; // "y,x" -> { x, y } partner pad for warp tiles
 let groundKey = null; // { x, y } of the vault key on this floor, if any
 let hasKey = false;   // whether the player is currently carrying a vault key
 let startPos = { x: 5, y: 5 }; // this floor's safe entry tile (where death sends you)
+// How the player arrived on the floor about to be built: 'down' (descended, via
+// the gate, or a fresh load) or 'up' (climbed the stairs up from below). It
+// decides which stair sits on the entry tile — you always spawn on the stair
+// that leads back the way you came. Reset to 'down' at the end of generateMap.
+let arrivalDir = 'down';
 // Optional mini-quest on this floor: { type, npc:{x,y,emoji,name,following?}, done }
 let quest = null;
 const QUEST_NPCS  = ['🧑‍🌾','🧓','🧝','🧙‍♀️','👨‍🔧','🧕','👩‍🌾','🤴','👸','🧑‍🎓'];
@@ -2214,6 +2724,7 @@ const QUEST_NAMES = ['Elara','Old Tomas','Bram','Sera','the Scholar','Mira','Cap
 let enemies = [];
 let currentTab = 'inv';
 let selectedItem = null;
+let selectedSkillId = null; // skill-tree node whose detail popover is open (null = none)
 let mapData = [];
 let dungeonLevel = 1;
 
@@ -2256,17 +2767,56 @@ function audioInit() {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return null;
     audio.ctx = new AC();
+
+    // Master bus → gentle limiter → speakers. The compressor glues the layered
+    // voices together and tames peaks so nothing clips into harshness — most of
+    // the difference between "cheap beep" and "polished" is this and the reverb.
     audio.master = audio.ctx.createGain();
     audio.master.gain.value = audio.muted ? 0 : 0.9;
-    audio.master.connect(audio.ctx.destination);
+    const comp = audio.ctx.createDynamicsCompressor();
+    comp.threshold.value = -14; comp.knee.value = 24; comp.ratio.value = 3;
+    comp.attack.value = 0.003; comp.release.value = 0.25;
+    audio.master.connect(comp);
+    comp.connect(audio.ctx.destination);
+
+    // A convolution reverb fed by a synthesized impulse — gives every sound a
+    // sense of space/room instead of a dry, flat blip.
+    audio.reverb = audio.ctx.createConvolver();
+    audio.reverb.buffer = makeImpulse(audio.ctx, 1.8, 2.6);
+    audio.reverb.connect(audio.master);
+
+    // SFX bus: mostly dry with a touch of reverb.
     audio.sfxGain = audio.ctx.createGain();
     audio.sfxGain.gain.value = 0.6;
     audio.sfxGain.connect(audio.master);
+    const sfxVerb = audio.ctx.createGain();
+    sfxVerb.gain.value = 0.12;
+    audio.sfxGain.connect(sfxVerb);
+    sfxVerb.connect(audio.reverb);
+
+    // Music bus: more reverb for a lush, spacious dungeon ambience.
     audio.musicGain = audio.ctx.createGain();
-    audio.musicGain.gain.value = 0.22;
+    audio.musicGain.gain.value = 0.2;
     audio.musicGain.connect(audio.master);
+    const musicVerb = audio.ctx.createGain();
+    musicVerb.gain.value = 0.3;
+    audio.musicGain.connect(musicVerb);
+    musicVerb.connect(audio.reverb);
   } catch (e) { audio.ctx = null; }
   return audio.ctx;
+}
+
+// Build a decaying-noise impulse response for the convolution reverb above.
+function makeImpulse(ctx, seconds, decay) {
+  const len = Math.max(1, Math.floor(ctx.sampleRate * seconds));
+  const buf = ctx.createBuffer(2, len, ctx.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = buf.getChannelData(ch);
+    for (let i = 0; i < len; i++) {
+      d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+    }
+  }
+  return buf;
 }
 
 // Browsers block audio until a user gesture — call this from the first input to
@@ -2278,24 +2828,46 @@ function audioUnlock() {
   if (!audio.started) { audio.started = true; startMusic(); }
 }
 
-// A single shaped blip — the building block for every sound effect.
-function tone(freq, dur, when, type = 'square', vol = 0.5, slideTo = null) {
+// A rich single voice: two slightly detuned oscillators run through a lowpass
+// filter with a real attack/decay envelope and a little filter movement. The
+// detuning fattens it and the filter rounds off the raw-waveform "buzz" — this
+// is what makes a note sound warm and produced rather than like a bare beep.
+function voice(opts) {
   const ctx = audio.ctx;
   if (!ctx) return;
-  const o = ctx.createOscillator();
+  const { freq, dur, when, dest = audio.sfxGain, type = 'triangle', vol = 0.4,
+          detune = 7, slideTo = null, cutoff = 3000, q = 1, attack = 0.008 } = opts;
   const g = ctx.createGain();
-  o.type = type;
-  o.frequency.setValueAtTime(freq, when);
-  if (slideTo) o.frequency.exponentialRampToValueAtTime(Math.max(1, slideTo), when + dur);
+  const f = ctx.createBiquadFilter();
+  f.type = 'lowpass'; f.Q.value = q;
+  f.frequency.setValueAtTime(cutoff, when);
+  f.frequency.exponentialRampToValueAtTime(Math.max(180, cutoff * 0.5), when + dur);
   g.gain.setValueAtTime(0.0001, when);
-  g.gain.exponentialRampToValueAtTime(vol, when + 0.008);
+  g.gain.exponentialRampToValueAtTime(vol, when + attack);
   g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
-  o.connect(g); g.connect(audio.sfxGain);
-  o.start(when); o.stop(when + dur + 0.02);
+  for (const dt of [-detune, detune]) {
+    const o = ctx.createOscillator();
+    o.type = type;
+    o.frequency.setValueAtTime(freq, when);
+    if (slideTo) o.frequency.exponentialRampToValueAtTime(Math.max(1, slideTo), when + dur);
+    o.detune.value = dt;
+    o.connect(f);
+    o.start(when); o.stop(when + dur + 0.03);
+  }
+  f.connect(g); g.connect(dest);
 }
 
-// A burst of decaying white noise — used for impacts, traps, and death.
-function noise(dur, when, vol = 0.4) {
+// A shaped blip for sound effects — a thin wrapper over the richer voice so
+// every existing sfx call gets the detuned/filtered treatment for free.
+function tone(freq, dur, when, type = 'square', vol = 0.5, slideTo = null) {
+  voice({ freq, dur, when, dest: audio.sfxGain, type, vol, slideTo,
+          detune: 7, cutoff: 3400, q: 1, attack: 0.006 });
+}
+
+// A burst of decaying noise — used for impacts, traps, and death. Now shaped by
+// a filter and an envelope so it reads as a soft "whoosh"/"thud" rather than a
+// harsh hiss.
+function noise(dur, when, vol = 0.4, cutoff = 3800, type = 'lowpass') {
   const ctx = audio.ctx;
   if (!ctx) return;
   const n = Math.max(1, Math.floor(ctx.sampleRate * dur));
@@ -2303,8 +2875,11 @@ function noise(dur, when, vol = 0.4) {
   const d = buf.getChannelData(0);
   for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
   const src = ctx.createBufferSource(); src.buffer = buf;
-  const g = ctx.createGain(); g.gain.value = vol;
-  src.connect(g); g.connect(audio.sfxGain);
+  const f = ctx.createBiquadFilter(); f.type = type; f.frequency.value = cutoff; f.Q.value = 0.7;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(vol, when);
+  g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+  src.connect(f); f.connect(g); g.connect(audio.sfxGain);
   src.start(when); src.stop(when + dur);
 }
 
@@ -2336,43 +2911,123 @@ function sfx(name) {
 }
 
 // ── Background music ──
-// A looping minor-key dungeon theme: a wandering lead over a steady bass,
-// scheduled a fraction of a second ahead of the playhead so it never glitches.
+// A *generative* minor-key dungeon theme rather than a fixed loop: it walks a
+// rotating chord progression and improvises a fresh melody, arpeggio, bassline
+// and light percussion bar by bar, so the music keeps evolving and never
+// repeats note-for-note. Everything is scheduled a fraction of a second ahead
+// of the playhead so it never glitches.
 let musicTimer = null, musicStep = 0, musicNext = 0;
-const MUSIC_TEMPO = 0.26;   // seconds per eighth-note step (~115 BPM feel)
-// Frequencies in Hz; 0 = a rest. The lead wanders an A-minor scale.
-const MUSIC_LEAD = [
-  440, 523, 587, 659, 587, 523, 440, 392,
-  440, 523, 659, 587, 523, 440, 392, 330,
-  392, 440, 523, 440, 587, 523, 440, 330,
-  440, 392, 330, 392, 440, 523, 587, 659,
+let musicProg = null, musicLeadIdx = 4;
+const MUSIC_TEMPO = 0.26;     // seconds per eighth-note step (~115 BPM feel)
+const STEPS_PER_BAR = 8;      // eighth-notes per 4/4 bar
+const A2 = 110;               // reference pitch in Hz
+// Semitone offset from A2 → Hz.
+const mhz = (semi) => A2 * Math.pow(2, semi / 12);
+// A natural-minor scale (semitone offsets) the melody wanders within.
+const MUSIC_SCALE = [0, 2, 3, 5, 7, 8, 10, 12, 14, 15, 17, 19, 24];
+// Diatonic chords as semitone offsets from A2 (root, third, fifth).
+const MUSIC_CHORDS = {
+  Am: [0, 3, 7],  Dm: [5, 8, 12], Em: [7, 10, 14],
+  C:  [3, 7, 10], F:  [8, 12, 15], G:  [10, 14, 17],
+};
+// A handful of 4-bar progressions; the engine rotates between them for variety.
+const MUSIC_PROGS = [
+  ['Am', 'F',  'C',  'G'],
+  ['Am', 'Dm', 'G',  'C'],
+  ['Am', 'C',  'Dm', 'Em'],
+  ['Am', 'F',  'G',  'Em'],
 ];
-const MUSIC_BASS = [
-  110, 0, 165, 0, 110, 0, 147, 0,
-  110, 0, 165, 0, 98, 0, 131, 0,
-];
-function musicTone(freq, dur, when, type, vol) {
+const mpick = (a) => a[Math.floor(Math.random() * a.length)];
+
+// A soft, pitched kick for the downbeats.
+function musicKick(when) {
   const ctx = audio.ctx;
   if (!ctx) return;
   const o = ctx.createOscillator();
   const g = ctx.createGain();
-  o.type = type;
-  o.frequency.setValueAtTime(freq, when);
+  o.type = 'sine';
+  o.frequency.setValueAtTime(140, when);
+  o.frequency.exponentialRampToValueAtTime(45, when + 0.12);
   g.gain.setValueAtTime(0.0001, when);
-  g.gain.exponentialRampToValueAtTime(vol, when + 0.02);
-  g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+  g.gain.exponentialRampToValueAtTime(0.26, when + 0.005);
+  g.gain.exponentialRampToValueAtTime(0.0001, when + 0.18);
   o.connect(g); g.connect(audio.musicGain);
-  o.start(when); o.stop(when + dur + 0.02);
+  o.start(when); o.stop(when + 0.2);
+}
+// A brushed closed-hat (filtered noise) for the offbeats.
+function musicHat(when, vol) {
+  const ctx = audio.ctx;
+  if (!ctx) return;
+  const n = Math.max(1, Math.floor(ctx.sampleRate * 0.05));
+  const buf = ctx.createBuffer(1, n, ctx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
+  const src = ctx.createBufferSource(); src.buffer = buf;
+  const f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 7000;
+  const g = ctx.createGain(); g.gain.value = vol;
+  src.connect(f); f.connect(g); g.connect(audio.musicGain);
+  src.start(when); src.stop(when + 0.05);
+}
+// Wander the melody: land on chord tones for stability, otherwise step along
+// the scale a degree or two. Returns a semitone offset from A2.
+function musicLeadStep(chord) {
+  if (Math.random() < 0.45) {
+    const t = chord[Math.floor(Math.random() * chord.length)];
+    const i = MUSIC_SCALE.indexOf(t);
+    musicLeadIdx = i < 0 ? 4 : i;
+  } else {
+    musicLeadIdx += mpick([-2, -1, 1, 2]);
+    musicLeadIdx = Math.max(0, Math.min(MUSIC_SCALE.length - 1, musicLeadIdx));
+  }
+  return MUSIC_SCALE[musicLeadIdx];
 }
 function scheduleMusic() {
   const ctx = audio.ctx;
   if (!ctx || audio.muted || ctx.state === 'suspended') return;
-  // Schedule every step that falls inside the next 0.2s look-ahead window.
-  while (musicNext < ctx.currentTime + 0.2) {
-    const lead = MUSIC_LEAD[musicStep % MUSIC_LEAD.length];
-    const bass = MUSIC_BASS[musicStep % MUSIC_BASS.length];
-    if (lead) musicTone(lead, MUSIC_TEMPO * 0.9, musicNext, 'triangle', 0.5);
-    if (bass) musicTone(bass, MUSIC_TEMPO * 1.8, musicNext, 'square', 0.32);
+  if (!musicProg) musicProg = mpick(MUSIC_PROGS);
+  // Schedule every step that falls inside the look-ahead window.
+  while (musicNext < ctx.currentTime + 0.3) {
+    const bar = Math.floor(musicStep / STEPS_PER_BAR);
+    const beat = musicStep % STEPS_PER_BAR;
+    const chord = MUSIC_CHORDS[musicProg[bar % musicProg.length]];
+    const root = chord[0];
+
+    // At the top of each 4-bar phrase, sometimes swap to a new progression so
+    // the theme keeps evolving instead of looping forever.
+    if (beat === 0 && bar % musicProg.length === 0 && musicStep > 0 && Math.random() < 0.5) {
+      musicProg = mpick(MUSIC_PROGS);
+    }
+
+    // Bass: a warm root on the downbeat, a fifth pulse mid-bar.
+    if (beat === 0) {
+      voice({ freq: mhz(root - 12), dur: MUSIC_TEMPO * 3.6, when: musicNext,
+              dest: audio.musicGain, type: 'sawtooth', vol: 0.3, detune: 4,
+              cutoff: 620, q: 3, attack: 0.02 });
+    } else if (beat === 4) {
+      voice({ freq: mhz(chord[2] - 12), dur: MUSIC_TEMPO * 3.0, when: musicNext,
+              dest: audio.musicGain, type: 'sawtooth', vol: 0.26, detune: 4,
+              cutoff: 620, q: 3, attack: 0.02 });
+    }
+
+    // Pad/arp: a soft sine arpeggio cycling the chord tones underneath.
+    if (beat % 2 === 0 || Math.random() < 0.5) {
+      voice({ freq: mhz(chord[beat % chord.length]), dur: MUSIC_TEMPO * 1.6,
+              when: musicNext, dest: audio.musicGain, type: 'sine', vol: 0.13,
+              detune: 4, cutoff: 1500, q: 1, attack: 0.04 });
+    }
+
+    // Lead: an improvised melody that breathes (occasional rests + long notes).
+    if (Math.random() < 0.72) {
+      const note = musicLeadStep(chord);
+      voice({ freq: mhz(note + 12), dur: MUSIC_TEMPO * (Math.random() < 0.3 ? 1.7 : 0.85),
+              when: musicNext, dest: audio.musicGain, type: 'triangle', vol: 0.2,
+              detune: 5, cutoff: 3000, q: 1, attack: 0.012 });
+    }
+
+    // Percussion: a steady heartbeat kick with brushed offbeat hats.
+    if (beat === 0 || beat === 4) musicKick(musicNext);
+    if (beat % 2 === 1) musicHat(musicNext, 0.05);
+
     musicStep++;
     musicNext += MUSIC_TEMPO;
   }
@@ -2422,6 +3077,9 @@ window.addEventListener('resize', () => { resizeCanvas(); draw(); });
 const WEB_MQ = window.matchMedia('(min-width: 760px) and (hover: hover) and (pointer: fine)');
 function isWebLayout() { return WEB_MQ.matches; }
 
+// Latest camera transform from draw(), used to map screen taps back to tiles.
+let lastCam = null;
+
 let panelOpen = false;
 function togglePanel() {
   // The drawer is pinned open on the web layout — just (re)render it.
@@ -2435,9 +3093,77 @@ function togglePanel() {
   if (panelOpen) renderPanel();
 }
 
-// Tapping the map closes the bag overlay if it's open (mobile only — on the
-// web layout the drawer is a fixed column and stays put).
-canvas.addEventListener('click', () => { if (panelOpen && !isWebLayout()) togglePanel(); });
+// ── MAP GESTURES ──
+// Movement on touch is driven by the floating #touch-dpad (whose direction is
+// unambiguous), not by tapping the map. The map still accepts two gestures: a
+// swipe steps in the swiped direction (a quick alternative to the pad), and any
+// tap/swipe closes the bag drawer if it's open. The web layout is unchanged —
+// mouse-and-keyboard driven, so map clicks do nothing.
+let gestureStart = null;
+const SWIPE_PX = 24; // travel beyond this counts as a swipe, not a stray tap
+
+canvas.addEventListener('pointerdown', e => {
+  gestureStart = { x: e.clientX, y: e.clientY };
+});
+canvas.addEventListener('pointercancel', () => { gestureStart = null; });
+canvas.addEventListener('pointerup', e => {
+  if (!gestureStart) return;
+  const dx = e.clientX - gestureStart.x;
+  const dy = e.clientY - gestureStart.y;
+  gestureStart = null;
+
+  if (isWebLayout()) return;
+
+  // An open drawer eats the gesture: close it to reveal the dungeon.
+  if (panelOpen) { togglePanel(); return; }
+
+  // Swipe → one step along the dominant axis. A plain tap does nothing (use the
+  // pad), so accidental taps never send the hero wandering off.
+  const adx = Math.abs(dx), ady = Math.abs(dy);
+  if (adx > SWIPE_PX || ady > SWIPE_PX) {
+    if (adx > ady) move(Math.sign(dx), 0); else move(0, Math.sign(dy));
+  }
+});
+
+// Keep the floating movement pad pinned to the bottom-centre of the map. A
+// ResizeObserver re-runs it whenever the canvas changes size (rotation, the
+// skill bar appearing, the address bar collapsing, etc.).
+const touchDpad = document.getElementById('touch-dpad');
+// Movement-pad preferences: corner to dock it in, and its opacity (0 = hidden).
+const DPAD_KEY = 'dpadCfg';
+let dpadCfg = { pos: 'left', opacity: 1 };
+try { const s = JSON.parse(localStorage.getItem(DPAD_KEY)); if (s) dpadCfg = Object.assign(dpadCfg, s); } catch (e) {}
+
+function saveDpadCfg() { try { localStorage.setItem(DPAD_KEY, JSON.stringify(dpadCfg)); } catch (e) {} }
+
+function positionTouchDpad() {
+  if (!touchDpad) return;
+  const r = canvas.getBoundingClientRect();
+  if (!r.width) return;
+  const halfW = (touchDpad.offsetWidth || 148) / 2;
+  const margin = 14;
+  let cx;
+  if (dpadCfg.pos === 'left')       cx = r.left + margin + halfW;
+  else if (dpadCfg.pos === 'right') cx = r.right - margin - halfW;
+  else                              cx = r.left + r.width / 2;  // centre
+  touchDpad.style.left = cx + 'px';
+  // Height is unchanged — same vertical anchor as before.
+  touchDpad.style.bottom = Math.max(10, window.innerHeight - r.bottom + 12) + 'px';
+}
+
+// Apply opacity / hidden state, then re-place the pad.
+function applyDpadSettings() {
+  if (touchDpad) {
+    const hidden = dpadCfg.opacity <= 0;
+    touchDpad.style.opacity = hidden ? '0' : String(dpadCfg.opacity);
+    touchDpad.style.pointerEvents = hidden ? 'none' : 'auto';
+  }
+  positionTouchDpad();
+}
+
+if (window.ResizeObserver) new ResizeObserver(positionTouchDpad).observe(canvas);
+window.addEventListener('resize', positionTouchDpad);
+applyDpadSettings();
 
 // Keep the drawer populated and open whenever we're in (or switch into) the
 // web layout.
@@ -2558,12 +3284,20 @@ function isWalkThrough(t) {
 
 // Flood-fill the tiles reachable on foot, with stairs and teleporters acting as
 // dead-ends: you can walk up to one but not past it.
+//
+// The start tile is the exception: it's where the player already stands, so the
+// flood must always expand out of it even when it's terminal. On every floor
+// below the first the player spawns *on* the entry-stair tile (a stair is
+// terminal), so without this the flood would dead-end immediately and report
+// nothing reachable — quietly disabling ensureFootConnected and letting a foe
+// strand behind the sealed exit.
 function reachableOnFoot(sx, sy) {
   const seen = new Set([sy + ',' + sx]);
   const stack = [[sx, sy]];
   while (stack.length) {
     const [x, y] = stack.pop();
-    if (!isWalkThrough(mapData[y][x])) continue;     // terminal tile: don't pass through
+    const isStart = x === sx && y === sy;
+    if (!isStart && !isWalkThrough(mapData[y][x])) continue;  // terminal tile: don't pass through
     for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
       const nx = x + dx, ny = y + dy;
       if (nx < 0 || ny < 0 || nx >= MAP_W || ny >= MAP_H) continue;
@@ -2602,6 +3336,34 @@ function ensureFootConnected() {
     }
     if (!near) return;
     tunnel(target.x, target.y, near.x, near.y);
+  }
+}
+
+// Safety net against an unwinnable floor: the exit stays sealed until every
+// hostile is dead, so a foe walled off behind the sealed stairs (or any other
+// terminal pinch point) can never be reached and the floor can never clear.
+// After all foes are placed, relocate any hostile the player can't walk to onto
+// a guaranteed-reachable open floor tile. ensureFootConnected normally carves a
+// detour to every pocket, so this only fires in rare residual cases — but a
+// deadlock is bad enough to be worth the belt-and-suspenders check.
+function ensureHostilesReachable() {
+  const foot = reachableOnFoot(player.x, player.y);
+  // Goblins flee and don't gate the exit, so they're allowed to be unreachable.
+  const stranded = (enemies || []).filter(e => !e.dead && !e.isGoblin && !foot.has(e.y + ',' + e.x));
+  if (!stranded.length) return;
+  // Open, reachable floor tiles we can move a stranded foe onto.
+  const spots = [];
+  for (const key of foot) {
+    const c = key.indexOf(',');
+    const y = +key.slice(0, c), x = +key.slice(c + 1);
+    if (mapData[y][x] !== 0) continue;               // plain floor only
+    if (x === player.x && y === player.y) continue;
+    spots.push({ x, y });
+  }
+  for (const e of stranded) {
+    const spot = spots.find(s => !getEnemyAt(s.x, s.y));
+    if (!spot) break;                                // no room left — give up
+    e.x = spot.x; e.y = spot.y;
   }
 }
 
@@ -2749,20 +3511,28 @@ function generateMap() {
   // player can reach from the start tile is then valid for placement.
   const reach = ensureConnected();
 
-  // ── STAIRS ── on a reachable floor tile, as far from the start as possible.
+  // ── STAIRS ── two staircases: the entry stair you spawn on leads back the way
+  // you came, and a far stair (placed as far from the start as possible) leads
+  // onward. Which is which depends on how you arrived:
+  //   • descended / gated / loaded in → onward is DOWN (deeper), entry is UP.
+  //   • climbed up from below → onward is UP (higher), entry is DOWN (back down).
+  // Floor 1 has nothing above it, so its far stair is always down regardless.
+  const climbing = arrivalDir === 'up' && dungeonLevel > 1;
+  const farStair = climbing ? 12 : 2;   // the way onward
+  const entryStair = climbing ? 2 : 12; // the way back, under your feet
   let best = null, bestD = -1;
   for (let t = 0; t < 80; t++) {
     const c = randomFloorTile(reach); if (!c) break;
     const d = Math.abs(c.x - player.x) + Math.abs(c.y - player.y);
     if (d > bestD) { bestD = d; best = c; }
   }
-  if (best) mapData[best.y][best.x] = 2;
-  else mapData[player.y][Math.min(MAP_W-2, player.x+1)] = 2; // safety fallback
+  if (best) mapData[best.y][best.x] = farStair;
+  else mapData[player.y][Math.min(MAP_W-2, player.x+1)] = farStair; // safety fallback
 
-  // ── STAIRS UP ── back the way you came. They sit on the entry tile (where you
-  // arrive), so walking back onto them returns you to the previous floor. Floor 1
+  // ── ENTRY STAIR ── back the way you came. It sits on the entry tile (where you
+  // arrive), so walking back onto it returns you to the previous floor. Floor 1
   // has no floor above, so it gets none — use TOWN to leave the first floor.
-  if (dungeonLevel > 1) mapData[startPos.y][startPos.x] = 12;
+  if (dungeonLevel > 1) mapData[startPos.y][startPos.x] = entryStair;
 
   // ── LAVA (passable, burns) ──
   if (dungeonLevel >= 2 && Math.random() < 0.5) {
@@ -2827,6 +3597,10 @@ function generateMap() {
   // A mini-quest may take over the floor (after enemies/loot are placed).
   maybeSpawnQuest(reach);
 
+  // With every foe (including any quest horde) now placed, make sure none is
+  // stranded behind the sealed exit — otherwise the floor could never clear.
+  ensureHostilesReachable();
+
   // ── CLEAR CONDITION ── seal the stairs until the floor's hostiles are down.
   // (A handful of floors can spawn with no blockers — those open immediately.)
   // A floor you've already cleared stays open: backtracking here via the gate or
@@ -2840,6 +3614,10 @@ function generateMap() {
   } else {
     log(`🔒 The stairs down are sealed. ${clearConditionLabel()}`, 'important');
   }
+
+  // Consume the arrival direction — the next floor defaults to a downward entry
+  // unless its caller (the stairs-up handler) sets it again right before building.
+  arrivalDir = 'down';
 }
 
 // Build a standard floor-level foe at a tile (used for quest hordes).
@@ -3174,9 +3952,11 @@ function stockPrice(s) {
 // Compact one-line summary of an item's stats & attributes, e.g.
 // "⚡14 · 8-12 DMG · +3 ATK · +5 MIG".
 function itemStatLine(item) {
-  const parts = Object.entries(item.stats).map(([k, v]) =>
-    (typeof v === 'string') ? `${v} ${k}` : `${v < 0 ? '' : '+'}${v} ${k}`
-  );
+  const parts = Object.entries(item.stats).map(([k, v]) => {
+    if (typeof v === 'string') return `${v} ${STAT_SHORT[k] || k}`; // DMG range
+    const unit = PCT_STATS.has(k) ? '%' : '';
+    return `${v < 0 ? '' : '+'}${v}${unit} ${STAT_SHORT[k] || k}`;
+  });
   if (item.attrs) for (const [k, v] of Object.entries(item.attrs)) parts.push(`+${v} ${ATTRIBUTES[k].short}`);
   const body = parts.join(' · ');
   return item.slot ? `⚡${itemPower(item)}${body ? ' · ' + body : ''}` : body;
@@ -3185,6 +3965,9 @@ function itemStatLine(item) {
 function openShop() {
   if (!merchant) return;
   document.getElementById('shop-overlay').classList.add('open');
+  // Opened from the town hub, the ← returns there; as a dungeon wanderer there's
+  // nowhere to go back to, so the arrow stays hidden.
+  document.getElementById('shop-back').style.display = merchant.town ? '' : 'none';
   // Always reopen on the BUY tab — shopTab() also resyncs the tab highlight so
   // it can't get stuck showing SELL as active while displaying buy content.
   shopTab('buy');
@@ -3193,6 +3976,14 @@ function openShop() {
 
 function closeShop() {
   document.getElementById('shop-overlay').classList.remove('open');
+}
+
+// Town header buttons mirror the other service panels: ← returns to the hub,
+// ✕ leaves town for the dungeon. As a dungeon wanderer the ✕ just closes the shop.
+function shopBack() { closeShop(); openTownHub(); }
+function shopClose() {
+  if (merchant && merchant.town) { leaveTown(); return; }
+  closeShop();
 }
 
 function shopTab(tab) {
@@ -3340,12 +4131,23 @@ function sellAll() {
 function openMystic() {
   if (!mystic) return;
   document.getElementById('mystic-overlay').classList.add('open');
+  // Show the ← only when summoned from the town hub (see openShop for the same
+  // pattern); a dungeon mystic has nowhere to go back to.
+  document.getElementById('mystic-back').style.display = mystic.town ? '' : 'none';
   renderMystic();
   log('The mystic studies you, weighing what the depths might become.');
 }
 
 function closeMystic() {
   document.getElementById('mystic-overlay').classList.remove('open');
+}
+
+// Match the other town service panels: ← returns to the hub, ✕ leaves town.
+// As a dungeon wanderer the ✕ simply closes the mystic.
+function mysticBack() { closeMystic(); openTownHub(); }
+function mysticClose() {
+  if (mystic && mystic.town) { leaveTown(); return; }
+  closeMystic();
 }
 
 function renderMystic() {
@@ -3510,7 +4312,30 @@ function openTownService(kind) {
   if (kind === 'gambler') { openGambler(); return; }
   if (kind === 'enchanter') { openEnchanter(); return; }
   if (kind === 'stash')   { openStash();   return; }
+  if (kind === 'settings'){ openSettings();return; }
   if (kind === 'gate')    { openGate();    return; }
+}
+
+// ── SETTINGS — movement-pad position & opacity ──
+function openSettings() { openTownModal('⚙️ Settings'); renderSettings(); }
+function setDpadPos(p) { dpadCfg.pos = p; saveDpadCfg(); applyDpadSettings(); renderSettings(); }
+function setDpadOpacity(v) { dpadCfg.opacity = v; saveDpadCfg(); applyDpadSettings(); renderSettings(); }
+function renderSettings() {
+  const pos = dpadCfg.pos, op = dpadCfg.opacity;
+  const posBtn = (val, label) =>
+    `<button class="shop-buy-btn" ${pos === val ? 'disabled' : ''} onclick="setDpadPos('${val}')">${pos === val ? '✓ ' : ''}${label}</button>`;
+  const opBtn = (val, label) =>
+    `<button class="shop-buy-btn" ${Math.abs(op - val) < 0.001 ? 'disabled' : ''} onclick="setDpadOpacity(${val})">${Math.abs(op - val) < 0.001 ? '✓ ' : ''}${label}</button>`;
+  setTownContent(`
+    <div class="town-blurb">Customise the on-screen movement pad (touch devices). Changes save automatically and apply the next time you're in the dungeon.</div>
+    <div class="hc-line" style="margin-top:8px;font-weight:bold">Position</div>
+    <div class="shop-row" style="gap:6px;flex-wrap:wrap">
+      ${posBtn('left', 'Left')}${posBtn('center', 'Centre')}${posBtn('right', 'Right')}
+    </div>
+    <div class="hc-line" style="margin-top:10px;font-weight:bold">Opacity</div>
+    <div class="shop-row" style="gap:6px;flex-wrap:wrap">
+      ${opBtn(1, 'Full')}${opBtn(0.66, '66%')}${opBtn(0.33, '33%')}${opBtn(0, 'Hidden')}
+    </div>`);
 }
 
 // ── TOWN HUB MENU — the town itself is a menu of services ──
@@ -3526,6 +4351,7 @@ const TOWN_MENU = [
   { kind: 'enchanter', icon: '🪄', name: 'Enchanter',   desc: 'Add & reroll affixes' },
   { kind: 'stash',     icon: '🏦', name: 'Stash Vault', desc: 'Store gold & gear safe' },
   { kind: 'gambler',   icon: '🎲', name: 'Gambler',     desc: 'Wager gold for loot' },
+  { kind: 'settings',  icon: '⚙️', name: 'Settings',    desc: 'Move-pad position & opacity' },
 ];
 function openTownHub() {
   townView = 'hub';
@@ -3846,6 +4672,9 @@ function respecCost() {
   const spent = spentAttrPoints();
   return 50 + spent * 20 + player.level * 5;
 }
+function skillRespecCost() {
+  return 40 + spentSkillPoints() * 15 + player.level * 4;
+}
 function openTrainer() { openTownModal('🎓 Trainer'); renderTrainer(); }
 function renderTrainer() {
   const a = player.attributes || {};
@@ -3863,6 +4692,13 @@ function renderTrainer() {
         <div class="shop-row-sub">Refund every point spent above the base ${ATTR_BASE}</div></div>
       <span class="shop-price">${cost}g</span>
       <button class="shop-buy-btn" ${(player.gold >= cost && spent > 0) ? '' : 'disabled'} onclick="respecAttrs()">RESET</button>
+    </div>
+    <div class="shop-row">
+      <span class="loot-icon">🌟</span>
+      <div class="shop-row-info"><div class="shop-row-name">Forget Skills</div>
+        <div class="shop-row-sub">Refund all ${spentSkillPoints()} spent skill point${spentSkillPoints() === 1 ? '' : 's'} to spend anew</div></div>
+      <span class="shop-price">${skillRespecCost()}g</span>
+      <button class="shop-buy-btn" ${(player.gold >= skillRespecCost() && spentSkillPoints() > 0) ? '' : 'disabled'} onclick="respecSkills()">RESET</button>
     </div>
     <div class="town-blurb" style="margin-top:10px">Retrain into a different class for ${classChangeCost()}g. Your attributes are kept; if your new class can't wield your weapon, it goes back in your bag.</div>
     ${CLASS_KEYS.map(k => {
@@ -3890,6 +4726,22 @@ function respecAttrs() {
   sfx('shrine');
   log(`🎓 You unlearn your attributes — ${spent} point${spent === 1 ? '' : 's'} returned to spend.`, 'important');
   updateBars(); renderPanel(); renderTrainer(); saveGame();
+}
+function respecSkills() {
+  const spent = spentSkillPoints();
+  const cost = skillRespecCost();
+  if (spent <= 0 || player.gold < cost) return;
+  player.gold -= cost;
+  player.skillPoints = (player.skillPoints || 0) + spent;
+  player.skills = {};
+  player.skillCds = {};
+  combatBuffs = {};
+  recomputeMaxStats();
+  if (player.hp > player.maxHp) player.hp = player.maxHp;
+  if (player.mp > player.maxMp) player.mp = player.maxMp;
+  sfx('shrine');
+  log(`🎓 You unlearn your skills — ${spent} skill point${spent === 1 ? '' : 's'} returned to spend.`, 'important');
+  updateBars(); renderPanel(); renderSkillBar(); renderTrainer(); saveGame();
 }
 
 // ── ENCHANTER — fill in & reroll item affixes ──
@@ -4701,22 +5553,41 @@ function affixStatValue(stat, lvl, mult) {
 // is the `rnd(0,2)` term, so min uses 0 and max uses 2. Crit chance, crit damage
 // and luck are deterministic (fixed at this ilvl), so their min === max. The
 // enchanter UI uses this to show players the value band before they reroll.
+// Per-stat roll shapes. Flat stats ride the general (1 + 0.6·lvl)·mult curve times
+// `flat` (HP/MP are big pools, regen tiny, etc.). Percent stats grow gently with
+// level & rarity but cap out, so stacking five rolls can't trivialise the game —
+// `per` is the growth and `cap` the per-roll ceiling.
+const AFFIX_CURVES = {
+  ATK:{flat:1}, DEF:{flat:1}, SPD:{flat:1}, HP:{flat:6}, MP:{flat:4}, REGEN:{flat:0.4},
+  THORNS:{flat:0.7}, HPKILL:{flat:0.7}, MPKILL:{flat:0.5},
+  LEECH:{pct:0.18,cap:8}, MPLEECH:{pct:0.18,cap:8}, DR:{pct:0.12,cap:6}, BLOCK:{pct:0.16,cap:8},
+  DODGE:{pct:0.12,cap:6}, IDMG:{pct:0.25,cap:12}, DBLSTRIKE:{pct:0.14,cap:7}, CLEAVE:{pct:0.5,cap:25},
+  BOSSDMG:{pct:0.4,cap:18}, EXEC:{pct:0.3,cap:15}, PEN:{pct:0.5,cap:25}, GOLDFIND:{pct:0.7,cap:35},
+  XPGAIN:{pct:0.5,cap:25}, MAGICFIND:{pct:0.4,cap:20}, MATFIND:{pct:0.6,cap:30}, SPELLPWR:{pct:0.3,cap:15},
+  CDR:{pct:0.12,cap:6}, MCR:{pct:0.16,cap:8},
+};
 function affixStatRange(stat, lvl, mult) {
-  // Deterministic curves: a single fixed outcome at this item level.
+  // Crit chance / Fortune: small numbers, kept on a tight band (and capped) so a
+  // single piece can never swing crit by a wild amount, but value-rerolls still
+  // do something. The cap mirrors the old fixed ceiling.
   if (stat === 'CRIT' || stat === 'LCK') {
-    const v = Math.max(1, Math.round(Math.min(6, (1 + lvl * 0.12) * mult)));
-    return { min: v, max: v };
+    const hi = Math.max(2, Math.round(Math.min(6, (1 + lvl * 0.12) * mult)));
+    return { min: Math.max(1, hi - 2), max: hi };
   }
+  // Crit damage %: roomy ±25% band centred on its old fixed value.
   if (stat === 'CRITDMG') {
-    const v = Math.max(1, Math.round((5 + lvl * 0.8) * mult));
-    return { min: v, max: v };
+    const base = (5 + lvl * 0.8) * mult;
+    return { min: Math.max(2, Math.round(base * 0.75)), max: Math.max(3, Math.round(base * 1.25)) };
   }
-  // General curve: lo = rnd term 0, hi = rnd term 2, with per-stat scaling.
-  let lo = (1 + lvl * 0.6 + 0) * mult;
-  let hi = (1 + lvl * 0.6 + 2) * mult;
-  if      (stat === 'REGEN') { lo *= 0.4; hi *= 0.4; }
-  else if (stat === 'HP')    { lo *= 6;   hi *= 6;   }
-  else if (stat === 'MP')    { lo *= 4;   hi *= 4;   }
+  const c = AFFIX_CURVES[stat] || { flat: 1 };
+  // Percent stats: mild level/rarity scaling, capped, with a ±band for rerolls.
+  if (c.pct) {
+    const hi = Math.max(2, Math.round(Math.min(c.cap, (1 + lvl * c.pct) * mult * 0.5)));
+    return { min: Math.max(1, Math.round(hi * 0.6)), max: hi };
+  }
+  // Flat curve: lo = rnd term 0, hi = rnd term 2, scaled by the stat's `flat` mult.
+  const lo = (1 + lvl * 0.6 + 0) * mult * c.flat;
+  const hi = (1 + lvl * 0.6 + 2) * mult * c.flat;
   return { min: Math.max(1, Math.round(lo)), max: Math.max(1, Math.round(hi)) };
 }
 // Value of one rolled attribute affix (+Might, +Luck, …), now rolled within a
@@ -4920,6 +5791,46 @@ const THEMES = [
     floor:'#2f6b3a', floorAlt:'#285e33', wall:'#1f5e2e', wallTop:'#55bb64',
     brickA:'#2f8a44', brickB:'#184a24', mortar:'#143a1c', crack:'#0e2814',
     seam:'#1e4a26', speckle:'#5fc070', accent:'rgba(150,255,150,0.30)', stairsGlow:'#bdff9a' },
+
+  // ── Seasonal themes ──
+  { name: 'the Winter Frostwood', wallStyle: 'pine',
+    floor:'#cdd9e4', floorAlt:'#bccadb', wall:'#2e4a3e', wallTop:'#ffffff',
+    brickA:'#3d5e4c', brickB:'#243a30', mortar:'#a6bccb', crack:'#8aa0b4',
+    seam:'#b4c5d4', speckle:'#eef4fa', accent:'rgba(255,255,255,0.32)', stairsGlow:'#e4f4ff' },
+  { name: 'the Wildflower Meadow', wallStyle: 'forest',
+    floor:'#5fa048', floorAlt:'#6cad53', wall:'#4e9440', wallTop:'#a6e878',
+    brickA:'#6cc04e', brickB:'#3f7a32', mortar:'#2c5422', crack:'#1c2c18',
+    seam:'#347029', speckle:'#ffe066', accent:'rgba(255,180,220,0.30)', stairsGlow:'#fbff9a' },
+  { name: 'the Golden Savanna', wallStyle: 'forest',
+    floor:'#b89a52', floorAlt:'#a88a48', wall:'#7a8a3a', wallTop:'#cdd66e',
+    brickA:'#9aa84a', brickB:'#5e6a2c', mortar:'#5a4a28', crack:'#3a2e18',
+    seam:'#6a5a30', speckle:'#d8c878', accent:'rgba(255,230,150,0.28)', stairsGlow:'#ffe89a' },
+  { name: 'the Harvest Vineyard', wallStyle: 'forest',
+    floor:'#7a6a3a', floorAlt:'#6e5f33', wall:'#6a3a6e', wallTop:'#b06ac0',
+    brickA:'#8a4a90', brickB:'#4a2850', mortar:'#3a2a1e', crack:'#2a1c12',
+    seam:'#5a4a2a', speckle:'#c890d0', accent:'rgba(210,150,230,0.28)', stairsGlow:'#e8b0f0' },
+
+  // ── Exotic themes ──
+  { name: 'the Lavender Fields', wallStyle: 'forest',
+    floor:'#6a8a4a', floorAlt:'#5f7e42', wall:'#9a78c8', wallTop:'#e0caf8',
+    brickA:'#b59ae0', brickB:'#7a5aa8', mortar:'#4a3a64', crack:'#3a2c50',
+    seam:'#3a5a30', speckle:'#c8aef0', accent:'rgba(210,180,255,0.30)', stairsGlow:'#ecd9ff' },
+  { name: 'the Mushroom Hollow', wallStyle: 'mushroom',
+    floor:'#3a2e44', floorAlt:'#322840', wall:'#c83a4a', wallTop:'#ffe0e0',
+    brickA:'#e05a6a', brickB:'#e8dcc8', mortar:'#241c2e', crack:'#1c1626',
+    seam:'#2a2238', speckle:'#6a5a82', accent:'rgba(255,120,180,0.30)', stairsGlow:'#ff9ad0' },
+  { name: 'the Crystal Cavern', wallStyle: 'crystal',
+    floor:'#2a2a44', floorAlt:'#23233a', wall:'#5a7ad0', wallTop:'#cfe6ff',
+    brickA:'#8aa8ff', brickB:'#3a4a8a', mortar:'#181828', crack:'#aaccff',
+    seam:'#20203a', speckle:'#6a8ad0', accent:'rgba(150,200,255,0.30)', stairsGlow:'#d6ecff' },
+  { name: 'the Coral Lagoon', wallStyle: 'forest',
+    floor:'#2a6a7a', floorAlt:'#236070', wall:'#e8806a', wallTop:'#ffc8a8',
+    brickA:'#f09a7a', brickB:'#c85a4a', mortar:'#1a4a56', crack:'#0e3038',
+    seam:'#205662', speckle:'#7ad0d8', accent:'rgba(255,180,150,0.30)', stairsGlow:'#ffd6b8' },
+  { name: 'the Obsidian Wastes', wallStyle: 'crystal',
+    floor:'#2a2228', floorAlt:'#231c22', wall:'#3a2a3e', wallTop:'#c86a3a',
+    brickA:'#6a3a4a', brickB:'#241820', mortar:'#161016', crack:'#ff7a3a',
+    seam:'#1e161e', speckle:'#5a3a44', accent:'rgba(255,120,50,0.28)', stairsGlow:'#ff9a4b' },
 ];
 function currentTheme() { return THEMES[(dungeonLevel - 1) % THEMES.length]; }
 
@@ -5043,6 +5954,8 @@ function isWallTile(x, y) {
 function drawWall(px, py, tw, th, x, y, seed, C, cracked) {
   if (C.wallStyle === 'forest') { drawForestWall(px, py, tw, th, x, y, seed, C, cracked); return; }
   if (C.wallStyle === 'pine') { drawPineWall(px, py, tw, th, x, y, seed, C, cracked); return; }
+  if (C.wallStyle === 'mushroom') { drawMushroomWall(px, py, tw, th, x, y, seed, C, cracked); return; }
+  if (C.wallStyle === 'crystal') { drawCrystalWall(px, py, tw, th, x, y, seed, C, cracked); return; }
   // Pixel-art wall: only walls that touch open floor get a tile, using DawnLike's
   // directional pieces (H/V edges + the four corners). Rock buried inside the
   // mass (no floor neighbour) is left as the dark background — like the official
@@ -5179,6 +6092,65 @@ function drawPineWall(px, py, tw, th, x, y, seed, C, cracked) {
   if (cracked) { ctx.strokeStyle = 'rgba(255,220,120,0.3)'; ctx.lineWidth = 1; ctx.strokeRect(px + 1, py + 1, tw - 2, th - 2); }
 }
 
+// Giant toadstool wall — a pale stalk under a spotted dome cap, for the exotic
+// mushroom theme. Cap colour and spots come from the palette; offset per tile.
+function drawMushroomWall(px, py, tw, th, x, y, seed, C, cracked) {
+  const h = Math.abs(seed);
+  ctx.fillStyle = C.mortar;
+  ctx.fillRect(px, py, tw, th);
+  const sx = px + tw / 2 + ((h % 3) - 1) * tw * 0.06;
+  // Stalk.
+  ctx.fillStyle = C.brickB;
+  ctx.fillRect(sx - tw * 0.09, py + th * 0.42, tw * 0.18, th * 0.58);
+  // Cap dome.
+  const capCol = (h % 2) ? C.wall : C.brickA;
+  const capY = py + th * 0.4, rx = tw * 0.34, ry = th * 0.28;
+  ctx.fillStyle = capCol;
+  ctx.beginPath(); ctx.ellipse(sx, capY, rx, ry, 0, 0, Math.PI * 2); ctx.fill();
+  // Underside shadow line.
+  ctx.fillStyle = 'rgba(0,0,0,0.22)';
+  ctx.fillRect(sx - rx * 0.9, capY + ry * 0.55, rx * 1.8, Math.max(1, th * 0.04));
+  // Spots.
+  ctx.fillStyle = C.wallTop;
+  for (let i = 0; i < 3; i++) {
+    const s = (h >> (i * 3 + 1));
+    const dx = ((s % 100) / 100 - 0.5) * rx * 1.2;
+    const dy = ((s >> 4) % 100) / 100 * ry * 0.6 - ry * 0.2;
+    ctx.beginPath(); ctx.arc(sx + dx, capY + dy, tw * 0.05, 0, Math.PI * 2); ctx.fill();
+  }
+  if (cracked) { ctx.strokeStyle = 'rgba(255,220,120,0.3)'; ctx.lineWidth = 1; ctx.strokeRect(px + 1, py + 1, tw - 2, th - 2); }
+}
+
+// Glowing crystal cluster wall — angular shards rising from the floor, lit with
+// a soft glow, for the exotic crystal-cavern theme.
+function drawCrystalWall(px, py, tw, th, x, y, seed, C, cracked) {
+  const h = Math.abs(seed);
+  ctx.fillStyle = C.mortar;
+  ctx.fillRect(px, py, tw, th);
+  ctx.save();
+  ctx.shadowColor = C.wallTop;
+  ctx.shadowBlur = 8 * (tw / 16);
+  const shards = 3 + (h % 3);
+  const cols = [C.wall, C.brickA, C.wallTop];
+  for (let i = 0; i < shards; i++) {
+    const s = (h >> (i * 2 + 1));
+    const bx = px + tw * (0.18 + (s % 7) * 0.1);
+    const by = py + th * 0.98;
+    const wHalf = tw * (0.06 + ((s >> 4) % 3) * 0.03);
+    const ht = th * (0.42 + ((s >> 8) % 5) * 0.1);
+    ctx.fillStyle = cols[i % cols.length];
+    ctx.beginPath();
+    ctx.moveTo(bx, by);
+    ctx.lineTo(bx - wHalf, by - ht * 0.62);
+    ctx.lineTo(bx, by - ht);
+    ctx.lineTo(bx + wHalf, by - ht * 0.62);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+  if (cracked) { ctx.strokeStyle = 'rgba(255,220,120,0.3)'; ctx.lineWidth = 1; ctx.strokeRect(px + 1, py + 1, tw - 2, th - 2); }
+}
+
 function draw() {
   const W = canvas.width, H = canvas.height;
   const C = currentTheme();
@@ -5203,6 +6175,10 @@ function draw() {
   const offX = Math.round(-camX);
   const offY = Math.round(-camY);
   const scale = tw / TILE; // for glow blur sizing, relative to base tile
+
+  // Remember the camera so a tap on the canvas can be converted back to a map
+  // tile (tap-to-move / tap-to-USE replaces the old d-pad on touch devices).
+  lastCam = { tw, th, camX, camY };
 
   // Only draw tiles within the visible window (perf + clean edges)
   const x0 = Math.max(0, Math.floor(camX / tw));
@@ -6083,6 +7059,7 @@ function move(dx, dy) {
     sfx('stairs');
     log(`Ascended to dungeon level ${dungeonLevel}. You return to ${currentTheme().name}.`, 'important');
     player.x = 5; player.y = 5;
+    arrivalDir = 'up';   // spawn on the stairs DOWN that lead back the way you came
     generateMap();
     maybeFloorEvent();
     updateBars();
@@ -6247,8 +7224,62 @@ function totalStat(name) {
 function mitigateDamage(raw, lvl) {
   const def = playerDefense();
   const mitigation = def / (def + 18 + (lvl || dungeonLevel) * 6);
-  // Warrior passive: shrug off a flat slice of every incoming blow.
-  return Math.max(1, Math.round(raw * (1 - mitigation) * classDmgTakenMult()));
+  // Sanctuary (Templar active) halves incoming damage while it's up.
+  const sanct = hasBuff('sanctuary') ? 0.5 : 1;
+  // Warrior passive + skill-tree defence passives shave off another slice.
+  return Math.max(1, Math.round(raw * (1 - mitigation) * classDmgTakenMult() * sanct));
+}
+
+// Post-mitigation gear layers applied to any incoming hit: a Block % chance to
+// halve it, then a flat Damage Reduction %. Both are capped so they can't make the
+// hero untouchable. Returns the final HP damage (≥1).
+function applyIncomingMods(dmg) {
+  if (Math.random() < Math.min(0.6, totalStat('BLOCK') / 100)) {
+    dmg = Math.max(1, Math.round(dmg * 0.5));
+    spawnFloatingText(player.x, player.y - 0.3, 'BLOCK', '#cfe0ff');
+  }
+  const dr = Math.min(0.6, totalStat('DR') / 100);
+  if (dr > 0) dmg = Math.max(1, Math.round(dmg * (1 - dr)));
+  return dmg;
+}
+
+// Thorns (gear): reflect a flat amount back at a melee attacker after it hits you.
+function thornsReflect(e) {
+  const thorns = totalStat('THORNS');
+  if (thorns > 0 && e && !e.dead) {
+    spawnFloatingText(e.x, e.y, `${thorns}`, '#ffcc66');
+    dealDamage(e, thorns, false);
+  }
+}
+
+// Bloodthirst (Warrior passive): heal a slice of melee damage dealt. Called from
+// basic attacks and every weapon-based active so a Cleave/Whirlwind build sustains.
+function lifestealHeal(amount) {
+  if (amount <= 0) return;
+  // Life leech: Bloodthirst (skill) + gear Life Leech %.
+  const ls = skillBonus('lifesteal') + totalStat('LEECH') / 100;
+  if (ls > 0 && player.hp < player.maxHp) {
+    const got = Math.min(Math.max(1, Math.round(amount * ls)), player.maxHp - player.hp);
+    if (got > 0) { player.hp += got; spawnFloatingText(player.x, player.y, `+${got}`, '#ff6688'); }
+  }
+  // Mana leech: gear Mana Leech % restores MP from damage dealt.
+  const ml = totalStat('MPLEECH') / 100;
+  if (ml > 0 && player.mp < player.maxMp) {
+    const got = Math.min(Math.max(1, Math.round(amount * ml)), player.maxMp - player.mp);
+    if (got > 0) { player.mp += got; spawnFloatingText(player.x, player.y - 0.3, `+${got}`, '#7fb0ff'); }
+  }
+}
+
+// Mana Shield (Mage passive): divert part of an incoming hit onto your MP pool
+// at 2 MP per 1 HP. Returns the HP damage that gets through after absorption.
+function absorbWithMana(dmg) {
+  const frac = Math.min(0.8, skillBonus('manaShield'));
+  if (frac <= 0 || player.mp <= 0) return dmg;
+  const absorbed = Math.min(Math.floor(dmg * frac), Math.floor(player.mp / 2));
+  if (absorbed <= 0) return dmg;
+  player.mp -= absorbed * 2;
+  spawnFloatingText(player.x, player.y - 0.3, `🔮${absorbed}`, '#7d9bff');
+  return Math.max(0, dmg - absorbed);
 }
 
 // A readable label for an enemy in the log: bosses/elites use their name, plain
@@ -6281,9 +7312,40 @@ function rollPlayerHit(e) {
   const hitCap = Math.max(1, Math.floor(e.maxHp / hitDivisor));
   if (dmg > hitCap) dmg = Math.max(1, Math.round(hitCap * (rnd(80, 100) / 100)));
   if (buffs.power) dmg = Math.round(dmg * 1.5);
-  dmg = Math.round(dmg * classDmgDealtMult()); // Warrior hits harder
+  dmg = Math.round(dmg * classDmgDealtMult()); // Warrior + damage passives
+  if (hasBuff('warcry')) dmg = Math.round(dmg * 1.5); // War Cry self-buff
+  // Increased Damage % (gear): a flat multiplier on every hit.
+  const idmg = totalStat('IDMG');
+  if (idmg > 0) dmg = Math.round(dmg * (1 + idmg / 100));
+  // Dmg vs Bosses % (gear): extra punch against bosses and elites.
+  const bossDmg = totalStat('BOSSDMG');
+  if (bossDmg > 0 && e && (e.isBoss || e.isElite)) dmg = Math.round(dmg * (1 + bossDmg / 100));
+  // Zeal/Fervor (Templar): more damage the lower your health.
+  const zeal = skillBonus('zeal');
+  if (zeal > 0) dmg = Math.round(dmg * (1 + zeal * (1 - player.hp / player.maxHp)));
+  // Opportunist/Executioner (skill) + Execute % (gear): bonus to badly-wounded foes.
+  const lowHp = skillBonus('lowHpDmg') + totalStat('EXEC') / 100;
+  if (lowHp > 0 && e && e.hp < e.maxHp * 0.35) dmg = Math.round(dmg * (1 + lowHp));
   if (isCrit) dmg = Math.round(dmg * critDamageMult());
+  // Enemy armor mitigates a slice of the blow; Armor Pen % (gear) ignores part of
+  // it. Armor is light on rank-and-file foes and heavier on elites/bosses, so Pen
+  // shines against the toughest enemies (and pairs naturally with Dmg vs Bosses).
+  const armor = enemyArmorPct(e);
+  if (armor > 0) {
+    const pen = Math.min(0.9, totalStat('PEN') / 100);
+    dmg = Math.round(dmg * (1 - armor * (1 - pen)));
+  }
   return { dmg: Math.max(1, dmg), isCrit };
+}
+
+// Fraction of a player's blow an enemy shrugs off via armor. Modest by default so
+// it barely taxes normal fights, but real on elites/bosses where Armor Pen earns
+// its slot. Scales gently with the foe's level/depth.
+function enemyArmorPct(e) {
+  let pct = 0.03 + Math.min(0.10, ((e && e.level) || dungeonLevel) * 0.0035);
+  if (e && e.isElite) pct += 0.06;
+  if (e && e.isBoss)  pct += 0.12;
+  return Math.min(0.45, pct);
 }
 
 // Apply already-rolled damage to a foe and show the number. Returns true if it
@@ -6302,19 +7364,31 @@ function onEnemyDefeated(e) {
   const label = enemyLabel(e);
   const xpMult = e.isBoss ? 5 : (e.isElite ? 2 : 1);
   const goldMult = e.isBoss ? 3 : (e.isElite ? 2 : 1);
-  const xp = Math.round(12 * dungeonLevel * xpMult * pfx('xp', 1));
+  const xp = Math.round(12 * dungeonLevel * xpMult * pfx('xp', 1) * (1 + totalStat('XPGAIN') / 100));
   player.xp += xp;
-  const gold = Math.round((rnd(2, 8) + dungeonLevel * 3) * goldMult * (floorMod.goldMult || 1) * pfx('gold', 1));
+  const gold = Math.round((rnd(2, 8) + dungeonLevel * 3) * goldMult * (floorMod.goldMult || 1) * pfx('gold', 1) * (1 + totalStat('GOLDFIND') / 100));
   player.gold += gold;
   spawnFloatingText(e.x + 0.35, e.y, `+${gold}g`, '#ffd24b');
   log(`${label} defeated! +${xp} XP, +${gold}g`, 'important');
   sfx(e.isBoss ? 'boss' : 'kill');
   if (e.isBoss) screenFlash('#ff3344');
+  // Life/Mana on Kill (gear): a flat top-up every time a foe falls.
+  const hpKill = totalStat('HPKILL');
+  if (hpKill > 0 && player.hp < player.maxHp) {
+    const got = Math.min(hpKill, player.maxHp - player.hp);
+    if (got > 0) { player.hp += got; spawnFloatingText(player.x, player.y, `+${got}`, '#ff6688'); }
+  }
+  const mpKill = totalStat('MPKILL');
+  if (mpKill > 0 && player.mp < player.maxMp) {
+    const got = Math.min(mpKill, player.maxMp - player.mp);
+    if (got > 0) { player.mp += got; spawnFloatingText(player.x, player.y - 0.3, `+${got}`, '#7fb0ff'); }
+  }
   updateBars();
   // Minions summoned by a boss never drop loot — only XP/gold above.
   if (e.minion) { checkLevelUp(); updateFloorClear(); return; }
-  // The floor modifier, an active Fortune buff, and any pact sweeten every drop roll.
-  const lootMult = (floorMod.lootMult || 1) * (buffs.fortune ? 1.5 : 1) * pfx('loot', 1);
+  // The floor modifier, an active Fortune buff, gear Magic Find, and any pact all
+  // sweeten every drop roll.
+  const lootMult = (floorMod.lootMult || 1) * (buffs.fortune ? 1.5 : 1) * pfx('loot', 1) * (1 + totalStat('MAGICFIND') / 100);
   // Drop a chest — bosses and elites always drop, with richer loot. The luck
   // value is how many rarity rolls the chest makes (more rolls = better odds).
   // Enemy drops land straight in your pack — no need to walk over and open them.
@@ -6342,10 +7416,12 @@ function onEnemyDefeated(e) {
     const gained = {};
     const add = (k, n) => { if (n > 0) gained[k] = (gained[k] || 0) + n; };
     const big = e.isBoss ? 3 : (e.isElite ? 2 : 1);
-    if (Math.random() < 0.5 * lootMult || e.isElite || e.isBoss) add('scrap', rnd(1, 2) * big + Math.floor(dungeonLevel / 4));
-    if (Math.random() < 0.16 * lootMult || e.isBoss)             add('glimmer', e.isBoss ? rnd(2, 3) : 1);
-    if (Math.random() < (0.04 + dungeonLevel * 0.004) * lootMult || e.isBoss) add('core', e.isBoss ? rnd(1, 2) : 1);
-    if (e.isBoss ? Math.random() < 0.35 : Math.random() < 0.01 * lootMult)    add('chaos', 1);
+    // Material Find % (gear) boosts the odds of every crafting-material drop.
+    const matMult = lootMult * (1 + totalStat('MATFIND') / 100);
+    if (Math.random() < 0.5 * matMult || e.isElite || e.isBoss) add('scrap', rnd(1, 2) * big + Math.floor(dungeonLevel / 4));
+    if (Math.random() < 0.16 * matMult || e.isBoss)             add('glimmer', e.isBoss ? rnd(2, 3) : 1);
+    if (Math.random() < (0.04 + dungeonLevel * 0.004) * matMult || e.isBoss) add('core', e.isBoss ? rnd(1, 2) : 1);
+    if (e.isBoss ? Math.random() < 0.35 : Math.random() < 0.01 * matMult)    add('chaos', 1);
     const keys = Object.keys(gained);
     if (keys.length) {
       for (const k of keys) gainMaterial(k, gained[k]);
@@ -6424,6 +7500,29 @@ function attackEnemy(e, opts = {}) {
     });
   }
 
+  // Double Strike % (gear): a chance for a free extra swing at the main target.
+  const dbl = totalStat('DBLSTRIKE') / 100;
+  if (dbl > 0 && !ranged && !e.dead && Math.random() < dbl) {
+    const before = dealtTotal;
+    swing(e);
+    if (dealtTotal > before) {
+      spawnFloatingText(e.x, e.y - 0.3, `2×${dealtTotal - before}`, '#ffd24b');
+      log(`⚡ ${HERO} strikes again for ${dealtTotal - before}!`, 'important');
+    }
+  }
+
+  // Cleave % (gear): splash a slice of the damage dealt onto adjacent foes (on top
+  // of any weapon cleave above), so even a single-target weapon can hit a crowd.
+  const clv = totalStat('CLEAVE') / 100;
+  if (clv > 0 && dealtTotal > 0) {
+    adjacentEnemies(e).forEach(o => {
+      if (o.dead) return;
+      const sd = Math.max(1, Math.round(dealtTotal * clv));
+      spawnFloatingText(o.x, o.y, `${sd}`, '#ffbb66');
+      dealDamage(o, sd, false);
+    });
+  }
+
   // Crush (Mace): heavy blows have a good chance to stun a surviving foe.
   if (style === 'crush' && !e.dead && Math.random() < 0.5) {
     applyStatusEffect(e, 'stun', 1, 'player');
@@ -6435,6 +7534,9 @@ function attackEnemy(e, opts = {}) {
     const got = Math.min(Math.max(1, Math.round(dealtTotal * 0.25)), player.maxHp - player.hp);
     if (got > 0) { player.hp += got; spawnFloatingText(player.x, player.y, `+${got}`, '#7fffaa'); }
   }
+
+  // Bloodthirst (Warrior passive): heal a slice of all damage dealt this swing.
+  lifestealHeal(dealtTotal);
 
   // Every attack costs a turn: after your swing resolves, the caller runs the
   // enemy turn (runEnemyTurn) so the foe you hit strikes back AND any others
@@ -6484,32 +7586,68 @@ function tryRangedAttack(dx, dy) {
 // button or the R key. A skill spends MP, resolves its effect, then passes a
 // turn (the floor's foes act) and begins its cooldown. Failures (no target, not
 // enough mana, on cooldown) are reported in the log and cost nothing.
+// R key / ⚡ button cast the baseline class skill; the skill bar and number keys
+// cast unlocked tree actives. Both route through castSkillById.
 function castSkill() {
   const cls = playerClass();
   if (!cls || !cls.skill) { log('Pick a class to gain its skill.'); return; }
+  castSkillById(cls.skill.id);
+}
+
+// Cast any active skill the player currently has (baseline or learned), shared by
+// every entry point. Validates town/stun/cooldown/mana, resolves the effect, then
+// spends MP, passes a turn, and begins that skill's own cooldown. A skill that
+// can't resolve (no target, nothing to heal) costs nothing.
+function castSkillById(id) {
+  const sk = activeSkillList().find(s => s.id === id);
+  if (!sk) { log('You haven\'t learned that skill.'); return; }
   if (inTown) { log('Save your skills for the dungeon.'); return; }
   if (isPlayerStunned()) { log('You are stunned and can\'t cast!'); return; }
-  const sk = cls.skill;
-  if ((player.skillCd || 0) > 0) { log(`⏳ ${sk.name} is recharging (${player.skillCd} more turn${player.skillCd === 1 ? '' : 's'}).`); return; }
-  if (player.mp < sk.mp) { log(`💧 Not enough mana for ${sk.name} — need ${sk.mp} MP.`); return; }
+  const cd = skillCd(id);
+  if (cd > 0) { log(`⏳ ${sk.name} is recharging (${cd} more turn${cd === 1 ? '' : 's'}).`); return; }
+  // Mana Cost Reduction % (gear) lowers the price of every cast.
+  const mpCost = Math.max(1, Math.round(sk.mp * (1 - Math.min(0.6, totalStat('MCR') / 100))));
+  if (player.mp < mpCost) { log(`💧 Not enough mana for ${sk.name} — need ${mpCost} MP.`); return; }
 
-  let fired = false;
-  if (sk.id === 'cleave')        fired = skillCleave();
-  else if (sk.id === 'backstab') fired = skillBackstab();
-  else if (sk.id === 'firebolt') fired = skillFirebolt();
-  else if (sk.id === 'mend')     fired = skillMend();
-  if (!fired) return; // no valid target / nothing to do — don't spend MP or a turn
+  if (!runActiveSkill(id)) return; // no valid target / nothing to do
 
-  player.mp -= sk.mp;
+  player.mp -= mpCost;
   updateBars();
   // The cast costs a turn: foes act and escorts trail along. Set the cooldown
   // AFTER runEnemyTurn so this very turn doesn't immediately tick it down.
   runEnemyTurn();
   moveQuestEntities();
-  player.skillCd = sk.cd;
+  // Cooldown Reduction % (gear) shortens the recharge (never below 1 turn).
+  setSkillCd(id, Math.max(1, Math.round(sk.cd * (1 - Math.min(0.6, totalStat('CDR') / 100)))));
   updateBars();
+  renderSkillBar();
   draw();
   saveGame();
+}
+
+// Dispatch an active skill id to its implementation. Each returns true if it
+// actually fired (so castSkillById knows whether to spend the turn/MP).
+function runActiveSkill(id) {
+  switch (id) {
+    case 'cleave':         return skillCleave();
+    case 'backstab':       return skillBackstab();
+    case 'firebolt':       return skillFirebolt();
+    case 'mend':           return skillMend();
+    case 'warcry':         return skillWarCry();
+    case 'whirlwind':      return skillWhirlwind();
+    case 'berserk':        return skillBerserk();
+    case 'poisonstrike':   return skillPoisonStrike();
+    case 'shadowstep':     return skillShadowstep();
+    case 'fanofknives':    return skillFanOfKnives();
+    case 'deathmark':      return skillDeathMark();
+    case 'frostnova':      return skillFrostNova();
+    case 'chainlightning': return skillChainLightning();
+    case 'meteor':         return skillMeteor();
+    case 'holysmite':      return skillHolySmite();
+    case 'sanctuary':      return skillSanctuary();
+    case 'judgment':       return skillJudgment();
+  }
+  return false;
 }
 
 // Foes orthogonally/diagonally adjacent to the player.
@@ -6529,6 +7667,7 @@ function skillCleave() {
     total += d;
     dealDamage(e, d, true);
   });
+  lifestealHeal(total);
   log(`🪓 ${HERO} cleaves ${adj.length} foe${adj.length === 1 ? '' : 's'} for ${total}!`, 'important');
   return true;
 }
@@ -6556,7 +7695,7 @@ function skillFirebolt() {
     .sort((a, b) => (Math.abs(a.x - player.x) + Math.abs(a.y - player.y)) - (Math.abs(b.x - player.x) + Math.abs(b.y - player.y)));
   if (!inRange.length) { log('🔥 No foe within range of your Firebolt.'); return false; }
   const e = inRange[0];
-  let dmg = 16 + player.level * 3 + totalAttr('spirit') * ATTR_FX.spellPerSpr;
+  let dmg = (16 + player.level * 3 + totalAttr('spirit') * ATTR_FX.spellPerSpr) * spellPowerMult();
   if (buffs.power) dmg = Math.round(dmg * 1.5);
   dmg = Math.max(1, Math.round(dmg));
   sfx('attack');
@@ -6577,11 +7716,256 @@ function skillMend() {
   return true;
 }
 
+// ── SKILL-TREE ACTIVES ──
+// Shared helpers used by the unlocked active skills below.
+// Living foes within Chebyshev radius r of a point (defaults to the player).
+function enemiesNear(r, cx, cy) {
+  const x = cx == null ? player.x : cx, y = cy == null ? player.y : cy;
+  return enemies.filter(o => !o.dead && Math.abs(o.x - x) <= r && Math.abs(o.y - y) <= r);
+}
+// Living foes within Manhattan `range` of the player, nearest first.
+function foesInRange(range) {
+  return enemies
+    .filter(o => !o.dead && (Math.abs(o.x - player.x) + Math.abs(o.y - player.y)) <= range)
+    .sort((a, b) => (Math.abs(a.x - player.x) + Math.abs(a.y - player.y)) - (Math.abs(b.x - player.x) + Math.abs(b.y - player.y)));
+}
+// A walkable, unoccupied tile adjacent to enemy e (for blink targeting), or null.
+function adjacentOpenTile(e) {
+  const dirs = [[0,-1],[0,1],[-1,0],[1,0],[-1,-1],[1,1],[-1,1],[1,-1]];
+  for (const [dx, dy] of dirs) {
+    const x = e.x + dx, y = e.y + dy;
+    if (x < 0 || y < 0 || x >= MAP_W || y >= MAP_H) continue;
+    const t = mapData[y][x];
+    if (t === 1 || t === 6 || t === 10 || t === 11) continue; // wall / deep water / sealed
+    if (getEnemyAt(x, y)) continue;
+    if (x === player.x && y === player.y) continue;
+    return { x, y };
+  }
+  return null;
+}
+// Spell base damage shared by the Mage/Templar nuke actives (scales with Spirit
+// and any Spell Power passives).
+function spellBase(flat, perLevel) {
+  return (flat + player.level * perLevel + totalAttr('spirit') * ATTR_FX.spellPerSpr) * spellPowerMult();
+}
+
+// Warrior — War Cry: a rallying shout that boosts your damage for several turns.
+function skillWarCry() {
+  combatBuffs.warcry = 5;
+  sfx('crit');
+  spawnFloatingText(player.x, player.y, '📣', '#ffcf6b');
+  log(`📣 ${HERO} lets out a War Cry — +50% damage for the next few turns!`, 'important');
+  return true;
+}
+
+// Warrior — Whirlwind: a spinning attack that hits every adjacent foe and may stun.
+function skillWhirlwind() {
+  const adj = adjacentToPlayer();
+  if (!adj.length) { log('🌀 No foe within reach to whirl through.'); return false; }
+  sfx('crit');
+  let total = 0;
+  adj.forEach(e => {
+    const h = rollPlayerHit(e);
+    const d = Math.max(1, Math.round(h.dmg * 1.8));
+    total += d;
+    dealDamage(e, d, true);
+    if (!e.dead && Math.random() < 0.35) applyStatusEffect(e, 'stun', 1, 'player');
+  });
+  lifestealHeal(total);
+  log(`🌀 ${HERO} whirls through ${adj.length} foe${adj.length === 1 ? '' : 's'} for ${total}!`, 'important');
+  return true;
+}
+
+// Warrior — Berserk: an explosive frenzy hitting everything within 2 tiles.
+function skillBerserk() {
+  const foes = enemiesNear(2);
+  if (!foes.length) { log('💥 No foes near enough to devastate.'); return false; }
+  sfx('crit'); screenFlash('#ff7733');
+  let total = 0;
+  foes.forEach(e => {
+    const h = rollPlayerHit(e);
+    const d = Math.max(1, Math.round(h.dmg * 2.2));
+    total += d;
+    dealDamage(e, d, true);
+  });
+  lifestealHeal(total);
+  log(`💥 ${HERO} erupts in a Berserk frenzy, hitting ${foes.length} foe${foes.length === 1 ? '' : 's'} for ${total}!`, 'important');
+  return true;
+}
+
+// Rogue — Poison Strike: a venomous stab that poisons an adjacent foe.
+function skillPoisonStrike() {
+  const adj = adjacentToPlayer().sort((a, b) => a.hp - b.hp);
+  if (!adj.length) { log('🧪 No foe adjacent to strike.'); return false; }
+  const e = adj[0];
+  const h = rollPlayerHit(e);
+  const d = Math.max(1, Math.round(h.dmg * 1.2));
+  sfx('attack');
+  dealDamage(e, d, h.isCrit);
+  if (!e.dead) applyStatusEffect(e, 'poison', 5, 'player');
+  log(`🧪 ${HERO} stabs ${enemyLabel(e)} for ${d} and leaves it poisoned!`, 'important');
+  return true;
+}
+
+// Rogue — Shadowstep: blink beside the nearest foe and land a guaranteed crit.
+function skillShadowstep() {
+  const foes = foesInRange(6);
+  if (!foes.length) { log('🌑 No foe within blink range.'); return false; }
+  const e = foes[0];
+  const spot = adjacentOpenTile(e);
+  if (spot) { player.x = spot.x; player.y = spot.y; }
+  spawnFloatingText(player.x, player.y, '🌑', '#9a7bce');
+  let dmg = getWeaponDamage() + player.level * 2 + totalStat('ATK') + attrDamage();
+  dmg = Math.round(dmg * 2.5 * classDmgDealtMult() * critDamageMult());
+  if (buffs.power) dmg = Math.round(dmg * 1.5);
+  dmg = Math.max(1, Math.min(dmg, Math.ceil(e.maxHp * 0.6)));
+  sfx('crit');
+  dealDamage(e, dmg, true);
+  log(`🌑 ${HERO} shadowsteps and crits ${enemyLabel(e)} for ${dmg}!`, 'important');
+  return true;
+}
+
+// Rogue — Fan of Knives: spray every adjacent foe and poison them.
+function skillFanOfKnives() {
+  const adj = adjacentToPlayer();
+  if (!adj.length) { log('🔅 No foes adjacent to spray.'); return false; }
+  sfx('crit');
+  let total = 0;
+  adj.forEach(e => {
+    const h = rollPlayerHit(e);
+    const d = Math.max(1, Math.round(h.dmg * 1.1));
+    total += d;
+    dealDamage(e, d, h.isCrit);
+    if (!e.dead) applyStatusEffect(e, 'poison', 4, 'player');
+  });
+  log(`🔅 ${HERO} fans blades into ${adj.length} foe${adj.length === 1 ? '' : 's'} for ${total}, poisoning them!`, 'important');
+  return true;
+}
+
+// Rogue — Death Mark: a massive guaranteed crit on the nearest foe in range.
+function skillDeathMark() {
+  const foes = foesInRange(6);
+  if (!foes.length) { log('🎯 No foe in range to mark.'); return false; }
+  const e = foes[0];
+  let dmg = getWeaponDamage() + player.level * 2 + totalStat('ATK') + attrDamage();
+  dmg = Math.round(dmg * 4.0 * classDmgDealtMult() * critDamageMult());
+  if (buffs.power) dmg = Math.round(dmg * 1.5);
+  dmg = Math.max(1, Math.min(dmg, Math.ceil(e.maxHp * 0.7)));
+  sfx('crit'); screenFlash('#88ff88');
+  dealDamage(e, dmg, true);
+  log(`🎯 DEATH MARK! ${HERO} obliterates ${enemyLabel(e)} for ${dmg}!`, 'important');
+  return true;
+}
+
+// Mage — Frost Nova: an icy burst that damages and stuns nearby foes.
+function skillFrostNova() {
+  const foes = enemiesNear(2);
+  if (!foes.length) { log('❄️ No foes near enough to freeze.'); return false; }
+  sfx('attack');
+  spawnFloatingText(player.x, player.y, '❄️', '#9fe8ff');
+  const base = spellBase(10, 1.5);
+  let total = 0;
+  foes.forEach(e => {
+    const d = Math.max(1, Math.round(base * 0.6));
+    total += d;
+    dealDamage(e, d, true);
+    if (!e.dead) applyStatusEffect(e, 'stun', 2, 'player');
+  });
+  log(`❄️ ${HERO}'s Frost Nova freezes ${foes.length} foe${foes.length === 1 ? '' : 's'} for ${total}!`, 'important');
+  return true;
+}
+
+// Mage — Chain Lightning: a bolt that arcs between up to three nearby foes.
+function skillChainLightning() {
+  let cur = foesInRange(6)[0];
+  if (!cur) { log('⚡ No foe within range.'); return false; }
+  sfx('attack');
+  const base = spellBase(18, 2);
+  const hit = [];
+  let mult = 1;
+  for (let i = 0; i < 3 && cur; i++) {
+    const d = Math.max(1, Math.round(base * mult));
+    dealDamage(cur, d, true);
+    spawnFloatingText(cur.x, cur.y, '⚡', '#ffe680');
+    hit.push(cur);
+    mult *= 0.6;
+    cur = enemies
+      .filter(o => !o.dead && !hit.includes(o) && (Math.abs(o.x - hit[i].x) + Math.abs(o.y - hit[i].y)) <= 3)
+      .sort((a, b) => (Math.abs(a.x - hit[i].x) + Math.abs(a.y - hit[i].y)) - (Math.abs(b.x - hit[i].x) + Math.abs(b.y - hit[i].y)))[0];
+  }
+  log(`⚡ ${HERO}'s Chain Lightning leaps through ${hit.length} foe${hit.length === 1 ? '' : 's'}!`, 'important');
+  return true;
+}
+
+// Mage — Meteor: a falling rock that smashes the nearest foe and scorches around it.
+function skillMeteor() {
+  const c = foesInRange(7)[0];
+  if (!c) { log('☄️ No foe within range.'); return false; }
+  sfx('boss'); screenFlash('#ff7733');
+  spawnFloatingText(c.x, c.y, '☄️', '#ff8844');
+  const base = spellBase(26, 2.5);
+  const foes = enemiesNear(1, c.x, c.y);
+  let total = 0;
+  foes.forEach(e => {
+    const d = Math.max(1, Math.round(base * (e === c ? 1 : 0.6)));
+    total += d;
+    dealDamage(e, d, true);
+  });
+  log(`☄️ ${HERO} calls down a Meteor for ${total} across ${foes.length} foe${foes.length === 1 ? '' : 's'}!`, 'important');
+  return true;
+}
+
+// Templar — Holy Smite: searing light that damages a foe and heals you for part of it.
+function skillHolySmite() {
+  const e = foesInRange(4)[0];
+  if (!e) { log('🔆 No foe within range to smite.'); return false; }
+  const dmg = Math.max(1, Math.round(spellBase(18, 2.5)));
+  sfx('crit');
+  spawnFloatingText(e.x, e.y, '🔆', '#ffe680');
+  dealDamage(e, dmg, true);
+  const heal = Math.min(player.maxHp - player.hp, Math.round(dmg * 0.5));
+  if (heal > 0) { player.hp += heal; spawnFloatingText(player.x, player.y, `+${heal}`, '#7fffaa'); }
+  log(`🔆 ${HERO} smites ${enemyLabel(e)} for ${dmg}${heal > 0 ? ` and heals ${heal}` : ''}!`, 'important');
+  return true;
+}
+
+// Templar — Sanctuary: hallow the ground for halved incoming damage, and heal.
+function skillSanctuary() {
+  combatBuffs.sanctuary = 5;
+  const heal = Math.min(player.maxHp - player.hp, Math.round(30 + player.level * 3 + totalAttr('spirit') * ATTR_FX.spellPerSpr));
+  if (heal > 0) player.hp += heal;
+  sfx('potion');
+  spawnFloatingText(player.x, player.y, '⛪', '#ffe9a0');
+  log(`⛪ ${HERO} consecrates the ground — incoming damage halved for a few turns${heal > 0 ? `, +${heal} HP` : ''}.`, 'important');
+  return true;
+}
+
+// Templar — Judgment: smite every nearby foe and restore a burst of health.
+function skillJudgment() {
+  const foes = enemiesNear(2);
+  if (!foes.length && player.hp >= player.maxHp) { log('⚖️ No foes near and already at full health.'); return false; }
+  sfx('boss'); screenFlash('#ffe9a0');
+  const base = spellBase(22, 2.5);
+  let total = 0;
+  foes.forEach(e => {
+    const d = Math.max(1, Math.round(base));
+    total += d;
+    dealDamage(e, d, true);
+    spawnFloatingText(e.x, e.y, '⚖️', '#ffe680');
+  });
+  const heal = Math.min(player.maxHp - player.hp, Math.round(40 + player.level * 4));
+  if (heal > 0) player.hp += heal;
+  log(`⚖️ ${HERO} passes Judgment${foes.length ? ` on ${foes.length} foe${foes.length === 1 ? '' : 's'} for ${total}` : ''}${heal > 0 ? `, restoring ${heal} HP` : ''}!`, 'important');
+  return true;
+}
+
 // Run every nearby living enemy's turn once, bailing if the floor changes
 // mid-turn (e.g. a death warps you to the previous floor and rebuilds it).
 function runEnemyTurn() {
-  // Every passed turn (move, attack, or skill) ticks the class-skill cooldown.
-  if (player.skillCd > 0) player.skillCd--;
+  // Every passed turn (move, attack, or skill) ticks down active-skill cooldowns
+  // and any transient combat buffs (War Cry, Sanctuary, …).
+  if (player.skillCds) for (const k in player.skillCds) if (player.skillCds[k] > 0) player.skillCds[k]--;
+  for (const k in combatBuffs) if (combatBuffs[k] > 0) combatBuffs[k]--;
   const serial = floorSerial;
   enemies.filter(e => !e.dead).forEach(e => {
     if (floorSerial !== serial) return;
@@ -6735,13 +8119,21 @@ function enemyAttackPlayer(e) {
   let raw = Math.round(e.dmg * rnd(80, 120) / 100);
   if (beh.hitMult) raw = Math.round(raw * beh.hitMult);
   if (buffs.guard) raw = Math.round(raw * 0.6);
-  const dmg = mitigateDamage(raw, e.level);
+  const dmg = applyIncomingMods(absorbWithMana(mitigateDamage(raw, e.level)));
   player.hp = Math.max(0, player.hp - dmg);
   sfx('hurt');
   spawnFloatingText(player.x, player.y, `${dmg}`, '#ff3344');
   log(`${enemyLabel(e)} attacks ${HERO} for ${dmg}!`);
   if (player.hp <= player.maxHp * 0.25) screenFlash('#cc0000');
   if (e.bossAbility === 'lifesteal') bossLifesteal(e, dmg);
+  // Retribution (Templar passive): reflect part of a melee blow back at the foe.
+  const reflect = skillBonus('reflect');
+  if (reflect > 0 && !e.dead && dmg > 0) {
+    const rd = Math.max(1, Math.round(dmg * reflect));
+    spawnFloatingText(e.x, e.y, `${rd}`, '#ffcc66');
+    dealDamage(e, rd, false);
+  }
+  thornsReflect(e); // gear Thorns: flat reflected damage on melee
   tryBossStatusProc(e);
   updateBars();
   if (player.hp === 0) handleDeath();
@@ -6756,7 +8148,7 @@ function enemyRangedAttack(e) {
   }
   let raw = Math.round(e.dmg * rnd(75, 110) / 100);
   if (buffs.guard) raw = Math.round(raw * 0.6);
-  const dmg = mitigateDamage(raw, e.level);
+  const dmg = applyIncomingMods(absorbWithMana(mitigateDamage(raw, e.level)));
   player.hp = Math.max(0, player.hp - dmg);
   sfx(e.isBoss ? 'boss' : 'hurt');
   spawnFloatingText(player.x, player.y, `${dmg}`, '#c77dff');
@@ -6842,6 +8234,7 @@ function handleDeath() {
   const lostGold = Math.floor(player.gold / 2);
   player.gold -= lostGold;
   statusEffects = statusEffects.filter(s => s.target !== 'player');
+  player.skillCds = {}; combatBuffs = {}; // revived fresh — skills ready again
   sfx('death');
   // Remember where you fell so the Dungeon Gate can return you there.
   dungeonReturn = dungeonLevel;
@@ -6991,13 +8384,14 @@ function checkLevelUp() {
     player.xp -= needed;
     player.level++;
     player.attrPoints = (player.attrPoints || 0) + ATTR_POINTS_PER_LEVEL;
+    player.skillPoints = (player.skillPoints || 0) + SKILL_POINTS_PER_LEVEL;
     recomputeMaxStats();        // level grants more base HP/MP
     player.hp = player.maxHp;   // a level up fully restores you
     player.mp = player.maxMp;
     sfx('levelup');
     showLevelUpBanner(player.level);
     log(`⭐ LEVEL UP! You are now level ${player.level}!`, 'important');
-    log(`💠 +${ATTR_POINTS_PER_LEVEL} attribute points — open the 🎒 bag's HERO tab to spend them.`, 'important');
+    log(`💠 +${ATTR_POINTS_PER_LEVEL} attribute points (HERO tab) · +${SKILL_POINTS_PER_LEVEL} skill point (SKILLS tab).`, 'important');
     updateBars();
     renderPanel();
     saveGame();
@@ -7052,26 +8446,35 @@ function updateBars() {
       pactHud.style.display = '';
       pactHud.firstChild.textContent = pact.icon + ' ';
       setText('pact-num', pact.floors);
-      pactHud.title = `${pact.name} — ${pact.floors} floor${pact.floors === 1 ? '' : 's'} left`;
+      pactHud.dataset.tip = `<div class='ht-name'>${pact.icon} ${pact.name}</div><div class='ht-line'>A mystic pact is in effect — ${pact.floors} floor${pact.floors === 1 ? '' : 's'} left before it lifts.</div>`;
     } else {
       pactHud.style.display = 'none';
     }
   }
 
-  // Nudge the HERO tab when there are unspent attribute points to spend.
+  // Nudge the HERO / SKILLS tabs when there are unspent points to spend.
   const pts = player.attrPoints || 0;
+  const sPts = player.skillPoints || 0;
   const heroTab = document.getElementById('tab-hero');
   if (heroTab) {
     heroTab.textContent = pts > 0 ? `HERO (${pts})` : 'HERO';
     heroTab.classList.toggle('has-points', pts > 0);
   }
-  // The HERO tab glow only shows once the bag is open, so also surface a
-  // pulsing badge on the always-visible BAG button as a persistent reminder.
+  const skillsTab = document.getElementById('tab-skills');
+  if (skillsTab) {
+    skillsTab.textContent = sPts > 0 ? `SKILLS (${sPts})` : 'SKILLS';
+    skillsTab.classList.toggle('has-points', sPts > 0);
+  }
+  // The tab glow only shows once the bag is open, so also surface a pulsing badge
+  // on the always-visible BAG button (combining attribute + skill points).
   const bagBadge = document.getElementById('bag-points-badge');
   if (bagBadge) {
-    bagBadge.textContent = pts;
-    bagBadge.classList.toggle('show', pts > 0);
+    const totalPts = pts + sPts;
+    bagBadge.textContent = totalPts;
+    bagBadge.classList.toggle('show', totalPts > 0);
   }
+  // Keep the learned-actives skill bar in sync.
+  renderSkillBar();
 
   const healLabel = document.getElementById('heal-label');
   const healBtn = document.querySelector('.heal-btn');
@@ -7091,7 +8494,7 @@ function updateBars() {
       const icon = document.getElementById('skill-icon');
       const label = document.getElementById('skill-label');
       if (icon) icon.textContent = sk.icon;
-      const cd = player.skillCd || 0;
+      const cd = skillCd(sk.id);
       const ready = cd === 0 && player.mp >= sk.mp && !inTown;
       if (label) label.textContent = cd > 0 ? `${cd}` : `${sk.mp}MP`;
       skillBtn.title = `${sk.name} — ${sk.desc} (${sk.mp} MP, ${sk.cd}-turn cooldown) · press R`;
@@ -7140,6 +8543,8 @@ function switchTab(tab) {
   document.getElementById('tab-inv').classList.toggle('active', tab==='inv');
   document.getElementById('tab-equip').classList.toggle('active', tab==='equip');
   document.getElementById('tab-hero').classList.toggle('active', tab==='hero');
+  const st = document.getElementById('tab-skills');
+  if (st) st.classList.toggle('active', tab==='skills');
   renderPanel();
 }
 
@@ -7200,6 +8605,8 @@ function renderPanel() {
     el.innerHTML = SLOT_KEYS.map(s => renderSlot(s, SLOTS[s].label)).join('') +
       `<div style="margin-top:8px;font-size:10px;color:#555">Tap EQUIP on any loot<br>item to gear up.</div>` +
       renderCosmetics();
+  } else if (currentTab === 'skills') {
+    renderSkills(el);
   } else {
     renderHero(el);
   }
@@ -7230,6 +8637,23 @@ function renderHero(el) {
   }).join('');
   // Derived combat stats so the player can see what their attributes/gear produce.
   const stat = (label, val) => `<div class="hc-line" style="display:flex;justify-content:space-between"><span style="opacity:0.8">${label}</span><b>${val}</b></div>`;
+  // Extended gear stats (leech, thorns, find, caster %s, …): every one the hero
+  // currently carries from gear is listed so nothing stays hidden. Zero-value
+  // stats are skipped to keep the panel readable.
+  const EXT = [
+    ['IDMG','💢 Increased dmg'], ['BOSSDMG','👑 Dmg vs bosses'], ['EXEC','🗡 Execute'],
+    ['PEN','🩹 Armor pen'], ['CLEAVE','🪓 Cleave'], ['DBLSTRIKE','⚡ Double strike'],
+    ['LEECH','🩸 Life leech'], ['MPLEECH','🔹 Mana leech'], ['HPKILL','❤️ Life on kill'],
+    ['MPKILL','🔷 Mana on kill'], ['THORNS','🌵 Thorns'], ['DR','🛡 Dmg reduction'],
+    ['BLOCK','🟦 Block'], ['SPELLPWR','🔮 Spell power'], ['CDR','⏳ Cooldown reduc'],
+    ['MCR','💧 Mana cost reduc'], ['GOLDFIND','💰 Gold find'], ['XPGAIN','📘 XP gain'],
+    ['MAGICFIND','🍀 Magic find'], ['MATFIND','🧰 Material find'],
+  ];
+  const extRows = EXT.map(([k, lbl]) => {
+    const t = totalStat(k);
+    if (!t) return '';
+    return stat(lbl, '+' + t + (PCT_STATS.has(k) ? '%' : ''));
+  }).join('');
   const derived = `<div class="hero-class" style="border-color:#445">
       <div class="hc-head"><span class="hc-name">📊 Stats</span></div>
       ${stat('⚔️ Attack power', Math.round(totalStat('ATK') + attrDamage()))}
@@ -7241,6 +8665,7 @@ function renderHero(el) {
       ${stat('🎯 Crit chance', Math.round(playerCritChance()*100) + '%')}
       ${stat('💥 Crit damage', Math.round(critDamageMult()*100) + '%')}
       ${stat('💨 Dodge', Math.round(playerDodge()*100) + '%')}
+      ${extRows ? `<div class="hc-line" style="opacity:0.5;margin-top:4px">— from gear —</div>${extRows}` : ''}
     </div>`;
   const cls = playerClass();
   const classBlock = cls ? `
@@ -7260,9 +8685,147 @@ function renderHero(el) {
     </div>
     <div class="hero-sub">Level ${player.level} · ${gearPower} from gear</div>
     ${classBlock}
-    ${derived}
     <div class="hero-points">${pts > 0 ? `${pts} point${pts>1?'s':''} to spend!` : 'No points to spend — level up for more.'}</div>
-    ${rows}`;
+    ${rows}
+    ${derived}`;
+}
+
+// SKILLS tab: the class skill tree, drawn as a branching node graph. Two trunks
+// (offense / defense) root in the Lv1 passives and flow down to the capstone.
+// Tiles are hand-placed via SKILL_TREE_LAYOUT; SVG draws the branch connectors,
+// which light up once their prerequisite is owned. Tapping a node opens a detail
+// popover with a Learn button (buySkill) — see selectSkill / positionSkillPop.
+function renderSkills(el) {
+  const cls = playerClass();
+  if (!cls) { el.innerHTML = '<div class="hero-sub" style="padding:12px">Pick a class to unlock its skill tree.</div>'; selectedSkillId = null; return; }
+  const pts = player.skillPoints || 0;
+  const tree = classSkillTree();
+  const layout = SKILL_TREE_LAYOUT[player.class] || {};
+
+  // Branch connectors: one line per node→prerequisite. Lit (bright purple) once
+  // the prerequisite has any rank, dim grey while still locked. A wider faint line
+  // under each lit line fakes a glow; non-scaling-stroke keeps widths even though
+  // the viewBox is stretched non-uniformly to fill the canvas.
+  let lines = '';
+  for (const n of tree) {
+    const p = layout[n.id]; if (!p || !n.req) continue;
+    for (const [rid] of n.req) {
+      const q = layout[rid]; if (!q) continue;
+      const x1 = (q[0] * 100).toFixed(1), y1 = (q[1] * 100).toFixed(1);
+      const x2 = (p[0] * 100).toFixed(1), y2 = (p[1] * 100).toFixed(1);
+      if (skillRank(rid) > 0) {
+        lines += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#8c6eff" stroke-opacity="0.28" stroke-width="6" vector-effect="non-scaling-stroke"/>`;
+        lines += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#a98cff" stroke-width="2.5" vector-effect="non-scaling-stroke"/>`;
+      } else {
+        lines += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#332b4a" stroke-width="2" vector-effect="non-scaling-stroke"/>`;
+      }
+    }
+  }
+
+  // Node tiles. State precedence: maxed > available-to-buy > owned > locked, so a
+  // partly-ranked node you can still spend on glows purple to draw the eye there.
+  const tiles = tree.map(n => {
+    const p = layout[n.id]; if (!p) return '';
+    const rank = skillRank(n.id);
+    const maxd = skillMaxed(n);
+    const owned = rank > 0;
+    const avail = canBuySkill(n);
+    const state = maxd ? 'maxed' : avail ? 'avail' : owned ? 'owned' : 'locked';
+    const badge = maxd ? '✓' : avail ? '+' : owned ? '✓' : '🔒';
+    const pips = (n.max || 1) > 1
+      ? `<div class="pips">${Array.from({ length: n.max }, (_, i) => `<span class="pip${i < rank ? ' on' : ''}"></span>`).join('')}</div>`
+      : '';
+    return `<button class="sk-tnode ${state}${n.type === 'active' ? ' act' : ''}${selectedSkillId === n.id ? ' sel' : ''}" id="sknode-${n.id}"
+        style="left:${(p[0] * 100).toFixed(2)}%;top:${(p[1] * 100).toFixed(2)}%" onclick="selectSkill('${n.id}')">
+      <span class="badge">${badge}</span><span class="ic">${n.icon}</span>
+      <span class="nm">${n.name}</span>${pips}
+    </button>`;
+  }).join('');
+
+  // Detail popover for the selected node (placed by positionSkillPop after layout).
+  let pop = '';
+  const sn = selectedSkillId ? skillNode(selectedSkillId) : null;
+  if (sn && layout[sn.id]) {
+    const rank = skillRank(sn.id);
+    const typeTxt = sn.type === 'active' ? `⚡ ACTIVE · ${sn.mp}MP · ${sn.cd}cd` : 'PASSIVE';
+    const rankTxt = (sn.max || 1) > 1 ? ` <span style="color:#e8c267">${rank}/${sn.max}</span>` : (rank > 0 ? ' ✓' : '');
+    const bits = [];
+    if ((sn.lvl || 1) > 1) bits.push(`Lv${sn.lvl}`);
+    if (sn.req) for (const [rid, rk] of sn.req) { const rn = skillNode(rid); bits.push(`${rn ? rn.name : rid}${rk > 1 ? ` ${rk}` : ''}`); }
+    const reqMet = skillReqMet(sn);
+    const reqHtml = bits.length ? `<div class="rq ${reqMet ? 'ok' : 'no'}">${reqMet ? '✓ ' : '🔒 '}${bits.join(' · ')}</div>` : '';
+    const buyBtn = skillMaxed(sn)
+      ? `<button class="pop-buy maxed" disabled>✓ Maxed</button>`
+      : `<button class="pop-buy" ${canBuySkill(sn) ? '' : 'disabled'} onclick="buySkill('${sn.id}')">${(sn.max || 1) > 1 ? `Learn (rank ${rank + 1}/${sn.max})` : 'Learn'}</button>`;
+    pop = `<div class="sk-pop" id="sk-pop">
+      <b>${sn.icon} ${sn.name}</b>${rankTxt}
+      <div class="ty">${typeTxt}</div>
+      <div class="ds">${sn.desc}</div>
+      ${reqHtml}
+      ${buyBtn}
+    </div>`;
+  }
+
+  el.innerHTML = `
+    <div class="hero-power">
+      <div class="hp-label">🌟 SKILL POINTS</div>
+      <div class="hp-value">${pts}</div>
+    </div>
+    <div class="hero-sub">${cls.icon} ${cls.name} · ${spentSkillPoints()} learned</div>
+    <div class="hero-points">${pts > 0 ? `${pts} point${pts > 1 ? 's' : ''} to spend!` : 'Level up to earn more skill points.'}</div>
+    <div class="sk-trunks"><span class="sk-trunk off">◆ OFFENSE</span><span class="sk-trunk def">DEFENSE ◆</span></div>
+    <div class="sk-tree" id="sk-tree" onclick="if(event.target.id==='sk-tree'){selectedSkillId=null;renderPanel();}">
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none">${lines}</svg>
+      ${tiles}
+      ${pop}
+    </div>`;
+  positionSkillPop();
+}
+
+// Toggle the detail popover for a skill node (tap the open node again to close).
+function selectSkill(id) {
+  selectedSkillId = (selectedSkillId === id) ? null : id;
+  renderPanel();
+}
+
+// Place the selected node's popover just below it, flipping above and clamping
+// horizontally so it always stays inside the tree canvas.
+function positionSkillPop() {
+  const pop = document.getElementById('sk-pop');
+  const node = selectedSkillId && document.getElementById('sknode-' + selectedSkillId);
+  const tree = document.getElementById('sk-tree');
+  if (!pop || !node || !tree) return;
+  const tw = tree.clientWidth, th = tree.clientHeight;
+  const cx = node.offsetLeft, cy = node.offsetTop; // node center (CSS translate is visual only)
+  const pw = pop.offsetWidth, ph = pop.offsetHeight;
+  let left = Math.max(2, Math.min(cx - pw / 2, tw - pw - 2));
+  let top = cy + 34;                          // default: below the node
+  if (top + ph > th - 2) top = cy - 34 - ph;  // flip above if it would overflow
+  if (top < 2) top = 2;
+  pop.style.left = left + 'px';
+  pop.style.top = top + 'px';
+}
+
+// The on-screen bar of active skills: the baseline class skill first (keyed R,
+// matching the R key / ⚡ button), then any learned tree actives (keyed 1–4,
+// matching the number keys). Showing the baseline here means mobile players, who
+// have no keyboard and where the ⚡ button is dropped from the nav bar, can still
+// see and cast their class skill. Hidden in town and before a class is chosen.
+function renderSkillBar() {
+  const bar = document.getElementById('skill-bar');
+  if (!bar) return;
+  const skills = activeSkillList();
+  if (!skills.length || inTown) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+  bar.style.display = 'flex';
+  let extraNum = 0;
+  bar.innerHTML = skills.map((s) => {
+    const cd = skillCd(s.id);
+    const ready = cd === 0 && player.mp >= s.mp && player.hp > 0;
+    const key = s.baseline ? 'R' : String(++extraNum);
+    return `<button class="skillbar-btn ${s.baseline ? 'baseline ' : ''}${ready ? 'ready' : 'disabled'}" title="${s.name} — ${s.desc} (${s.mp} MP, ${s.cd}-turn cooldown) · press ${key}" onclick="castSkillById('${s.id}')">
+      <span class="sb-key">${key}</span><span class="sb-icon">${s.icon}</span><span class="sb-info">${cd > 0 ? cd : s.mp + 'MP'}</span>
+    </button>`;
+  }).join('');
 }
 
 // ── CLASS SELECTION ──
@@ -7293,6 +8856,7 @@ function chooseClass(key) {
   if (!cls) return;
   player.class = key;
   player.skillCd = 0;
+  player.skills = {}; player.skillCds = {}; combatBuffs = {};
   recomputeMaxStats();
   player.hp = player.maxHp;
   player.mp = player.maxMp;
@@ -7301,7 +8865,7 @@ function chooseClass(key) {
   if (ov) ov.classList.remove('open');
   log(`${cls.icon} You are a ${cls.name}! ${cls.passive}. Skill: ${cls.skill.icon} ${cls.skill.name} — press R to cast.`, 'important');
   sfx('levelup');
-  updateBars(); renderPanel(); draw(); saveGame();
+  updateBars(); renderPanel(); renderSkillBar(); draw(); saveGame();
 }
 
 // If the (new) class can't wield the equipped weapon, stow it in the bag.
@@ -7321,15 +8885,20 @@ function changeClass(key) {
   const cost = classChangeCost();
   if (player.gold < cost) { log('Not enough gold to retrain.'); return; }
   player.gold -= cost;
+  // Skill trees are class-specific: refund everything spent and wipe the old
+  // tree so the player can re-spec into the new class's skills from scratch.
+  const refunded = spentSkillPoints();
   player.class = key;
   player.skillCd = 0;
+  player.skills = {}; player.skillCds = {}; combatBuffs = {};
+  player.skillPoints = (player.skillPoints || 0) + refunded;
   recomputeMaxStats();
   if (player.hp > player.maxHp) player.hp = player.maxHp;
   if (player.mp > player.maxMp) player.mp = player.maxMp;
   revalidateWeapon(cls);
   sfx('shrine');
-  log(`${cls.icon} You retrain as a ${cls.name}! Skill: ${cls.skill.icon} ${cls.skill.name}.`, 'important');
-  updateBars(); renderPanel(); renderTrainer(); draw(); saveGame();
+  log(`${cls.icon} You retrain as a ${cls.name}! Skill: ${cls.skill.icon} ${cls.skill.name}.${refunded ? ` ${refunded} skill point${refunded === 1 ? '' : 's'} refunded.` : ''}`, 'important');
+  updateBars(); renderPanel(); renderSkillBar(); renderTrainer(); draw(); saveGame();
 }
 
 function renderSlot(slot, label) {
@@ -7655,6 +9224,12 @@ document.addEventListener('keydown', e => {
   if (e.key==='q'||e.key==='Q')          useHealthPotion();
   if (e.key==='e'||e.key==='E')          useManaPotion();
   if (e.key==='r'||e.key==='R')          castSkill();
+  // Number keys cast learned tree actives in skill-bar order.
+  if (e.key>='1' && e.key<='4') {
+    const extras = activeSkillList().filter(s => !s.baseline);
+    const sk = extras[parseInt(e.key, 10) - 1];
+    if (sk) castSkillById(sk.id);
+  }
   if (e.key==='t'||e.key==='T')          enterTown();
   if (e.key==='b'||e.key==='B'||e.key==='i'||e.key==='I') togglePanel();
 });
@@ -7721,6 +9296,26 @@ function loadGame() {
     // init flow prompts the player to choose one. Drop any unknown class id.
     if (player.class && !CLASSES[player.class]) player.class = null;
     if (player.skillCd == null) player.skillCd = 0;
+    // Migrate saves that predate the skill tree.
+    if (player.skillPoints == null) player.skillPoints = 0;
+    if (!player.skills || typeof player.skills !== 'object') player.skills = {};
+    if (!player.skillCds || typeof player.skillCds !== 'object') player.skillCds = {};
+    // Fold the old single-skill cooldown into the per-skill map for the baseline.
+    if (player.class && CLASSES[player.class] && player.skillCd) {
+      const bid = CLASSES[player.class].skill.id;
+      if (player.skillCds[bid] == null) player.skillCds[bid] = player.skillCd;
+    }
+    // Drop any skill ranks that don't belong to the current class's tree (e.g.
+    // after a class change on an older save), then grant points retroactively for
+    // levels gained before the tree existed (1 per level above 1, minus any
+    // already banked or spent on valid nodes).
+    {
+      const valid = new Set(classSkillTree().map(n => n.id));
+      for (const k of Object.keys(player.skills)) if (!valid.has(k)) delete player.skills[k];
+      const earned = Math.max(0, (player.level || 1) - 1) * SKILL_POINTS_PER_LEVEL;
+      const have = (player.skillPoints || 0) + spentSkillPoints();
+      if (have < earned) player.skillPoints += (earned - have);
+    }
     // Migrate saves that predate the deepest-floor tracker / town hub.
     if (player.maxFloor == null) player.maxFloor = data.dungeonLevel || 1;
     // Migrate saves that predate cleared-floor tracking.
@@ -7833,12 +9428,12 @@ if (hadSave) {
   if (inTown) log('You are in town. Pick a service from the menu, or take the 🌀 Dungeon Gate back into the dungeon.');
   else log(`Resuming on dungeon level ${dungeonLevel}. Your gear is intact.`);
 } else {
-  log('Welcome to the dungeon. Move to explore. USE to open chests.', 'important');
+  log('Welcome to the dungeon. Use the on-screen pad, a swipe, or arrow keys to move.', 'important');
   log('🔒 Clear a floor of its foes to unseal the ▼ stairs, then descend.', 'important');
   log('⚠️ The deep scales faster than you can — grind lower floors from 🏰 TOWN when you hit a wall.');
 }
 log('Progress auto-saves automatically as you play.');
-log('Tap 🎒 BAG (bottom-right) to open your loot.');
+log('Open 🎒 BAG to view your loot; press the pad\'s USE button to grab items.');
 log(`Tap the ❤️ flask to drink a ${logPotion('Health Potion')} when you're hurt. Enemies hit hard!`);
 log('⌨️ Keys: Q drink potion · E mana · R class skill · T town · B open bag · Space/F use.');
 log('⚡ Your class grants a special skill — tap the ⚡ button (or press R) to spend mana on it.');
@@ -7860,8 +9455,19 @@ updateSoundButton();
 // Redraw once layout has settled so the camera fits the real canvas size.
 // On the web layout, also open + populate the permanent loot drawer.
 syncWebPanel();
-requestAnimationFrame(() => { resizeCanvas(); draw(); });
-window.addEventListener('load', () => { syncWebPanel(); resizeCanvas(); draw(); });
+requestAnimationFrame(() => { resizeCanvas(); positionTouchDpad(); draw(); });
+
+// Teach the controls once per load. Skipped on the keyboard-driven web layout.
+function showMoveHint() {
+  if (isWebLayout() || document.getElementById('move-hint')) return;
+  const hint = document.createElement('div');
+  hint.id = 'move-hint';
+  hint.innerHTML = '👆 Use the pad to move<br>· USE grabs loot · swipe also moves ·';
+  document.body.appendChild(hint);
+  setTimeout(() => hint.remove(), 5600);
+}
+requestAnimationFrame(showMoveHint);
+window.addEventListener('load', () => { syncWebPanel(); resizeCanvas(); positionTouchDpad(); draw(); });
 // Once the emoji/icon fonts have finished loading, repaint so any glyphs that
 // weren't yet resident on the first frame bake into the sprite cache and show.
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => draw());
