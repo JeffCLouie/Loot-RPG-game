@@ -4288,6 +4288,10 @@ function draw() {
         // top highlight ridge
         ctx.fillStyle = C.wallTop;
         ctx.fillRect(px, py, tw, Math.max(1, th*0.12));
+        // per-block shade variation so the masonry isn't uniform
+        const wv = (Math.abs(seed >> 3) % 5) - 2;   // -2..+2
+        if (wv > 0) { ctx.fillStyle = `rgba(255,248,230,${wv * 0.022})`; ctx.fillRect(px, py, tw, th); }
+        else if (wv < 0) { ctx.fillStyle = `rgba(0,0,0,${(-wv) * 0.03})`; ctx.fillRect(px, py, tw, th); }
         // occasional crack
         if (seed % 5 === 0) {
           ctx.fillStyle = C.crack;
@@ -4366,7 +4370,7 @@ function draw() {
         ctx.restore();
       } else if (t === 3) {
         // Fountain of Healing — stone basin with glowing blue water
-        ctx.fillStyle = (x+y)%2===0 ? C.floor : C.floorAlt;
+        ctx.fillStyle = C.floor;
         ctx.fillRect(px, py, tw, th);
         // stone rim
         ctx.fillStyle = '#5a5a72';
@@ -4390,7 +4394,7 @@ function draw() {
         ctx.restore();
       } else if (t === 5) {
         // Shrine — a glowing pillar that pulses to draw the eye.
-        ctx.fillStyle = (x+y)%2===0 ? C.floor : C.floorAlt;
+        ctx.fillStyle = C.floor;
         ctx.fillRect(px, py, tw, th);
         const sp = 0.5 + 0.5*Math.sin(Date.now()/350);
         ctx.save();
@@ -4425,7 +4429,7 @@ function draw() {
         ctx.fillRect(px+tw*0.6, py+th*0.55, tw*0.15, th*0.25);
       } else if (t === 8) {
         // Spike trap — floor studded with metal spikes.
-        ctx.fillStyle = (x+y)%2===0 ? C.floor : C.floorAlt;
+        ctx.fillStyle = C.floor;
         ctx.fillRect(px, py, tw, th);
         ctx.fillStyle = '#c4c4d2';
         for (let s = 0; s < 3; s++) {
@@ -4441,7 +4445,7 @@ function draw() {
         ctx.fillRect(px+tw*0.1, py+th*0.78, tw*0.8, Math.max(1, th*0.1));
       } else if (t === 9) {
         // Teleporter pad — a swirling purple portal.
-        ctx.fillStyle = (x+y)%2===0 ? C.floor : C.floorAlt;
+        ctx.fillStyle = C.floor;
         ctx.fillRect(px, py, tw, th);
         const tp = 0.5 + 0.5*Math.sin(Date.now()/300 + seed);
         ctx.save();
@@ -4477,7 +4481,7 @@ function draw() {
         ctx.stroke();
       } else if (t === 11) {
         // Locked vault door — heavy timber with a brass lock.
-        ctx.fillStyle = (x+y)%2===0 ? C.floor : C.floorAlt;
+        ctx.fillStyle = C.floor;
         ctx.fillRect(px, py, tw, th);
         ctx.fillStyle = '#5a3a1c';
         ctx.fillRect(px+tw*0.18, py+th*0.1, tw*0.64, th*0.8);
@@ -4488,11 +4492,16 @@ function draw() {
         ctx.arc(px+tw*0.66, py+th*0.5, tw*0.08, 0, Math.PI*2);
         ctx.fill();
       } else {
-        // Floor base with subtle checker
-        ctx.fillStyle = (x+y)%2===0 ? C.floor : C.floorAlt;
+        // Floor base — organic per-tile variation instead of a checkerboard:
+        // most tiles use the base colour, a few the alt, and every tile gets a
+        // faint lightness jitter so the ground reads as natural, worn stone.
+        ctx.fillStyle = (Math.abs(seed) % 5 === 0) ? C.floorAlt : C.floor;
         ctx.fillRect(px, py, tw, th);
+        const fv = (Math.abs(seed >> 2) % 7) - 3;   // -3..+3
+        if (fv > 0) { ctx.fillStyle = `rgba(255,248,230,${fv * 0.013})`; ctx.fillRect(px, py, tw, th); }
+        else if (fv < 0) { ctx.fillStyle = `rgba(0,0,0,${(-fv) * 0.022})`; ctx.fillRect(px, py, tw, th); }
         // flagstone seams — barely-there grid lines
-        ctx.fillStyle = 'rgba(0,0,0,0.06)';
+        ctx.fillStyle = 'rgba(0,0,0,0.05)';
         ctx.fillRect(px, py, tw, 1);
         ctx.fillRect(px, py, 1, th);
         // speckle / rubble (deterministic)
