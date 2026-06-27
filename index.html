@@ -793,7 +793,7 @@ function spawnEnemies() {
         const bossIdx = Math.min(Math.floor(dungeonLevel / 5) - 1, BOSSES.length - 1);
         const boss = BOSSES[bossIdx];
         const bossHp = (10 + dungeonLevel * 6) * 3;
-        const bossDmg = (4 + dungeonLevel * 2) * 1.5;
+        const bossDmg = (3 + dungeonLevel) * 1.5;
         enemies.push({
           x: ex, y: ey,
           hp: bossHp, maxHp: bossHp,
@@ -805,7 +805,7 @@ function spawnEnemies() {
         log(`⚠️ ${boss.name} ${boss.type} guards this floor!`, 'important');
       } else {
         const tierIdx = Math.min(dungeonLevel-1, 4);
-        const baseDmg = 4 + dungeonLevel * 2 + tierIdx * 2;
+        const baseDmg = 3 + dungeonLevel + tierIdx;
         enemies.push({
           x: ex, y: ey,
           hp: 10 + dungeonLevel * 6,
@@ -1375,7 +1375,7 @@ function attackEnemy(e) {
       groundItems.push({ x: e.x, y: e.y, item });
       log(`💎 ${label} dropped: ${item.name}`, 'loot');
     }
-    if (Math.random() < 0.08) {
+    if (Math.random() < 0.20) {
       player.healPotions++;
       log(`❤️ ${label} dropped a Health Potion! (${player.healPotions} held)`, 'loot');
       updateBars();
