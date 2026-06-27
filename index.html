@@ -394,7 +394,7 @@
     letter-spacing: 2px; cursor: pointer; border-bottom: 2px solid transparent;
   }
   .shop-tab.active { color: var(--gold); border-bottom-color: var(--gold); }
-  #shop-content { overflow-y: auto; padding: 8px; }
+  #shop-content { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 8px; }
 
   .shop-row {
     display: flex; align-items: center; gap: 8px;
@@ -768,7 +768,8 @@ function spawnMerchant() {
   ];
   const gearCount = rnd(2, 3);
   for (let i = 0; i < gearCount; i++) {
-    const item = generateItem();
+    // Merchants deal in better goods: extra rarity rolls on top of progression.
+    const item = generateItem(3);
     stock.push({ kind: 'gear', item, price: Math.max(10, Math.round(item.value * 1.4)) });
   }
   merchant = { x: mx, y: my, stock };
@@ -799,9 +800,10 @@ function itemStatLine(item) {
 
 function openShop() {
   if (!merchant) return;
-  shopCurrentTab = 'buy';
   document.getElementById('shop-overlay').classList.add('open');
-  renderShop();
+  // Always reopen on the BUY tab — shopTab() also resyncs the tab highlight so
+  // it can't get stuck showing SELL as active while displaying buy content.
+  shopTab('buy');
   log('The merchant spreads out their wares.');
 }
 
@@ -1010,6 +1012,13 @@ function spawnGroundLoot() {
 // ITEM GENERATION
 // ══════════════════════════════════════════
 
+// Bonus rarity rolls earned from progression: the deeper you delve and the
+// higher your level, the more rolls every drop gets (and keeps the best),
+// so rarer loot steadily becomes more common. Capped so it stays sane.
+function progressionRolls() {
+  return Math.min(6, Math.floor(dungeonLevel / 4) + Math.floor((player.level - 1) / 5));
+}
+
 function rollTier(rolls = 1) {
   const entries = Object.entries(TIERS);
   const total = entries.reduce((s, [,v]) => s + v.weight, 0);
@@ -1023,9 +1032,11 @@ function rollTier(rolls = 1) {
   };
   // Luckier sources roll several times and keep the rarest result, so bosses
   // (many rolls) skew much higher than elites, which skew higher than normal.
+  // Progression adds extra rolls on top, raising rarity as you advance.
   const order = Object.keys(TIERS);
+  const totalRolls = Math.max(1, rolls + progressionRolls());
   let best = rollOnce();
-  for (let i = 1; i < rolls; i++) {
+  for (let i = 1; i < totalRolls; i++) {
     const r = rollOnce();
     if (order.indexOf(r) > order.indexOf(best)) best = r;
   }
