@@ -1333,6 +1333,7 @@ let dungeonLevel = 1;
 // drops you onto when you re-enter.
 let inTown = false;
 let townNpcs = [];
+let townBuildings = []; // decorative shop buildings drawn behind the NPCs
 let dungeonReturn = 1;
 // Bumped whenever the active floor is rebuilt (descend, death-retreat, town).
 // Enemy-turn loops capture it and bail if it changes mid-turn, so a death that
@@ -2408,15 +2409,41 @@ function buildTown() {
     }
   }
 
-  // The townsfolk, each offering a service when you walk into them.
-  townNpcs = [
-    { x: 4,  y: 4,  emoji: '🧙‍♂️', name: 'Merchant',     kind: 'merchant', tag: '💰' },
-    { x: 8,  y: 4,  emoji: '⚒️',   name: 'Blacksmith',   kind: 'smith',    tag: '🔧' },
-    { x: 12, y: 4,  emoji: '⛑️',   name: 'Healer',       kind: 'healer',   tag: '❤️' },
-    { x: 15, y: 5,  emoji: '🔮',   name: 'Mystic',       kind: 'mystic',   tag: '🔮' },
-    { x: 5,  y: 9,  emoji: '🎓',   name: 'Trainer',      kind: 'trainer',  tag: '✨' },
-    { x: 14, y: 11, emoji: '🌀',   name: 'Dungeon Gate', kind: 'gate',     tag: '⬇️' },
+  // The shops, laid out as 3×2-tile buildings around the plaza. Each building's
+  // footprint is solid (so you can't walk through it) and its keeper stands at
+  // the doorway, one tile below the building. `sign` is the icon on the shingle,
+  // `roof` the shingle colour. The Dungeon Gate is a stone archway, not a shop.
+  townBuildings = [
+    { x: 2,  y: 2,  w: 3, h: 2, kind: 'merchant', roof: '#7a4a8a', sign: '💰' },
+    { x: 8,  y: 2,  w: 3, h: 2, kind: 'smith',    roof: '#9a5a2a', sign: '⚒️' },
+    { x: 14, y: 2,  w: 3, h: 2, kind: 'healer',   roof: '#b04545', sign: '⛑️' },
+    { x: 2,  y: 10, w: 3, h: 2, kind: 'mystic',   roof: '#3a5a9a', sign: '🔮' },
+    { x: 8,  y: 10, w: 3, h: 2, kind: 'trainer',  roof: '#3a7a4a', sign: '🎓' },
+    { x: 14, y: 10, w: 3, h: 2, kind: 'gate',     roof: '#5a4a7a', sign: '🌀' },
   ];
+
+  // Stamp each building footprint into the map as solid tiles.
+  townBuildings.forEach(b => {
+    for (let y = b.y; y < b.y + b.h; y++) {
+      for (let x = b.x; x < b.x + b.w; x++) mapData[y][x] = 1;
+    }
+  });
+
+  // The townsfolk, each standing at their building's door (centre, one row below).
+  const npcMeta = {
+    merchant: { emoji: '🧙‍♂️', name: 'Merchant',     tag: '💰' },
+    smith:    { emoji: '⚒️',   name: 'Blacksmith',   tag: '🔧' },
+    healer:   { emoji: '⛑️',   name: 'Healer',       tag: '❤️' },
+    mystic:   { emoji: '🔮',   name: 'Mystic',       tag: '🔮' },
+    trainer:  { emoji: '🎓',   name: 'Trainer',      tag: '✨' },
+    gate:     { emoji: '🌀',   name: 'Dungeon Gate', tag: '⬇️' },
+  };
+  townNpcs = townBuildings.map(b => ({
+    x: b.x + Math.floor(b.w / 2),
+    y: b.y + b.h,
+    kind: b.kind,
+    ...npcMeta[b.kind],
+  }));
 
   // Enter near the bottom-centre of the plaza.
   player.x = 10; player.y = MAP_H - 3;
@@ -2639,6 +2666,113 @@ function enterDungeonAt(f) {
   sfx('stairs');
   log(`🌀 You step through the gate onto dungeon floor ${f}.`, 'important');
   updateBars(); draw(); saveGame();
+}
+
+// Warm cobblestone plaza tile — clearly a town square, not a dungeon floor.
+function drawTownFloor(px, py, tw, th, x, y, seed) {
+  ctx.fillStyle = (x + y) % 2 === 0 ? '#8a7d63' : '#7e7158';
+  ctx.fillRect(px, py, tw, th);
+  // cobble seams
+  ctx.fillStyle = 'rgba(58,50,36,0.5)';
+  ctx.fillRect(px, py, tw, 1);
+  ctx.fillRect(px, py, 1, th);
+  // worn cobble highlight
+  if (seed % 7 === 0) {
+    ctx.fillStyle = 'rgba(255,240,205,0.12)';
+    ctx.fillRect(px + tw * 0.28, py + th * 0.28, tw * 0.32, th * 0.32);
+  }
+  // the odd tuft of grass between the stones
+  if (seed % 13 === 0) {
+    ctx.fillStyle = 'rgba(86,142,62,0.55)';
+    ctx.fillRect(px + tw * 0.55, py + th * 0.6, tw * 0.22, Math.max(1, th * 0.18));
+    ctx.fillRect(px + tw * 0.2, py + th * 0.68, tw * 0.14, Math.max(1, th * 0.12));
+  }
+}
+
+// Paint the town's shop buildings: a timbered plaster wall, door, lit windows,
+// a colour-coded gabled roof, and a hanging shingle. The Dungeon Gate renders as
+// a glowing stone archway instead.
+function drawTownBuildings(offX, offY, tw, th) {
+  townBuildings.forEach(b => {
+    const x0 = offX + b.x * tw, y0 = offY + b.y * th;
+    const w = b.w * tw, h = b.h * th;
+
+    if (b.kind === 'gate') {
+      // Stone archway with a swirling portal in the opening.
+      ctx.fillStyle = '#6a6275';
+      ctx.fillRect(x0, y0 + h * 0.12, w * 0.24, h * 0.88);
+      ctx.fillRect(x0 + w - w * 0.24, y0 + h * 0.12, w * 0.24, h * 0.88);
+      ctx.fillStyle = '#7c7488';
+      ctx.fillRect(x0 - tw * 0.06, y0 + h * 0.02, w + tw * 0.12, h * 0.2);
+      // block seams on the lintel
+      ctx.fillStyle = 'rgba(0,0,0,0.25)';
+      ctx.fillRect(x0 + w * 0.5 - 1, y0 + h * 0.02, 2, h * 0.2);
+      const tp = 0.5 + 0.5 * Math.sin(Date.now() / 300);
+      ctx.save();
+      ctx.shadowColor = '#bb66ff';
+      ctx.shadowBlur = 14 * (tw / TILE);
+      ctx.fillStyle = `rgba(150,90,230,${0.5 + 0.32 * tp})`;
+      ctx.beginPath();
+      ctx.ellipse(x0 + w / 2, y0 + h * 0.6, w * 0.24, h * 0.34, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = `rgba(225,195,255,${0.4 + 0.4 * tp})`;
+      ctx.beginPath();
+      ctx.ellipse(x0 + w / 2, y0 + h * 0.6, w * 0.1, h * 0.16, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      return;
+    }
+
+    const eave = y0 + h * 0.4;            // where the roof meets the wall
+    const wallH = y0 + h - eave;
+    const fr = Math.max(2, tw * 0.08);    // timber frame thickness
+
+    // plaster wall
+    ctx.fillStyle = '#cbab86';
+    ctx.fillRect(x0, eave, w, wallH);
+    // timber framing (corners + sill)
+    ctx.fillStyle = '#6b4a2c';
+    ctx.fillRect(x0, eave, fr, wallH);
+    ctx.fillRect(x0 + w - fr, eave, fr, wallH);
+    ctx.fillRect(x0, y0 + h - Math.max(2, th * 0.12), w, Math.max(2, th * 0.12));
+
+    // lit windows flanking the door
+    ctx.fillStyle = '#ffe39a';
+    const winW = tw * 0.34, winH = th * 0.3, winY = eave + th * 0.16;
+    ctx.fillRect(x0 + w * 0.16, winY, winW, winH);
+    ctx.fillRect(x0 + w - w * 0.16 - winW, winY, winW, winH);
+    ctx.fillStyle = '#6b4a2c'; // muntins
+    ctx.fillRect(x0 + w * 0.16 + winW / 2 - 1, winY, 2, winH);
+    ctx.fillRect(x0 + w - w * 0.16 - winW / 2 - 1, winY, 2, winH);
+
+    // door, centred at the bottom (where the keeper stands)
+    const dw = tw * 0.5, dh = wallH * 0.72;
+    const dx = x0 + w / 2 - dw / 2, dy = y0 + h - dh;
+    ctx.fillStyle = '#4a2f18';
+    ctx.fillRect(dx, dy, dw, dh);
+    ctx.fillStyle = '#caa15a';
+    ctx.beginPath();
+    ctx.arc(dx + dw * 0.82, dy + dh * 0.5, Math.max(1, tw * 0.04), 0, Math.PI * 2);
+    ctx.fill();
+
+    // gabled roof, overhanging the walls a touch
+    ctx.fillStyle = b.roof;
+    ctx.beginPath();
+    ctx.moveTo(x0 - tw * 0.12, eave);
+    ctx.lineTo(x0 + w / 2, y0);
+    ctx.lineTo(x0 + w + tw * 0.12, eave);
+    ctx.closePath();
+    ctx.fill();
+    // shaded eave band
+    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    ctx.fillRect(x0 - tw * 0.12, eave, w + tw * 0.24, Math.max(2, th * 0.09));
+
+    // hanging shingle with the shop's icon
+    ctx.font = `${Math.round(tw * 0.4)}px serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(b.sign, x0 + w / 2, eave + th * 0.04);
+  });
 }
 
 // Draw the friendly townsfolk on top of the plaza, with a glow + name label.
@@ -3134,6 +3268,24 @@ function draw() {
       const t = mapData[y][x];
       const seed = (x * 73856093) ^ (y * 19349663); // deterministic per-tile
 
+      // In town, every tile is either the plaza ground or a building footprint.
+      // Buildings are painted as whole structures later (drawTownBuildings), so
+      // here we just lay cobblestone everywhere and a warm stone perimeter wall.
+      if (inTown) {
+        const isBorder = (x === 0 || y === 0 || x === MAP_W - 1 || y === MAP_H - 1);
+        if (isBorder) {
+          ctx.fillStyle = '#5b5048';
+          ctx.fillRect(px, py, tw, th);
+          ctx.fillStyle = '#6b5f54';
+          ctx.fillRect(px, py, tw, Math.max(1, th * 0.5));
+          ctx.fillStyle = '#403832';
+          ctx.fillRect(px, py + th - Math.max(1, th * 0.12), tw, Math.max(1, th * 0.12));
+        } else {
+          drawTownFloor(px, py, tw, th, x, y, seed);
+        }
+        continue;
+      }
+
       if (t === 1) {
         // Wall base
         ctx.fillStyle = C.wall;
@@ -3468,8 +3620,9 @@ function draw() {
     ctx.fillText('🔮', px + tw/2, py - th*0.02);
   }
 
-  // Town NPCs (only present in the safe hub).
-  if (inTown) drawTownNpcs(offX, offY, tw, th, scale);
+  // Town buildings + NPCs (only present in the safe hub). Buildings first so the
+  // townsfolk and hero stand in front of them.
+  if (inTown) { drawTownBuildings(offX, offY, tw, th); drawTownNpcs(offX, offY, tw, th, scale); }
 
   // Enemies
   enemies.filter(e => !e.dead).forEach(e => {
