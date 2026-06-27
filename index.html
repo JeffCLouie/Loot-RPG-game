@@ -2942,9 +2942,12 @@ function renderShop() {
         isUpgrade = delta > 0;
         let deltaTag = '';
         if (equippedHere) {
+          const basePower = itemPower(equippedHere);
           const c = delta > 0 ? '#5ee08a' : (delta < 0 ? '#e0556b' : '#888');
           const arrow = delta > 0 ? '▲' : (delta < 0 ? '▼' : '=');
-          deltaTag = ` <span style="color:${c}">${arrow}${delta>0?'+':''}${delta}</span>`;
+          // Show the swing as a percentage so it matches the compare tooltip.
+          const pct = basePower > 0 ? Math.round(delta / basePower * 100) : 100;
+          deltaTag = ` <span style="color:${c}">${arrow}${delta>0?'+':''}${pct}%</span>`;
         }
         sub += ` <span class="item-power">⚡${ip}${deltaTag}</span>`;
         if (isUpgrade) name = '<span class="up-arrow">▲</span> ' + name;
@@ -6635,9 +6638,12 @@ function renderPanel() {
       const isUpgrade = equipable && delta > 0;
       let deltaTag = '';
       if (equippedHere) {
+        const basePower = itemPower(equippedHere);
         const c = delta > 0 ? '#5ee08a' : (delta < 0 ? '#e0556b' : '#888');
         const arrow = delta > 0 ? '▲' : (delta < 0 ? '▼' : '=');
-        deltaTag = ` <span style="color:${c}">${arrow}${delta>0?'+':''}${delta}</span>`;
+        // Show the swing as a percentage so it matches the compare tooltip.
+        const pct = basePower > 0 ? Math.round(delta / basePower * 100) : 100;
+        deltaTag = ` <span style="color:${c}">${arrow}${delta>0?'+':''}${pct}%</span>`;
       }
       const pwr = equipable ? `<span class="item-power">⚡${ip}${deltaTag}</span>` : '';
       return `
