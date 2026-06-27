@@ -601,6 +601,19 @@
   .shop-buy-btn:active { background: #44bb44; }
   .shop-buy-btn:disabled { background: #333; color: #666; cursor: not-allowed; }
   .shop-sell-btn { background: #8a6a1a; }
+  /* Enchanter: two compact reroll buttons per property (value vs modifier). */
+  .ench-btn { padding: 7px 8px; font-size: 10px; background: #355a8a; }
+  .ench-btn:active { background: #4a78b3; }
+  .ench-legend { font-size: 9px; color: #7a8499; margin: 2px 0 6px; line-height: 1.4; }
+  /* Reference panel listing every modifier this slot can roll, with value bands. */
+  .ench-pool { margin-top: 10px; padding: 8px 10px; border: 1px solid var(--border);
+    border-radius: 5px; background: rgba(255,255,255,0.02); }
+  .ench-pool-head { font-size: 10px; color: #b9a98a; margin-bottom: 5px; }
+  .ench-pool-grp { font-size: 9px; letter-spacing: 1px; text-transform: uppercase;
+    color: #6a7180; margin: 5px 0 2px; }
+  .ench-pool-line { font-size: 11px; color: #6a7180; line-height: 1.5; }
+  .ench-pool-line.on { color: #cdd3df; }
+  .ench-pool-range { float: right; color: #7fb0ff; font-size: 10px; }
   .shop-sell-btn:active { background: var(--gold); }
   .shop-empty { color: #555; text-align: center; padding: 24px 0; font-size: 12px; }
   .shop-sell-all-bar { display: flex; justify-content: flex-end; margin-bottom: 8px; }
@@ -3382,7 +3395,30 @@ function findGear(id) { return allGear().find(g => g.item.id == id) || null; }
 function enchTierFactor(item) { return 1 + Object.keys(TIERS).indexOf(item.tier) * 0.3; }
 function augmentCost(item)   { return Math.round((60 + (item.ilvl||1) * 9) * enchTierFactor(item)); }
 function rerollAllCost(item) { return Math.round((90 + (item.ilvl||1) * 13) * enchTierFactor(item)); }
-function rerollOneCost(item) { return Math.round((35 + (item.ilvl||1) * 6) * enchTierFactor(item)); }
+// Rerolling a single property comes in two flavours: changing the property TYPE
+// (Might → Agility) is the bigger gamble, while rerolling just its VALUE
+// (+13 Might → +18 Might) is cheaper because it can only land within the band.
+function rerollTypeCost(item)  { return Math.round((35 + (item.ilvl||1) * 6) * enchTierFactor(item)); }
+function rerollValueCost(item) { return Math.round(rerollTypeCost(item) * 0.6); }
+
+// Pretty "min–max" (or single number) for a stat/attr affix at this item's
+// level & rarity, so the UI can show the value band a reroll would land in.
+function statRangeLabel(item, stat) {
+  const r = affixStatRange(stat, item.ilvl, tierMult(item.tier));
+  return r.min === r.max ? `${r.min}` : `${r.min}–${r.max}`;
+}
+function attrRangeLabel(item) {
+  const r = affixAttrRange(item.ilvl, tierMult(item.tier));
+  return r.min === r.max ? `${r.min}` : `${r.min}–${r.max}`;
+}
+// Other property TYPES this slot could roll into (the pool minus what's present,
+// minus the property itself) — what a TYPE reroll might swap a property for.
+function otherStatTypes(item, key) {
+  return (SLOT_AFFIX_POOLS[item.slot]?.stats || []).filter(s => s !== key && !(s in item.stats));
+}
+function otherAttrTypes(item, key) {
+  return (SLOT_AFFIX_POOLS[item.slot]?.attrs || []).filter(a => a !== key && !(a in (item.attrs || {})));
+}
 
 // Affixes currently available to ADD (slot pool minus what's already present).
 function availStatAffixes(item) {
@@ -3450,25 +3486,64 @@ function enchantRerollAll(id) {
   afterEnchant(item);
 }
 
-// Reroll one affix into a fresh random one of the same kind (stat or attribute).
-function enchantRerollOne(id, kind, key) {
+// Reroll just a property's VALUE, keeping the same modifier (e.g. +13 Might →
+// +18 Might). Reassigns the existing key in place so the property list never
+// reshuffles. No-op for fixed-value stats (crit chance / crit damage), whose
+// button is disabled in the UI.
+function enchantRerollValue(id, kind, key) {
   const g = findGear(id); if (!g) return;
   const item = g.item;
-  const cost = rerollOneCost(item);
+  const cost = rerollValueCost(item);
   if (player.gold < cost) return;
   const mult = tierMult(item.tier);
   if (kind === 'stat') {
     if (headlineStats(item).includes(key) || !(key in item.stats)) return;
-    delete item.stats[key];
-    addStatAffixes(item, item.ilvl, mult, 1);
+    item.stats[key] = affixStatValue(key, item.ilvl, mult);
   } else {
     if (!item.attrs || !(key in item.attrs)) return;
-    delete item.attrs[key];
-    addAttrAffixes(item, item.ilvl, mult, 1);
+    item.attrs[key] = affixAttrValue(item.ilvl, mult);
   }
   player.gold -= cost;
-  log(`🪄 The enchanter rerolls a property on your ${item.name}.`, 'loot');
+  log(`🪄 The enchanter reforges the strength of a property on your ${item.name}.`, 'loot');
   afterEnchant(item);
+}
+
+// Reroll a property's TYPE into a *different* modifier from the slot's pool
+// (e.g. Might → Agility), rolling a fresh value for it too. The new property is
+// written into the same key slot's position via rebuild so the list stays put.
+function enchantRerollType(id, kind, key) {
+  const g = findGear(id); if (!g) return;
+  const item = g.item;
+  const cost = rerollTypeCost(item);
+  if (player.gold < cost) return;
+  const mult = tierMult(item.tier);
+  if (kind === 'stat') {
+    if (headlineStats(item).includes(key) || !(key in item.stats)) return;
+    const pool = otherStatTypes(item, key);
+    if (!pool.length) return; // no other stat this slot can hold
+    const ns = pick(pool);
+    item.stats = replaceObjKey(item.stats, key, ns, affixStatValue(ns, item.ilvl, mult));
+  } else {
+    if (!item.attrs || !(key in item.attrs)) return;
+    const pool = otherAttrTypes(item, key);
+    if (!pool.length) return;
+    const na = pick(pool);
+    item.attrs = replaceObjKey(item.attrs, key, na, affixAttrValue(item.ilvl, mult));
+  }
+  player.gold -= cost;
+  log(`🪄 The enchanter transmutes a property on your ${item.name} into something new.`, 'loot');
+  afterEnchant(item);
+}
+
+// Rebuild an object replacing oldKey with newKey:newVal in the SAME position,
+// so property order is preserved when a type reroll swaps one modifier out.
+function replaceObjKey(obj, oldKey, newKey, newVal) {
+  const out = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (k === oldKey) out[newKey] = newVal;
+    else out[k] = v;
+  }
+  return out;
 }
 
 function renderEnchanter() {
@@ -3491,7 +3566,7 @@ function renderEnchanter() {
       <button class="shop-buy-btn" onclick="enchantPick(${g.item.id})">WORK</button>
     </div>`;
   }).join('');
-  setTownContent(`<div class="town-blurb">The enchanter tinkers with your gear: <b>Augment</b> adds a missing property, <b>Reroll</b> gambles all bonus properties at once, and you can reroll a single property too. Rarity sets how many properties a piece can hold.</div>${rows}`);
+  setTownContent(`<div class="town-blurb">The enchanter tinkers with your gear: <b>Augment</b> adds a missing property, <b>Reroll all</b> gambles every bonus property at once, and each property can be rerolled on its own — its <b>value</b> (🎲, same modifier, new number) or its <b>modifier</b> (🔄, swapped for another). Rarity sets how many properties a piece can hold.</div>${rows}`);
 }
 
 function enchantPick(id) { enchantSel = id; renderEnchanter(); }
@@ -3501,37 +3576,88 @@ function renderEnchantItem(item) {
   const caps = TIER_AFFIX_CAPS[item.tier] || { stat:0, attr:0 };
   const { statN, attrN } = itemAffixCounts(item);
   const head = headlineStats(item);
+  const poolStats = SLOT_AFFIX_POOLS[item.slot]?.stats || [];
+  const poolAttrs = SLOT_AFFIX_POOLS[item.slot]?.attrs || [];
+  // Stable display order: follow the slot's pool order, with any legacy
+  // off-pool properties trailing. This keeps the list from reshuffling when a
+  // property is rerolled.
+  const orderBy = pool => (a, b) => {
+    const ia = pool.indexOf(a), ib = pool.indexOf(b);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  };
   // Headline (locked) lines.
   const headRows = head.filter(k => k in item.stats).map(k =>
     `<div class="hc-line" style="opacity:0.6">🔒 ${(typeof item.stats[k]==='string')?item.stats[k]:'+'+item.stats[k]} ${STAT_LABELS[k]||k} <span style="font-size:9px">(headline)</span></div>`
   ).join('');
-  const oneCost = rerollOneCost(item);
-  const canOne = player.gold >= oneCost;
-  // Rerollable stat affixes.
-  const statRows = Object.keys(item.stats).filter(k => !head.includes(k)).map(k =>
-    `<div class="shop-row"><div class="shop-row-info"><div class="shop-row-name">${item.stats[k] < 0 ? '' : '+'}${item.stats[k]} ${STAT_LABELS[k]||k}</div></div>
-      <button class="shop-buy-btn" ${canOne?'':'disabled'} onclick="enchantRerollOne(${item.id},'stat','${k}')">🔄 ${oneCost}g</button></div>`
+  const valCost = rerollValueCost(item), typeCost = rerollTypeCost(item);
+
+  // One property row: a Value reroll (same modifier, new number) and a Type
+  // reroll (swap to a different modifier). Each button shows what it would do.
+  const propRow = (kind, key, label, color, curVal, rangeStr, swaps) => {
+    const fixed = rangeStr.indexOf('–') < 0;             // single fixed value → value reroll is a no-op
+    const canVal  = player.gold >= valCost && !fixed;
+    const canType = player.gold >= typeCost && swaps.length > 0;
+    const valTitle  = fixed
+      ? `${label} has a fixed value (${rangeStr}) at this item level — nothing to reroll.`
+      : `Reroll the value only, keeping ${label}. Lands ${rangeStr} at this item level (now +${curVal}).`;
+    const typeTitle = swaps.length
+      ? `Swap ${label} for a random other modifier this slot can hold: ${swaps.join(', ')}.`
+      : `No other modifier is available for this slot — every type it can roll is already present.`;
+    return `<div class="shop-row"><div class="shop-row-info">
+        <div class="shop-row-name" style="${color}">${curVal < 0 ? '' : '+'}${curVal} ${label}</div>
+        <div class="shop-row-sub">rolls ${rangeStr} at ilvl ${item.ilvl}</div></div>
+      <button class="shop-buy-btn ench-btn" ${canVal?'':'disabled'} title="${valTitle}" onclick="enchantRerollValue(${item.id},'${kind}','${key}')">🎲 ${valCost}g</button>
+      <button class="shop-buy-btn ench-btn" ${canType?'':'disabled'} title="${typeTitle}" onclick="enchantRerollType(${item.id},'${kind}','${key}')">🔄 ${typeCost}g</button></div>`;
+  };
+
+  const statRows = Object.keys(item.stats).filter(k => !head.includes(k)).sort(orderBy(poolStats)).map(k =>
+    propRow('stat', k, STAT_LABELS[k]||k, '', item.stats[k], statRangeLabel(item, k), otherStatTypes(item, k).map(s => STAT_LABELS[s]||s))
   ).join('');
-  // Rerollable attribute affixes.
-  const attrRows = Object.keys(item.attrs || {}).map(k =>
-    `<div class="shop-row"><div class="shop-row-info"><div class="shop-row-name" style="color:#e6c34a">+${item.attrs[k]} ${ATTRIBUTES[k].label}</div></div>
-      <button class="shop-buy-btn" ${canOne?'':'disabled'} onclick="enchantRerollOne(${item.id},'attr','${k}')">🔄 ${oneCost}g</button></div>`
+  const attrRows = Object.keys(item.attrs || {}).sort(orderBy(poolAttrs)).map(k =>
+    propRow('attr', k, ATTRIBUTES[k].label, 'color:#e6c34a', item.attrs[k], attrRangeLabel(item), otherAttrTypes(item, k).map(a => ATTRIBUTES[a].label))
   ).join('');
   const empty = (!statRows && !attrRows) ? `<div class="hc-line" style="opacity:0.6">No bonus properties yet.</div>` : '';
+
   // Action buttons.
   const augCost = augmentCost(item);
   const canAug = canAddStat(item) || canAddAttr(item);
   const allCost = rerollAllCost(item);
   const augBtn = `<button class="shop-buy-btn" ${(canAug && player.gold>=augCost)?'':'disabled'} onclick="enchantAugment(${item.id})">✨ Augment ${augCost}g</button>`;
   const allBtn = `<button class="shop-buy-btn" ${(player.gold>=allCost && (caps.stat+caps.attr)>0)?'':'disabled'} onclick="enchantRerollAll(${item.id})">🔄 Reroll all ${allCost}g</button>`;
+
+  // Why is Augment unavailable? Distinguish "rarity slots full" from "this slot
+  // has no more modifier types to add" (the common, confusing case — e.g. a
+  // weapon shows 3/4 stats but weapons only have 3 stat types to begin with).
+  let blockMsg = '';
+  if (!canAug) {
+    const capFull = statN >= caps.stat && attrN >= caps.attr;
+    blockMsg = capFull
+      ? 'All property slots for this rarity are full.'
+      : 'No more modifier types are available for this slot — every property it can roll is already present, so there is nothing new to add.';
+  }
+
+  // Reference panel: every modifier this slot can roll, with its value band, so
+  // you can judge a reroll before spending. Present modifiers are marked.
+  const poolLine = (key, label, rangeStr, present) =>
+    `<div class="ench-pool-line${present?' on':''}">${present?'◆':'◇'} ${label} <span class="ench-pool-range">${rangeStr}</span></div>`;
+  const statPool = poolStats.map(s => poolLine(s, STAT_LABELS[s]||s, statRangeLabel(item, s), s in item.stats)).join('');
+  const attrPool = poolAttrs.map(a => poolLine(a, ATTRIBUTES[a].label, attrRangeLabel(item), item.attrs && a in item.attrs)).join('');
+  const poolPanel = `<div class="ench-pool">
+      <div class="ench-pool-head">Modifiers this slot can roll <span style="opacity:0.6">(◆ = on item)</span></div>
+      ${statPool ? `<div class="ench-pool-grp">Stats</div>${statPool}` : ''}
+      ${attrPool ? `<div class="ench-pool-grp">Attributes</div>${attrPool}` : ''}
+    </div>`;
+
   setTownContent(`
     <div class="shop-row"><button class="shop-buy-btn" onclick="enchantBack()">← Back</button>
       <div class="shop-row-info item-${item.tier}" style="margin-left:8px"><div class="shop-row-name">${item.name}</div>
       <div class="shop-row-sub">${SLOTS[item.slot].label.replace(/^\S+\s/,'')} · ilvl ${item.ilvl} · ${statN}/${caps.stat} stats · ${attrN}/${caps.attr} attrs</div></div></div>
+    <div class="ench-legend">🎲 reroll value · 🔄 reroll modifier · hover a button for details</div>
     ${headRows}
     ${empty}${statRows}${attrRows}
     <div class="shop-row" style="margin-top:6px;gap:6px">${augBtn}${allBtn}</div>
-    ${canAug ? '' : '<div class="hc-line" style="opacity:0.6;margin-top:4px">All property slots for this rarity are full.</div>'}`);
+    ${blockMsg ? `<div class="hc-line" style="opacity:0.6;margin-top:4px">${blockMsg}</div>` : ''}
+    ${poolPanel}`);
 }
 
 // ── DUNGEON GATE — choose any reached floor to re-enter ──
@@ -4011,20 +4137,42 @@ function tierMult(tier) { return TIER_MULT[tier] || 1; }
 // to stay relevant next to the HP/MP that Vitality/Spirit grant; CRITDMG is a
 // straight crit-damage % bonus on its own curve.
 function affixStatValue(stat, lvl, mult) {
-  let v = (1 + lvl * 0.6 + rnd(0,2)) * mult;
-  if (stat === 'REGEN')        v *= 0.4;
-  // Crit chance is a 0–100% stat, so its rolls stay small and incremental and are
-  // capped low — a single affix can't dump a huge chunk of crit chance on you.
-  else if (stat === 'CRIT')    v = Math.min(6, (1 + lvl * 0.12) * mult);
-  else if (stat === 'LCK')     v = Math.min(6, (1 + lvl * 0.12) * mult);
-  else if (stat === 'HP')      v *= 6;
-  else if (stat === 'MP')      v *= 4;
-  else if (stat === 'CRITDMG') v = (5 + lvl * 0.8) * mult; // % crit damage
-  return Math.max(1, Math.round(v));
+  const r = affixStatRange(stat, lvl, mult);
+  return rnd(r.min, r.max);
 }
-// Value of one rolled attribute affix (+Might, +Luck, …).
+// The min/max a stat affix can roll at this item level & rarity. Mirrors the
+// scaling in affixStatValue exactly — the only randomness in the general curve
+// is the `rnd(0,2)` term, so min uses 0 and max uses 2. Crit chance, crit damage
+// and luck are deterministic (fixed at this ilvl), so their min === max. The
+// enchanter UI uses this to show players the value band before they reroll.
+function affixStatRange(stat, lvl, mult) {
+  // Deterministic curves: a single fixed outcome at this item level.
+  if (stat === 'CRIT' || stat === 'LCK') {
+    const v = Math.max(1, Math.round(Math.min(6, (1 + lvl * 0.12) * mult)));
+    return { min: v, max: v };
+  }
+  if (stat === 'CRITDMG') {
+    const v = Math.max(1, Math.round((5 + lvl * 0.8) * mult));
+    return { min: v, max: v };
+  }
+  // General curve: lo = rnd term 0, hi = rnd term 2, with per-stat scaling.
+  let lo = (1 + lvl * 0.6 + 0) * mult;
+  let hi = (1 + lvl * 0.6 + 2) * mult;
+  if      (stat === 'REGEN') { lo *= 0.4; hi *= 0.4; }
+  else if (stat === 'HP')    { lo *= 6;   hi *= 6;   }
+  else if (stat === 'MP')    { lo *= 4;   hi *= 4;   }
+  return { min: Math.max(1, Math.round(lo)), max: Math.max(1, Math.round(hi)) };
+}
+// Value of one rolled attribute affix (+Might, +Luck, …), now rolled within a
+// modest band around its base so that rerolling an attribute's *value* actually
+// does something (a fixed value would make value-rerolls pointless).
 function affixAttrValue(lvl, mult) {
-  return Math.max(1, Math.round((2 + lvl * 0.5) * mult * 0.5));
+  const r = affixAttrRange(lvl, mult);
+  return rnd(r.min, r.max);
+}
+function affixAttrRange(lvl, mult) {
+  const base = (2 + lvl * 0.5) * mult * 0.5;
+  return { min: Math.max(1, Math.round(base * 0.7)), max: Math.max(1, Math.round(base * 1.3)) };
 }
 // Size of a cursed item's boost (or penalty) for one stat. Crit chance (CRIT/LCK)
 // only ranges 0–100% in play, so its swings stay tiny and capped — a single item
