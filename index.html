@@ -1503,17 +1503,25 @@ function wallSpriteName(x, y) {
     : (mapData[yy][xx] === 1 || mapData[yy][xx] === 10);
   const oN = !isWall(x, y - 1), oE = !isWall(x + 1, y), oS = !isWall(x, y + 1), oW = !isWall(x - 1, y);
   const open = oN + oE + oS + oW;
-  // Canonical DawnLike wall autotile (the official Dungeon.tmx layout): four
-  // corners, one shared horizontal edge, one shared vertical edge, and a solid
-  // interior block for buried walls and pillars. This honours how the tiles are
-  // designed to connect instead of treating them as interchangeable.
-  if (open === 0 || open >= 3) return 'wall_iso';
-  if (oS && oE) return 'wall_TL';
+  // DawnLike directional walls for a carved (thick-rock) dungeon. The brick of a
+  // corner piece always sits on its two solid sides, so the same tile serves both
+  // inner corners (floor on two adjacent ORTHOGONAL sides) and outer corners
+  // (floor only on the DIAGONAL). Straight runs use H/V. Rock with no floor
+  // anywhere around it is buried and returns null → drawn as the dark background.
+  if (open >= 3) return 'wall_iso';            // thin nub / pillar
+  if (oS && oE) return 'wall_TL';              // brick wraps top-left
   if (oS && oW) return 'wall_TR';
   if (oN && oE) return 'wall_BL';
   if (oN && oW) return 'wall_BR';
-  if (oN || oS) return 'wall_H';
-  return 'wall_V';
+  if (oN || oS) return 'wall_H';               // floor above/below → horizontal edge
+  if (oE || oW) return 'wall_V';               // floor left/right → vertical edge
+  // No orthogonal floor: an outer corner of the rock wrapping a room — use the
+  // diagonal to choose which corner brick to show.
+  if (!isWall(x + 1, y + 1)) return 'wall_TL';
+  if (!isWall(x - 1, y + 1)) return 'wall_TR';
+  if (!isWall(x + 1, y - 1)) return 'wall_BL';
+  if (!isWall(x - 1, y - 1)) return 'wall_BR';
+  return null;                                 // fully buried rock → background
 }
 
 // Slots that actually change how the hero sprite looks.
@@ -5027,13 +5035,18 @@ function isWallTile(x, y) {
 function drawWall(px, py, tw, th, x, y, seed, C, cracked) {
   if (C.wallStyle === 'forest') { drawForestWall(px, py, tw, th, x, y, seed, C, cracked); return; }
   if (C.wallStyle === 'pine') { drawPineWall(px, py, tw, th, x, y, seed, C, cracked); return; }
-  // Pixel-art wall: autotile the right corner/edge/face from neighbours, tinted
-  // to the active biome. Falls back to the procedural wall below if the atlas
-  // hasn't loaded yet.
-  if (spriteReady && drawSprite(wallSpriteName(x, y), px, py, tw)) {
-    if (C.spriteTint) { ctx.save(); ctx.globalCompositeOperation = 'overlay'; ctx.globalAlpha = C.spriteTintA || 0.35; ctx.fillStyle = C.spriteTint; ctx.fillRect(px, py, tw, th); ctx.restore(); }
-    if (cracked) { ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(px + tw*0.42, py + th*0.2, Math.max(1, tw*0.06), th*0.6); ctx.fillRect(px + tw*0.3, py + th*0.5, tw*0.3, Math.max(1, th*0.06)); }
-    return;
+  // Pixel-art wall: only walls that touch open floor get a tile, using DawnLike's
+  // directional pieces (H/V edges + the four corners). Rock buried inside the
+  // mass (no floor neighbour) is left as the dark background — like the official
+  // DawnLike maps — so we don't tile a solid square of bricks.
+  if (spriteReady) {
+    const wn = wallSpriteName(x, y);
+    if (wn === null) return;            // buried rock — leave background void
+    if (drawSprite(wn, px, py, tw)) {
+      if (C.spriteTint) { ctx.save(); ctx.globalCompositeOperation = 'overlay'; ctx.globalAlpha = C.spriteTintA || 0.35; ctx.fillStyle = C.spriteTint; ctx.fillRect(px, py, tw, th); ctx.restore(); }
+      if (cracked) { ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(px + tw*0.42, py + th*0.2, Math.max(1, tw*0.06), th*0.6); ctx.fillRect(px + tw*0.3, py + th*0.5, tw*0.3, Math.max(1, th*0.06)); }
+      return;
+    }
   }
   const h = Math.abs(seed);
   const W = Math.max(1, Math.floor(tw)), H = Math.max(1, Math.floor(th));
@@ -7827,6 +7840,7 @@ log('🗡️ Every weapon fights differently — axes cleave, daggers flurry, bo
 log('🏰 Tap TOWN (or press T) to warp to the safe hub: craftsman, healer, trainer, enchanter, and a gate to re-enter any floor you\'ve reached.');
 log('🧰 Foes drop crafting materials — 🔩 Scrap, 🔆 Core, ✨ Glimmer, 🌀 Chaos Orb. The 🔨 Craftsman forges blank gear; the 🪄 Enchanter fills in its modifiers.');
 log('⚔️ Each move OR attack passes a turn — get surrounded and every foe piles on, so don\'t let them encircle you.');
+log('🎨 Pixel art from the DawnLike tileset by DragonDePlatino & DawnBringer (CC-BY 4.0).');
 
 // Reflect any saved mute preference on the SOUND button, then arm the audio:
 // browsers won't let sound start until the player interacts, so the first
