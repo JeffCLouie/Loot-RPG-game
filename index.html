@@ -4038,14 +4038,28 @@ function enterDungeonAt(f) {
 // humble — yet every tier, up to a leveled-up legendary or unique, is on the
 // table, so a lucky wager can hand you something far beyond your reach.
 let gambleLast = null;
+// Which equipment slot the next wager is targeted at. null = "any" (the classic
+// blind pull); a slot key (e.g. 'weapon') narrows the pull to that item type for
+// a surcharge — you trade a heavier price for a guaranteed category.
+let gambleSlot = null;
 
 function gambleDeepest() { return Math.max(1, dungeonReturn || 1, player.maxFloor || 1); }
 
-function gambleCost() {
+// Targeting a specific item type costs a premium over a blind pull — you're
+// paying the gambler to narrow the odds in your favour.
+const GAMBLE_TARGET_SURCHARGE = 1.6;
+
+function gambleCost(slot = gambleSlot) {
   const d = gambleDeepest();
   // Linear base plus a gentle quadratic so deep wagers cost meaningfully more,
   // mirroring how much more valuable deep gear is.
-  return Math.round(50 + d * 12 + d * d * 0.4);
+  const base = 50 + d * 12 + d * d * 0.4;
+  return Math.round(base * (slot ? GAMBLE_TARGET_SURCHARGE : 1));
+}
+
+function setGambleSlot(slot) {
+  gambleSlot = (slot === gambleSlot || slot === '') ? null : slot;
+  renderGambler();
 }
 
 // Item-level offset distribution, relative to your deepest floor. Peaks at -1/0
@@ -4067,12 +4081,24 @@ function gambleRollIlvl() {
   return Math.max(1, gambleDeepest() + off);
 }
 
-function openGambler() { gambleLast = null; openTownModal('🎲 Gambler'); renderGambler(); }
+function openGambler() { gambleLast = null; gambleSlot = null; openTownModal('🎲 Gambler'); renderGambler(); }
 
 function renderGambler() {
   const d = gambleDeepest();
   const cost = gambleCost();
   const afford = player.gold >= cost;
+  // Type-selector chips: "Any" (blind pull) plus one per equipment slot. The
+  // selected chip drives both the price (targeting carries a surcharge) and the
+  // slot the roll is locked to.
+  const chip = (slot, label) =>
+    `<button class="cos-chip ${gambleSlot === slot ? 'sel' : ''}" onclick="setGambleSlot('${slot}')">${label}</button>`;
+  const chips = chip('', '🎲 Any') +
+    SLOT_KEYS.map(s => chip(s, SLOTS[s].label)).join('');
+  const targetName = gambleSlot ? SLOTS[gambleSlot].label.replace(/^\S+\s/, '') : 'any type';
+  const rollLabel = gambleSlot ? `Wager for a ${targetName}` : 'Wager for Loot';
+  const rollSub = gambleSlot
+    ? `Item level ${Math.max(1, d - 10)}–${d + 3} · guaranteed ${targetName.toLowerCase()} · targeting surcharge`
+    : `Item level ${Math.max(1, d - 10)}–${d + 3} · any rarity · the deeper you've delved, the higher the stakes`;
   let resultRow = '';
   if (gambleLast) {
     const it = gambleLast.item;
@@ -4087,11 +4113,13 @@ function renderGambler() {
       </div>`;
   }
   setTownContent(`
-    <div class="town-blurb">The gambler shoves a heap of mystery loot across the table. Throw down your gold and she'll pull a random piece of gear geared near your deepest floor (${d}). Most pulls land at — or a little below — your depth at a humble rarity, but fortune is fickle: a single wager can turn up something legendary from far beyond your reach.</div>
+    <div class="town-blurb">The gambler shoves a heap of mystery loot across the table. Throw down your gold and she'll pull a random piece of gear geared near your deepest floor (${d}). Most pulls land at — or a little below — your depth at a humble rarity, but fortune is fickle: a single wager can turn up something legendary from far beyond your reach. Pick a slot to fish for a specific item type — for a steeper price.</div>
+    <div class="town-blurb" style="margin-bottom:4px">Gamble for:</div>
+    <div class="cos-chips" style="margin-bottom:10px">${chips}</div>
     <div class="shop-row">
       <span class="loot-icon">🎲</span>
-      <div class="shop-row-info"><div class="shop-row-name">Wager for Loot</div>
-        <div class="shop-row-sub">Item level ${Math.max(1, d - 10)}–${d + 3} · any rarity · the deeper you've delved, the higher the stakes</div></div>
+      <div class="shop-row-info"><div class="shop-row-name">${rollLabel}</div>
+        <div class="shop-row-sub">${rollSub}</div></div>
       <span class="shop-price">${cost}g</span>
       <button class="shop-buy-btn" ${afford ? '' : 'disabled'} onclick="gambleRoll()">ROLL</button>
     </div>
@@ -4104,7 +4132,7 @@ function gambleRoll() {
   player.gold -= cost;
   const ilvl = gambleRollIlvl();
   const tier = weighted(GAMBLE_TIER_WEIGHTS);
-  const item = generateItem(1, ilvl, tier);
+  const item = generateItem(1, ilvl, tier, gambleSlot);
   inventory.push(item);
   recordWardrobe(item);
   gambleLast = { item, cost };
@@ -4564,11 +4592,13 @@ function headlineStats(item) {
   return []; // ring / amulet are pure-affix
 }
 
-function generateItem(rolls = 1, ilvl = null, forceTier = null) {
+function generateItem(rolls = 1, ilvl = null, forceTier = null, forceSlot = null) {
   // forceTier pins the rarity (used by the town gambler, which rolls its own
   // rarity distribution); otherwise rarity comes from the usual luck rolls.
+  // forceSlot pins the equipment slot (also used by the gambler, when the player
+  // pays to target a specific item type); otherwise the slot is rolled.
   const tier = forceTier || rollTier(rolls);
-  const slot = weighted(SLOT_WEIGHTS);
+  const slot = (forceSlot && SLOTS[forceSlot]) ? forceSlot : weighted(SLOT_WEIGHTS);
   const baseName = pick(SLOTS[slot].names);
   // Item level: how deep this drop is geared for. Higher item level means
   // bigger raw stats regardless of rarity, so loot from deeper floors steadily
