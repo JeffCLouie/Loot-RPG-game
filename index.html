@@ -1085,14 +1085,17 @@ const TIER_AFFIX_CAPS = {
 // Which stats / attributes each slot is allowed to roll. A slot can never roll
 // anything outside its pool (no Attack on boots, no Defense on a ring), which is
 // what gives each piece a recognisable identity.
+// Note: Luck is now an *attribute*, not a gear stat — the old LCK stat is kept
+// only so legacy items keep working, and never appears in these pools, so "Luck"
+// in the UI always refers to the attribute.
 const SLOT_AFFIX_POOLS = {
   head:   { stats: ['DEF','HP','MP','REGEN','CRIT'],      attrs: ['vitality','spirit','luck'] },
   chest:  { stats: ['DEF','HP','REGEN','MP'],             attrs: ['vitality','spirit'] },
   hands:  { stats: ['ATK','CRIT','CRITDMG','SPD'],        attrs: ['might','agility'] },
   legs:   { stats: ['DEF','SPD','HP','REGEN'],            attrs: ['agility','vitality'] },
-  weapon: { stats: ['ATK','CRIT','CRITDMG','LCK'],        attrs: ['might','agility','spirit'] },
-  ring:   { stats: ['CRIT','CRITDMG','LCK','ATK','MP'],   attrs: ['might','agility','luck','spirit','vitality'] },
-  amulet: { stats: ['MP','HP','LCK','REGEN','CRIT'],      attrs: ['spirit','luck','vitality','might'] },
+  weapon: { stats: ['ATK','CRIT','CRITDMG'],             attrs: ['might','agility','spirit'] },
+  ring:   { stats: ['CRIT','CRITDMG','ATK','MP'],         attrs: ['might','agility','luck','spirit','vitality'] },
+  amulet: { stats: ['MP','HP','REGEN','CRIT'],            attrs: ['spirit','luck','vitality','might'] },
 };
 
 // ── ITEM ICONS ──
@@ -1301,7 +1304,10 @@ const FLAVOR = {
 // stat: nothing but gear raises it, so loot drives the crit-damage side of a build.
 const STAT_NAMES = ['ATK','DEF','SPD','LCK','HP','MP','CRIT','CRITDMG','REGEN'];
 // Friendly labels for stats in tooltips/the hero sheet (CRIT/CRITDMG read as %).
-const STAT_LABELS = { ATK:'Attack', DEF:'Defense', SPD:'Speed', LCK:'Luck', HP:'Max HP',
+// LCK is a legacy gear stat (functions as bonus crit chance). It's labelled
+// "Fortune" so it never reads as the new Luck *attribute*; it no longer rolls on
+// new gear and survives only on older items.
+const STAT_LABELS = { ATK:'Attack', DEF:'Defense', SPD:'Speed', LCK:'Fortune', HP:'Max HP',
   MP:'Max MP', CRIT:'Crit %', CRITDMG:'Crit Dmg %', REGEN:'Regen', DMG:'Damage' };
 const HERO = '🧙';
 
@@ -1330,7 +1336,7 @@ const ATTRIBUTES = {
   vitality: { label: '❤️ Vitality', short: 'VIT', desc: 'raises max HP, Defense & HP regen' },
   agility:  { label: '🎯 Agility',  short: 'AGI', desc: 'raises Speed (dodge)' },
   spirit:   { label: '✨ Spirit',   short: 'SPR', desc: 'raises max MP, MP regen & spell power' },
-  luck:     { label: '🍀 Luck',     short: 'LCK', desc: 'raises Crit chance & loot quality' },
+  luck:     { label: '🍀 Luck',     short: 'LUK', desc: 'raises Crit chance & loot quality' },
 };
 const ATTR_KEYS = Object.keys(ATTRIBUTES);
 // Every hero starts with this many points already in each attribute, so a fresh
@@ -3412,12 +3418,12 @@ function renderEnchanter() {
   const rows = gear.map(g => {
     const it = g.item;
     return `<div class="shop-row">
-      <span class="loot-icon">${itemIcon(it)}</span>
+      <span class="loot-icon">${iconMarkup(itemIcon(it), tierColor(it))}</span>
       <div class="shop-row-info item-${it.tier}">
         <div class="shop-row-name">${it.name}${g.where === 'equipped' ? ' <span style="color:#7fb0ff;font-size:9px">[worn]</span>' : ''}</div>
         <div class="shop-row-stats">${itemStatLine(it)}</div>
       </div>
-      <button class="shop-buy-btn" onclick="enchantPick(${it.id})">WORK</button>
+      <button class="shop-buy-btn" onclick="enchantPick(${g.item.id})">WORK</button>
     </div>`;
   }).join('');
   setTownContent(`<div class="town-blurb">The enchanter tinkers with your gear: <b>Augment</b> adds a missing property, <b>Reroll</b> gambles all bonus properties at once, and you can reroll a single property too. Rarity sets how many properties a piece can hold.</div>${rows}`);
