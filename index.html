@@ -983,23 +983,24 @@ function spawnEnemies() {
 
 function spawnGroundLoot() {
   groundItems = [];
-  // Ground loot is now a rare lucky find — most floors have none.
-  // ~40% chance of a single item, with a small chance of a second on deeper floors.
+  // Ground loot is a rare lucky find — most floors have none.
   let count = 0;
-  if (Math.random() < 0.4) count = 1;
-  if (count === 1 && dungeonLevel >= 4 && Math.random() < 0.25) count = 2;
+  if (Math.random() < 0.22) count = 1;
+  if (count === 1 && dungeonLevel >= 6 && Math.random() < 0.15) count = 2;
+  // Deeper chests roll richer loot on top of the usual progression bonus.
+  const chestLuck = 1 + Math.floor(dungeonLevel / 4);
   for (let i = 0; i < count; i++) {
     let gx, gy;
     let tries = 0;
     do {
       gx = rnd(1, MAP_W-1); gy = rnd(1, MAP_H-1); tries++;
     } while (mapData[gy][gx] !== 0 && tries < 100);
-    if (tries < 100) groundItems.push({ x: gx, y: gy });
+    if (tries < 100) groundItems.push({ x: gx, y: gy, luck: chestLuck });
   }
-  // Spawn food — now a rare find: most floors have none.
+  // Spawn food — a rare find: most floors have none.
   groundFood = [];
   let foodCount = 0;
-  if (Math.random() < 0.35) foodCount = 1;
+  if (Math.random() < 0.18) foodCount = 1;
   for (let i = 0; i < foodCount; i++) {
     let fx, fy, tries = 0;
     do {
