@@ -601,7 +601,7 @@ const BOSSES = [
 // STATE
 // ══════════════════════════════════════════
 
-let player = { x: 5, y: 5, hp: 100, maxHp: 100, mp: 60, maxMp: 60, gold: 0, level: 1, xp: 0, healPotions: 2, manaPotions: 0 };
+let player = { x: 5, y: 5, hp: 100, maxHp: 100, mp: 60, maxMp: 60, gold: 0, level: 1, xp: 0, healPotions: 2, manaPotions: 0, healthPotionsBought: 0 };
 let inventory = [];
 let equipped = { head: null, chest: null, hands: null, legs: null, weapon: null, ring: null, amulet: null };
 let groundItems = []; // chests on the floor: { x, y } — loot is rolled when opened
@@ -716,6 +716,15 @@ function spawnMerchant() {
 
 let shopCurrentTab = 'buy';
 
+// Effective price of a stock entry. Health potions get pricier the more you've
+// bought, so you can't lean on them forever as a cheap heal.
+function stockPrice(s) {
+  if (s.kind === 'potion' && s.heal) {
+    return s.price + (player.healthPotionsBought || 0) * 15;
+  }
+  return s.price;
+}
+
 // Compact one-line summary of an item's stats, e.g. "8-12 DMG · +3 ATK".
 function itemStatLine(item) {
   return Object.entries(item.stats).map(([k, v]) =>
@@ -753,7 +762,8 @@ function renderShop() {
       return;
     }
     el.innerHTML = merchant.stock.map((s, i) => {
-      const afford = player.gold >= s.price;
+      const price = stockPrice(s);
+      const afford = player.gold >= price;
       let name, sub, cls = '', stats = '';
       if (s.kind === 'potion') {
         name = s.name;
@@ -770,7 +780,7 @@ function renderShop() {
           <div class="shop-row-sub">${sub}</div>
           ${stats ? `<div class="shop-row-stats">${stats}</div>` : ''}
         </div>
-        <span class="shop-price">${s.price}g</span>
+        <span class="shop-price">${price}g</span>
         <button class="shop-buy-btn" ${afford?'':'disabled'} onclick="buyItem(${i})">BUY</button>
       </div>`;
     }).join('');
@@ -798,10 +808,12 @@ function renderShop() {
 
 function buyItem(i) {
   const s = merchant.stock[i];
-  if (!s || player.gold < s.price) return;
-  player.gold -= s.price;
+  if (!s) return;
+  const price = stockPrice(s);
+  if (player.gold < price) return;
+  player.gold -= price;
   if (s.kind === 'potion') {
-    if (s.heal) { player.healPotions++; log(`Bought a Health Potion. (${player.healPotions} held)`, 'loot'); }
+    if (s.heal) { player.healPotions++; player.healthPotionsBought++; log(`Bought a Health Potion. (${player.healPotions} held)`, 'loot'); }
     if (s.mana) { player.manaPotions++; log(`Bought a Mana Potion. (${player.manaPotions} held)`, 'loot'); }
     // potions restock infinitely; gear is one-off
   } else {
@@ -1935,6 +1947,7 @@ function loadGame() {
     player = data.player;
     if (player.gold == null) player.gold = 0;
     if (player.healPotions == null) player.healPotions = 0;
+    if (player.healthPotionsBought == null) player.healthPotionsBought = 0;
     if (player.manaPotions == null) player.manaPotions = 0;
     inventory = (data.inventory || []).filter(it => it && it.slot); // drop legacy typeKey-only items
     // Rebuild equipped into the new 7-slot shape; salvage any still-valid pieces into the bag.
