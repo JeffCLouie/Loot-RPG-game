@@ -516,6 +516,14 @@
   .shop-sell-btn { background: #8a6a1a; }
   .shop-sell-btn:active { background: var(--gold); }
   .shop-empty { color: #555; text-align: center; padding: 24px 0; font-size: 12px; }
+  .shop-sell-all-bar { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+  .shop-sell-all-btn {
+    border: none; border-radius: 5px; cursor: pointer;
+    font-family: 'Courier New', monospace; font-weight: bold;
+    font-size: 11px; padding: 8px 12px; color: #fff; background: #8a6a1a;
+    -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  }
+  .shop-sell-all-btn:active { background: var(--gold); }
 
   /* ── MYSTIC MODAL ── (the Wandering Mystic sells floor-spanning pacts) */
   #mystic-overlay {
@@ -1642,7 +1650,8 @@ function renderShop() {
       el.innerHTML = '<div class="shop-empty">Nothing to sell.<br>Go find some loot!</div>';
       return;
     }
-    el.innerHTML = inventory.map((item, i) => {
+    const totalSell = inventory.reduce((sum, item) => sum + Math.max(1, Math.round(item.value * 0.5)), 0);
+    const rows = inventory.map((item, i) => {
       const sellPrice = Math.max(1, Math.round(item.value * 0.5));
       const stats = item.stats ? itemStatLine(item) : '';
       return `<div class="shop-row">
@@ -1656,6 +1665,9 @@ function renderShop() {
         <button class="shop-sell-btn" onclick="sellItem(${i})">SELL</button>
       </div>`;
     }).join('');
+    el.innerHTML = `<div class="shop-sell-all-bar">
+      <button class="shop-sell-all-btn" onclick="sellAll()">SELL ALL (${totalSell}g)</button>
+    </div>${rows}`;
   }
 }
 
@@ -1690,6 +1702,20 @@ function sellItem(i) {
   inventory.splice(i, 1);
   sfx('sell');
   log(`Sold ${logItem(item)} for ${sellPrice}g.`);
+  updateBars();
+  renderShop();
+  renderPanel();
+  saveGame();
+}
+
+function sellAll() {
+  if (inventory.length === 0) return;
+  const count = inventory.length;
+  const total = inventory.reduce((sum, item) => sum + Math.max(1, Math.round(item.value * 0.5)), 0);
+  player.gold += total;
+  inventory.length = 0;
+  sfx('sell');
+  log(`Sold all ${count} item${count === 1 ? '' : 's'} for ${total}g.`);
   updateBars();
   renderShop();
   renderPanel();
