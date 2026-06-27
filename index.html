@@ -561,6 +561,7 @@ let equipped = { head: null, chest: null, hands: null, legs: null, weapon: null,
 let groundItems = []; // { x, y, item }
 let merchant = null;  // { x, y, stock: [...] } when present
 let hasFountain = false;
+let floatingTexts = [];
 let enemies = [];
 let currentTab = 'inv';
 let selectedItem = null;
@@ -1115,6 +1116,31 @@ function draw() {
   ctx.textBaseline = 'middle';
   ctx.fillText(HERO, px + tw/2, py + th/2 + th*0.04);
   ctx.shadowBlur = 0;
+
+  // Floating damage numbers
+  const now = Date.now();
+  floatingTexts = floatingTexts.filter(ft => now - ft.start < ft.duration);
+  floatingTexts.forEach(ft => {
+    const t = (now - ft.start) / ft.duration;
+    const px = offX + ft.x * tw + tw / 2;
+    const py = offY + ft.y * th - t * tw * 0.8;
+    const alpha = 1 - t * t;
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, alpha);
+    ctx.font = `bold ${Math.round(tw * 0.44)}px 'Courier New', monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 3;
+    ctx.strokeText(ft.text, px, py);
+    ctx.fillStyle = ft.color;
+    ctx.fillText(ft.text, px, py);
+    ctx.restore();
+  });
+}
+
+function spawnFloatingText(x, y, text, color) {
+  floatingTexts.push({ x, y, text, color, start: Date.now(), duration: 800 });
 }
 
 // ══════════════════════════════════════════
@@ -1202,6 +1228,7 @@ function totalStat(name) {
 function attackEnemy(e) {
   const dmg = getWeaponDamage() + player.level * 2 + totalStat('ATK');
   e.hp -= dmg;
+  spawnFloatingText(e.x, e.y, `-${dmg}`, '#fff');
   log(`${HERO} hits ${e.type} for ${dmg} damage!`);
   if (e.hp <= 0) {
     e.dead = true;
@@ -1229,6 +1256,7 @@ function attackEnemy(e) {
     const raw = Math.round(e.dmg * rnd(80, 120) / 100);
     const edm = Math.max(1, raw - Math.floor(totalStat('DEF') / 2));
     player.hp = Math.max(0, player.hp - edm);
+    spawnFloatingText(player.x, player.y, `-${edm}`, '#ff3344');
     log(`${e.type} hits ${HERO} back for ${edm}!`);
     updateBars();
     if (player.hp === 0) handleDeath();
@@ -1263,6 +1291,7 @@ function enemyMove(e) {
       const raw = Math.round(e.dmg * rnd(80, 120) / 100);
       const dmg = Math.max(1, raw - Math.floor(totalStat('DEF') / 2));
       player.hp = Math.max(0, player.hp-dmg);
+      spawnFloatingText(player.x, player.y, `-${dmg}`, '#ff3344');
       log(`${e.type} attacks ${HERO} for ${dmg}!`);
       updateBars();
       if (player.hp === 0) handleDeath();
@@ -1633,7 +1662,7 @@ window.addEventListener('load', () => { resizeCanvas(); draw(); });
 // so their robe glow pulses. Idle otherwise to save battery.
 let lastPulse = 0;
 function pulseLoop(ts) {
-  if ((merchant || hasFountain) && ts - lastPulse > 60) { lastPulse = ts; draw(); }
+  if ((merchant || hasFountain || floatingTexts.length) && ts - lastPulse > 60) { lastPulse = ts; draw(); }
   requestAnimationFrame(pulseLoop);
 }
 requestAnimationFrame(pulseLoop);
