@@ -297,6 +297,36 @@
   .attr-plus:active { background: #44bb44; }
   .attr-plus:disabled { background: #2a2a3a; color: #555; cursor: not-allowed; }
 
+  /* ── SKILL TREE (SKILLS tab) ── */
+  .sk-node { border: 1px solid var(--border); border-radius: 6px; padding: 6px 7px; margin-bottom: 6px; background: #14140f; }
+  .sk-node.owned { border-color: #6b8f4a; background: #161a10; }
+  .sk-node.locked { opacity: 0.55; }
+  .sk-top { display: flex; align-items: flex-start; gap: 6px; }
+  .sk-icon { font-size: 17px; line-height: 1.2; flex-shrink: 0; }
+  .sk-titles { flex: 1; min-width: 0; }
+  .sk-name { font-size: 11px; font-weight: bold; color: #e8d5b5; display: flex; align-items: center; gap: 5px; }
+  .sk-rank { font-size: 9px; color: #ffd24b; font-weight: bold; }
+  .sk-meta { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+  .sk-type { font-size: 8px; font-weight: bold; letter-spacing: 0.5px; padding: 1px 4px; border-radius: 3px; }
+  .sk-type.act { background: #2a1f4a; color: #cbb8ff; }
+  .sk-type.pas { background: #20301c; color: #9fd07a; }
+  .sk-req { font-size: 8px; color: #998; align-self: center; }
+  .sk-desc { font-size: 9px; color: #9a937e; line-height: 1.4; margin-top: 4px; }
+  .sk-buy { flex-shrink: 0; width: 28px; height: 28px; border: none; border-radius: 5px; background: #4a3a7a; color: #fff; font-size: 17px; font-weight: bold; cursor: pointer; line-height: 1; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+  .sk-buy:active { background: #6a55a8; }
+  .sk-buy:disabled { background: #2a2a3a; color: #555; cursor: not-allowed; }
+  .sk-buy.maxed { background: #2e7d32; color: #cdebcf; }
+
+  /* ── SKILL BAR (learned actives, above the control bar) ── */
+  #skill-bar { display: flex; gap: 5px; justify-content: center; flex-wrap: wrap; padding: 4px 6px; }
+  .skillbar-btn { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; min-width: 42px; padding: 3px 5px; border-radius: 7px; border: 1px solid #4a3a7a; background: #2a1f4a; color: #cbb8ff; cursor: pointer; font-family: 'Courier New', monospace; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+  .skillbar-btn .sb-key { position: absolute; top: 1px; left: 3px; font-size: 8px; color: #8a7fc0; }
+  .skillbar-btn .sb-icon { font-size: 17px; line-height: 1; }
+  .skillbar-btn .sb-info { font-size: 8px; letter-spacing: 0.5px; }
+  .skillbar-btn.ready { box-shadow: 0 0 7px rgba(140,110,255,0.5); }
+  .skillbar-btn.ready:active { background: #4a3a7a; }
+  .skillbar-btn.disabled { background: #211c2a; border-color: #33304a; color: #6a647a; }
+
   #panel-content { flex: 1; overflow-y: auto; padding: 6px; }
   #panel-content::-webkit-scrollbar { width: 4px; }
   #panel-content::-webkit-scrollbar-track { background: var(--bg); }
@@ -1050,6 +1080,9 @@
     <div id="bottom-row">
       <div id="log"></div>
     </div>
+    <!-- Learned active skills (beyond the baseline class skill). Populated by
+         renderSkillBar(); hidden when you have no extra actives or are in town. -->
+    <div id="skill-bar" style="display:none"></div>
     <div id="control-bar">
       <div id="dpad">
         <div></div>
@@ -1115,6 +1148,7 @@
       <button class="tab-btn active" id="tab-inv" onclick="switchTab('inv')">LOOT</button>
       <button class="tab-btn" id="tab-equip" onclick="switchTab('equip')">GEAR</button>
       <button class="tab-btn" id="tab-hero" onclick="switchTab('hero')">HERO</button>
+      <button class="tab-btn" id="tab-skills" onclick="switchTab('skills')">SKILLS</button>
     </div>
     <div id="panel-content"></div>
   </div>
@@ -1702,7 +1736,7 @@ function attrDamage() {
 // Crit damage multiplier — equipment-only beyond the base, so gear (CRITDMG)
 // drives how hard your crits land. Crit damage can swing freely up or down, but
 // the multiplier never drops below 0 (no stat should ever read negative).
-function critDamageMult() { return Math.max(0, 2.0 + totalStat('CRITDMG') / 100); }
+function critDamageMult() { return Math.max(0, 2.0 + totalStat('CRITDMG') / 100 + skillBonus('critDmg')); }
 
 // The player's overall power: a blend of level, spent attributes, and equipped gear.
 function playerPower() {
@@ -1710,6 +1744,7 @@ function playerPower() {
   for (const slot of SLOT_KEYS) if (equipped[slot]) p += itemPower(equipped[slot]);
   const spent = ATTR_KEYS.reduce((s, k) => s + (player.attributes?.[k] || 0), 0);
   p += spent * 3;
+  p += spentSkillPoints() * 5; // skill-tree investment shows up in Power too
   return Math.round(p);
 }
 
@@ -1719,11 +1754,13 @@ function playerPower() {
 function baseMaxHp() {
   let hp = player.level*8 + totalAttr('vitality') * ATTR_FX.hpPerVit + totalStat('HP');
   if (player.class === 'templar') hp = hp * 1.20; // Templar: hardier body
+  hp = hp * (1 + skillBonus('maxHpPct')); // Toughness / Divine Vigor / capstones
   return Math.max(1, Math.round(hp));
 }
 function baseMaxMp() {
   let mp = player.level*4 + totalAttr('spirit') * ATTR_FX.mpPerSpr + totalStat('MP');
   if (player.class === 'mage') mp = mp * 1.30; // Mage: deeper mana pool
+  mp = mp * (1 + skillBonus('maxMpPct')); // Arcane Mind / Attunement / Ward Flesh
   return Math.max(0, Math.round(mp));
 }
 
@@ -1738,7 +1775,7 @@ function playerDefense() {
 // negative (no stat should ever read below 0).
 function playerCritChance() {
   const rogueCrit = player.class === 'rogue' ? 0.08 : 0;
-  return Math.max(0, Math.min(0.6, 0.04 + rogueCrit
+  return Math.max(0, Math.min(0.6, 0.04 + rogueCrit + skillBonus('crit')
     + (totalStat('CRIT') + totalStat('LCK')) * 0.01
     + totalAttr('luck') * ATTR_FX.critPerLuck));
 }
@@ -1746,7 +1783,7 @@ function playerCritChance() {
 // Chance to completely avoid an incoming hit, driven by Agility and gear SPD.
 // Capped so you can never become untouchable — depth threat still outpaces it.
 function playerDodge() {
-  const base = totalAttr('agility') * ATTR_FX.dodgePerAgi + totalStat('SPD') * 0.006;
+  const base = totalAttr('agility') * ATTR_FX.dodgePerAgi + totalStat('SPD') * 0.006 + skillBonus('dodge');
   // Rogues are slipperier: a flat dodge bump and a slightly higher ceiling.
   if (player.class === 'rogue') return Math.min(0.45, base + 0.08);
   return Math.min(0.35, base);
@@ -1763,10 +1800,11 @@ function recomputeMaxStats() {
 function hpRegenPerTurn() {
   let r = totalStat('REGEN') + Math.floor(totalAttr('vitality') * ATTR_FX.hpRegenPerVit);
   if (player.class === 'templar') r += 2; // Templar mends faster between fights
+  r += skillBonus('hpRegen'); // Second Wind / Divine Vigor
   return r;
 }
 function mpRegenPerTurn() {
-  return 1 + Math.floor(totalAttr('spirit') * ATTR_FX.mpRegenPerSpr);
+  return 1 + Math.floor(totalAttr('spirit') * ATTR_FX.mpRegenPerSpr) + skillBonus('mpRegen');
 }
 
 const FOODS = [
@@ -1935,9 +1973,141 @@ function canEquipItem(item) {
   return !t || cls.weapons.includes(t);
 }
 
-// Combat passives keyed off the chosen class.
-function classDmgDealtMult() { return player.class === 'warrior' ? 1.10 : 1; }
-function classDmgTakenMult() { return player.class === 'warrior' ? 0.85 : 1; }
+// Combat passives keyed off the chosen class — now also folding in any damage
+// passives bought on the skill tree (see skillBonus).
+function classDmgDealtMult() {
+  const base = player.class === 'warrior' ? 1.10 : 1;
+  return base * (1 + skillBonus('dmgDealt'));
+}
+function classDmgTakenMult() {
+  const base = player.class === 'warrior' ? 0.85 : 1;
+  // Iron Hide / Aegis / Juggernaut etc. shave a slice off every blow; clamp so a
+  // fully-stacked defence build can never reach zero (no free invulnerability).
+  return Math.max(0.1, base * (1 - skillBonus('dmgTaken')));
+}
+
+// ── SKILL TREES ──
+// A per-class tree of passive and active skills. Leveling grants 1 skill point
+// (separate from the 5 attribute points), spent here in the bag's SKILLS tab.
+// Nodes branch via `req` (prerequisite node ids + the rank each needs) and a
+// minimum character `lvl`. PASSIVE nodes carry an `fx` map summed across their
+// ranks (see skillBonus) and feed the derived-stat formulas; ACTIVE nodes carry
+// an `active` id cast from the on-screen skill bar / number keys (castSkillById).
+const SKILL_POINTS_PER_LEVEL = 1;
+const SKILL_TREES = {
+  warrior: [
+    { id:'brutality',   name:'Brutality',   icon:'💢', type:'passive', max:3, lvl:1,  fx:{ dmgDealt:0.04 },              desc:'+4% damage dealt per rank.' },
+    { id:'toughness',   name:'Toughness',   icon:'🪨', type:'passive', max:3, lvl:1,  fx:{ maxHpPct:0.05 },             desc:'+5% max HP per rank.' },
+    { id:'warcry',      name:'War Cry',     icon:'📣', type:'active',  active:'warcry',    max:1, lvl:2, req:[['brutality',1]], mp:14, cd:6, desc:'Roar for +50% damage dealt for 5 turns.' },
+    { id:'ironhide',    name:'Iron Hide',   icon:'🛡️', type:'passive', max:3, lvl:3,  req:[['toughness',1]], fx:{ dmgTaken:0.04 }, desc:'-4% damage taken per rank.' },
+    { id:'bloodthirst', name:'Bloodthirst', icon:'🩸', type:'passive', max:2, lvl:4,  req:[['brutality',2]], fx:{ lifesteal:0.06 }, desc:'Heal 6% of the damage you deal, per rank.' },
+    { id:'whirlwind',   name:'Whirlwind',   icon:'🌀', type:'active',  active:'whirlwind', max:1, lvl:5, req:[['warcry',1]],   mp:16, cd:4, desc:'Strike every adjacent foe for 180% — chance to stun.' },
+    { id:'secondwind',  name:'Second Wind', icon:'💚', type:'passive', max:2, lvl:6,  req:[['toughness',2]], fx:{ hpRegen:1 },     desc:'+1 HP regen per turn, per rank.' },
+    { id:'juggernaut',  name:'Juggernaut',  icon:'🏰', type:'passive', max:1, lvl:9,  req:[['ironhide',3],['secondwind',1]], fx:{ dmgTaken:0.08, maxHpPct:0.10 }, desc:'-8% damage taken and +10% max HP.' },
+    { id:'executioner', name:'Executioner', icon:'☠️', type:'passive', max:1, lvl:10, req:[['bloodthirst',1]], fx:{ lowHpDmg:0.5 }, desc:'+50% damage to foes below 35% HP.' },
+    { id:'berserk',     name:'Berserk',     icon:'💥', type:'active',  active:'berserk',   max:1, lvl:12, req:[['whirlwind',1]],  mp:24, cd:8, desc:'Devastate every foe within 2 tiles for 220%.' },
+  ],
+  rogue: [
+    { id:'precision',   name:'Precision',     icon:'🎯', type:'passive', max:3, lvl:1,  fx:{ crit:0.03 },     desc:'+3% crit chance per rank.' },
+    { id:'evasion',     name:'Evasion',       icon:'💨', type:'passive', max:3, lvl:1,  fx:{ dodge:0.03 },    desc:'+3% dodge per rank.' },
+    { id:'poisonstrike',name:'Poison Strike', icon:'🧪', type:'active',  active:'poisonstrike', max:1, lvl:2, req:[['precision',1]], mp:10, cd:3, desc:'Stab an adjacent foe and inflict heavy poison.' },
+    { id:'lethality',   name:'Lethality',     icon:'🔪', type:'passive', max:3, lvl:3,  req:[['precision',1]], fx:{ critDmg:0.15 }, desc:'+15% crit damage per rank.' },
+    { id:'shadowstep',  name:'Shadowstep',    icon:'🌑', type:'active',  active:'shadowstep',   max:1, lvl:4, req:[['evasion',1]],  mp:12, cd:5, desc:'Blink to the nearest foe and land a guaranteed crit.' },
+    { id:'opportunist', name:'Opportunist',   icon:'🗡️', type:'passive', max:2, lvl:6,  req:[['lethality',1]], fx:{ lowHpDmg:0.2 }, desc:'+20% damage to foes below 35% HP, per rank.' },
+    { id:'fleetfoot',   name:'Fleet Foot',    icon:'🍃', type:'passive', max:2, lvl:6,  req:[['evasion',2]],   fx:{ dodge:0.03 },   desc:'+3% dodge per rank.' },
+    { id:'fanofknives', name:'Fan of Knives', icon:'🔅', type:'active',  active:'fanofknives',  max:1, lvl:8, req:[['poisonstrike',1]], mp:16, cd:4, desc:'Spray blades at every adjacent foe and poison them.' },
+    { id:'assassinate', name:'Assassinate',   icon:'☠️', type:'passive', max:1, lvl:10, req:[['lethality',3],['opportunist',1]], fx:{ critDmg:0.5 }, desc:'+50% crit damage.' },
+    { id:'deathmark',   name:'Death Mark',    icon:'🎯', type:'active',  active:'deathmark',    max:1, lvl:12, req:[['shadowstep',1],['fanofknives',1]], mp:22, cd:7, desc:'A huge guaranteed crit on one foe in range.' },
+  ],
+  mage: [
+    { id:'arcanemind',   name:'Arcane Mind',     icon:'🔵', type:'passive', max:3, lvl:1,  fx:{ maxMpPct:0.08, mpRegen:1 }, desc:'+8% max MP and +1 MP regen per rank.' },
+    { id:'spellpower',   name:'Spell Power',     icon:'✨', type:'passive', max:3, lvl:1,  fx:{ spell:0.10 },               desc:'+10% spell damage per rank.' },
+    { id:'frostnova',    name:'Frost Nova',      icon:'❄️', type:'active',  active:'frostnova',     max:1, lvl:2, req:[['spellpower',1]], mp:14, cd:5, desc:'Freeze every foe within 2 tiles, stunning them.' },
+    { id:'pyromancy',    name:'Pyromancy',       icon:'🔥', type:'passive', max:2, lvl:3,  req:[['spellpower',1]], fx:{ spell:0.08 }, desc:'+8% spell damage per rank.' },
+    { id:'manashield',   name:'Mana Shield',     icon:'🔮', type:'passive', max:2, lvl:4,  req:[['arcanemind',1]], fx:{ manaShield:0.25 }, desc:'Absorb 25% of incoming damage with MP, per rank.' },
+    { id:'chainlightning',name:'Chain Lightning',icon:'⚡', type:'active',  active:'chainlightning',max:1, lvl:5, req:[['frostnova',1]], mp:18, cd:4, desc:'Lightning arcs between up to 3 nearby foes.' },
+    { id:'attunement',   name:'Attunement',      icon:'🌀', type:'passive', max:2, lvl:6,  req:[['arcanemind',2]], fx:{ mpRegen:1, maxMpPct:0.06 }, desc:'+1 MP regen and +6% max MP per rank.' },
+    { id:'archmage',     name:'Archmage',        icon:'📜', type:'passive', max:1, lvl:9,  req:[['spellpower',3],['pyromancy',1]], fx:{ spell:0.30 }, desc:'+30% spell damage.' },
+    { id:'wardflesh',    name:'Ward Flesh',      icon:'🛡️', type:'passive', max:1, lvl:10, req:[['manashield',2]], fx:{ manaShield:0.20, maxMpPct:0.10 }, desc:'+20% mana shield and +10% max MP.' },
+    { id:'meteor',       name:'Meteor',          icon:'☄️', type:'active',  active:'meteor',        max:1, lvl:12, req:[['chainlightning',1],['archmage',1]], mp:28, cd:8, desc:'Call a meteor onto the nearest foe, scorching all around it.' },
+  ],
+  templar: [
+    { id:'divinevigor',  name:'Divine Vigor', icon:'💛', type:'passive', max:3, lvl:1,  fx:{ maxHpPct:0.05, hpRegen:1 }, desc:'+5% max HP and +1 HP regen per rank.' },
+    { id:'aegis',        name:'Aegis',        icon:'🛡️', type:'passive', max:3, lvl:1,  fx:{ dmgTaken:0.04 },            desc:'-4% damage taken per rank.' },
+    { id:'holysmite',    name:'Holy Smite',   icon:'🔆', type:'active',  active:'holysmite', max:1, lvl:2, req:[['divinevigor',1]], mp:12, cd:3, desc:'Smite a nearby foe and heal yourself.' },
+    { id:'zeal',         name:'Zeal',         icon:'⚔️', type:'passive', max:3, lvl:3,  req:[['divinevigor',1]], fx:{ zeal:0.10 }, desc:'Up to +10% damage per rank as your HP drops.' },
+    { id:'retribution',  name:'Retribution',  icon:'↩️', type:'passive', max:2, lvl:4,  req:[['aegis',1]], fx:{ reflect:0.15 }, desc:'Reflect 15% of melee damage taken, per rank.' },
+    { id:'sanctuary',    name:'Sanctuary',    icon:'⛪', type:'active',  active:'sanctuary', max:1, lvl:5, req:[['aegis',1]], mp:16, cd:6, desc:'Hallow the ground: -50% damage taken for 4 turns, and heal.' },
+    { id:'consecration', name:'Consecration', icon:'✝️', type:'passive', max:2, lvl:6,  req:[['zeal',2]], fx:{ dmgDealt:0.05 }, desc:'+5% damage dealt per rank.' },
+    { id:'bulwark',      name:'Bulwark',      icon:'🏰', type:'passive', max:1, lvl:9,  req:[['aegis',3],['retribution',1]], fx:{ dmgTaken:0.08, maxHpPct:0.10 }, desc:'-8% damage taken and +10% max HP.' },
+    { id:'fervor',       name:'Fervor',       icon:'🔥', type:'passive', max:1, lvl:10, req:[['zeal',3],['consecration',1]], fx:{ zeal:0.30 }, desc:'Up to +30% more damage as your HP drops.' },
+    { id:'judgment',     name:'Judgment',     icon:'⚖️', type:'active',  active:'judgment',  max:1, lvl:12, req:[['holysmite',1],['sanctuary',1]], mp:26, cd:8, desc:'Smite all nearby foes and restore a burst of health.' },
+  ],
+};
+
+// The current class's tree (empty array for a classless legacy save).
+function classSkillTree() { return (player.class && SKILL_TREES[player.class]) || []; }
+function skillNode(id) { return classSkillTree().find(n => n.id === id) || null; }
+function skillRank(id) { return (player.skills && player.skills[id]) || 0; }
+// Sum a passive bonus key across every owned node rank in the current tree. This
+// is the single hook every derived-stat formula reads, so a passive is "live"
+// the instant it's bought with no per-stat bookkeeping.
+function skillBonus(key) {
+  if (!player.skills) return 0;
+  let sum = 0;
+  for (const n of classSkillTree()) {
+    if (n.type === 'passive' && n.fx && n.fx[key]) sum += n.fx[key] * skillRank(n.id);
+  }
+  return sum;
+}
+// Spell-damage multiplier from Spell Power / Pyromancy / Archmage (Mage tree).
+function spellPowerMult() { return 1 + skillBonus('spell'); }
+// Prereqs satisfied? (high enough level AND every required node at its rank).
+function skillReqMet(node) {
+  if (!node) return false;
+  if (player.level < (node.lvl || 1)) return false;
+  if (node.req) for (const [rid, rk] of node.req) if (skillRank(rid) < rk) return false;
+  return true;
+}
+function skillMaxed(node) { return skillRank(node.id) >= (node.max || 1); }
+function canBuySkill(node) {
+  return !!node && (player.skillPoints || 0) > 0 && !skillMaxed(node) && skillReqMet(node);
+}
+function spentSkillPoints() {
+  return classSkillTree().reduce((s, n) => s + skillRank(n.id), 0);
+}
+// Castable actives: the always-available baseline class skill first, then every
+// unlocked active node — each keyed by its own id for an independent cooldown.
+function activeSkillList() {
+  const cls = playerClass();
+  const list = [];
+  if (cls && cls.skill) list.push({ ...cls.skill, baseline: true });
+  for (const n of classSkillTree()) {
+    if (n.type === 'active' && skillRank(n.id) > 0) {
+      list.push({ id: n.active, name: n.name, icon: n.icon, mp: n.mp, cd: n.cd, desc: n.desc });
+    }
+  }
+  return list;
+}
+function skillCd(id) { return (player.skillCds && player.skillCds[id]) || 0; }
+function setSkillCd(id, v) { if (!player.skillCds) player.skillCds = {}; player.skillCds[id] = v; }
+// Buy / rank up a skill node, spending one skill point.
+function buySkill(id) {
+  const node = skillNode(id);
+  if (!node) return;
+  if (!canBuySkill(node)) { log('You can\'t learn that yet — check its level and prerequisites.'); return; }
+  if (!player.skills) player.skills = {};
+  player.skills[id] = (player.skills[id] || 0) + 1;
+  player.skillPoints--;
+  // Passives that raise max HP/MP grant the new headroom immediately.
+  const beforeHp = player.maxHp, beforeMp = player.maxMp;
+  recomputeMaxStats();
+  player.hp += Math.max(0, player.maxHp - beforeHp);
+  player.mp += Math.max(0, player.maxMp - beforeMp);
+  sfx('levelup');
+  log(`✨ Learned ${node.icon} ${node.name}${(node.max || 1) > 1 ? ` (rank ${player.skills[id]}/${node.max})` : ''}.`, 'important');
+  updateBars(); renderPanel(); renderSkillBar(); saveGame();
+}
 
 // Names rolled for elite (named) enemies and mimics, so a glowing foe feels
 // like a personality rather than just a tougher sprite.
@@ -2068,6 +2238,10 @@ let player = { x: 5, y: 5, hp: 100, maxHp: 100, mp: 60, maxMp: 60, gold: 0, leve
   // attributes convert into damage, passives, the active skill, and which weapons
   // can be equipped.
   class: null, skillCd: 0,
+  // Skill tree — 1 skill point earned per level (separate from attribute points),
+  // spent on the class's passive/active nodes. `skills` maps node id → rank;
+  // `skillCds` holds each active skill's independent cooldown.
+  skillPoints: 0, skills: {}, skillCds: {},
   // Hero attributes — every one starts at ATTR_BASE and is raised by spending
   // points earned on level up. attrSchema marks the attribute-driven-stats model
   // (v2) so older saves can be migrated on load.
@@ -2094,6 +2268,11 @@ let shrineData = {};  // "y,x" -> { kind } for shrine tiles on this floor
 const SHRINE_KINDS = ['power','guard','fortune','blood','wisdom'];
 // Temporary shrine buffs, each counts down a number of floors.
 let buffs = { power: 0, guard: 0, fortune: 0 };
+// Transient combat buffs from active skills (War Cry, Sanctuary, …), keyed by id
+// to a remaining-turn count and ticked down each turn in runEnemyTurn. Purely
+// in-combat and short-lived, so it is intentionally NOT saved.
+let combatBuffs = {};
+function hasBuff(id) { return (combatBuffs[id] || 0) > 0; }
 let floatingTexts = [];
 let statusEffects = [];
 let groundFood = [];
@@ -3742,6 +3921,9 @@ function respecCost() {
   const spent = spentAttrPoints();
   return 50 + spent * 20 + player.level * 5;
 }
+function skillRespecCost() {
+  return 40 + spentSkillPoints() * 15 + player.level * 4;
+}
 function openTrainer() { openTownModal('🎓 Trainer'); renderTrainer(); }
 function renderTrainer() {
   const a = player.attributes || {};
@@ -3759,6 +3941,13 @@ function renderTrainer() {
         <div class="shop-row-sub">Refund every point spent above the base ${ATTR_BASE}</div></div>
       <span class="shop-price">${cost}g</span>
       <button class="shop-buy-btn" ${(player.gold >= cost && spent > 0) ? '' : 'disabled'} onclick="respecAttrs()">RESET</button>
+    </div>
+    <div class="shop-row">
+      <span class="loot-icon">🌟</span>
+      <div class="shop-row-info"><div class="shop-row-name">Forget Skills</div>
+        <div class="shop-row-sub">Refund all ${spentSkillPoints()} spent skill point${spentSkillPoints() === 1 ? '' : 's'} to spend anew</div></div>
+      <span class="shop-price">${skillRespecCost()}g</span>
+      <button class="shop-buy-btn" ${(player.gold >= skillRespecCost() && spentSkillPoints() > 0) ? '' : 'disabled'} onclick="respecSkills()">RESET</button>
     </div>
     <div class="town-blurb" style="margin-top:10px">Retrain into a different class for ${classChangeCost()}g. Your attributes are kept; if your new class can't wield your weapon, it goes back in your bag.</div>
     ${CLASS_KEYS.map(k => {
@@ -3786,6 +3975,22 @@ function respecAttrs() {
   sfx('shrine');
   log(`🎓 You unlearn your attributes — ${spent} point${spent === 1 ? '' : 's'} returned to spend.`, 'important');
   updateBars(); renderPanel(); renderTrainer(); saveGame();
+}
+function respecSkills() {
+  const spent = spentSkillPoints();
+  const cost = skillRespecCost();
+  if (spent <= 0 || player.gold < cost) return;
+  player.gold -= cost;
+  player.skillPoints = (player.skillPoints || 0) + spent;
+  player.skills = {};
+  player.skillCds = {};
+  combatBuffs = {};
+  recomputeMaxStats();
+  if (player.hp > player.maxHp) player.hp = player.maxHp;
+  if (player.mp > player.maxMp) player.mp = player.maxMp;
+  sfx('shrine');
+  log(`🎓 You unlearn your skills — ${spent} skill point${spent === 1 ? '' : 's'} returned to spend.`, 'important');
+  updateBars(); renderPanel(); renderSkillBar(); renderTrainer(); saveGame();
 }
 
 // ── ENCHANTER — fill in & reroll item affixes ──
@@ -6079,8 +6284,31 @@ function totalStat(name) {
 function mitigateDamage(raw, lvl) {
   const def = playerDefense();
   const mitigation = def / (def + 18 + (lvl || dungeonLevel) * 6);
-  // Warrior passive: shrug off a flat slice of every incoming blow.
-  return Math.max(1, Math.round(raw * (1 - mitigation) * classDmgTakenMult()));
+  // Sanctuary (Templar active) halves incoming damage while it's up.
+  const sanct = hasBuff('sanctuary') ? 0.5 : 1;
+  // Warrior passive + skill-tree defence passives shave off another slice.
+  return Math.max(1, Math.round(raw * (1 - mitigation) * classDmgTakenMult() * sanct));
+}
+
+// Bloodthirst (Warrior passive): heal a slice of melee damage dealt. Called from
+// basic attacks and every weapon-based active so a Cleave/Whirlwind build sustains.
+function lifestealHeal(amount) {
+  const ls = skillBonus('lifesteal');
+  if (ls <= 0 || amount <= 0 || player.hp >= player.maxHp) return;
+  const got = Math.min(Math.max(1, Math.round(amount * ls)), player.maxHp - player.hp);
+  if (got > 0) { player.hp += got; spawnFloatingText(player.x, player.y, `+${got}`, '#ff6688'); }
+}
+
+// Mana Shield (Mage passive): divert part of an incoming hit onto your MP pool
+// at 2 MP per 1 HP. Returns the HP damage that gets through after absorption.
+function absorbWithMana(dmg) {
+  const frac = Math.min(0.8, skillBonus('manaShield'));
+  if (frac <= 0 || player.mp <= 0) return dmg;
+  const absorbed = Math.min(Math.floor(dmg * frac), Math.floor(player.mp / 2));
+  if (absorbed <= 0) return dmg;
+  player.mp -= absorbed * 2;
+  spawnFloatingText(player.x, player.y - 0.3, `🔮${absorbed}`, '#7d9bff');
+  return Math.max(0, dmg - absorbed);
 }
 
 // A readable label for an enemy in the log: bosses/elites use their name, plain
@@ -6113,7 +6341,14 @@ function rollPlayerHit(e) {
   const hitCap = Math.max(1, Math.floor(e.maxHp / hitDivisor));
   if (dmg > hitCap) dmg = Math.max(1, Math.round(hitCap * (rnd(80, 100) / 100)));
   if (buffs.power) dmg = Math.round(dmg * 1.5);
-  dmg = Math.round(dmg * classDmgDealtMult()); // Warrior hits harder
+  dmg = Math.round(dmg * classDmgDealtMult()); // Warrior + damage passives
+  if (hasBuff('warcry')) dmg = Math.round(dmg * 1.5); // War Cry self-buff
+  // Zeal/Fervor (Templar): more damage the lower your health.
+  const zeal = skillBonus('zeal');
+  if (zeal > 0) dmg = Math.round(dmg * (1 + zeal * (1 - player.hp / player.maxHp)));
+  // Opportunist/Executioner: bonus damage to badly-wounded foes.
+  const lowHp = skillBonus('lowHpDmg');
+  if (lowHp > 0 && e && e.hp < e.maxHp * 0.35) dmg = Math.round(dmg * (1 + lowHp));
   if (isCrit) dmg = Math.round(dmg * critDamageMult());
   return { dmg: Math.max(1, dmg), isCrit };
 }
@@ -6265,6 +6500,9 @@ function attackEnemy(e, opts = {}) {
     if (got > 0) { player.hp += got; spawnFloatingText(player.x, player.y, `+${got}`, '#7fffaa'); }
   }
 
+  // Bloodthirst (Warrior passive): heal a slice of all damage dealt this swing.
+  lifestealHeal(dealtTotal);
+
   // Every attack costs a turn: after your swing resolves, the caller runs the
   // enemy turn (runEnemyTurn) so the foe you hit strikes back AND any others
   // crowding you close in or pile on. `ranged` shots simply don't pin you in
@@ -6313,21 +6551,28 @@ function tryRangedAttack(dx, dy) {
 // button or the R key. A skill spends MP, resolves its effect, then passes a
 // turn (the floor's foes act) and begins its cooldown. Failures (no target, not
 // enough mana, on cooldown) are reported in the log and cost nothing.
+// R key / ⚡ button cast the baseline class skill; the skill bar and number keys
+// cast unlocked tree actives. Both route through castSkillById.
 function castSkill() {
   const cls = playerClass();
   if (!cls || !cls.skill) { log('Pick a class to gain its skill.'); return; }
+  castSkillById(cls.skill.id);
+}
+
+// Cast any active skill the player currently has (baseline or learned), shared by
+// every entry point. Validates town/stun/cooldown/mana, resolves the effect, then
+// spends MP, passes a turn, and begins that skill's own cooldown. A skill that
+// can't resolve (no target, nothing to heal) costs nothing.
+function castSkillById(id) {
+  const sk = activeSkillList().find(s => s.id === id);
+  if (!sk) { log('You haven\'t learned that skill.'); return; }
   if (inTown) { log('Save your skills for the dungeon.'); return; }
   if (isPlayerStunned()) { log('You are stunned and can\'t cast!'); return; }
-  const sk = cls.skill;
-  if ((player.skillCd || 0) > 0) { log(`⏳ ${sk.name} is recharging (${player.skillCd} more turn${player.skillCd === 1 ? '' : 's'}).`); return; }
+  const cd = skillCd(id);
+  if (cd > 0) { log(`⏳ ${sk.name} is recharging (${cd} more turn${cd === 1 ? '' : 's'}).`); return; }
   if (player.mp < sk.mp) { log(`💧 Not enough mana for ${sk.name} — need ${sk.mp} MP.`); return; }
 
-  let fired = false;
-  if (sk.id === 'cleave')        fired = skillCleave();
-  else if (sk.id === 'backstab') fired = skillBackstab();
-  else if (sk.id === 'firebolt') fired = skillFirebolt();
-  else if (sk.id === 'mend')     fired = skillMend();
-  if (!fired) return; // no valid target / nothing to do — don't spend MP or a turn
+  if (!runActiveSkill(id)) return; // no valid target / nothing to do
 
   player.mp -= sk.mp;
   updateBars();
@@ -6335,10 +6580,36 @@ function castSkill() {
   // AFTER runEnemyTurn so this very turn doesn't immediately tick it down.
   runEnemyTurn();
   moveQuestEntities();
-  player.skillCd = sk.cd;
+  setSkillCd(id, sk.cd);
   updateBars();
+  renderSkillBar();
   draw();
   saveGame();
+}
+
+// Dispatch an active skill id to its implementation. Each returns true if it
+// actually fired (so castSkillById knows whether to spend the turn/MP).
+function runActiveSkill(id) {
+  switch (id) {
+    case 'cleave':         return skillCleave();
+    case 'backstab':       return skillBackstab();
+    case 'firebolt':       return skillFirebolt();
+    case 'mend':           return skillMend();
+    case 'warcry':         return skillWarCry();
+    case 'whirlwind':      return skillWhirlwind();
+    case 'berserk':        return skillBerserk();
+    case 'poisonstrike':   return skillPoisonStrike();
+    case 'shadowstep':     return skillShadowstep();
+    case 'fanofknives':    return skillFanOfKnives();
+    case 'deathmark':      return skillDeathMark();
+    case 'frostnova':      return skillFrostNova();
+    case 'chainlightning': return skillChainLightning();
+    case 'meteor':         return skillMeteor();
+    case 'holysmite':      return skillHolySmite();
+    case 'sanctuary':      return skillSanctuary();
+    case 'judgment':       return skillJudgment();
+  }
+  return false;
 }
 
 // Foes orthogonally/diagonally adjacent to the player.
@@ -6358,6 +6629,7 @@ function skillCleave() {
     total += d;
     dealDamage(e, d, true);
   });
+  lifestealHeal(total);
   log(`🪓 ${HERO} cleaves ${adj.length} foe${adj.length === 1 ? '' : 's'} for ${total}!`, 'important');
   return true;
 }
@@ -6385,7 +6657,7 @@ function skillFirebolt() {
     .sort((a, b) => (Math.abs(a.x - player.x) + Math.abs(a.y - player.y)) - (Math.abs(b.x - player.x) + Math.abs(b.y - player.y)));
   if (!inRange.length) { log('🔥 No foe within range of your Firebolt.'); return false; }
   const e = inRange[0];
-  let dmg = 16 + player.level * 3 + totalAttr('spirit') * ATTR_FX.spellPerSpr;
+  let dmg = (16 + player.level * 3 + totalAttr('spirit') * ATTR_FX.spellPerSpr) * spellPowerMult();
   if (buffs.power) dmg = Math.round(dmg * 1.5);
   dmg = Math.max(1, Math.round(dmg));
   sfx('attack');
@@ -6406,11 +6678,256 @@ function skillMend() {
   return true;
 }
 
+// ── SKILL-TREE ACTIVES ──
+// Shared helpers used by the unlocked active skills below.
+// Living foes within Chebyshev radius r of a point (defaults to the player).
+function enemiesNear(r, cx, cy) {
+  const x = cx == null ? player.x : cx, y = cy == null ? player.y : cy;
+  return enemies.filter(o => !o.dead && Math.abs(o.x - x) <= r && Math.abs(o.y - y) <= r);
+}
+// Living foes within Manhattan `range` of the player, nearest first.
+function foesInRange(range) {
+  return enemies
+    .filter(o => !o.dead && (Math.abs(o.x - player.x) + Math.abs(o.y - player.y)) <= range)
+    .sort((a, b) => (Math.abs(a.x - player.x) + Math.abs(a.y - player.y)) - (Math.abs(b.x - player.x) + Math.abs(b.y - player.y)));
+}
+// A walkable, unoccupied tile adjacent to enemy e (for blink targeting), or null.
+function adjacentOpenTile(e) {
+  const dirs = [[0,-1],[0,1],[-1,0],[1,0],[-1,-1],[1,1],[-1,1],[1,-1]];
+  for (const [dx, dy] of dirs) {
+    const x = e.x + dx, y = e.y + dy;
+    if (x < 0 || y < 0 || x >= MAP_W || y >= MAP_H) continue;
+    const t = mapData[y][x];
+    if (t === 1 || t === 6 || t === 10 || t === 11) continue; // wall / deep water / sealed
+    if (getEnemyAt(x, y)) continue;
+    if (x === player.x && y === player.y) continue;
+    return { x, y };
+  }
+  return null;
+}
+// Spell base damage shared by the Mage/Templar nuke actives (scales with Spirit
+// and any Spell Power passives).
+function spellBase(flat, perLevel) {
+  return (flat + player.level * perLevel + totalAttr('spirit') * ATTR_FX.spellPerSpr) * spellPowerMult();
+}
+
+// Warrior — War Cry: a rallying shout that boosts your damage for several turns.
+function skillWarCry() {
+  combatBuffs.warcry = 5;
+  sfx('crit');
+  spawnFloatingText(player.x, player.y, '📣', '#ffcf6b');
+  log(`📣 ${HERO} lets out a War Cry — +50% damage for the next few turns!`, 'important');
+  return true;
+}
+
+// Warrior — Whirlwind: a spinning attack that hits every adjacent foe and may stun.
+function skillWhirlwind() {
+  const adj = adjacentToPlayer();
+  if (!adj.length) { log('🌀 No foe within reach to whirl through.'); return false; }
+  sfx('crit');
+  let total = 0;
+  adj.forEach(e => {
+    const h = rollPlayerHit(e);
+    const d = Math.max(1, Math.round(h.dmg * 1.8));
+    total += d;
+    dealDamage(e, d, true);
+    if (!e.dead && Math.random() < 0.35) applyStatusEffect(e, 'stun', 1, 'player');
+  });
+  lifestealHeal(total);
+  log(`🌀 ${HERO} whirls through ${adj.length} foe${adj.length === 1 ? '' : 's'} for ${total}!`, 'important');
+  return true;
+}
+
+// Warrior — Berserk: an explosive frenzy hitting everything within 2 tiles.
+function skillBerserk() {
+  const foes = enemiesNear(2);
+  if (!foes.length) { log('💥 No foes near enough to devastate.'); return false; }
+  sfx('crit'); screenFlash('#ff7733');
+  let total = 0;
+  foes.forEach(e => {
+    const h = rollPlayerHit(e);
+    const d = Math.max(1, Math.round(h.dmg * 2.2));
+    total += d;
+    dealDamage(e, d, true);
+  });
+  lifestealHeal(total);
+  log(`💥 ${HERO} erupts in a Berserk frenzy, hitting ${foes.length} foe${foes.length === 1 ? '' : 's'} for ${total}!`, 'important');
+  return true;
+}
+
+// Rogue — Poison Strike: a venomous stab that poisons an adjacent foe.
+function skillPoisonStrike() {
+  const adj = adjacentToPlayer().sort((a, b) => a.hp - b.hp);
+  if (!adj.length) { log('🧪 No foe adjacent to strike.'); return false; }
+  const e = adj[0];
+  const h = rollPlayerHit(e);
+  const d = Math.max(1, Math.round(h.dmg * 1.2));
+  sfx('attack');
+  dealDamage(e, d, h.isCrit);
+  if (!e.dead) applyStatusEffect(e, 'poison', 5, 'player');
+  log(`🧪 ${HERO} stabs ${enemyLabel(e)} for ${d} and leaves it poisoned!`, 'important');
+  return true;
+}
+
+// Rogue — Shadowstep: blink beside the nearest foe and land a guaranteed crit.
+function skillShadowstep() {
+  const foes = foesInRange(6);
+  if (!foes.length) { log('🌑 No foe within blink range.'); return false; }
+  const e = foes[0];
+  const spot = adjacentOpenTile(e);
+  if (spot) { player.x = spot.x; player.y = spot.y; }
+  spawnFloatingText(player.x, player.y, '🌑', '#9a7bce');
+  let dmg = getWeaponDamage() + player.level * 2 + totalStat('ATK') + attrDamage();
+  dmg = Math.round(dmg * 2.5 * classDmgDealtMult() * critDamageMult());
+  if (buffs.power) dmg = Math.round(dmg * 1.5);
+  dmg = Math.max(1, Math.min(dmg, Math.ceil(e.maxHp * 0.6)));
+  sfx('crit');
+  dealDamage(e, dmg, true);
+  log(`🌑 ${HERO} shadowsteps and crits ${enemyLabel(e)} for ${dmg}!`, 'important');
+  return true;
+}
+
+// Rogue — Fan of Knives: spray every adjacent foe and poison them.
+function skillFanOfKnives() {
+  const adj = adjacentToPlayer();
+  if (!adj.length) { log('🔅 No foes adjacent to spray.'); return false; }
+  sfx('crit');
+  let total = 0;
+  adj.forEach(e => {
+    const h = rollPlayerHit(e);
+    const d = Math.max(1, Math.round(h.dmg * 1.1));
+    total += d;
+    dealDamage(e, d, h.isCrit);
+    if (!e.dead) applyStatusEffect(e, 'poison', 4, 'player');
+  });
+  log(`🔅 ${HERO} fans blades into ${adj.length} foe${adj.length === 1 ? '' : 's'} for ${total}, poisoning them!`, 'important');
+  return true;
+}
+
+// Rogue — Death Mark: a massive guaranteed crit on the nearest foe in range.
+function skillDeathMark() {
+  const foes = foesInRange(6);
+  if (!foes.length) { log('🎯 No foe in range to mark.'); return false; }
+  const e = foes[0];
+  let dmg = getWeaponDamage() + player.level * 2 + totalStat('ATK') + attrDamage();
+  dmg = Math.round(dmg * 4.0 * classDmgDealtMult() * critDamageMult());
+  if (buffs.power) dmg = Math.round(dmg * 1.5);
+  dmg = Math.max(1, Math.min(dmg, Math.ceil(e.maxHp * 0.7)));
+  sfx('crit'); screenFlash('#88ff88');
+  dealDamage(e, dmg, true);
+  log(`🎯 DEATH MARK! ${HERO} obliterates ${enemyLabel(e)} for ${dmg}!`, 'important');
+  return true;
+}
+
+// Mage — Frost Nova: an icy burst that damages and stuns nearby foes.
+function skillFrostNova() {
+  const foes = enemiesNear(2);
+  if (!foes.length) { log('❄️ No foes near enough to freeze.'); return false; }
+  sfx('attack');
+  spawnFloatingText(player.x, player.y, '❄️', '#9fe8ff');
+  const base = spellBase(10, 1.5);
+  let total = 0;
+  foes.forEach(e => {
+    const d = Math.max(1, Math.round(base * 0.6));
+    total += d;
+    dealDamage(e, d, true);
+    if (!e.dead) applyStatusEffect(e, 'stun', 2, 'player');
+  });
+  log(`❄️ ${HERO}'s Frost Nova freezes ${foes.length} foe${foes.length === 1 ? '' : 's'} for ${total}!`, 'important');
+  return true;
+}
+
+// Mage — Chain Lightning: a bolt that arcs between up to three nearby foes.
+function skillChainLightning() {
+  let cur = foesInRange(6)[0];
+  if (!cur) { log('⚡ No foe within range.'); return false; }
+  sfx('attack');
+  const base = spellBase(18, 2);
+  const hit = [];
+  let mult = 1;
+  for (let i = 0; i < 3 && cur; i++) {
+    const d = Math.max(1, Math.round(base * mult));
+    dealDamage(cur, d, true);
+    spawnFloatingText(cur.x, cur.y, '⚡', '#ffe680');
+    hit.push(cur);
+    mult *= 0.6;
+    cur = enemies
+      .filter(o => !o.dead && !hit.includes(o) && (Math.abs(o.x - hit[i].x) + Math.abs(o.y - hit[i].y)) <= 3)
+      .sort((a, b) => (Math.abs(a.x - hit[i].x) + Math.abs(a.y - hit[i].y)) - (Math.abs(b.x - hit[i].x) + Math.abs(b.y - hit[i].y)))[0];
+  }
+  log(`⚡ ${HERO}'s Chain Lightning leaps through ${hit.length} foe${hit.length === 1 ? '' : 's'}!`, 'important');
+  return true;
+}
+
+// Mage — Meteor: a falling rock that smashes the nearest foe and scorches around it.
+function skillMeteor() {
+  const c = foesInRange(7)[0];
+  if (!c) { log('☄️ No foe within range.'); return false; }
+  sfx('boss'); screenFlash('#ff7733');
+  spawnFloatingText(c.x, c.y, '☄️', '#ff8844');
+  const base = spellBase(26, 2.5);
+  const foes = enemiesNear(1, c.x, c.y);
+  let total = 0;
+  foes.forEach(e => {
+    const d = Math.max(1, Math.round(base * (e === c ? 1 : 0.6)));
+    total += d;
+    dealDamage(e, d, true);
+  });
+  log(`☄️ ${HERO} calls down a Meteor for ${total} across ${foes.length} foe${foes.length === 1 ? '' : 's'}!`, 'important');
+  return true;
+}
+
+// Templar — Holy Smite: searing light that damages a foe and heals you for part of it.
+function skillHolySmite() {
+  const e = foesInRange(4)[0];
+  if (!e) { log('🔆 No foe within range to smite.'); return false; }
+  const dmg = Math.max(1, Math.round(spellBase(18, 2.5)));
+  sfx('crit');
+  spawnFloatingText(e.x, e.y, '🔆', '#ffe680');
+  dealDamage(e, dmg, true);
+  const heal = Math.min(player.maxHp - player.hp, Math.round(dmg * 0.5));
+  if (heal > 0) { player.hp += heal; spawnFloatingText(player.x, player.y, `+${heal}`, '#7fffaa'); }
+  log(`🔆 ${HERO} smites ${enemyLabel(e)} for ${dmg}${heal > 0 ? ` and heals ${heal}` : ''}!`, 'important');
+  return true;
+}
+
+// Templar — Sanctuary: hallow the ground for halved incoming damage, and heal.
+function skillSanctuary() {
+  combatBuffs.sanctuary = 5;
+  const heal = Math.min(player.maxHp - player.hp, Math.round(30 + player.level * 3 + totalAttr('spirit') * ATTR_FX.spellPerSpr));
+  if (heal > 0) player.hp += heal;
+  sfx('potion');
+  spawnFloatingText(player.x, player.y, '⛪', '#ffe9a0');
+  log(`⛪ ${HERO} consecrates the ground — incoming damage halved for a few turns${heal > 0 ? `, +${heal} HP` : ''}.`, 'important');
+  return true;
+}
+
+// Templar — Judgment: smite every nearby foe and restore a burst of health.
+function skillJudgment() {
+  const foes = enemiesNear(2);
+  if (!foes.length && player.hp >= player.maxHp) { log('⚖️ No foes near and already at full health.'); return false; }
+  sfx('boss'); screenFlash('#ffe9a0');
+  const base = spellBase(22, 2.5);
+  let total = 0;
+  foes.forEach(e => {
+    const d = Math.max(1, Math.round(base));
+    total += d;
+    dealDamage(e, d, true);
+    spawnFloatingText(e.x, e.y, '⚖️', '#ffe680');
+  });
+  const heal = Math.min(player.maxHp - player.hp, Math.round(40 + player.level * 4));
+  if (heal > 0) player.hp += heal;
+  log(`⚖️ ${HERO} passes Judgment${foes.length ? ` on ${foes.length} foe${foes.length === 1 ? '' : 's'} for ${total}` : ''}${heal > 0 ? `, restoring ${heal} HP` : ''}!`, 'important');
+  return true;
+}
+
 // Run every nearby living enemy's turn once, bailing if the floor changes
 // mid-turn (e.g. a death warps you to the previous floor and rebuilds it).
 function runEnemyTurn() {
-  // Every passed turn (move, attack, or skill) ticks the class-skill cooldown.
-  if (player.skillCd > 0) player.skillCd--;
+  // Every passed turn (move, attack, or skill) ticks down active-skill cooldowns
+  // and any transient combat buffs (War Cry, Sanctuary, …).
+  if (player.skillCds) for (const k in player.skillCds) if (player.skillCds[k] > 0) player.skillCds[k]--;
+  for (const k in combatBuffs) if (combatBuffs[k] > 0) combatBuffs[k]--;
   const serial = floorSerial;
   enemies.filter(e => !e.dead).forEach(e => {
     if (floorSerial !== serial) return;
@@ -6564,13 +7081,20 @@ function enemyAttackPlayer(e) {
   let raw = Math.round(e.dmg * rnd(80, 120) / 100);
   if (beh.hitMult) raw = Math.round(raw * beh.hitMult);
   if (buffs.guard) raw = Math.round(raw * 0.6);
-  const dmg = mitigateDamage(raw, e.level);
+  const dmg = absorbWithMana(mitigateDamage(raw, e.level));
   player.hp = Math.max(0, player.hp - dmg);
   sfx('hurt');
   spawnFloatingText(player.x, player.y, `${dmg}`, '#ff3344');
   log(`${enemyLabel(e)} attacks ${HERO} for ${dmg}!`);
   if (player.hp <= player.maxHp * 0.25) screenFlash('#cc0000');
   if (e.bossAbility === 'lifesteal') bossLifesteal(e, dmg);
+  // Retribution (Templar passive): reflect part of a melee blow back at the foe.
+  const reflect = skillBonus('reflect');
+  if (reflect > 0 && !e.dead && dmg > 0) {
+    const rd = Math.max(1, Math.round(dmg * reflect));
+    spawnFloatingText(e.x, e.y, `${rd}`, '#ffcc66');
+    dealDamage(e, rd, false);
+  }
   tryBossStatusProc(e);
   updateBars();
   if (player.hp === 0) handleDeath();
@@ -6585,7 +7109,7 @@ function enemyRangedAttack(e) {
   }
   let raw = Math.round(e.dmg * rnd(75, 110) / 100);
   if (buffs.guard) raw = Math.round(raw * 0.6);
-  const dmg = mitigateDamage(raw, e.level);
+  const dmg = absorbWithMana(mitigateDamage(raw, e.level));
   player.hp = Math.max(0, player.hp - dmg);
   sfx(e.isBoss ? 'boss' : 'hurt');
   spawnFloatingText(player.x, player.y, `${dmg}`, '#c77dff');
@@ -6671,6 +7195,7 @@ function handleDeath() {
   const lostGold = Math.floor(player.gold / 2);
   player.gold -= lostGold;
   statusEffects = statusEffects.filter(s => s.target !== 'player');
+  player.skillCds = {}; combatBuffs = {}; // revived fresh — skills ready again
   sfx('death');
   // Remember where you fell so the Dungeon Gate can return you there.
   dungeonReturn = dungeonLevel;
@@ -6816,13 +7341,14 @@ function checkLevelUp() {
     player.xp -= needed;
     player.level++;
     player.attrPoints = (player.attrPoints || 0) + ATTR_POINTS_PER_LEVEL;
+    player.skillPoints = (player.skillPoints || 0) + SKILL_POINTS_PER_LEVEL;
     recomputeMaxStats();        // level grants more base HP/MP
     player.hp = player.maxHp;   // a level up fully restores you
     player.mp = player.maxMp;
     sfx('levelup');
     showLevelUpBanner(player.level);
     log(`⭐ LEVEL UP! You are now level ${player.level}!`, 'important');
-    log(`💠 +${ATTR_POINTS_PER_LEVEL} attribute points — open the 🎒 bag's HERO tab to spend them.`, 'important');
+    log(`💠 +${ATTR_POINTS_PER_LEVEL} attribute points (HERO tab) · +${SKILL_POINTS_PER_LEVEL} skill point (SKILLS tab).`, 'important');
     updateBars();
     renderPanel();
     saveGame();
@@ -6883,20 +7409,29 @@ function updateBars() {
     }
   }
 
-  // Nudge the HERO tab when there are unspent attribute points to spend.
+  // Nudge the HERO / SKILLS tabs when there are unspent points to spend.
   const pts = player.attrPoints || 0;
+  const sPts = player.skillPoints || 0;
   const heroTab = document.getElementById('tab-hero');
   if (heroTab) {
     heroTab.textContent = pts > 0 ? `HERO (${pts})` : 'HERO';
     heroTab.classList.toggle('has-points', pts > 0);
   }
-  // The HERO tab glow only shows once the bag is open, so also surface a
-  // pulsing badge on the always-visible BAG button as a persistent reminder.
+  const skillsTab = document.getElementById('tab-skills');
+  if (skillsTab) {
+    skillsTab.textContent = sPts > 0 ? `SKILLS (${sPts})` : 'SKILLS';
+    skillsTab.classList.toggle('has-points', sPts > 0);
+  }
+  // The tab glow only shows once the bag is open, so also surface a pulsing badge
+  // on the always-visible BAG button (combining attribute + skill points).
   const bagBadge = document.getElementById('bag-points-badge');
   if (bagBadge) {
-    bagBadge.textContent = pts;
-    bagBadge.classList.toggle('show', pts > 0);
+    const totalPts = pts + sPts;
+    bagBadge.textContent = totalPts;
+    bagBadge.classList.toggle('show', totalPts > 0);
   }
+  // Keep the learned-actives skill bar in sync.
+  renderSkillBar();
 
   const healLabel = document.getElementById('heal-label');
   const healBtn = document.querySelector('.heal-btn');
@@ -6916,7 +7451,7 @@ function updateBars() {
       const icon = document.getElementById('skill-icon');
       const label = document.getElementById('skill-label');
       if (icon) icon.textContent = sk.icon;
-      const cd = player.skillCd || 0;
+      const cd = skillCd(sk.id);
       const ready = cd === 0 && player.mp >= sk.mp && !inTown;
       if (label) label.textContent = cd > 0 ? `${cd}` : `${sk.mp}MP`;
       skillBtn.title = `${sk.name} — ${sk.desc} (${sk.mp} MP, ${sk.cd}-turn cooldown) · press R`;
@@ -6965,6 +7500,8 @@ function switchTab(tab) {
   document.getElementById('tab-inv').classList.toggle('active', tab==='inv');
   document.getElementById('tab-equip').classList.toggle('active', tab==='equip');
   document.getElementById('tab-hero').classList.toggle('active', tab==='hero');
+  const st = document.getElementById('tab-skills');
+  if (st) st.classList.toggle('active', tab==='skills');
   renderPanel();
 }
 
@@ -7025,6 +7562,8 @@ function renderPanel() {
     el.innerHTML = SLOT_KEYS.map(s => renderSlot(s, SLOTS[s].label)).join('') +
       `<div style="margin-top:8px;font-size:10px;color:#555">Tap EQUIP on any loot<br>item to gear up.</div>` +
       renderCosmetics();
+  } else if (currentTab === 'skills') {
+    renderSkills(el);
   } else {
     renderHero(el);
   }
@@ -7090,6 +7629,68 @@ function renderHero(el) {
     ${rows}`;
 }
 
+// SKILLS tab: the class skill tree. Each node shows its type, rank, prerequisites,
+// and a + to buy it with a skill point (greyed until its level/prereqs are met).
+function renderSkills(el) {
+  const cls = playerClass();
+  if (!cls) { el.innerHTML = '<div class="hero-sub" style="padding:12px">Pick a class to unlock its skill tree.</div>'; return; }
+  const pts = player.skillPoints || 0;
+  const nodes = classSkillTree().map(n => {
+    const rank = skillRank(n.id);
+    const owned = rank > 0;
+    const maxed = rank >= (n.max || 1);
+    const locked = !skillReqMet(n);
+    const reqBits = [];
+    if ((n.lvl || 1) > 1) reqBits.push(`Lv${n.lvl}`);
+    if (n.req) for (const [rid, rk] of n.req) { const rn = skillNode(rid); reqBits.push(`${rn ? rn.name : rid}${rk > 1 ? ` ${rk}` : ''}`); }
+    const typeTag = n.type === 'active'
+      ? `<span class="sk-type act">⚡ ACTIVE · ${n.mp}MP · ${n.cd}cd</span>`
+      : `<span class="sk-type pas">PASSIVE</span>`;
+    const rankTag = (n.max || 1) > 1
+      ? `<span class="sk-rank">${rank}/${n.max}</span>`
+      : (owned ? `<span class="sk-rank">✓</span>` : '');
+    const btn = maxed
+      ? `<button class="sk-buy maxed" disabled>✓</button>`
+      : `<button class="sk-buy" ${canBuySkill(n) ? '' : 'disabled'} onclick="buySkill('${n.id}')">+</button>`;
+    return `<div class="sk-node${owned ? ' owned' : ''}${locked && !owned ? ' locked' : ''}">
+      <div class="sk-top">
+        <span class="sk-icon">${n.icon}</span>
+        <div class="sk-titles">
+          <div class="sk-name">${n.name} ${rankTag}</div>
+          <div class="sk-meta">${typeTag}${reqBits.length ? ` <span class="sk-req">${locked && !owned ? '🔒 ' : ''}${reqBits.join(' · ')}</span>` : ''}</div>
+        </div>
+        ${btn}
+      </div>
+      <div class="sk-desc">${n.desc}</div>
+    </div>`;
+  }).join('');
+  el.innerHTML = `
+    <div class="hero-power">
+      <div class="hp-label">🌟 SKILL POINTS</div>
+      <div class="hp-value">${pts}</div>
+    </div>
+    <div class="hero-sub">${cls.icon} ${cls.name} · ${spentSkillPoints()} learned</div>
+    <div class="hero-points">${pts > 0 ? `${pts} point${pts > 1 ? 's' : ''} to spend!` : 'Level up to earn more skill points.'}</div>
+    ${nodes}`;
+}
+
+// The on-screen bar of LEARNED active skills (everything beyond the baseline class
+// skill, which keeps its own ⚡ button). Number keys 1–4 cast these in order.
+function renderSkillBar() {
+  const bar = document.getElementById('skill-bar');
+  if (!bar) return;
+  const extras = activeSkillList().filter(s => !s.baseline);
+  if (!extras.length || inTown) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+  bar.style.display = 'flex';
+  bar.innerHTML = extras.map((s, i) => {
+    const cd = skillCd(s.id);
+    const ready = cd === 0 && player.mp >= s.mp && player.hp > 0;
+    return `<button class="skillbar-btn ${ready ? 'ready' : 'disabled'}" title="${s.name} — ${s.desc} (${s.mp} MP, ${s.cd}-turn cooldown) · press ${i + 1}" onclick="castSkillById('${s.id}')">
+      <span class="sb-key">${i + 1}</span><span class="sb-icon">${s.icon}</span><span class="sb-info">${cd > 0 ? cd : s.mp + 'MP'}</span>
+    </button>`;
+  }).join('');
+}
+
 // ── CLASS SELECTION ──
 // The mandatory pick shown on a new game (and once for saves that predate
 // classes). Building the cards from CLASSES keeps it in sync with the data.
@@ -7118,6 +7719,7 @@ function chooseClass(key) {
   if (!cls) return;
   player.class = key;
   player.skillCd = 0;
+  player.skills = {}; player.skillCds = {}; combatBuffs = {};
   recomputeMaxStats();
   player.hp = player.maxHp;
   player.mp = player.maxMp;
@@ -7126,7 +7728,7 @@ function chooseClass(key) {
   if (ov) ov.classList.remove('open');
   log(`${cls.icon} You are a ${cls.name}! ${cls.passive}. Skill: ${cls.skill.icon} ${cls.skill.name} — press R to cast.`, 'important');
   sfx('levelup');
-  updateBars(); renderPanel(); draw(); saveGame();
+  updateBars(); renderPanel(); renderSkillBar(); draw(); saveGame();
 }
 
 // If the (new) class can't wield the equipped weapon, stow it in the bag.
@@ -7146,15 +7748,20 @@ function changeClass(key) {
   const cost = classChangeCost();
   if (player.gold < cost) { log('Not enough gold to retrain.'); return; }
   player.gold -= cost;
+  // Skill trees are class-specific: refund everything spent and wipe the old
+  // tree so the player can re-spec into the new class's skills from scratch.
+  const refunded = spentSkillPoints();
   player.class = key;
   player.skillCd = 0;
+  player.skills = {}; player.skillCds = {}; combatBuffs = {};
+  player.skillPoints = (player.skillPoints || 0) + refunded;
   recomputeMaxStats();
   if (player.hp > player.maxHp) player.hp = player.maxHp;
   if (player.mp > player.maxMp) player.mp = player.maxMp;
   revalidateWeapon(cls);
   sfx('shrine');
-  log(`${cls.icon} You retrain as a ${cls.name}! Skill: ${cls.skill.icon} ${cls.skill.name}.`, 'important');
-  updateBars(); renderPanel(); renderTrainer(); draw(); saveGame();
+  log(`${cls.icon} You retrain as a ${cls.name}! Skill: ${cls.skill.icon} ${cls.skill.name}.${refunded ? ` ${refunded} skill point${refunded === 1 ? '' : 's'} refunded.` : ''}`, 'important');
+  updateBars(); renderPanel(); renderSkillBar(); renderTrainer(); draw(); saveGame();
 }
 
 function renderSlot(slot, label) {
@@ -7480,6 +8087,12 @@ document.addEventListener('keydown', e => {
   if (e.key==='q'||e.key==='Q')          useHealthPotion();
   if (e.key==='e'||e.key==='E')          useManaPotion();
   if (e.key==='r'||e.key==='R')          castSkill();
+  // Number keys cast learned tree actives in skill-bar order.
+  if (e.key>='1' && e.key<='4') {
+    const extras = activeSkillList().filter(s => !s.baseline);
+    const sk = extras[parseInt(e.key, 10) - 1];
+    if (sk) castSkillById(sk.id);
+  }
   if (e.key==='t'||e.key==='T')          enterTown();
   if (e.key==='b'||e.key==='B'||e.key==='i'||e.key==='I') togglePanel();
 });
@@ -7546,6 +8159,26 @@ function loadGame() {
     // init flow prompts the player to choose one. Drop any unknown class id.
     if (player.class && !CLASSES[player.class]) player.class = null;
     if (player.skillCd == null) player.skillCd = 0;
+    // Migrate saves that predate the skill tree.
+    if (player.skillPoints == null) player.skillPoints = 0;
+    if (!player.skills || typeof player.skills !== 'object') player.skills = {};
+    if (!player.skillCds || typeof player.skillCds !== 'object') player.skillCds = {};
+    // Fold the old single-skill cooldown into the per-skill map for the baseline.
+    if (player.class && CLASSES[player.class] && player.skillCd) {
+      const bid = CLASSES[player.class].skill.id;
+      if (player.skillCds[bid] == null) player.skillCds[bid] = player.skillCd;
+    }
+    // Drop any skill ranks that don't belong to the current class's tree (e.g.
+    // after a class change on an older save), then grant points retroactively for
+    // levels gained before the tree existed (1 per level above 1, minus any
+    // already banked or spent on valid nodes).
+    {
+      const valid = new Set(classSkillTree().map(n => n.id));
+      for (const k of Object.keys(player.skills)) if (!valid.has(k)) delete player.skills[k];
+      const earned = Math.max(0, (player.level || 1) - 1) * SKILL_POINTS_PER_LEVEL;
+      const have = (player.skillPoints || 0) + spentSkillPoints();
+      if (have < earned) player.skillPoints += (earned - have);
+    }
     // Migrate saves that predate the deepest-floor tracker / town hub.
     if (player.maxFloor == null) player.maxFloor = data.dungeonLevel || 1;
     // Migrate saves that predate cleared-floor tracking.
