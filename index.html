@@ -551,6 +551,14 @@ const FLAVOR = {
 const STAT_NAMES = ['ATK','DEF','SPD','LCK','HP','MP','CRIT'];
 const HERO = '🧙';
 
+const BOSSES = [
+  { type: '👑', name: 'Rat King',      floor: 5  },
+  { type: '🔥', name: 'Inferno Demon', floor: 10 },
+  { type: '🐲', name: 'Elder Dragon',  floor: 15 },
+  { type: '💀', name: 'Death Knight',  floor: 20 },
+  { type: '👁', name: 'The All-Seer',  floor: 25 },
+];
+
 // ══════════════════════════════════════════
 // STATE
 // ══════════════════════════════════════════
@@ -562,6 +570,7 @@ let groundItems = []; // { x, y, item }
 let merchant = null;  // { x, y, stock: [...] } when present
 let hasFountain = false;
 let floatingTexts = [];
+let statusEffects = [];
 let enemies = [];
 let currentTab = 'inv';
 let selectedItem = null;
@@ -771,7 +780,8 @@ function sellItem(i) {
 
 function spawnEnemies() {
   enemies = [];
-  const count = 4 + dungeonLevel * 2;
+  const isBossFloor = dungeonLevel % 5 === 0;
+  const count = isBossFloor ? 1 + Math.floor(dungeonLevel / 5) : 4 + dungeonLevel * 2;
   for (let i = 0; i < count; i++) {
     let ex, ey;
     let tries = 0;
@@ -779,17 +789,32 @@ function spawnEnemies() {
       ex = rnd(1, MAP_W-1); ey = rnd(1, MAP_H-1); tries++;
     } while ((mapData[ey][ex] !== 0 || (ex === player.x && ey === player.y) || getEnemyAt(ex,ey)) && tries < 100);
     if (tries < 100) {
-      const tierIdx = Math.min(dungeonLevel-1, 4);
-      // Damage scales with depth and enemy type; deeper monsters hit much harder.
-      const baseDmg = 4 + dungeonLevel * 2 + tierIdx * 2;
-      enemies.push({
-        x: ex, y: ey,
-        hp: 10 + dungeonLevel * 6,
-        maxHp: 10 + dungeonLevel * 6,
-        type: ['🐀','👹','💀','🧟','🐉'][tierIdx],
-        dmg: baseDmg,
-        dead: false,
-      });
+      if (isBossFloor && i === 0) {
+        const bossIdx = Math.min(Math.floor(dungeonLevel / 5) - 1, BOSSES.length - 1);
+        const boss = BOSSES[bossIdx];
+        const bossHp = (10 + dungeonLevel * 6) * 3;
+        const bossDmg = (4 + dungeonLevel * 2) * 1.5;
+        enemies.push({
+          x: ex, y: ey,
+          hp: bossHp, maxHp: bossHp,
+          type: boss.type, name: boss.name,
+          dmg: Math.round(bossDmg),
+          dead: false, isBoss: true,
+          statusChance: 0.25,
+        });
+        log(`⚠️ ${boss.name} ${boss.type} guards this floor!`, 'important');
+      } else {
+        const tierIdx = Math.min(dungeonLevel-1, 4);
+        const baseDmg = 4 + dungeonLevel * 2 + tierIdx * 2;
+        enemies.push({
+          x: ex, y: ey,
+          hp: 10 + dungeonLevel * 6,
+          maxHp: 10 + dungeonLevel * 6,
+          type: ['🐀','👹','💀','🧟','🐉'][tierIdx],
+          dmg: baseDmg,
+          dead: false,
+        });
+      }
     }
   }
 }
@@ -1075,15 +1100,32 @@ function draw() {
   // Enemies
   enemies.filter(e => !e.dead).forEach(e => {
     const px = offX + e.x * tw, py = offY + e.y * th;
-    // dark backing disc so the sprite reads against floor
+    const radius = e.isBoss ? tw * 0.54 : tw * 0.42;
+    // boss aura
+    if (e.isBoss) {
+      ctx.fillStyle = 'rgba(255,50,50,0.2)';
+      ctx.beginPath();
+      ctx.arc(px + tw/2, py + th/2, tw * 0.6, 0, Math.PI*2);
+      ctx.fill();
+    }
+    // dark backing disc
     ctx.fillStyle = 'rgba(0,0,0,0.4)';
     ctx.beginPath();
-    ctx.arc(px + tw/2, py + th/2, tw*0.42, 0, Math.PI*2);
+    ctx.arc(px + tw/2, py + th/2, radius, 0, Math.PI*2);
     ctx.fill();
-    ctx.font = `${Math.round(tw * 0.78)}px serif`;
+    ctx.font = `${Math.round(tw * (e.isBoss ? 0.95 : 0.78))}px serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(e.type, px + tw/2, py + th/2 + th*0.04);
+
+    // Status effect icons
+    const eEffects = statusEffects.filter(s => s.target === e);
+    if (eEffects.length) {
+      ctx.font = `${Math.round(tw * 0.28)}px serif`;
+      eEffects.forEach((s, i) => {
+        ctx.fillText(s.effect === 'poison' ? '🧪' : '⚡', px + tw * 0.15 + i * tw * 0.25, py + th * 0.92);
+      });
+    }
 
     // HP bar
     if (e.hp < e.maxHp) {
@@ -1092,7 +1134,7 @@ function draw() {
       ctx.fillRect(px, py, bw+2, bh+1);
       ctx.fillStyle = '#3a0000';
       ctx.fillRect(px+1, py, bw, bh);
-      ctx.fillStyle = '#ff3344';
+      ctx.fillStyle = e.isBoss ? '#ff6622' : '#ff3344';
       ctx.fillRect(px+1, py, bw * (e.hp/e.maxHp), bh);
     }
   });
@@ -1116,6 +1158,16 @@ function draw() {
   ctx.textBaseline = 'middle';
   ctx.fillText(HERO, px + tw/2, py + th/2 + th*0.04);
   ctx.shadowBlur = 0;
+
+  // Player status effect icons
+  const pEffects = statusEffects.filter(s => s.target === 'player');
+  if (pEffects.length) {
+    ctx.font = `${Math.round(tw * 0.28)}px serif`;
+    ctx.textAlign = 'center';
+    pEffects.forEach((s, i) => {
+      ctx.fillText(s.effect === 'poison' ? '🧪' : '⚡', px + tw * 0.15 + i * tw * 0.25, py + th * 0.92);
+    });
+  }
 
   // Floating damage numbers
   const now = Date.now();
@@ -1144,10 +1196,85 @@ function spawnFloatingText(x, y, text, color) {
 }
 
 // ══════════════════════════════════════════
+// STATUS EFFECTS
+// ══════════════════════════════════════════
+
+function applyStatusEffect(target, effect, turns, source) {
+  const existing = statusEffects.find(s => s.target === target && s.effect === effect);
+  if (existing) { existing.turns = Math.max(existing.turns, turns); return; }
+  statusEffects.push({ target, effect, turns, source });
+}
+
+function tickStatusEffects() {
+  statusEffects = statusEffects.filter(s => {
+    if (s.target === 'player') {
+      if (s.effect === 'poison') {
+        const dmg = 2 + dungeonLevel;
+        player.hp = Math.max(1, player.hp - dmg);
+        spawnFloatingText(player.x, player.y, `${dmg}`, '#44dd44');
+        log(`🧪 Poison deals ${dmg} damage!`);
+        updateBars();
+      }
+      if (s.effect === 'stun') {
+        log('⚡ You are stunned and cannot move!');
+      }
+    } else {
+      const e = s.target;
+      if (e.dead) return false;
+      if (s.effect === 'poison') {
+        const dmg = 2 + dungeonLevel;
+        e.hp -= dmg;
+        spawnFloatingText(e.x, e.y, `${dmg}`, '#44dd44');
+        log(`🧪 Poison deals ${dmg} to ${e.isBoss ? e.name : e.type}!`);
+        if (e.hp <= 0) { e.dead = true; log(`${e.isBoss ? e.name : e.type} succumbed to poison!`, 'important'); }
+      }
+    }
+    s.turns--;
+    return s.turns > 0;
+  });
+}
+
+function isPlayerStunned() {
+  return statusEffects.some(s => s.target === 'player' && s.effect === 'stun');
+}
+
+function tryBossStatusProc(e) {
+  if (!e.statusChance) return;
+  if (Math.random() < e.statusChance) {
+    const effect = Math.random() < 0.6 ? 'poison' : 'stun';
+    const turns = effect === 'poison' ? 3 : 1;
+    applyStatusEffect('player', effect, turns, e);
+    const icon = effect === 'poison' ? '🧪' : '⚡';
+    log(`${icon} ${e.name} inflicts ${effect}!`, 'important');
+  }
+}
+
+function tryPlayerStatusProc(e) {
+  const w = equipped.weapon;
+  if (!w) return;
+  const tierOrder = Object.keys(TIERS);
+  const tierIdx = tierOrder.indexOf(w.tier);
+  if (tierIdx >= 4 && Math.random() < 0.15) {
+    const effect = Math.random() < 0.5 ? 'poison' : 'stun';
+    const turns = effect === 'poison' ? 3 : 1;
+    applyStatusEffect(e, effect, turns, 'player');
+    const icon = effect === 'poison' ? '🧪' : '⚡';
+    const label = e.isBoss ? e.name : e.type;
+    log(`${icon} Your ${w.name} inflicts ${effect} on ${label}!`, 'loot');
+  }
+}
+
+// ══════════════════════════════════════════
 // MOVEMENT & COMBAT
 // ══════════════════════════════════════════
 
 function move(dx, dy) {
+  if (isPlayerStunned()) {
+    tickStatusEffects();
+    draw();
+    return;
+  }
+  tickStatusEffects();
   const nx = player.x + dx, ny = player.y + dy;
   if (nx < 0 || ny < 0 || nx >= MAP_W || ny >= MAP_H) return;
 
@@ -1170,6 +1297,7 @@ function move(dx, dy) {
   // Stairs
   if (tile === 2) {
     dungeonLevel++;
+    statusEffects = [];
     log(`Descended to dungeon level ${dungeonLevel}!`, 'important');
     player.x = 5; player.y = 5;
     generateMap();
@@ -1232,22 +1360,24 @@ function attackEnemy(e) {
   log(`${HERO} hits ${e.type} for ${dmg} damage!`);
   if (e.hp <= 0) {
     e.dead = true;
-    const xp = 10 * dungeonLevel;
+    const xpMult = e.isBoss ? 5 : 1;
+    const goldMult = e.isBoss ? 3 : 1;
+    const xp = 10 * dungeonLevel * xpMult;
     player.xp += xp;
-    const gold = rnd(2, 8) + dungeonLevel * 3;
+    const gold = (rnd(2, 8) + dungeonLevel * 3) * goldMult;
     player.gold += gold;
-    log(`${e.type} defeated! +${xp} XP, +${gold}g`, 'important');
+    const label = e.isBoss ? `${e.name} ${e.type}` : e.type;
+    log(`${label} defeated! +${xp} XP, +${gold}g`, 'important');
     updateBars();
-    // Drop loot
-    if (Math.random() < 0.18) {
+    // Drop loot — bosses always drop
+    if (e.isBoss || Math.random() < 0.18) {
       const item = generateItem();
       groundItems.push({ x: e.x, y: e.y, item });
-      log(`💎 ${e.type} dropped: ${item.name}`, 'loot');
+      log(`💎 ${label} dropped: ${item.name}`, 'loot');
     }
-    // Small chance of a health potion drop so you aren't solely merchant-reliant.
     if (Math.random() < 0.08) {
       player.healPotions++;
-      log(`❤️ ${e.type} dropped a Health Potion! (${player.healPotions} held)`, 'loot');
+      log(`❤️ ${label} dropped a Health Potion! (${player.healPotions} held)`, 'loot');
       updateBars();
     }
     checkLevelUp();
@@ -1258,9 +1388,11 @@ function attackEnemy(e) {
     player.hp = Math.max(0, player.hp - edm);
     spawnFloatingText(player.x, player.y, `${edm}`, '#ff3344');
     log(`${e.type} hits ${HERO} back for ${edm}!`);
+    tryBossStatusProc(e);
     updateBars();
     if (player.hp === 0) handleDeath();
   }
+  tryPlayerStatusProc(e);
   saveGame();
   draw();
 }
@@ -1310,6 +1442,7 @@ function handleDeath() {
   const lostGold = Math.floor(player.gold / 2);
   player.gold -= lostGold;
   player.hp = Math.floor(player.maxHp * 0.4);
+  statusEffects = statusEffects.filter(s => s.target !== 'player');
   player.x = 5; player.y = 5;
   log(`💀 ${HERO} was slain! Lost ${lostGold}g and crawled back to the entrance.`, 'important');
   // Respawn enemies/loot are kept; just regenerate enemy positions away from spawn.
@@ -1662,7 +1795,7 @@ window.addEventListener('load', () => { resizeCanvas(); draw(); });
 // so their robe glow pulses. Idle otherwise to save battery.
 let lastPulse = 0;
 function pulseLoop(ts) {
-  if ((merchant || hasFountain || floatingTexts.length) && ts - lastPulse > 60) { lastPulse = ts; draw(); }
+  if ((merchant || hasFountain || floatingTexts.length || statusEffects.length) && ts - lastPulse > 60) { lastPulse = ts; draw(); }
   requestAnimationFrame(pulseLoop);
 }
 requestAnimationFrame(pulseLoop);
