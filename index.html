@@ -1360,6 +1360,50 @@ function reachableFrom(sx, sy) {
   return seen;
 }
 
+// Carve a guaranteed-open L-shaped path, clearing both rock and water so the
+// connection can't be silently blocked by a pool mid-route.
+function tunnel(x1, y1, x2, y2) {
+  let x = x1, y = y1;
+  const open = () => { const t = mapData[y][x]; if (t === 1 || t === 6) mapData[y][x] = 0; };
+  open();
+  if (Math.random() < 0.5) {
+    while (x !== x2) { x += Math.sign(x2 - x); open(); }
+    while (y !== y2) { y += Math.sign(y2 - y); open(); }
+  } else {
+    while (y !== y2) { y += Math.sign(y2 - y); open(); }
+    while (x !== x2) { x += Math.sign(x2 - x); open(); }
+  }
+}
+
+// Guarantee every carved-out area is reachable from the start. Water pools and
+// pillars can sever a room from the corridor network, leaving an area the
+// player can see but never enter — tunnel through to any such pocket until the
+// whole floor is connected. Returns the final reachable set.
+function ensureConnected() {
+  for (let pass = 0; pass < 60; pass++) {
+    const reach = reachableFrom(player.x, player.y);
+    // Find an unreachable tile the player could otherwise stand on.
+    let target = null;
+    for (let y = 1; y < MAP_H - 1 && !target; y++) {
+      for (let x = 1; x < MAP_W - 1; x++) {
+        if (isFloorPassable(mapData[y][x]) && !reach.has(y + ',' + x)) { target = { x, y }; break; }
+      }
+    }
+    if (!target) return reach;                       // fully connected
+    // Tunnel from the orphaned tile to the nearest reachable one.
+    let near = null, nd = Infinity;
+    for (const key of reach) {
+      const c = key.indexOf(',');
+      const ry = +key.slice(0, c), rx = +key.slice(c + 1);
+      const d = Math.abs(rx - target.x) + Math.abs(ry - target.y);
+      if (d < nd) { nd = d; near = { x: rx, y: ry }; }
+    }
+    if (!near) return reach;
+    tunnel(target.x, target.y, near.x, near.y);
+  }
+  return reachableFrom(player.x, player.y);
+}
+
 // Pick a random plain-floor tile, optionally limited to a reachable set.
 function randomFloorTile(reach) {
   for (let i = 0; i < 200; i++) {
@@ -1384,6 +1428,16 @@ function tryBuildVault(reach) {
       if (fx < 0 || fy < 0 || fx >= MAP_W || fy >= MAP_H) continue;
       if (mapData[wy][wx] !== 1 || mapData[fy][fx] !== 0) continue;
       if (reach && !reach.has(fy + ',' + fx)) continue;
+      // The vault must be truly sealed: every neighbour of the interior other
+      // than the chosen door cell has to be solid rock, or the player could
+      // just stroll in from the side and the lock would mean nothing.
+      let sealed = true;
+      for (const [ox, oy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+        const nx = x + ox, ny = y + oy;
+        if (nx === wx && ny === wy) continue;        // the door itself
+        if (mapData[ny][nx] !== 1) { sealed = false; break; }
+      }
+      if (!sealed) continue;
       mapData[y][x] = 0;                             // hollow out the vault
       mapData[wy][wx] = 11;                          // locked door
       groundItems.push({ x, y, luck: 6 });          // guaranteed rich chest inside
@@ -1458,8 +1512,10 @@ function generateMap() {
     }
   });
 
-  // Everything the player can reach from the start tile (water excluded).
-  const reach = reachableFrom(player.x, player.y);
+  // Stitch together any room or pocket the water pools or pillars cut off, so
+  // no part of the floor is drawn open yet impossible to reach. Everything the
+  // player can reach from the start tile is then valid for placement.
+  const reach = ensureConnected();
 
   // ── STAIRS ── on a reachable floor tile, as far from the start as possible.
   let best = null, bestD = -1;
@@ -1568,6 +1624,15 @@ function tryBuildCell(reach, who) {
       if (fx < 0 || fy < 0 || fx >= MAP_W || fy >= MAP_H) continue;
       if (mapData[wy][wx] !== 1 || mapData[fy][fx] !== 0) continue;
       if (reach && !reach.has(fy + ',' + fx)) continue;
+      // Seal the cell so the cracked wall is the only way in — otherwise the
+      // prisoner could be reached without smashing through.
+      let sealed = true;
+      for (const [ox, oy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+        const nx = x + ox, ny = y + oy;
+        if (nx === wx && ny === wy) continue;        // the cracked wall itself
+        if (mapData[ny][nx] !== 1) { sealed = false; break; }
+      }
+      if (!sealed) continue;
       mapData[y][x] = 0;       // cell interior
       mapData[wy][wx] = 10;    // cracked wall — smash to break in
       quest = { type: 'jailbreak', npc: { x, y, emoji: who.emoji, name: who.name }, done: false };
