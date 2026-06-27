@@ -4052,8 +4052,8 @@ function draw() {
         // Floor base with subtle checker
         ctx.fillStyle = (x+y)%2===0 ? C.floor : C.floorAlt;
         ctx.fillRect(px, py, tw, th);
-        // flagstone seams
-        ctx.fillStyle = C.seam;
+        // flagstone seams — barely-there grid lines
+        ctx.fillStyle = 'rgba(0,0,0,0.06)';
         ctx.fillRect(px, py, tw, 1);
         ctx.fillRect(px, py, 1, th);
         // speckle / rubble (deterministic)
