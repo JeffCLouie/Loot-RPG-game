@@ -862,19 +862,31 @@
     }
     #side-panel.collapsed { transform: none; opacity: 1; pointer-events: auto; }
 
-    /* Town / shop / mystic menus are confined to the MAP area on web: their
-       right edge stops at the loot drawer column so LOOT / GEAR / HERO stay
-       visible and clickable while a service is open. The modal grows to fill
-       the play area instead of floating as a small centered box. */
+    /* Town / shop / mystic menus REPLACE the map on web: they sit inside #main
+       and occupy exactly the map column — left edge starts after the log,
+       right edge stops before the loot drawer. The header, log, and
+       LOOT / GEAR / HERO tabs stay fully visible and usable (no backdrop, no
+       blur), so the menu reads as the map area swapping to a menu rather than a
+       window popping up over everything. */
     #town-overlay, #shop-overlay, #mystic-overlay {
+      position: absolute;
+      top: 0; bottom: 0;
+      left: clamp(250px, 24vw, 480px);
       right: clamp(210px, 22vw, 440px);
-      background: rgba(0,0,0,0.55);
+      padding: 0;
+      background: #120e08;
+      z-index: 240;
     }
+    /* Shop / mystic still stack above the town menu when opened from a service. */
+    #shop-overlay, #mystic-overlay { z-index: 245; }
     #town-modal, #shop-modal, #mystic-modal {
       width: 100%;
-      max-width: 560px;
+      max-width: none;
       height: 100%;
-      max-height: calc(100vh - 32px);
+      max-height: none;
+      border: none;
+      border-radius: 0;
+      box-shadow: none;
     }
 
     /* Header reserves room on the right for the floating action buttons that
@@ -1106,6 +1118,50 @@
     </div>
     <div id="panel-content"></div>
   </div>
+
+  <!-- Town / shop / mystic service menus live INSIDE #main so that on web they
+       can fill exactly the MAP column (between the log and the loot drawer) and
+       leave the header, log, and LOOT/GEAR/HERO tabs fully usable. On mobile
+       they fall back to full-screen fixed overlays. -->
+  <div id="shop-overlay" onclick="if(event.target===this)closeShop()">
+    <div id="shop-modal">
+      <div id="shop-header">
+        <span id="shop-title">🧙‍♂️ Wandering Merchant</span>
+        <button id="shop-close" onclick="closeShop()">✕</button>
+      </div>
+      <div id="shop-gold">Your gold: <span id="shop-gold-count">0</span>g</div>
+      <div id="shop-tabs">
+        <button class="shop-tab active" id="shoptab-buy" onclick="shopTab('buy')">BUY</button>
+        <button class="shop-tab" id="shoptab-sell" onclick="shopTab('sell')">SELL</button>
+      </div>
+      <div id="shop-content"></div>
+    </div>
+  </div>
+
+  <div id="mystic-overlay" onclick="if(event.target===this)closeMystic()">
+    <div id="mystic-modal">
+      <div id="mystic-header">
+        <span id="mystic-title">🔮 Wandering Mystic</span>
+        <button id="mystic-close" onclick="closeMystic()">✕</button>
+      </div>
+      <div id="mystic-gold">Your gold: <span id="mystic-gold-count">0</span>g</div>
+      <div id="mystic-active" style="display:none"></div>
+      <div id="mystic-content"></div>
+    </div>
+  </div>
+
+  <div id="town-overlay" onclick="if(event.target===this)townBack()">
+    <div id="town-modal">
+      <div id="town-header">
+        <button id="town-back" onclick="townBack()" style="display:none" title="Back to town menu">←</button>
+        <span id="town-title">Town</span>
+        <button id="town-close" onclick="leaveTown()" title="Leave town for the dungeon">✕</button>
+      </div>
+      <div id="town-gold">Your gold: <span id="town-gold-count">0</span>g</div>
+      <div id="town-mats"></div>
+      <div id="town-content"></div>
+    </div>
+  </div>
 </div>
 
 <div id="tooltip"></div>
@@ -1118,46 +1174,6 @@
 <div id="levelup-banner">
   <div class="lvl-title">⭐ LEVEL UP!</div>
   <div class="lvl-sub">Open the 🎒 BAG → HERO tab to spend your points!</div>
-</div>
-
-<div id="shop-overlay" onclick="if(event.target===this)closeShop()">
-  <div id="shop-modal">
-    <div id="shop-header">
-      <span id="shop-title">🧙‍♂️ Wandering Merchant</span>
-      <button id="shop-close" onclick="closeShop()">✕</button>
-    </div>
-    <div id="shop-gold">Your gold: <span id="shop-gold-count">0</span>g</div>
-    <div id="shop-tabs">
-      <button class="shop-tab active" id="shoptab-buy" onclick="shopTab('buy')">BUY</button>
-      <button class="shop-tab" id="shoptab-sell" onclick="shopTab('sell')">SELL</button>
-    </div>
-    <div id="shop-content"></div>
-  </div>
-</div>
-
-<div id="mystic-overlay" onclick="if(event.target===this)closeMystic()">
-  <div id="mystic-modal">
-    <div id="mystic-header">
-      <span id="mystic-title">🔮 Wandering Mystic</span>
-      <button id="mystic-close" onclick="closeMystic()">✕</button>
-    </div>
-    <div id="mystic-gold">Your gold: <span id="mystic-gold-count">0</span>g</div>
-    <div id="mystic-active" style="display:none"></div>
-    <div id="mystic-content"></div>
-  </div>
-</div>
-
-<div id="town-overlay" onclick="if(event.target===this)townBack()">
-  <div id="town-modal">
-    <div id="town-header">
-      <button id="town-back" onclick="townBack()" style="display:none" title="Back to town menu">←</button>
-      <span id="town-title">Town</span>
-      <button id="town-close" onclick="leaveTown()" title="Leave town for the dungeon">✕</button>
-    </div>
-    <div id="town-gold">Your gold: <span id="town-gold-count">0</span>g</div>
-    <div id="town-mats"></div>
-    <div id="town-content"></div>
-  </div>
 </div>
 
 <div id="class-overlay">
