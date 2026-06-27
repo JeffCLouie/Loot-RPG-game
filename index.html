@@ -9,11 +9,12 @@
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
   :root {
-    --bg: #0a0a0f;
-    --panel: #11111a;
-    --border: #2a2a3a;
-    --text: #c8c8d0;
-    --gold: #c8a84b;
+    --bg: #0e0b1a;
+    --panel: #1f1830;
+    --border: #4a3d6a;
+    --frame: #c8a24b;
+    --text: #ece2cc;
+    --gold: #e8c267;
     --hp: #ff3b4e;
     --mp: #3a8bff;
 
@@ -28,7 +29,8 @@
   }
 
   body {
-    background: var(--bg);
+    background:
+      radial-gradient(circle at 50% -10%, #2a2148 0%, #150f26 55%, var(--bg) 100%);
     color: var(--text);
     font-family: 'Courier New', monospace;
     font-size: 13px;
@@ -47,11 +49,12 @@
     flex-wrap: wrap;
     gap: 10px 14px;
     padding: 6px 10px;
-    background: var(--panel);
-    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, #2c2344, #1a1430);
+    border-bottom: 2px solid var(--frame);
+    box-shadow: inset 0 1px 0 rgba(232,194,103,0.25), 0 2px 6px rgba(0,0,0,0.5);
     flex-shrink: 0;
   }
-  #header h1 { color: var(--gold); font-size: 14px; letter-spacing: 2px; }
+  #header h1 { color: var(--gold); font-size: 14px; letter-spacing: 2px; text-shadow: 0 0 6px rgba(232,194,103,0.5); }
   #stats { display: flex; gap: 14px; font-size: 11px; }
   .stat-bar { display: flex; align-items: center; gap: 4px; }
   .bar-track { width: 74px; height: 13px; background: #45455e; border: 1px solid #000; border-radius: 4px; box-shadow: inset 0 1px 2px rgba(0,0,0,0.6); overflow: hidden; }
@@ -112,8 +115,9 @@
     justify-content: space-between;
     gap: 8px;
     padding: 6px 8px;
-    background: var(--panel);
-    border-top: 1px solid var(--border);
+    background: linear-gradient(180deg, #1a1430, #2c2344);
+    border-top: 2px solid var(--frame);
+    box-shadow: inset 0 1px 0 rgba(232,194,103,0.2), 0 -2px 6px rgba(0,0,0,0.5);
     flex-shrink: 0;
     /* Stay above the bag overlay so the d-pad and action buttons remain usable. */
     position: relative;
@@ -187,12 +191,12 @@
     bottom: 0;
     width: 160px;
     z-index: 200;
-    background: var(--panel);
-    border-left: 1px solid var(--border);
+    background: linear-gradient(180deg, #241c38, #181226);
+    border-left: 2px solid var(--frame);
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    box-shadow: -4px 0 14px rgba(0,0,0,0.45);
+    box-shadow: -4px 0 14px rgba(0,0,0,0.55), inset 1px 0 0 rgba(232,194,103,0.2);
     transition: transform 0.18s ease, opacity 0.18s ease;
   }
   #side-panel.collapsed {
@@ -3323,31 +3327,34 @@ function weighted(obj) {
 
 // Each dungeon depth cycles through a visual theme so floors don't all look
 // alike. Every theme defines the full palette used by the tile renderer.
+// Palettes reworked toward a Golden Sun / Final Fantasy Tactics feel: warmer,
+// more saturated stone, sunlit wall caps, and floors lit brighter than walls so
+// the tiles read as a little painterly diorama.
 const THEMES = [
   { name: 'the Stone Crypt',
-    floor:'#2e2e42', floorAlt:'#26263a', wall:'#4a4a66', wallTop:'#64648a',
-    brickA:'#56567a', brickB:'#4e4e70', mortar:'#33334a', crack:'#2a2a3c',
-    seam:'#1c1c2c', speckle:'#3a3a52', accent:'rgba(90,140,70,0.3)', stairsGlow:'#ffd24b' },
+    floor:'#6b5d44', floorAlt:'#5e5139', wall:'#473d2c', wallTop:'#9a8255',
+    brickA:'#574a34', brickB:'#4d4030', mortar:'#352e20', crack:'#2a2418',
+    seam:'#3a3122', speckle:'#857143', accent:'rgba(130,180,95,0.25)', stairsGlow:'#ffe08a' },
   { name: 'the Mossy Caverns',
-    floor:'#243524', floorAlt:'#1d2b1d', wall:'#3a5236', wallTop:'#557a4e',
-    brickA:'#436147', brickB:'#3a5640', mortar:'#243a26', crack:'#1c2c1e',
-    seam:'#142016', speckle:'#3a5236', accent:'rgba(150,200,90,0.32)', stairsGlow:'#ffe24b' },
+    floor:'#3f6b3a', floorAlt:'#356030', wall:'#2a4626', wallTop:'#7cbb5e',
+    brickA:'#3a5e34', brickB:'#31522d', mortar:'#22381f', crack:'#1c2c18',
+    seam:'#284a24', speckle:'#74b557', accent:'rgba(185,235,115,0.30)', stairsGlow:'#dcff7a' },
   { name: 'the Lava Depths',
-    floor:'#3a221c', floorAlt:'#2c1916', wall:'#5a2c22', wallTop:'#8a3e2c',
-    brickA:'#6e3326', brickB:'#5e2c20', mortar:'#3a1c14', crack:'#ff6a2a',
-    seam:'#241310', speckle:'#7a3a20', accent:'rgba(255,120,40,0.35)', stairsGlow:'#ff9a3b' },
+    floor:'#5e3225', floorAlt:'#4f291b', wall:'#3a1d13', wallTop:'#c2552c',
+    brickA:'#6f3420', brickB:'#5e2d1b', mortar:'#2e160e', crack:'#ff7a2a',
+    seam:'#3a1c11', speckle:'#b05a30', accent:'rgba(255,145,55,0.30)', stairsGlow:'#ffb24b' },
   { name: 'the Frozen Halls',
-    floor:'#2a3a4a', floorAlt:'#22303e', wall:'#3e5a72', wallTop:'#6a90ad',
-    brickA:'#4a6a86', brickB:'#3e5c76', mortar:'#283a4a', crack:'#1e2c38',
-    seam:'#16222c', speckle:'#5a7a96', accent:'rgba(150,220,255,0.3)', stairsGlow:'#bfe8ff' },
+    floor:'#5e7e98', floorAlt:'#52708a', wall:'#39566e', wallTop:'#cdeeff',
+    brickA:'#4c6c86', brickB:'#405e78', mortar:'#2a4254', crack:'#d6f0ff',
+    seam:'#3a5a70', speckle:'#aadcf2', accent:'rgba(200,240,255,0.32)', stairsGlow:'#ecf9ff' },
   { name: 'the Sunken Tombs',
-    floor:'#4a4026', floorAlt:'#3e351f', wall:'#6e5d36', wallTop:'#9a8550',
-    brickA:'#7e6c40', brickB:'#6e5d36', mortar:'#4a3e22', crack:'#34291a',
-    seam:'#241c10', speckle:'#8a7548', accent:'rgba(220,200,120,0.3)', stairsGlow:'#ffe07a' },
+    floor:'#8e7848', floorAlt:'#7e6a40', wall:'#5d4d2c', wallTop:'#e8c873',
+    brickA:'#6f5d35', brickB:'#5f4f2d', mortar:'#3e331e', crack:'#c4a456',
+    seam:'#4a3e22', speckle:'#c8ae62', accent:'rgba(255,228,135,0.30)', stairsGlow:'#ffec9c' },
   { name: 'the Void Sanctum',
-    floor:'#2e2440', floorAlt:'#251d34', wall:'#4a3a6a', wallTop:'#6e54a0',
-    brickA:'#56447e', brickB:'#4a3a6e', mortar:'#332a4a', crack:'#22182c',
-    seam:'#1a1226', speckle:'#5a4a82', accent:'rgba(190,120,255,0.3)', stairsGlow:'#d9a0ff' },
+    floor:'#4d3c72', floorAlt:'#433463', wall:'#312452', wallTop:'#a684e0',
+    brickA:'#463674', brickB:'#3b2d62', mortar:'#271d45', crack:'#cca4ff',
+    seam:'#2f2452', speckle:'#9070d6', accent:'rgba(205,160,255,0.32)', stairsGlow:'#e6c0ff' },
 ];
 function currentTheme() { return THEMES[(dungeonLevel - 1) % THEMES.length]; }
 
@@ -3753,6 +3760,18 @@ function draw() {
           ctx.fillStyle = C.accent;
           ctx.fillRect(px+tw*0.2, py+th*0.2, tw*0.5, th*0.5);
         }
+        // Ambient occlusion: walls cast a soft shadow onto the floor below and
+        // to the right, giving the tiles a painterly sense of depth.
+        if (y > 0 && (mapData[y-1][x] === 1 || mapData[y-1][x] === 10)) {
+          ctx.fillStyle = 'rgba(0,0,0,0.28)';
+          ctx.fillRect(px, py, tw, Math.max(1, th*0.16));
+          ctx.fillStyle = 'rgba(0,0,0,0.12)';
+          ctx.fillRect(px, py + th*0.16, tw, Math.max(1, th*0.12));
+        }
+        if (x > 0 && (mapData[y][x-1] === 1 || mapData[y][x-1] === 10)) {
+          ctx.fillStyle = 'rgba(0,0,0,0.18)';
+          ctx.fillRect(px, py, Math.max(1, tw*0.14), th);
+        }
       }
     }
   }
@@ -4026,6 +4045,16 @@ function draw() {
     ctx.fillStyle = floorTint;
     ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   }
+
+  // Painterly vignette: a warm overhead light fading to shadowed edges, for
+  // that Golden Sun / Tactics diorama feel.
+  const cw = ctx.canvas.width, ch = ctx.canvas.height;
+  const vg = ctx.createRadialGradient(cw/2, ch*0.42, Math.min(cw, ch)*0.18, cw/2, ch*0.5, Math.max(cw, ch)*0.72);
+  vg.addColorStop(0, 'rgba(255,236,190,0.06)');
+  vg.addColorStop(0.55, 'rgba(0,0,0,0)');
+  vg.addColorStop(1, 'rgba(8,6,18,0.55)');
+  ctx.fillStyle = vg;
+  ctx.fillRect(0, 0, cw, ch);
 }
 
 function spawnFloatingText(x, y, text, color) {
