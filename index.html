@@ -2918,7 +2918,16 @@ function sfx(name) {
 // of the playhead so it never glitches.
 let musicTimer = null, musicStep = 0, musicNext = 0;
 let musicProg = null, musicLeadIdx = 4;
-const MUSIC_TEMPO = 0.26;     // seconds per eighth-note step (~115 BPM feel)
+// The track drifts between distinct instrument palettes ("sections") over time:
+// it holds one timbre for a couple of minutes, then slowly crossfades into the
+// next so the music keeps reinventing itself instead of sounding static.
+let musicSectionIdx = 0;      // index of the palette currently playing
+let musicTrans = null;        // active crossfade: { fromIdx, toIdx, start, end }
+let musicSectionEndTime = 0;  // ctx time at which the current section drifts on
+const SECTION_MIN = 95;       // shortest a section holds before drifting (sec)
+const SECTION_MAX = 150;      // longest a section holds before drifting (sec)
+const SECTION_FADE = 16;      // how long the crossfade between sections lasts (sec)
+const MUSIC_TEMPO = 0.26;     // base eighth-note step; sections nudge it (~115 BPM)
 const STEPS_PER_BAR = 8;      // eighth-notes per 4/4 bar
 const A2 = 110;               // reference pitch in Hz
 // Semitone offset from A2 → Hz.
@@ -2939,8 +2948,74 @@ const MUSIC_PROGS = [
 ];
 const mpick = (a) => a[Math.floor(Math.random() * a.length)];
 
-// A soft, pitched kick for the downbeats.
-function musicKick(when) {
+// ── Instrument palettes ("sections") ──
+// Each section is a full timbre kit — bass, pad/arp and lead get their own
+// oscillator shape and filter, plus per-section density and percussion mix. The
+// engine plays one for a couple of minutes, then crossfades into another, so the
+// same generative theme is re-voiced again and again with different instruments.
+const MUSIC_SECTIONS = [
+  { name: 'Cavern',  tempo: 0.26,
+    bass: { type: 'sawtooth', cutoff: 620,  q: 3, detune: 4, vol: 0.30 },
+    pad:  { type: 'sine',     cutoff: 1500, q: 1, detune: 4, vol: 0.13 },
+    lead: { type: 'triangle', cutoff: 3000, q: 1, detune: 5, vol: 0.20 },
+    leadDensity: 0.72, arpDensity: 0.5,
+    kickVol: 1.0, kickMidVol: 1.0, hatVol: 0.05 },
+  { name: 'Crystal', tempo: 0.24,
+    bass: { type: 'triangle', cutoff: 900,  q: 2, detune: 4, vol: 0.26 },
+    pad:  { type: 'triangle', cutoff: 2200, q: 1, detune: 6, vol: 0.12 },
+    lead: { type: 'sine',     cutoff: 4200, q: 1, detune: 3, vol: 0.18 },
+    leadDensity: 0.6, arpDensity: 0.66,
+    kickVol: 0.55, kickMidVol: 0.3, hatVol: 0.035 },
+  { name: 'Forge',   tempo: 0.225,
+    bass: { type: 'square',   cutoff: 520,  q: 4, detune: 6, vol: 0.22 },
+    pad:  { type: 'sawtooth', cutoff: 1200, q: 2, detune: 4, vol: 0.11 },
+    lead: { type: 'square',   cutoff: 2500, q: 1, detune: 5, vol: 0.16 },
+    leadDensity: 0.82, arpDensity: 0.45,
+    kickVol: 1.1, kickMidVol: 0.9, hatVol: 0.07 },
+  { name: 'Mist',    tempo: 0.30,
+    bass: { type: 'sine',     cutoff: 400,  q: 1, detune: 3, vol: 0.30 },
+    pad:  { type: 'sine',     cutoff: 1000, q: 1, detune: 4, vol: 0.14 },
+    lead: { type: 'triangle', cutoff: 2200, q: 1, detune: 4, vol: 0.17 },
+    leadDensity: 0.5, arpDensity: 0.7,
+    kickVol: 0.35, kickMidVol: 0.0, hatVol: 0.0 },
+];
+
+// The crossfade state at a given playhead time: which two palettes are in play
+// and how far blended (t: 0 = all `from`, 1 = all `to`). Outside a transition
+// `from` and `to` are the same section and t is 0.
+function musicBlend(time) {
+  if (musicTrans && time >= musicTrans.start) {
+    const span = musicTrans.end - musicTrans.start;
+    const t = Math.max(0, Math.min(1, (time - musicTrans.start) / span));
+    return { from: musicTrans.fromIdx, to: musicTrans.toIdx, t };
+  }
+  return { from: musicSectionIdx, to: musicSectionIdx, t: 0 };
+}
+// Crossfade a top-level numeric section field (tempo, densities, perc volumes).
+function musicLerp(key, blend) {
+  const a = MUSIC_SECTIONS[blend.from][key];
+  const b = MUSIC_SECTIONS[blend.to][key];
+  return a + (b - a) * blend.t;
+}
+// Play one tonal role (bass/pad/lead) for the current blend. Mid-transition we
+// sound BOTH the old and new instrument at crossfaded volumes — that overlap is
+// what makes the timbre "morph" into the next section instead of hard-switching.
+function musicVoice(role, blend, o) {
+  const sound = (sec, vmul) => {
+    if (vmul <= 0.01) return;
+    const p = MUSIC_SECTIONS[sec][role];
+    voice({ freq: o.freq, dur: o.dur, when: o.when, dest: audio.musicGain,
+            type: p.type, vol: p.vol * vmul, detune: p.detune,
+            cutoff: p.cutoff, q: p.q, attack: o.attack });
+  };
+  if (blend.from === blend.to) { sound(blend.from, 1); return; }
+  sound(blend.from, 1 - blend.t);
+  sound(blend.to, blend.t);
+}
+
+// A soft, pitched kick for the downbeats. `vol` scales it so quieter sections
+// can pull the percussion right back (or drop it entirely).
+function musicKick(when, vol = 1) {
   const ctx = audio.ctx;
   if (!ctx) return;
   const o = ctx.createOscillator();
@@ -2949,7 +3024,7 @@ function musicKick(when) {
   o.frequency.setValueAtTime(140, when);
   o.frequency.exponentialRampToValueAtTime(45, when + 0.12);
   g.gain.setValueAtTime(0.0001, when);
-  g.gain.exponentialRampToValueAtTime(0.26, when + 0.005);
+  g.gain.exponentialRampToValueAtTime(0.26 * vol, when + 0.005);
   g.gain.exponentialRampToValueAtTime(0.0001, when + 0.18);
   o.connect(g); g.connect(audio.musicGain);
   o.start(when); o.stop(when + 0.2);
@@ -2985,12 +3060,40 @@ function scheduleMusic() {
   const ctx = audio.ctx;
   if (!ctx || audio.muted || ctx.state === 'suspended') return;
   if (!musicProg) musicProg = mpick(MUSIC_PROGS);
+  if (!musicSectionEndTime) {
+    musicSectionEndTime = musicNext + SECTION_MIN + Math.random() * (SECTION_MAX - SECTION_MIN);
+  }
   // Schedule every step that falls inside the look-ahead window.
   while (musicNext < ctx.currentTime + 0.3) {
+    const when = musicNext;
     const bar = Math.floor(musicStep / STEPS_PER_BAR);
     const beat = musicStep % STEPS_PER_BAR;
     const chord = MUSIC_CHORDS[musicProg[bar % musicProg.length]];
     const root = chord[0];
+
+    // ── Section lifecycle ──
+    // Finish a crossfade once the playhead clears it, then schedule the next
+    // hold. Otherwise, at the top of a phrase, if the hold has elapsed, begin
+    // drifting toward a fresh palette (never the same one twice in a row).
+    if (musicTrans && when >= musicTrans.end) {
+      musicSectionIdx = musicTrans.toIdx;
+      musicTrans = null;
+      musicSectionEndTime = when + SECTION_MIN + Math.random() * (SECTION_MAX - SECTION_MIN);
+    }
+    if (!musicTrans && beat === 0 && musicStep > 0 && when >= musicSectionEndTime) {
+      let next = Math.floor(Math.random() * MUSIC_SECTIONS.length);
+      if (next === musicSectionIdx) next = (next + 1) % MUSIC_SECTIONS.length;
+      musicTrans = { fromIdx: musicSectionIdx, toIdx: next, start: when, end: when + SECTION_FADE };
+    }
+
+    // Resolve the timbre/feel for this step (crossfaded mid-transition).
+    const blend = musicBlend(when);
+    const tempo = musicLerp('tempo', blend);
+    const leadDensity = musicLerp('leadDensity', blend);
+    const arpDensity = musicLerp('arpDensity', blend);
+    const kickVol = musicLerp('kickVol', blend);
+    const kickMidVol = musicLerp('kickMidVol', blend);
+    const hatVol = musicLerp('hatVol', blend);
 
     // At the top of each 4-bar phrase, sometimes swap to a new progression so
     // the theme keeps evolving instead of looping forever.
@@ -3000,42 +3103,40 @@ function scheduleMusic() {
 
     // Bass: a warm root on the downbeat, a fifth pulse mid-bar.
     if (beat === 0) {
-      voice({ freq: mhz(root - 12), dur: MUSIC_TEMPO * 3.6, when: musicNext,
-              dest: audio.musicGain, type: 'sawtooth', vol: 0.3, detune: 4,
-              cutoff: 620, q: 3, attack: 0.02 });
+      musicVoice('bass', blend, { freq: mhz(root - 12), dur: tempo * 3.6, when, attack: 0.02 });
     } else if (beat === 4) {
-      voice({ freq: mhz(chord[2] - 12), dur: MUSIC_TEMPO * 3.0, when: musicNext,
-              dest: audio.musicGain, type: 'sawtooth', vol: 0.26, detune: 4,
-              cutoff: 620, q: 3, attack: 0.02 });
+      musicVoice('bass', blend, { freq: mhz(chord[2] - 12), dur: tempo * 3.0, when, attack: 0.02 });
     }
 
-    // Pad/arp: a soft sine arpeggio cycling the chord tones underneath.
-    if (beat % 2 === 0 || Math.random() < 0.5) {
-      voice({ freq: mhz(chord[beat % chord.length]), dur: MUSIC_TEMPO * 1.6,
-              when: musicNext, dest: audio.musicGain, type: 'sine', vol: 0.13,
-              detune: 4, cutoff: 1500, q: 1, attack: 0.04 });
+    // Pad/arp: a soft arpeggio cycling the chord tones underneath.
+    if (beat % 2 === 0 || Math.random() < arpDensity) {
+      musicVoice('pad', blend, { freq: mhz(chord[beat % chord.length]), dur: tempo * 1.6, when, attack: 0.04 });
     }
 
     // Lead: an improvised melody that breathes (occasional rests + long notes).
-    if (Math.random() < 0.72) {
+    if (Math.random() < leadDensity) {
       const note = musicLeadStep(chord);
-      voice({ freq: mhz(note + 12), dur: MUSIC_TEMPO * (Math.random() < 0.3 ? 1.7 : 0.85),
-              when: musicNext, dest: audio.musicGain, type: 'triangle', vol: 0.2,
-              detune: 5, cutoff: 3000, q: 1, attack: 0.012 });
+      musicVoice('lead', blend, { freq: mhz(note + 12),
+        dur: tempo * (Math.random() < 0.3 ? 1.7 : 0.85), when, attack: 0.012 });
     }
 
-    // Percussion: a steady heartbeat kick with brushed offbeat hats.
-    if (beat === 0 || beat === 4) musicKick(musicNext);
-    if (beat % 2 === 1) musicHat(musicNext, 0.05);
+    // Percussion: a heartbeat kick with brushed offbeat hats, mixed per section.
+    if (beat === 0 && kickVol > 0.01) musicKick(when, kickVol);
+    if (beat === 4 && kickMidVol > 0.01) musicKick(when, kickMidVol);
+    if (beat % 2 === 1 && hatVol > 0.005) musicHat(when, hatVol);
 
     musicStep++;
-    musicNext += MUSIC_TEMPO;
+    musicNext += tempo;
   }
 }
 function startMusic() {
   const ctx = audioInit();
   if (!ctx) return;
   musicNext = ctx.currentTime + 0.1;
+  // Start on a random palette so reloads don't always open the same way.
+  musicSectionIdx = Math.floor(Math.random() * MUSIC_SECTIONS.length);
+  musicTrans = null;
+  musicSectionEndTime = 0;
   if (musicTimer) clearInterval(musicTimer);
   musicTimer = setInterval(scheduleMusic, 60);
   scheduleMusic();
