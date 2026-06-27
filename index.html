@@ -570,6 +570,14 @@ const FOODS = [
   { emoji: '🍤', name: 'Fried Shrimp',heal: 13 },
 ];
 
+// Enemy rosters by depth band. Each floor draws a few types from one band so
+// floors feel varied but enemies stay around the same power level.
+const ENEMY_POOL = [
+  ['🐀','🦇','🐍','🐛'],   // upper floors
+  ['👹','🧟','👻','🐺'],   // middle floors
+  ['💀','🐉','👺','🦂'],   // deep floors
+];
+
 const BOSSES = [
   { type: '👑', name: 'Rat King',      floor: 5  },
   { type: '🔥', name: 'Inferno Demon', floor: 10 },
@@ -802,6 +810,18 @@ function spawnEnemies() {
   enemies = [];
   const isBossFloor = dungeonLevel % 5 === 0;
   const count = isBossFloor ? 1 + Math.floor(dungeonLevel / 5) : 4 + dungeonLevel * 2;
+
+  // Pick 2-3 enemy types for this floor from the depth-appropriate band, so
+  // each floor has variety while every monster stays around the same level.
+  const bandIdx = Math.min(Math.floor((dungeonLevel - 1) / 3), ENEMY_POOL.length - 1);
+  const pool = [...ENEMY_POOL[bandIdx]];
+  const typeCount = Math.min(rnd(2, 3), pool.length);
+  const floorTypes = [];
+  for (let i = 0; i < typeCount; i++) floorTypes.push(pool.splice(rnd(0, pool.length-1), 1)[0]);
+
+  // 20% of non-boss floors feature a single glowing "elite" with better loot.
+  const eliteIndex = (!isBossFloor && Math.random() < 0.2) ? rnd(0, count - 1) : -1;
+
   for (let i = 0; i < count; i++) {
     let ex, ey;
     let tries = 0;
@@ -824,16 +844,27 @@ function spawnEnemies() {
         });
         log(`⚠️ ${boss.name} ${boss.type} guards this floor!`, 'important');
       } else {
-        const tierIdx = Math.min(dungeonLevel-1, 4);
-        const baseDmg = 3 + dungeonLevel + tierIdx;
-        enemies.push({
-          x: ex, y: ey,
-          hp: 10 + dungeonLevel * 6,
-          maxHp: 10 + dungeonLevel * 6,
-          type: ['🐀','👹','💀','🧟','🐉'][tierIdx],
-          dmg: baseDmg,
-          dead: false,
-        });
+        const baseHp = 10 + dungeonLevel * 6;
+        const baseDmg = 3 + dungeonLevel + bandIdx;
+        if (i === eliteIndex) {
+          const eHp = Math.round(baseHp * 2.2);
+          enemies.push({
+            x: ex, y: ey,
+            hp: eHp, maxHp: eHp,
+            type: pick(floorTypes),
+            dmg: Math.round(baseDmg * 1.4),
+            dead: false, isElite: true,
+          });
+          log('✨ A glowing elite prowls this floor — slay it for richer loot!', 'important');
+        } else {
+          enemies.push({
+            x: ex, y: ey,
+            hp: baseHp, maxHp: baseHp,
+            type: pick(floorTypes),
+            dmg: baseDmg,
+            dead: false,
+          });
+        }
       }
     }
   }
@@ -870,19 +901,30 @@ function spawnGroundLoot() {
 // ITEM GENERATION
 // ══════════════════════════════════════════
 
-function rollTier() {
+function rollTier(lucky = false) {
   const entries = Object.entries(TIERS);
   const total = entries.reduce((s, [,v]) => s + v.weight, 0);
-  let roll = Math.random() * total;
-  for (const [k, v] of entries) {
-    roll -= v.weight;
-    if (roll <= 0) return k;
+  const rollOnce = () => {
+    let roll = Math.random() * total;
+    for (const [k, v] of entries) {
+      roll -= v.weight;
+      if (roll <= 0) return k;
+    }
+    return 'normal';
+  };
+  // Lucky chests roll a few times and keep the rarest result.
+  if (!lucky) return rollOnce();
+  const order = Object.keys(TIERS);
+  let best = rollOnce();
+  for (let i = 0; i < 2; i++) {
+    const r = rollOnce();
+    if (order.indexOf(r) > order.indexOf(best)) best = r;
   }
-  return 'normal';
+  return best;
 }
 
-function generateItem() {
-  const tier = rollTier();
+function generateItem(lucky = false) {
+  const tier = rollTier(lucky);
   const slot = weighted(SLOT_WEIGHTS);
   const baseName = pick(SLOTS[slot].names);
 
@@ -935,17 +977,39 @@ function weighted(obj) {
 // DRAW
 // ══════════════════════════════════════════
 
-const COLORS = {
-  floor: '#2e2e42',
-  floorAlt: '#26263a',
-  wall: '#4a4a66',
-  wallTop: '#64648a',
-  stairs: '#5a4400',
-  stairsGlow: '#ffd24b',
-};
+// Each dungeon depth cycles through a visual theme so floors don't all look
+// alike. Every theme defines the full palette used by the tile renderer.
+const THEMES = [
+  { name: 'the Stone Crypt',
+    floor:'#2e2e42', floorAlt:'#26263a', wall:'#4a4a66', wallTop:'#64648a',
+    brickA:'#56567a', brickB:'#4e4e70', mortar:'#33334a', crack:'#2a2a3c',
+    seam:'#1c1c2c', speckle:'#3a3a52', accent:'rgba(90,140,70,0.3)', stairsGlow:'#ffd24b' },
+  { name: 'the Mossy Caverns',
+    floor:'#243524', floorAlt:'#1d2b1d', wall:'#3a5236', wallTop:'#557a4e',
+    brickA:'#436147', brickB:'#3a5640', mortar:'#243a26', crack:'#1c2c1e',
+    seam:'#142016', speckle:'#3a5236', accent:'rgba(150,200,90,0.32)', stairsGlow:'#ffe24b' },
+  { name: 'the Lava Depths',
+    floor:'#3a221c', floorAlt:'#2c1916', wall:'#5a2c22', wallTop:'#8a3e2c',
+    brickA:'#6e3326', brickB:'#5e2c20', mortar:'#3a1c14', crack:'#ff6a2a',
+    seam:'#241310', speckle:'#7a3a20', accent:'rgba(255,120,40,0.35)', stairsGlow:'#ff9a3b' },
+  { name: 'the Frozen Halls',
+    floor:'#2a3a4a', floorAlt:'#22303e', wall:'#3e5a72', wallTop:'#6a90ad',
+    brickA:'#4a6a86', brickB:'#3e5c76', mortar:'#283a4a', crack:'#1e2c38',
+    seam:'#16222c', speckle:'#5a7a96', accent:'rgba(150,220,255,0.3)', stairsGlow:'#bfe8ff' },
+  { name: 'the Sunken Tombs',
+    floor:'#4a4026', floorAlt:'#3e351f', wall:'#6e5d36', wallTop:'#9a8550',
+    brickA:'#7e6c40', brickB:'#6e5d36', mortar:'#4a3e22', crack:'#34291a',
+    seam:'#241c10', speckle:'#8a7548', accent:'rgba(220,200,120,0.3)', stairsGlow:'#ffe07a' },
+  { name: 'the Void Sanctum',
+    floor:'#2e2440', floorAlt:'#251d34', wall:'#4a3a6a', wallTop:'#6e54a0',
+    brickA:'#56447e', brickB:'#4a3a6e', mortar:'#332a4a', crack:'#22182c',
+    seam:'#1a1226', speckle:'#5a4a82', accent:'rgba(190,120,255,0.3)', stairsGlow:'#d9a0ff' },
+];
+function currentTheme() { return THEMES[(dungeonLevel - 1) % THEMES.length]; }
 
 function draw() {
   const W = canvas.width, H = canvas.height;
+  const C = currentTheme();
   ctx.fillStyle = '#0a0a0f';
   ctx.fillRect(0, 0, W, H);
 
@@ -983,7 +1047,7 @@ function draw() {
 
       if (t === 1) {
         // Wall base
-        ctx.fillStyle = COLORS.wall;
+        ctx.fillStyle = C.wall;
         ctx.fillRect(px, py, tw, th);
         // Brick rows with mortar lines
         const rows = 3;
@@ -992,21 +1056,21 @@ function draw() {
           const ry = py + r * rh;
           const offset = (r % 2) * (tw / 2);
           // brick face shading
-          ctx.fillStyle = (r % 2 === 0) ? '#56567a' : '#4e4e70';
+          ctx.fillStyle = (r % 2 === 0) ? C.brickA : C.brickB;
           ctx.fillRect(px, ry + 1, tw, rh - 1.5);
           // vertical mortar gap
-          ctx.fillStyle = '#33334a';
+          ctx.fillStyle = C.mortar;
           ctx.fillRect(px + (offset % tw), ry, Math.max(1, tw*0.06), rh);
           ctx.fillRect(px + ((offset + tw/2) % tw), ry, Math.max(1, tw*0.06), rh);
           // horizontal mortar
           ctx.fillRect(px, ry, tw, Math.max(1, th*0.05));
         }
         // top highlight ridge
-        ctx.fillStyle = COLORS.wallTop;
+        ctx.fillStyle = C.wallTop;
         ctx.fillRect(px, py, tw, Math.max(1, th*0.12));
         // occasional crack
         if (seed % 5 === 0) {
-          ctx.fillStyle = '#2a2a3c';
+          ctx.fillStyle = C.crack;
           ctx.fillRect(px + tw*0.5, py + th*0.3, Math.max(1,tw*0.06), th*0.4);
         }
       } else if (t === 2) {
@@ -1023,15 +1087,15 @@ function draw() {
           ctx.fillRect(px + inset, sy, tw - inset*2, th * (0.5/steps) + 1);
         }
         // glow
-        ctx.fillStyle = COLORS.stairsGlow + '33';
+        ctx.fillStyle = C.stairsGlow + '33';
         ctx.fillRect(px, py + th*0.55, tw, th*0.45);
-        ctx.fillStyle = COLORS.stairsGlow;
+        ctx.fillStyle = C.stairsGlow;
         ctx.font = `bold ${Math.round(tw*0.42)}px serif`;
         ctx.textAlign = 'center';
         ctx.fillText('▼', px + tw/2, py + th*0.85);
       } else if (t === 3) {
         // Fountain of Healing — stone basin with glowing blue water
-        ctx.fillStyle = (x+y)%2===0 ? COLORS.floor : COLORS.floorAlt;
+        ctx.fillStyle = (x+y)%2===0 ? C.floor : C.floorAlt;
         ctx.fillRect(px, py, tw, th);
         // stone rim
         ctx.fillStyle = '#5a5a72';
@@ -1055,45 +1119,64 @@ function draw() {
         ctx.restore();
       } else {
         // Floor base with subtle checker
-        ctx.fillStyle = (x+y)%2===0 ? COLORS.floor : COLORS.floorAlt;
+        ctx.fillStyle = (x+y)%2===0 ? C.floor : C.floorAlt;
         ctx.fillRect(px, py, tw, th);
         // flagstone seams
-        ctx.fillStyle = '#1c1c2c';
+        ctx.fillStyle = C.seam;
         ctx.fillRect(px, py, tw, 1);
         ctx.fillRect(px, py, 1, th);
         // speckle / rubble (deterministic)
         const speckles = (seed % 4);
-        ctx.fillStyle = '#3a3a52';
+        ctx.fillStyle = C.speckle;
         for (let s = 0; s < speckles; s++) {
           const sx = px + ((seed >> (s*3+1)) % tw);
           const sy = py + ((seed >> (s*2+2)) % th);
           ctx.fillRect(sx, sy, Math.max(1, tw*0.08), Math.max(1, th*0.08));
         }
-        // occasional moss tint
+        // occasional accent tint (moss/embers/frost depending on theme)
         if (seed % 11 === 0) {
-          ctx.fillStyle = 'rgba(90,140,70,0.3)';
+          ctx.fillStyle = C.accent;
           ctx.fillRect(px+tw*0.2, py+th*0.2, tw*0.5, th*0.5);
         }
       }
     }
   }
 
-  // Ground chests
-  groundItems.forEach(({ x, y }) => {
+  // Ground chests — a classic brown chest with gold trim, drawn by hand so it
+  // looks the same on every device. Lucky chests glow brighter gold.
+  groundItems.forEach(({ x, y, lucky }) => {
     const px = offX + x * tw, py = offY + y * th;
-    // dark backing disc for separation
-    ctx.fillStyle = 'rgba(0,0,0,0.5)';
-    ctx.beginPath();
-    ctx.arc(px + tw/2, py + th/2, tw*0.36, 0, Math.PI*2);
-    ctx.fill();
-    // warm glow + chest sprite
-    ctx.shadowColor = '#ffcc44';
-    ctx.shadowBlur = 10 * scale;
-    ctx.font = `${Math.round(tw * 0.62)}px serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('🧰', px + tw/2, py + th/2 + th*0.02);
+    const cx = px + tw/2, cy = py + th/2;
+    const w = tw * 0.58, h = th * 0.46;
+    const bx = cx - w/2, by = cy - h/2;
+    const gold = lucky ? '#ffd24b' : '#d9a441';
+    ctx.save();
+    ctx.shadowColor = lucky ? '#ffe066' : '#caa24a';
+    ctx.shadowBlur = (lucky ? 14 : 7) * scale;
+    // wooden body
+    ctx.fillStyle = '#7a4a22';
+    ctx.fillRect(bx, by, w, h);
     ctx.shadowBlur = 0;
+    // lid (slightly lighter band across the top)
+    ctx.fillStyle = '#8a5628';
+    ctx.fillRect(bx, by, w, h * 0.42);
+    // lid top highlight
+    ctx.fillStyle = '#a36c36';
+    ctx.fillRect(bx, by, w, Math.max(1, h * 0.1));
+    // gold trim: lid seam + bottom edge
+    ctx.fillStyle = gold;
+    ctx.fillRect(bx, by + h * 0.38, w, Math.max(1, h * 0.1));
+    ctx.fillRect(bx, by + h - Math.max(1, h * 0.1), w, Math.max(1, h * 0.1));
+    // vertical gold straps
+    ctx.fillRect(bx + w * 0.14, by, Math.max(1, w * 0.09), h);
+    ctx.fillRect(bx + w * 0.77, by, Math.max(1, w * 0.09), h);
+    // lock plate
+    ctx.fillStyle = lucky ? '#fff0a0' : '#e8c050';
+    ctx.fillRect(cx - w * 0.09, by + h * 0.32, w * 0.18, h * 0.3);
+    // keyhole
+    ctx.fillStyle = '#4a2f15';
+    ctx.fillRect(cx - w * 0.025, by + h * 0.42, w * 0.05, h * 0.13);
+    ctx.restore();
   });
 
   // Ground food
@@ -1136,20 +1219,31 @@ function draw() {
   // Enemies
   enemies.filter(e => !e.dead).forEach(e => {
     const px = offX + e.x * tw, py = offY + e.y * th;
-    const radius = e.isBoss ? tw * 0.54 : tw * 0.42;
+    const radius = e.isBoss ? tw * 0.54 : (e.isElite ? tw * 0.48 : tw * 0.42);
     // boss aura
     if (e.isBoss) {
       ctx.fillStyle = 'rgba(255,50,50,0.2)';
       ctx.beginPath();
       ctx.arc(px + tw/2, py + th/2, tw * 0.6, 0, Math.PI*2);
       ctx.fill();
+    } else if (e.isElite) {
+      // golden glow marking the elite
+      const pulse = 0.18 + 0.1 * (0.5 + 0.5 * Math.sin(Date.now() / 300));
+      ctx.save();
+      ctx.shadowColor = '#ffd24b';
+      ctx.shadowBlur = 16 * scale;
+      ctx.fillStyle = `rgba(255,210,75,${pulse})`;
+      ctx.beginPath();
+      ctx.arc(px + tw/2, py + th/2, tw * 0.56, 0, Math.PI*2);
+      ctx.fill();
+      ctx.restore();
     }
     // dark backing disc
     ctx.fillStyle = 'rgba(0,0,0,0.4)';
     ctx.beginPath();
     ctx.arc(px + tw/2, py + th/2, radius, 0, Math.PI*2);
     ctx.fill();
-    ctx.font = `${Math.round(tw * (e.isBoss ? 0.95 : 0.78))}px serif`;
+    ctx.font = `${Math.round(tw * (e.isBoss ? 0.95 : (e.isElite ? 0.86 : 0.78)))}px serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(e.type, px + tw/2, py + th/2 + th*0.04);
@@ -1170,7 +1264,7 @@ function draw() {
       ctx.fillRect(px, py, bw+2, bh+1);
       ctx.fillStyle = '#3a0000';
       ctx.fillRect(px+1, py, bw, bh);
-      ctx.fillStyle = e.isBoss ? '#ff6622' : '#ff3344';
+      ctx.fillStyle = e.isBoss ? '#ff6622' : (e.isElite ? '#ffaa22' : '#ff3344');
       ctx.fillRect(px+1, py, bw * (e.hp/e.maxHp), bh);
     }
   });
@@ -1334,7 +1428,7 @@ function move(dx, dy) {
   if (tile === 2) {
     dungeonLevel++;
     statusEffects = [];
-    log(`Descended to dungeon level ${dungeonLevel}!`, 'important');
+    log(`Descended to dungeon level ${dungeonLevel}! You enter ${currentTheme().name}.`, 'important');
     player.x = 5; player.y = 5;
     generateMap();
     saveGame();
@@ -1407,19 +1501,20 @@ function attackEnemy(e) {
   log(`${HERO} hits ${e.type} for ${dmg} damage!`);
   if (e.hp <= 0) {
     e.dead = true;
-    const xpMult = e.isBoss ? 5 : 1;
-    const goldMult = e.isBoss ? 3 : 1;
+    const xpMult = e.isBoss ? 5 : (e.isElite ? 2 : 1);
+    const goldMult = e.isBoss ? 3 : (e.isElite ? 2 : 1);
     const xp = 10 * dungeonLevel * xpMult;
     player.xp += xp;
     const gold = (rnd(2, 8) + dungeonLevel * 3) * goldMult;
     player.gold += gold;
-    const label = e.isBoss ? `${e.name} ${e.type}` : e.type;
+    const label = e.isBoss ? `${e.name} ${e.type}` : (e.isElite ? `Elite ${e.type}` : e.type);
     log(`${label} defeated! +${xp} XP, +${gold}g`, 'important');
     updateBars();
-    // Drop a chest — bosses always drop
-    if (e.isBoss || Math.random() < 0.18) {
-      groundItems.push({ x: e.x, y: e.y });
-      log(`🧰 ${label} dropped a chest!`, 'loot');
+    // Drop a chest — bosses and elites always drop, with richer loot.
+    if (e.isBoss || e.isElite || Math.random() < 0.18) {
+      const lucky = e.isBoss || e.isElite;
+      groundItems.push({ x: e.x, y: e.y, lucky });
+      log(`${lucky ? '🎁' : '🧰'} ${label} dropped a ${lucky ? 'glittering ' : ''}chest!`, 'loot');
     }
     if (Math.random() < 0.20) {
       player.healPotions++;
@@ -1511,7 +1606,7 @@ function checkPickupProximity() {
 function pickup() {
   const idx = groundItems.findIndex(g => g.x===player.x && g.y===player.y);
   if (idx === -1) { log('Nothing here to use.'); return; }
-  groundItems.splice(idx, 1);
+  const chest = groundItems.splice(idx, 1)[0];
 
   // Very small chance the chest is trapped.
   if (Math.random() < 0.07) {
@@ -1530,10 +1625,10 @@ function pickup() {
     return;
   }
 
-  // Otherwise it rolls fresh loot when opened.
-  const item = generateItem();
+  // Otherwise it rolls fresh loot when opened — lucky chests roll richer.
+  const item = generateItem(chest.lucky);
   inventory.push(item);
-  log(`🧰 Opened a chest: ${item.name}`, 'loot');
+  log(`${chest.lucky ? '🎁' : '🧰'} Opened a ${chest.lucky ? 'glittering ' : ''}chest: ${item.name}`, 'loot');
   renderPanel();
   saveGame();
   draw();
@@ -1866,7 +1961,8 @@ window.addEventListener('load', () => { resizeCanvas(); draw(); });
 // so their robe glow pulses. Idle otherwise to save battery.
 let lastPulse = 0;
 function pulseLoop(ts) {
-  if ((merchant || hasFountain || floatingTexts.length || statusEffects.length) && ts - lastPulse > 60) { lastPulse = ts; draw(); }
+  const hasElite = enemies.some(e => !e.dead && e.isElite);
+  if ((merchant || hasFountain || floatingTexts.length || statusEffects.length || hasElite) && ts - lastPulse > 60) { lastPulse = ts; draw(); }
   requestAnimationFrame(pulseLoop);
 }
 requestAnimationFrame(pulseLoop);
