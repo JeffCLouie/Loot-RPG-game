@@ -3741,51 +3741,47 @@ function activateShrine(nx, ny) {
   draw();
 }
 
-// Random one-off event when you step onto a new floor (~40% of the time).
-// Small spontaneous twists — a windfall, a scare, or a fleeting blessing.
+// Tiny on-descent vignettes — mostly atmosphere, some with a small mechanical
+// nudge. Cheap flavour to keep each new floor feeling a little alive.
+const FLOOR_EVENTS = [
+  // ── Small windfalls & boons ──
+  () => { const g = rnd(10,25) + dungeonLevel*3; player.gold += g; log(`💰 You stumble on a hidden coin cache — +${g} gold!`, 'important'); },
+  () => { const g = rnd(5,12) + dungeonLevel*2; player.gold += g; log(`🐀 A rat scurries off, dropping a stolen coin. +${g} gold.`, 'loot'); },
+  () => { const g = rnd(8,18) + dungeonLevel*2; player.gold += g; log(`💎 A vein of crystal glitters in the wall — you pry some loose. +${g} gold.`, 'loot'); },
+  () => { const g = rnd(12,28) + dungeonLevel*3; player.gold += g; log(`🪙 A careless adventurer left a coin pouch behind. +${g} gold!`, 'loot'); },
+  () => { const heal = Math.floor(player.maxHp*0.2); player.hp = Math.min(player.maxHp, player.hp+heal); spawnFloatingText(player.x, player.y, `+${heal}`, '#44dd44'); log(`🌿 An eerie calm settles over you — +${heal} HP.`, 'important'); },
+  () => { const heal = Math.floor(player.maxHp*0.1); player.hp = Math.min(player.maxHp, player.hp+heal); spawnFloatingText(player.x, player.y, `+${heal}`, '#44dd44'); log(`🍞 You find a forgotten ration and eat it. +${heal} HP.`, 'loot'); },
+  () => { const heal = Math.floor(player.maxHp*0.08); player.hp = Math.min(player.maxHp, player.hp+heal); log(`🛏️ You pause to catch your breath. +${heal} HP.`, ''); },
+  () => { const xp = 15*dungeonLevel; player.xp += xp; log(`💡 A flash of insight — +${xp} XP!`, 'important'); checkLevelUp(); },
+  () => { const xp = 10*dungeonLevel; player.xp += xp; log(`📖 You study a torn page of a spellbook. +${xp} XP.`, 'loot'); checkLevelUp(); },
+  () => { buffs.fortune = Math.max(buffs.fortune, 2); log('🍀 You pocket a lucky coin — better loot for 2 floors!', 'important'); screenFlash('#22cc66'); },
+  () => { buffs.power = Math.max(buffs.power, 2); log('🔥 Battle fury surges — +50% damage for 2 floors!', 'important'); screenFlash('#ff6600'); },
+  () => { buffs.power = Math.max(buffs.power, 1); log('🗡️ You hone your blade on a left-behind whetstone. +50% damage next floor.', 'loot'); },
+  () => { player.healPotions++; log(`⚗️ A dropped ${logPotion('Health Potion')} rolls to your feet! (${player.healPotions} held)`, 'loot'); },
+  // ── Small hazards ──
+  () => { const dmg = Math.min(player.hp-1, rnd(5,12) + dungeonLevel); if (dmg>0){ player.hp -= dmg; spawnFloatingText(player.x, player.y, `${dmg}`, '#ff3344'); } log(`🪤 A hidden trap snaps shut — you take ${dmg} damage!`, 'important'); screenFlash('#cc0000'); },
+  () => { if (Math.random()<0.5){ const h=Math.floor(player.maxHp*0.12); player.hp=Math.min(player.maxHp,player.hp+h); spawnFloatingText(player.x,player.y,`+${h}`,'#44dd44'); log(`🧪 You sip from a strange puddle — surprisingly refreshing. +${h} HP.`,'loot'); } else { const d=Math.min(player.hp-1, rnd(3,8)); if(d>0){player.hp-=d; spawnFloatingText(player.x,player.y,`${d}`,'#ff3344');} log(`🧪 You sip from a strange puddle — bad idea. -${d} HP.`); } },
+  () => { const d = Math.min(player.hp-1, rnd(2,6)); if (d>0){ player.hp -= d; spawnFloatingText(player.x,player.y,`${d}`,'#ff3344'); } log(`🕸️ You blunder into a thick web and scratch free. -${d} HP.`); },
+  // ── Pure flavour, no effect ──
+  () => log('💀 A long-dead adventurer slumps against the wall. You leave them be.'),
+  () => log('✍️ Scrawled on the stone: "TURN BACK." You press on anyway.'),
+  () => log('🌬️ A cold draft rises from below, carrying the stink of sulfur.'),
+  () => log('💧 Somewhere, a stalactite drips with maddening regularity.'),
+  () => log('🍗 You find a half-eaten meal, still warm. Something is close.'),
+  () => log('👻 A whisper calls your name. You turn — nothing is there.'),
+  () => log('🦇 A swarm of bats bursts past in a panic, then is gone.'),
+  () => log('🕯️ A ghostly merchant flickers into view, then vanishes before you can trade.'),
+  () => log('🔇 The floor is unnervingly silent. Even your footsteps feel muffled.'),
+  () => log('✨ A tiny glowbug drifts alongside you for a while, lighting the dark.'),
+  () => log('😱 A distant scream echoes up the corridor, then cuts off abruptly.'),
+];
+
+// Roughly 40% of new floors play one of the tiny vignettes above.
 function maybeFloorEvent() {
   if (dungeonLevel <= 1) return;
   if (Math.random() >= 0.4) return;
-  const roll = rnd(1, 6);
-  switch (roll) {
-    case 1: {
-      const g = rnd(10, 25) + dungeonLevel * 3;
-      player.gold += g;
-      log(`💰 You stumble on a hidden coin cache — +${g} gold!`, 'important');
-      break;
-    }
-    case 2: {
-      const dmg = Math.min(player.hp - 1, rnd(5, 12) + dungeonLevel);
-      if (dmg > 0) { player.hp -= dmg; spawnFloatingText(player.x, player.y, `${dmg}`, '#ff3344'); }
-      log(`🪤 A hidden trap snaps shut — you take ${dmg} damage!`, 'important');
-      screenFlash('#cc0000');
-      break;
-    }
-    case 3: {
-      const heal = Math.floor(player.maxHp * 0.2);
-      player.hp = Math.min(player.maxHp, player.hp + heal);
-      spawnFloatingText(player.x, player.y, `+${heal}`, '#44dd44');
-      log(`🌿 An eerie calm settles over you — +${heal} HP.`, 'important');
-      break;
-    }
-    case 4: {
-      const xp = 15 * dungeonLevel;
-      player.xp += xp;
-      log(`💡 A flash of insight — +${xp} XP!`, 'important');
-      checkLevelUp();
-      break;
-    }
-    case 5:
-      buffs.fortune = Math.max(buffs.fortune, 2);
-      log('🍀 You feel lucky — better loot for the next 2 floors!', 'important');
-      screenFlash('#22cc66');
-      break;
-    case 6:
-      buffs.power = Math.max(buffs.power, 2);
-      log('🔥 Battle fury surges — +50% damage for the next 2 floors!', 'important');
-      screenFlash('#ff6600');
-      break;
-  }
+  pick(FLOOR_EVENTS)();
+  updateBars();
 }
 
 // Count active shrine buffs down by one floor (called on descent).
