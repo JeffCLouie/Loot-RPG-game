@@ -394,6 +394,7 @@
   .shop-row-info { flex: 1; min-width: 0; }
   .shop-row-name { font-weight: bold; font-size: 12px; }
   .shop-row-sub { font-size: 10px; opacity: 0.7; }
+  .shop-row-stats { font-size: 10px; color: #8899bb; margin-top: 2px; line-height: 1.3; }
   .shop-price { color: var(--gold); font-size: 11px; flex-shrink: 0; }
   .shop-buy-btn, .shop-sell-btn {
     flex-shrink: 0; border: none; border-radius: 5px; cursor: pointer;
@@ -413,7 +414,6 @@
 
 <!-- HEADER -->
 <div id="header">
-  <h1>⚔ DUNGEON LOOT</h1>
   <div id="stats">
     <div class="stat-bar">
       <span style="color:var(--hp);font-size:10px">HP</span>
@@ -465,7 +465,18 @@
           </span><span class="action-label" id="heal-label">0</span>
         </button>
         <button class="action-btn bag-btn" onclick="togglePanel()">
-          <span class="action-icon">🎒</span><span class="action-label">BAG</span>
+          <span class="action-icon">
+            <svg width="20" height="20" viewBox="0 0 20 20" aria-label="bag">
+              <!-- drawstring neck -->
+              <rect x="7" y="2" width="6" height="3" rx="1.2" fill="#5a3a1c"/>
+              <!-- sack body -->
+              <path d="M5 6 q5 -2 10 0 q2.5 6 0.5 10 q-5.5 2.5 -11 0 q-2 -4 0.5 -10 z" fill="#8a5a2c" stroke="#5a3a1c" stroke-width="1"/>
+              <!-- tie band -->
+              <rect x="5.5" y="5.5" width="9" height="2" rx="1" fill="#6b4421"/>
+              <!-- highlight -->
+              <path d="M7.5 9 q2 -1 4 0" stroke="#b07d40" stroke-width="1.1" fill="none" stroke-linecap="round"/>
+            </svg>
+          </span><span class="action-label">BAG</span>
         </button>
         <button class="action-btn newgame-action" onclick="confirmNewGame()">
           <span class="action-icon">↻</span><span class="action-label">NEW</span>
@@ -548,7 +559,7 @@ const FLAVOR = {
   unique:    ['Only one exists. You found it.','The world trembles.','Destiny has chosen you.'],
 };
 
-const STAT_NAMES = ['ATK','DEF','SPD','LCK','HP','MP','CRIT'];
+const STAT_NAMES = ['ATK','DEF','SPD','LCK','HP','MP','CRIT','REGEN'];
 const HERO = '🧙';
 
 const FOODS = [
@@ -705,6 +716,13 @@ function spawnMerchant() {
 
 let shopCurrentTab = 'buy';
 
+// Compact one-line summary of an item's stats, e.g. "8-12 DMG · +3 ATK".
+function itemStatLine(item) {
+  return Object.entries(item.stats).map(([k, v]) =>
+    (typeof v === 'string') ? `${v} ${k}` : `+${v} ${k}`
+  ).join(' · ');
+}
+
 function openShop() {
   if (!merchant) return;
   shopCurrentTab = 'buy';
@@ -736,7 +754,7 @@ function renderShop() {
     }
     el.innerHTML = merchant.stock.map((s, i) => {
       const afford = player.gold >= s.price;
-      let name, sub, cls = '';
+      let name, sub, cls = '', stats = '';
       if (s.kind === 'potion') {
         name = s.name;
         sub = s.heal ? `Restores ${s.heal} HP` : `Restores ${s.mana} MP`;
@@ -744,11 +762,13 @@ function renderShop() {
         name = s.item.name;
         sub = SLOTS[s.item.slot].label.replace(/^\S+\s/, '');
         cls = 'item-' + s.item.tier;
+        stats = itemStatLine(s.item);
       }
       return `<div class="shop-row">
         <div class="shop-row-info ${cls}">
           <div class="shop-row-name">${name}</div>
           <div class="shop-row-sub">${sub}</div>
+          ${stats ? `<div class="shop-row-stats">${stats}</div>` : ''}
         </div>
         <span class="shop-price">${s.price}g</span>
         <button class="shop-buy-btn" ${afford?'':'disabled'} onclick="buyItem(${i})">BUY</button>
@@ -762,10 +782,12 @@ function renderShop() {
     }
     el.innerHTML = inventory.map((item, i) => {
       const sellPrice = Math.max(1, Math.round(item.value * 0.5));
+      const stats = item.stats ? itemStatLine(item) : '';
       return `<div class="shop-row">
         <div class="shop-row-info item-${item.tier}">
           <div class="shop-row-name">${item.name}</div>
           <div class="shop-row-sub">${item.slot ? SLOTS[item.slot].label.replace(/^\S+\s/, '') : 'potion'}</div>
+          ${stats ? `<div class="shop-row-stats">${stats}</div>` : ''}
         </div>
         <span class="shop-price">${sellPrice}g</span>
         <button class="shop-sell-btn" onclick="sellItem(${i})">SELL</button>
@@ -901,7 +923,7 @@ function spawnGroundLoot() {
 // ITEM GENERATION
 // ══════════════════════════════════════════
 
-function rollTier(lucky = false) {
+function rollTier(rolls = 1) {
   const entries = Object.entries(TIERS);
   const total = entries.reduce((s, [,v]) => s + v.weight, 0);
   const rollOnce = () => {
@@ -912,19 +934,19 @@ function rollTier(lucky = false) {
     }
     return 'normal';
   };
-  // Lucky chests roll a few times and keep the rarest result.
-  if (!lucky) return rollOnce();
+  // Luckier sources roll several times and keep the rarest result, so bosses
+  // (many rolls) skew much higher than elites, which skew higher than normal.
   const order = Object.keys(TIERS);
   let best = rollOnce();
-  for (let i = 0; i < 2; i++) {
+  for (let i = 1; i < rolls; i++) {
     const r = rollOnce();
     if (order.indexOf(r) > order.indexOf(best)) best = r;
   }
   return best;
 }
 
-function generateItem(lucky = false) {
-  const tier = rollTier(lucky);
+function generateItem(rolls = 1) {
+  const tier = rollTier(rolls);
   const slot = weighted(SLOT_WEIGHTS);
   const baseName = pick(SLOTS[slot].names);
 
@@ -939,17 +961,23 @@ function generateItem(lucky = false) {
   const statCount = { junk:0, normal:1, uncommon:1, rare:2, epic:3, legendary:3, unique:4 }[tier];
   const stats = {};
   const mult = { junk:0.4, normal:0.7, uncommon:1, rare:1.4, epic:2, legendary:3, unique:4.5 }[tier];
+  // Weapon damage uses a gentler curve so epic+ weapons aren't overpowered.
+  const dmgMult = { junk:0.4, normal:0.7, uncommon:0.9, rare:1.15, epic:1.5, legendary:2, unique:2.6 }[tier];
   const lvl = dungeonLevel;
 
   // Headline stat by slot: weapons deal damage, armor gives defense, jewelry gives utility.
   if (slot === 'weapon') {
-    const base = Math.max(1, Math.floor((rnd(2,4) + lvl) * mult));
+    const base = Math.max(1, Math.floor((rnd(2,4) + lvl) * dmgMult));
     const spread = Math.max(1, Math.floor(base * 0.4));
     stats.DMG = `${base}-${base + spread}`;
   } else if (slot === 'head' || slot === 'chest' || slot === 'hands' || slot === 'legs') {
     // Bigger armor pieces give more DEF than smaller ones.
     const slotDef = { chest: 1.3, legs: 1.0, head: 0.8, hands: 0.7 }[slot];
     stats.DEF = Math.max(1, Math.floor((rnd(1,3) + lvl) * mult * slotDef));
+    // Gloves also grant a little attack power — far less than a weapon.
+    if (slot === 'hands') {
+      stats.ATK = Math.max(1, Math.floor((rnd(1,2) + lvl * 0.25) * mult * 0.6));
+    }
   }
   // ring/amulet have no fixed headline — they roll pure bonus stats below.
 
@@ -958,7 +986,12 @@ function generateItem(lucky = false) {
     : Math.max(0, statCount - 1);
   const statPool = STAT_NAMES.filter(s => !(s in stats))
     .sort(() => Math.random()-0.5).slice(0, extraCount);
-  statPool.forEach(s => { stats[s] = Math.max(1, Math.floor((rnd(1,3) + lvl*0.5) * mult)); });
+  statPool.forEach(s => {
+    let v = Math.max(1, Math.floor((rnd(1,3) + lvl*0.5) * mult));
+    // Regen is applied every step, so keep the per-item value modest.
+    if (s === 'REGEN') v = Math.max(1, Math.round(v * 0.4));
+    stats[s] = v;
+  });
 
   const value = { junk:1, normal:5, uncommon:20, rare:80, epic:300, legendary:1200, unique:5000 }[tier];
 
@@ -1144,7 +1177,8 @@ function draw() {
 
   // Ground chests — a classic brown chest with gold trim, drawn by hand so it
   // looks the same on every device. Lucky chests glow brighter gold.
-  groundItems.forEach(({ x, y, lucky }) => {
+  groundItems.forEach(({ x, y, luck }) => {
+    const lucky = (luck || 1) > 1;
     const px = offX + x * tw, py = offY + y * th;
     const cx = px + tw/2, cy = py + th/2;
     const w = tw * 0.58, h = th * 0.46;
@@ -1398,13 +1432,24 @@ function tryPlayerStatusProc(e) {
 // MOVEMENT & COMBAT
 // ══════════════════════════════════════════
 
+// Heal a little each turn based on equipped REGEN, up to max HP.
+function applyRegen() {
+  const r = totalStat('REGEN');
+  if (r > 0 && player.hp > 0 && player.hp < player.maxHp) {
+    player.hp = Math.min(player.maxHp, player.hp + r);
+    updateBars();
+  }
+}
+
 function move(dx, dy) {
   if (isPlayerStunned()) {
     tickStatusEffects();
+    applyRegen();
     draw();
     return;
   }
   tickStatusEffects();
+  applyRegen();
   const nx = player.x + dx, ny = player.y + dy;
   if (nx < 0 || ny < 0 || nx >= MAP_W || ny >= MAP_H) return;
 
@@ -1510,11 +1555,13 @@ function attackEnemy(e) {
     const label = e.isBoss ? `${e.name} ${e.type}` : (e.isElite ? `Elite ${e.type}` : e.type);
     log(`${label} defeated! +${xp} XP, +${gold}g`, 'important');
     updateBars();
-    // Drop a chest — bosses and elites always drop, with richer loot.
+    // Drop a chest — bosses and elites always drop, with richer loot. The luck
+    // value is how many rarity rolls the chest makes (more rolls = better odds).
     if (e.isBoss || e.isElite || Math.random() < 0.18) {
-      const lucky = e.isBoss || e.isElite;
-      groundItems.push({ x: e.x, y: e.y, lucky });
-      log(`${lucky ? '🎁' : '🧰'} ${label} dropped a ${lucky ? 'glittering ' : ''}chest!`, 'loot');
+      const luck = e.isBoss ? 6 : (e.isElite ? 3 : 1);
+      groundItems.push({ x: e.x, y: e.y, luck });
+      const fancy = luck > 1;
+      log(`${fancy ? '🎁' : '🧰'} ${label} dropped a ${fancy ? 'glittering ' : ''}chest!`, 'loot');
     }
     if (Math.random() < 0.20) {
       player.healPotions++;
@@ -1625,10 +1672,12 @@ function pickup() {
     return;
   }
 
-  // Otherwise it rolls fresh loot when opened — lucky chests roll richer.
-  const item = generateItem(chest.lucky);
+  // Otherwise it rolls fresh loot when opened — luckier chests roll richer.
+  const luck = chest.luck || 1;
+  const fancy = luck > 1;
+  const item = generateItem(luck);
   inventory.push(item);
-  log(`${chest.lucky ? '🎁' : '🧰'} Opened a ${chest.lucky ? 'glittering ' : ''}chest: ${item.name}`, 'loot');
+  log(`${fancy ? '🎁' : '🧰'} Opened a ${fancy ? 'glittering ' : ''}chest: ${item.name}`, 'loot');
   renderPanel();
   saveGame();
   draw();
