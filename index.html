@@ -448,6 +448,12 @@
   #tooltip .tt-stat { color: #8899bb; }
   #tooltip .tt-flavor { color: #666; font-style: italic; margin-top: 4px; font-size: 10px; }
   #tooltip .tt-tier { font-size: 10px; opacity: 0.7; }
+  /* Side-by-side compare: hovered item next to the currently-equipped piece. */
+  #tooltip.comparing { max-width: 440px; }
+  #tooltip .tt-compare { display: flex; gap: 10px; align-items: flex-start; flex-wrap: wrap; }
+  #tooltip .tt-card { flex: 1 1 150px; min-width: 150px; }
+  #tooltip .tt-card-equipped { border-left: 1px solid var(--border); padding-left: 10px; opacity: 0.9; }
+  #tooltip .tt-cardlabel { font-size: 9px; letter-spacing: 1px; text-transform: uppercase; color: #888; margin-bottom: 3px; }
 
   /* ── EQUIPMENT ── */
   .equip-slot {
@@ -6506,8 +6512,10 @@ function positionTooltip(anchor) {
   ttEl.style.top = top + 'px';
 }
 
-function showTooltipForItem(item, anchor) {
-  if (!item) return;
+// Build the inner markup for a single item's tooltip card. `opts.label` adds a
+// small heading ("Hovered"/"Equipped"); `opts.compareTo` renders the power
+// difference vs that item as a percentage change.
+function itemCardHTML(item, opts = {}) {
   const tier = TIERS[item.tier];
   const statRows = Object.entries(item.stats).map(([k,v]) => {
     // DMG is a range string like "8-12"; others are flat numbers (negative on a curse).
@@ -6522,22 +6530,44 @@ function showTooltipForItem(item, anchor) {
   }
   const stats = statRows.join('') || '<div class="tt-stat" style="color:#666">No bonuses</div>';
   const power = item.slot ? itemPower(item) : 0;
-  // Compare against the currently-equipped piece in the same slot, if any.
+  // Power difference vs the comparison item, shown as a percentage so a +1 over a
+  // 10-power item reads as a meaningful +10% rather than a flat +1.
   let powerDelta = '';
-  if (item.slot && equipped[item.slot] && equipped[item.slot] !== item) {
-    const d = power - itemPower(equipped[item.slot]);
-    if (d !== 0) powerDelta = ` <span style="color:${d>0?'#5ee08a':'#e0556b'}">(${d>0?'+':''}${d})</span>`;
+  if (opts.compareTo && opts.compareTo !== item) {
+    const basePower = itemPower(opts.compareTo);
+    const d = power - basePower;
+    if (d !== 0) {
+      const pct = basePower > 0 ? Math.round(d / basePower * 100) : 100;
+      powerDelta = ` <span style="color:${d>0?'#5ee08a':'#e0556b'}">(${d>0?'+':''}${pct}%)</span>`;
+    }
   }
   // Item level: drives raw stat size, so it's worth surfacing alongside power.
   const ilvlLine = (item.slot && item.ilvl)
     ? `<span style="color:#7fb0ff;font-weight:bold">ilvl ${item.ilvl}</span>` : '';
-  ttEl.innerHTML = `
+  const label = opts.label ? `<div class="tt-cardlabel">${opts.label}</div>` : '';
+  return `
+    ${label}
     <div class="tt-name" style="color:${tier.color}">${item.name}</div>
     <div class="tt-tier" style="color:${tier.color}">${item.slot ? SLOTS[item.slot].label : 'potion'}${ilvlLine ? ' · ' + ilvlLine : ''}</div>
     ${item.slot ? `<div style="color:#ffd24b;font-weight:bold;font-size:11px;margin:3px 0">⚡ Power: ${power}${powerDelta}</div>` : ''}
     ${stats}
     <div style="color:#c8a84b;font-size:10px;margin-top:3px">Value: ${item.value}g</div>
-    <div class="tt-flavor">${item.flavor}</div>
+    <div class="tt-flavor">${item.flavor}</div>`;
+}
+
+function showTooltipForItem(item, anchor) {
+  if (!item) return;
+  // If the hovered/selected item slots into gear that's already filled with a
+  // different piece, show a side-by-side compare card for the equipped item.
+  const equippedHere = item.slot ? equipped[item.slot] : null;
+  const comparing = equippedHere && equippedHere !== item;
+  const mainCard = `<div class="tt-card">${itemCardHTML(item, comparing ? { label: 'Hovered', compareTo: equippedHere } : {})}</div>`;
+  const compareCard = comparing
+    ? `<div class="tt-card tt-card-equipped">${itemCardHTML(equippedHere, { label: 'Equipped' })}</div>`
+    : '';
+  ttEl.classList.toggle('comparing', !!comparing);
+  ttEl.innerHTML = `
+    <div class="tt-compare">${mainCard}${compareCard}</div>
     <div style="color:#555;font-size:9px;margin-top:5px">Tap anywhere to close</div>`;
   ttEl.style.display = 'block';
   // Measure after it's visible, then anchor it relative to the panel/row.
