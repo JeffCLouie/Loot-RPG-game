@@ -776,6 +776,10 @@ const FLOOR_MODS = [
   { id: 'silent', name: '🔇 Silent Halls',         dmgMult: 0.9,  lootMult: 1,   eliteBonus: 0,    desc: 'No merchant here, but the air feels calm.', noMerchant: true, forceFountain: true },
   { id: 'swarm',  name: '🐝 Infested Floor',       dmgMult: 0.85, lootMult: 1.2, eliteBonus: 0,    desc: 'Crawling with weaker foes.', enemyMult: 1.8, hpMult: 0.7 },
   { id: 'elite',  name: '⚔ Champions\' Ground',    dmgMult: 1.15, lootMult: 1.4, eliteBonus: 0.4,  desc: 'Elite monsters stalk these halls.' },
+  { id: 'goldrush', name: '🌟 Gold Rush',          dmgMult: 1,    lootMult: 1.2, eliteBonus: 0,    desc: 'Coins everywhere — foes spill extra gold.', goldMult: 2, goldPiles: 3 },
+  { id: 'haunted',  name: '👻 Haunted Halls',       dmgMult: 1.2,  lootMult: 1.3, eliteBonus: 0.15, desc: 'Restless spirits strike from the dark.' },
+  { id: 'brittle',  name: '🍃 Brittle Bones',       dmgMult: 1,    lootMult: 1,   eliteBonus: 0,    desc: 'Foes are frail — strike them down fast.', hpMult: 0.55 },
+  { id: 'bountiful',name: '🎁 Bountiful Floor',      dmgMult: 1.05, lootMult: 1.6, eliteBonus: 0,    desc: 'Chests hide around every corner.', chestBonus: 2 },
 ];
 let floorMod = FLOOR_MODS[0];
 
@@ -806,6 +810,8 @@ let buffs = { power: 0, guard: 0, fortune: 0 };
 let floatingTexts = [];
 let statusEffects = [];
 let groundFood = [];
+let groundGold = []; // scattered coin piles: { x, y, amount } — grabbed by walking over
+let floorTint = null; // optional atmospheric colour overlay for the current floor
 let enemies = [];
 let currentTab = 'inv';
 let selectedItem = null;
@@ -844,8 +850,17 @@ canvas.addEventListener('click', () => { if (panelOpen) togglePanel(); });
 // MAP GENERATION
 // ══════════════════════════════════════════
 
+const FLOOR_TINTS = [
+  'rgba(80,120,255,0.10)',   // cold blue
+  'rgba(120,40,160,0.10)',   // eerie violet
+  'rgba(255,140,40,0.10)',   // warm torchlight
+  'rgba(40,180,120,0.10)',   // sickly green
+  'rgba(200,40,60,0.10)',    // bloody red
+];
 function generateMap() {
   rollFloorMod();
+  // ~35% of floors get a subtle colour wash for atmosphere.
+  floorTint = Math.random() < 0.35 ? pick(FLOOR_TINTS) : null;
   mapData = [];
   for (let y = 0; y < MAP_H; y++) {
     mapData[y] = [];
@@ -918,8 +933,11 @@ function spawnMerchant() {
     const item = generateItem(3);
     stock.push({ kind: 'gear', item, price: Math.max(10, Math.round(item.value * 1.4)) });
   }
-  merchant = { x: mx, y: my, stock };
+  // Sometimes the merchant runs a flash sale — everything 30% off.
+  const sale = Math.random() < 0.25 ? 0.7 : 1;
+  merchant = { x: mx, y: my, stock, sale };
   log('✨ A robed merchant has wandered onto this floor...', 'important');
+  if (sale < 1) log('🏷️ The merchant is holding a flash sale — 30% off everything!', 'important');
 }
 
 // ══════════════════════════════════════════
@@ -931,10 +949,11 @@ let shopCurrentTab = 'buy';
 // Effective price of a stock entry. Health potions get pricier the more you've
 // bought, so you can't lean on them forever as a cheap heal.
 function stockPrice(s) {
+  const sale = (merchant && merchant.sale) || 1;
   if (s.kind === 'potion' && s.heal) {
-    return s.price + (player.healthPotionsBought || 0) * 15;
+    return Math.max(1, Math.round((s.price + (player.healthPotionsBought || 0) * 15) * sale));
   }
-  return s.price;
+  return Math.max(1, Math.round(s.price * sale));
 }
 
 // Compact one-line summary of an item's stats, e.g. "⚡14 · 8-12 DMG · +3 ATK".
@@ -1118,17 +1137,51 @@ function spawnEnemies() {
           });
           log(`✨ ${eName}, a glowing elite, prowls this floor — slay it for richer loot!`, 'important');
         } else {
-          enemies.push({
+          const mob = {
             x: ex, y: ey,
             hp: baseHp, maxHp: baseHp,
             type: pick(floorTypes),
             dmg: baseDmg,
             dead: false,
-          });
+          };
+          // ~22% of regular foes carry a random affix that shakes up the fight.
+          if (Math.random() < 0.22) applyAffix(mob);
+          enemies.push(mob);
         }
       }
     }
   }
+
+  // Treasure Goblin: a rare, fast coward that flees on sight. Catch it for a
+  // jackpot chest — but it never fights back, so it's a chase, not a duel.
+  if (!isBossFloor && dungeonLevel >= 2 && Math.random() < 0.12) {
+    let gx, gy, tries = 0;
+    do {
+      gx = rnd(1, MAP_W-1); gy = rnd(1, MAP_H-1); tries++;
+    } while ((mapData[gy][gx] !== 0 || (gx === player.x && gy === player.y) || getEnemyAt(gx,gy)) && tries < 100);
+    if (tries < 100) {
+      const gHp = Math.round((10 + dungeonLevel * 6) * 1.2);
+      enemies.push({
+        x: gx, y: gy, hp: gHp, maxHp: gHp,
+        type: '👺', name: 'Treasure', dmg: 1,
+        dead: false, isGoblin: true,
+      });
+      log('👺 A Treasure Goblin scurries about — catch it before it escapes!', 'important');
+    }
+  }
+}
+
+const AFFIXES = [
+  { key: 'tough',    icon: '🛡️', name: 'Tough',    apply: m => { m.hp = Math.round(m.hp * 1.6); m.maxHp = m.hp; } },
+  { key: 'fierce',   icon: '😡', name: 'Fierce',   apply: m => { m.dmg = Math.round(m.dmg * 1.4); } },
+  { key: 'venomous', icon: '🧪', name: 'Venomous', apply: m => { m.statusChance = 0.4; } },
+];
+// Give an enemy a random affix: a name, an icon, and a stat/behaviour tweak.
+function applyAffix(mob) {
+  const a = pick(AFFIXES);
+  mob.affixIcon = a.icon;
+  mob.name = a.name;
+  a.apply(mob);
 }
 
 function spawnGroundLoot() {
@@ -1137,6 +1190,8 @@ function spawnGroundLoot() {
   let count = 0;
   if (Math.random() < 0.22) count = 1;
   if (count === 1 && dungeonLevel >= 6 && Math.random() < 0.15) count = 2;
+  // Bountiful floors hide a few extra chests.
+  if (floorMod.chestBonus) count += floorMod.chestBonus;
   // Deeper chests roll richer loot on top of the usual progression bonus.
   const chestLuck = 1 + Math.floor(dungeonLevel / 4);
   for (let i = 0; i < count; i++) {
@@ -1157,6 +1212,16 @@ function spawnGroundLoot() {
       fx = rnd(1, MAP_W-1); fy = rnd(1, MAP_H-1); tries++;
     } while ((mapData[fy][fx] !== 0 || (fx === player.x && fy === player.y)) && tries < 100);
     if (tries < 100) groundFood.push({ x: fx, y: fy, ...pick(FOODS) });
+  }
+  // Scatter coin piles — a few on most floors, lots during a Gold Rush.
+  groundGold = [];
+  let coinCount = (Math.random() < 0.5 ? 1 : 0) + (floorMod.goldPiles || 0);
+  for (let i = 0; i < coinCount; i++) {
+    let cx, cy, tries = 0;
+    do {
+      cx = rnd(1, MAP_W-1); cy = rnd(1, MAP_H-1); tries++;
+    } while ((mapData[cy][cx] !== 0 || (cx === player.x && cy === player.y)) && tries < 100);
+    if (tries < 100) groundGold.push({ x: cx, y: cy, amount: rnd(3, 10) + dungeonLevel * 2 });
   }
 }
 
@@ -1512,6 +1577,19 @@ function draw() {
     ctx.fillText(f.emoji, px + tw/2, py + th/2);
   });
 
+  // Coin piles — a soft golden glow so loose gold catches the eye.
+  groundGold.forEach(g => {
+    const px = offX + g.x * tw, py = offY + g.y * th;
+    ctx.save();
+    ctx.shadowColor = '#ffe066';
+    ctx.shadowBlur = 8 * scale;
+    ctx.font = `${Math.round(tw * 0.52)}px serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🪙', px + tw/2, py + th/2);
+    ctx.restore();
+  });
+
   // Merchant (roaming trader in bright robes)
   if (merchant) {
     const px = offX + merchant.x * tw, py = offY + merchant.y * th;
@@ -1565,6 +1643,12 @@ function draw() {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(e.type, px + tw/2, py + th/2 + th*0.04);
+
+    // Affix badge (Tough/Fierce/Venomous) or goblin loot tag, floated above.
+    if (e.affixIcon || e.isGoblin) {
+      ctx.font = `${Math.round(tw * 0.34)}px serif`;
+      ctx.fillText(e.isGoblin ? '💰' : e.affixIcon, px + tw/2, py - th*0.02);
+    }
 
     // Status effect icons
     const eEffects = statusEffects.filter(s => s.target === e);
@@ -1637,6 +1721,12 @@ function draw() {
     ctx.fillText(ft.text, px, py);
     ctx.restore();
   });
+
+  // Atmospheric colour wash for this floor, if any.
+  if (floorTint) {
+    ctx.fillStyle = floorTint;
+    ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  }
 }
 
 function spawnFloatingText(x, y, text, color) {
@@ -1769,6 +1859,53 @@ function activateShrine(nx, ny) {
   draw();
 }
 
+// Random one-off event when you step onto a new floor (~40% of the time).
+// Small spontaneous twists — a windfall, a scare, or a fleeting blessing.
+function maybeFloorEvent() {
+  if (dungeonLevel <= 1) return;
+  if (Math.random() >= 0.4) return;
+  const roll = rnd(1, 6);
+  switch (roll) {
+    case 1: {
+      const g = rnd(10, 25) + dungeonLevel * 3;
+      player.gold += g;
+      log(`💰 You stumble on a hidden coin cache — +${g} gold!`, 'important');
+      break;
+    }
+    case 2: {
+      const dmg = Math.min(player.hp - 1, rnd(5, 12) + dungeonLevel);
+      if (dmg > 0) { player.hp -= dmg; spawnFloatingText(player.x, player.y, `${dmg}`, '#ff3344'); }
+      log(`🪤 A hidden trap snaps shut — you take ${dmg} damage!`, 'important');
+      screenFlash('#cc0000');
+      break;
+    }
+    case 3: {
+      const heal = Math.floor(player.maxHp * 0.2);
+      player.hp = Math.min(player.maxHp, player.hp + heal);
+      spawnFloatingText(player.x, player.y, `+${heal}`, '#44dd44');
+      log(`🌿 An eerie calm settles over you — +${heal} HP.`, 'important');
+      break;
+    }
+    case 4: {
+      const xp = 15 * dungeonLevel;
+      player.xp += xp;
+      log(`💡 A flash of insight — +${xp} XP!`, 'important');
+      checkLevelUp();
+      break;
+    }
+    case 5:
+      buffs.fortune = Math.max(buffs.fortune, 2);
+      log('🍀 You feel lucky — better loot for the next 2 floors!', 'important');
+      screenFlash('#22cc66');
+      break;
+    case 6:
+      buffs.power = Math.max(buffs.power, 2);
+      log('🔥 Battle fury surges — +50% damage for the next 2 floors!', 'important');
+      screenFlash('#ff6600');
+      break;
+  }
+}
+
 // Count active shrine buffs down by one floor (called on descent).
 function tickBuffs() {
   for (const k of Object.keys(buffs)) if (buffs[k] > 0) buffs[k]--;
@@ -1830,6 +1967,7 @@ function move(dx, dy) {
     log(`Descended to dungeon level ${dungeonLevel}! You enter ${currentTheme().name}.`, 'important');
     player.x = 5; player.y = 5;
     generateMap();
+    maybeFloorEvent();
     updateBars();
     saveGame();
     draw();
@@ -1865,6 +2003,16 @@ function move(dx, dy) {
     updateBars();
   }
 
+  // Auto-pickup coin piles
+  const gi = groundGold.findIndex(g => g.x === nx && g.y === ny);
+  if (gi !== -1) {
+    const g = groundGold.splice(gi, 1)[0];
+    player.gold += g.amount;
+    spawnFloatingText(player.x, player.y, `+${g.amount}g`, '#ffd24b');
+    log(`🪙 Picked up ${g.amount} gold!`, 'loot');
+    updateBars();
+  }
+
   // Enemy AI
   enemies.filter(e => !e.dead).forEach(e => {
     const dist = Math.abs(e.x - player.x) + Math.abs(e.y - player.y);
@@ -1897,7 +2045,9 @@ function totalStat(name) {
 function attackEnemy(e) {
   // A readable label: bosses/elites use their name, plain foes use their sprite.
   const label = e.isBoss ? `${e.name} ${e.type}`
-    : (e.isElite ? `${e.name || 'Elite'} ${e.type}` : e.type);
+    : (e.isElite ? `${e.name || 'Elite'} ${e.type}`
+    : (e.isGoblin ? 'Treasure Goblin 👺'
+    : (e.name ? `${e.name} ${e.type}` : e.type)));
 
   // Critical hits scale off your combined CRIT + LCK stats and Agility attribute.
   const critChance = Math.min(0.6, 0.05 + (totalStat('CRIT') + totalStat('LCK')) * 0.01 + (player.attributes?.agility||0) * 0.01);
@@ -1915,7 +2065,7 @@ function attackEnemy(e) {
     const goldMult = e.isBoss ? 3 : (e.isElite ? 2 : 1);
     const xp = 10 * dungeonLevel * xpMult;
     player.xp += xp;
-    const gold = (rnd(2, 8) + dungeonLevel * 3) * goldMult;
+    const gold = Math.round((rnd(2, 8) + dungeonLevel * 3) * goldMult * (floorMod.goldMult || 1));
     player.gold += gold;
     spawnFloatingText(e.x + 0.35, e.y, `+${gold}g`, '#ffd24b');
     log(`${label} defeated! +${xp} XP, +${gold}g`, 'important');
@@ -1942,6 +2092,21 @@ function attackEnemy(e) {
       groundFood.push({ x: e.x, y: e.y, ...f });
       log(`${f.emoji} ${label} dropped ${f.name}!`, 'loot');
     }
+    // Treasure Goblin jackpot — a fat gold burst plus a guaranteed rich chest.
+    if (e.isGoblin) {
+      const bonus = 30 + dungeonLevel * 8;
+      player.gold += bonus;
+      groundItems.push({ x: e.x, y: e.y, luck: 6 });
+      spawnFloatingText(e.x, e.y, `+${bonus}g`, '#ffd24b');
+      log(`💰 The Treasure Goblin bursts — +${bonus}g and a glittering chest!`, 'loot');
+      updateBars();
+    }
+    // Vanishingly rare super-drop: the air shimmers and a fabled chest appears.
+    if (Math.random() < 0.02) {
+      groundItems.push({ x: e.x, y: e.y, luck: 6 });
+      log('✨ The air shimmers — a fabled chest materializes!', 'important');
+      screenFlash('#ffd24b');
+    }
     checkLevelUp();
   } else {
     // Enemy strikes back. Damage scales with the enemy, reduced by armor DEF.
@@ -1962,8 +2127,10 @@ function attackEnemy(e) {
 }
 
 function enemyMove(e) {
-  const dx = Math.sign(player.x - e.x);
-  const dy = Math.sign(player.y - e.y);
+  // Treasure goblins flee — they move directly away from you and never attack.
+  const flee = e.isGoblin;
+  const dx = (flee ? -1 : 1) * Math.sign(player.x - e.x);
+  const dy = (flee ? -1 : 1) * Math.sign(player.y - e.y);
   // Try horizontal then vertical
   const options = [];
   if (dx !== 0) options.push([dx, 0]);
@@ -1991,6 +2158,7 @@ function enemyMove(e) {
       spawnFloatingText(player.x, player.y, `${dmg}`, '#ff3344');
       log(`${e.name ? e.name + ' ' + e.type : e.type} attacks ${HERO} for ${dmg}!`);
       if (player.hp <= player.maxHp * 0.25) screenFlash('#cc0000');
+      tryBossStatusProc(e);   // venomous/boss foes can inflict poison or stun
       updateBars();
       if (player.hp === 0) handleDeath();
       return;
@@ -2089,9 +2257,38 @@ function pickup() {
   // Otherwise it rolls fresh loot when opened — luckier chests roll richer.
   const luck = chest.luck || 1;
   const fancy = luck > 1;
+
+  // ~15% of chests surprise you with gold, a potion, or food instead of gear.
+  if (Math.random() < 0.15) {
+    const surprise = rnd(1, 3);
+    if (surprise === 1) {
+      const g = rnd(15, 40) + dungeonLevel * 4;
+      player.gold += g;
+      log(`${fancy ? '🎁' : '🧰'} The chest was full of coins — +${g} gold!`, 'loot');
+    } else if (surprise === 2) {
+      player.healPotions++;
+      log(`${fancy ? '🎁' : '🧰'} A ${logPotion('Health Potion')} sat inside! (${player.healPotions} held)`, 'loot');
+    } else {
+      const f = pick(FOODS);
+      groundFood.push({ x: chest.x, y: chest.y, ...f });
+      log(`${fancy ? '🎁' : '🧰'} Tucked inside: ${f.emoji} ${f.name} — grab it!`, 'loot');
+    }
+    updateBars();
+    renderPanel();
+    saveGame();
+    draw();
+    return;
+  }
+
   const item = generateItem(luck);
   inventory.push(item);
   log(`${fancy ? '🎁' : '🧰'} Opened a ${fancy ? 'glittering ' : ''}chest: ${logItem(item)}`, 'loot');
+  // Loot explosion: a lucky chest occasionally overflows with a bonus item.
+  if (Math.random() < 0.12) {
+    const bonus = generateItem(luck);
+    inventory.push(bonus);
+    log(`✨ The chest overflows — bonus loot: ${logItem(bonus)}!`, 'important');
+  }
   renderPanel();
   saveGame();
   draw();
