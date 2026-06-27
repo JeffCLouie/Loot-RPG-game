@@ -2705,9 +2705,13 @@ canvas.addEventListener('pointerup', e => {
   const dy = e.clientY - gestureStart.y;
   gestureStart = null;
 
-  // An open drawer eats the gesture: close it to reveal the dungeon (mobile
-  // only — on web the drawer is a permanent column and stays put).
-  if (panelOpen && !isWebLayout()) { togglePanel(); return; }
+  // Tap / swipe controls are a touch-only replacement for the d-pad. On the
+  // web layout the map is mouse-and-keyboard driven exactly as before, so a
+  // click on it does nothing here.
+  if (isWebLayout()) return;
+
+  // An open drawer eats the gesture: close it to reveal the dungeon.
+  if (panelOpen) { togglePanel(); return; }
 
   const adx = Math.abs(dx), ady = Math.abs(dy);
   if (adx > SWIPE_PX || ady > SWIPE_PX) {
@@ -8625,12 +8629,12 @@ if (hadSave) {
   if (inTown) log('You are in town. Pick a service from the menu, or take the 🌀 Dungeon Gate back into the dungeon.');
   else log(`Resuming on dungeon level ${dungeonLevel}. Your gear is intact.`);
 } else {
-  log('Welcome to the dungeon. Tap or swipe the map to move and explore.', 'important');
+  log('Welcome to the dungeon. Tap, swipe, or use arrow keys to move and explore.', 'important');
   log('🔒 Clear a floor of its foes to unseal the ▼ stairs, then descend.', 'important');
   log('⚠️ The deep scales faster than you can — grind lower floors from 🏰 TOWN when you hit a wall.');
 }
 log('Progress auto-saves automatically as you play.');
-log('Tap 🎒 BAG on the bottom bar to open your loot; tap your hero to grab items.');
+log('Open 🎒 BAG to view your loot; on mobile, tap your hero to grab items.');
 log(`Tap the ❤️ flask to drink a ${logPotion('Health Potion')} when you're hurt. Enemies hit hard!`);
 log('⌨️ Keys: Q drink potion · E mana · R class skill · T town · B open bag · Space/F use.');
 log('⚡ Your class grants a special skill — tap the ⚡ button (or press R) to spend mana on it.');
