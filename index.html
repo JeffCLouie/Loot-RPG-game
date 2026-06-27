@@ -2947,7 +2947,7 @@ function renderSmith() {
     const cost = upgradeCost(it);
     const afford = player.gold >= cost;
     return `<div class="shop-row">
-      <span class="loot-icon">${itemIcon(it)}</span>
+      <span class="loot-icon">${iconMarkup(itemIcon(it), tierColor(it))}</span>
       <div class="shop-row-info item-${it.tier}">
         <div class="shop-row-name">${it.name}${it.upgrades ? ` <span style="color:#ffd24b">+${it.upgrades}</span>` : ''}</div>
         <div class="shop-row-stats">${itemStatLine(it)}</div>
@@ -3156,7 +3156,7 @@ function renderGambler() {
     const above = (it.ilvl > d) ? ' <span style="color:#ffd24b">(above your depth!)</span>' : '';
     resultRow = `<div class="town-blurb" style="margin-top:10px">Your last wager (${gambleLast.cost}g) turned up:</div>
       <div class="shop-row">
-        <span class="loot-icon">${itemIcon(it)}</span>
+        <span class="loot-icon">${iconMarkup(itemIcon(it), tierColor(it))}</span>
         <div class="shop-row-info item-${it.tier}">
           <div class="shop-row-name">${it.name}</div>
           <div class="shop-row-stats">ilvl ${it.ilvl}${above} · ${itemStatLine(it)}</div>
