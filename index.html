@@ -222,6 +222,16 @@
   .newgame-action:active { background: var(--hp); color: #fff; }
   .newgame-action.armed { background: var(--hp); color: #fff; border-color: #fff; }
 
+  .skill-btn {
+    background: #2a1f4a;
+    border-color: #4a3a7a;
+    color: #cbb8ff;
+  }
+  .skill-btn:active { background: #4a3a7a; }
+  /* Greyed when on cooldown or short on mana; pulses when ready to fire. */
+  .skill-btn.disabled { background: #211c2a; border-color: #33304a; color: #6a647a; }
+  .skill-btn.ready { box-shadow: 0 0 8px rgba(140,110,255,0.55); }
+
   /* ── SIDE PANEL ── */
   /* Overlays the map (absolutely positioned) so opening it doesn't resize the
      game canvas. The control bar sits above it via a higher z-index. */
@@ -273,6 +283,11 @@
   .hero-power .hp-value { font-size: 22px; font-weight: bold; color: #ffd24b; text-shadow: 0 0 10px rgba(255,210,75,0.6); }
   .hero-sub { font-size: 10px; color: #888; text-align: center; margin-bottom: 8px; line-height: 1.5; }
   .hero-points { text-align: center; font-size: 11px; color: #ffe9a0; margin-bottom: 8px; font-weight: bold; }
+  .hero-class { border: 1px solid var(--border); border-left-width: 3px; border-radius: 6px; padding: 7px 9px; margin-bottom: 8px; background: #14140f; }
+  .hero-class .hc-head { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+  .hero-class .hc-icon { font-size: 16px; }
+  .hero-class .hc-name { font-size: 13px; font-weight: bold; letter-spacing: 1px; }
+  .hero-class .hc-line { font-size: 10px; color: #b9a98a; line-height: 1.5; }
   .attr-row { display: flex; align-items: center; gap: 6px; padding: 5px 4px; border: 1px solid var(--border); border-radius: 5px; margin-bottom: 5px; }
   .attr-info { flex: 1; min-width: 0; }
   .attr-name { font-size: 11px; font-weight: bold; color: #d8d8e0; }
@@ -388,6 +403,16 @@
     line-height: 1;
   }
   .unequip-row-btn:active { background: var(--hp); }
+  .locked-row-btn {
+    background: #2a2420;
+    color: #8a7a5a;
+    font-size: 12px;
+    width: 28px;
+    height: 28px;
+    line-height: 1;
+    border: 1px solid #4a3f2a;
+  }
+  .locked-row-btn:active { background: #3a3228; }
 
   .item-junk      { color: var(--junk); }
   .item-normal    { color: var(--normal); }
@@ -659,6 +684,35 @@
     border-bottom: 1px solid var(--border);
   }
   #town-content { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 8px; }
+
+  /* ── CLASS-PICK OVERLAY ── shown on a new game (and for classless saves). */
+  #class-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.85);
+    display: none; align-items: center; justify-content: center;
+    z-index: 400; padding: 16px;
+  }
+  #class-overlay.open { display: flex; }
+  #class-modal {
+    background: #16120c; border: 2px solid #9f7a3f; border-radius: 10px;
+    width: 100%; max-width: 380px; max-height: 88vh; overflow-y: auto;
+    -webkit-overflow-scrolling: touch; padding: 14px;
+    box-shadow: 0 0 30px rgba(255,200,100,0.3);
+  }
+  #class-title { color: #ffe9b0; font-size: 16px; font-weight: bold; display: block; text-align: center; }
+  #class-sub { color: #b9a98a; font-size: 11px; text-align: center; margin: 6px 0 12px; line-height: 1.4; }
+  #class-cards { display: flex; flex-direction: column; gap: 8px; }
+  .class-card {
+    border: 1px solid var(--border); border-left-width: 4px; border-radius: 8px;
+    padding: 9px 11px; background: #1b160f; cursor: pointer; text-align: left;
+    font-family: 'Courier New', monospace; color: #e8d5a8; width: 100%;
+    -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  }
+  .class-card:active { background: #2a2113; }
+  .class-card .cc-head { display: flex; align-items: center; gap: 7px; margin-bottom: 3px; }
+  .class-card .cc-icon { font-size: 18px; }
+  .class-card .cc-name { font-size: 14px; font-weight: bold; letter-spacing: 1px; }
+  .class-card .cc-blurb { font-size: 10px; color: #b9a98a; line-height: 1.4; margin-bottom: 3px; }
+  .class-card .cc-detail { font-size: 9px; color: #8a7d63; line-height: 1.5; }
   .town-blurb { font-size: 11px; color: #b9a98a; margin-bottom: 8px; line-height: 1.4; }
   .gate-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
   .gate-floor {
@@ -822,6 +876,9 @@
             </svg>
           </span><span class="action-label" id="heal-label">0</span>
         </button>
+        <button class="action-btn skill-btn" id="skill-btn" onclick="castSkill()" style="display:none" title="Cast your class skill (R)">
+          <span class="action-icon" id="skill-icon">⚡</span><span class="action-label" id="skill-label">SKILL</span>
+        </button>
         <button class="action-btn town-action" onclick="enterTown()">
           <span class="action-icon">🏰</span><span class="action-label">TOWN</span>
         </button>
@@ -906,6 +963,14 @@
     </div>
     <div id="town-gold">Your gold: <span id="town-gold-count">0</span>g</div>
     <div id="town-content"></div>
+  </div>
+</div>
+
+<div id="class-overlay">
+  <div id="class-modal">
+    <span id="class-title">Choose your Hero</span>
+    <div id="class-sub"></div>
+    <div id="class-cards"></div>
   </div>
 </div>
 
@@ -1206,13 +1271,24 @@ function playerPower() {
 
 // Max HP/MP are derived from level + attributes so the formula stays consistent
 // across level ups, attribute spends, and loading an older save.
-function baseMaxHp() { return 92 + player.level*8 + (player.attributes?.vitality||0)*18; }
-function baseMaxMp() { return 56 + player.level*4 + (player.attributes?.spirit||0)*10; }
+function baseMaxHp() {
+  let hp = 92 + player.level*8 + (player.attributes?.vitality||0)*18;
+  if (player.class === 'templar') hp = Math.round(hp * 1.20); // Templar: hardier body
+  return hp;
+}
+function baseMaxMp() {
+  let mp = 56 + player.level*4 + (player.attributes?.spirit||0)*10;
+  if (player.class === 'mage') mp = Math.round(mp * 1.30); // Mage: deeper mana pool
+  return mp;
+}
 
 // Chance to completely avoid an incoming hit, driven by Agility and gear SPD.
 // Capped so you can never become untouchable — depth threat still outpaces it.
 function playerDodge() {
-  return Math.min(0.35, (player.attributes?.agility||0) * 0.012 + totalStat('SPD') * 0.006);
+  const base = (player.attributes?.agility||0) * 0.012 + totalStat('SPD') * 0.006;
+  // Rogues are slipperier: a flat dodge bump and a slightly higher ceiling.
+  if (player.class === 'rogue') return Math.min(0.45, base + 0.08);
+  return Math.min(0.35, base);
 }
 function recomputeMaxStats() {
   player.maxHp = baseMaxHp();
@@ -1316,6 +1392,78 @@ function weaponStyle() {
   }
   return 'slash';
 }
+
+// ── CHARACTER CLASSES ──
+// Each class gives a starting attribute bias, a passive identity, an MP-fueled
+// active skill (cast with the ⚡ button / R key), and the set of weapon types it
+// is allowed to wield. Off-class weapons still drop and sell, but can't be
+// equipped (a hard lock — see canEquipItem). Class is chosen on a new game and
+// can be re-picked at the town Trainer.
+const CLASSES = {
+  warrior: {
+    name: 'Warrior', icon: '⚔️', color: '#e08a3c',
+    blurb: 'A frontline bruiser — hits harder and shrugs off blows.',
+    passive: '+10% damage dealt · −15% damage taken',
+    startAttrs: { might: 3, vitality: 1 },
+    weapons: ['Sword','Axe','Mace','Spear','Scythe'],
+    skill: { id:'cleave', name:'Cleave', icon:'🪓', mp:12, cd:3,
+             desc:'A sweeping blow strikes every adjacent foe hard.' },
+  },
+  rogue: {
+    name: 'Rogue', icon: '🗡️', color: '#5ec27a',
+    blurb: 'A nimble striker — more crits and harder to pin down.',
+    passive: '+8% crit chance · +8% dodge',
+    startAttrs: { agility: 3, might: 1 },
+    weapons: ['Dagger','Sword','Bow'],
+    skill: { id:'backstab', name:'Backstab', icon:'🎯', mp:10, cd:3,
+             desc:'A guaranteed, devastating critical on an adjacent foe.' },
+  },
+  mage: {
+    name: 'Mage', icon: '🔮', color: '#7d9bff',
+    blurb: 'A glass-cannon caster — a deep mana pool and ranged fire.',
+    passive: '+30% max MP · spell-powered Firebolt',
+    startAttrs: { spirit: 3, agility: 1 },
+    weapons: ['Staff','Dagger'],
+    skill: { id:'firebolt', name:'Firebolt', icon:'🔥', mp:14, cd:2,
+             desc:'Hurl fire at the nearest foe in range — it can\'t retaliate.' },
+  },
+  templar: {
+    name: 'Templar', icon: '🛡️', color: '#e8c95a',
+    blurb: 'A holy bulwark — sturdier, and able to mend its own wounds.',
+    passive: '+20% max HP · stronger regen',
+    startAttrs: { vitality: 3, spirit: 1 },
+    weapons: ['Sword','Mace','Spear'],
+    skill: { id:'mend', name:'Mend', icon:'✨', mp:12, cd:3,
+             desc:'Channel spirit to restore a burst of health.' },
+  },
+};
+const CLASS_KEYS = Object.keys(CLASSES);
+
+function playerClass() { return player.class ? CLASSES[player.class] : null; }
+
+// The base weapon type (Sword, Bow, …) of an item, or null if it isn't a known
+// weapon. Drives class equip restrictions.
+function weaponBaseType(item) {
+  if (!item || !item.name) return null;
+  for (const base of Object.keys(WEAPON_STYLES)) {
+    if (new RegExp('\\b' + base + '\\b').test(item.name)) return base;
+  }
+  return null;
+}
+
+// Can the current class equip this item? Non-weapons (and weapons of an
+// unrecognised type) are always allowed; a classless hero has no restriction.
+function canEquipItem(item) {
+  if (!item || item.slot !== 'weapon') return true;
+  const cls = playerClass();
+  if (!cls) return true;
+  const t = weaponBaseType(item);
+  return !t || cls.weapons.includes(t);
+}
+
+// Combat passives keyed off the chosen class.
+function classDmgDealtMult() { return player.class === 'warrior' ? 1.10 : 1; }
+function classDmgTakenMult() { return player.class === 'warrior' ? 0.85 : 1; }
 
 // Names rolled for elite (named) enemies and mimics, so a glowing foe feels
 // like a personality rather than just a tougher sprite.
@@ -1442,6 +1590,9 @@ let player = { x: 5, y: 5, hp: 100, maxHp: 100, mp: 60, maxMp: 60, gold: 0, leve
   // floor is here its stairs never re-seal — backtracking via the Dungeon Gate or
   // the up-stairs drops you onto an already-open floor with no unlock conditions.
   clearedFloors: {},
+  // Chosen character class (null until picked on a new game). Drives starting
+  // attributes, passives, the active skill, and which weapons can be equipped.
+  class: null, skillCd: 0,
   // Hero attributes raised by spending points earned on level up.
   attributes: { might: 0, vitality: 0, agility: 0, spirit: 0 }, attrPoints: 0,
   // Chosen cosmetic looks per visual slot (null = mirror equipped gear), plus the
@@ -2899,7 +3050,19 @@ function renderTrainer() {
         <div class="shop-row-sub">Refund every point you've spent</div></div>
       <span class="shop-price">${cost}g</span>
       <button class="shop-buy-btn" ${(player.gold >= cost && spent > 0) ? '' : 'disabled'} onclick="respecAttrs()">RESET</button>
-    </div>`);
+    </div>
+    <div class="town-blurb" style="margin-top:10px">Retrain into a different class for ${classChangeCost()}g. Your attributes are kept; if your new class can't wield your weapon, it goes back in your bag.</div>
+    ${CLASS_KEYS.map(k => {
+      const c = CLASSES[k];
+      const cur = player.class === k;
+      const ccost = classChangeCost();
+      return `<div class="shop-row">
+        <span class="loot-icon">${c.icon}</span>
+        <div class="shop-row-info"><div class="shop-row-name" style="color:${c.color}">${c.name}${cur ? ' (current)' : ''}</div>
+          <div class="shop-row-sub">${c.passive} · ${c.skill.icon} ${c.skill.name}</div></div>
+        <button class="shop-buy-btn" ${cur || player.gold < ccost ? 'disabled' : ''} onclick="changeClass('${k}')">${cur ? '—' : ccost + 'g'}</button>
+      </div>`;
+    }).join('')}`);
 }
 function respecAttrs() {
   const spent = ATTR_KEYS.reduce((s, k) => s + (player.attributes?.[k] || 0), 0);
@@ -4417,8 +4580,9 @@ function tickPact() {
 // Heal a little each turn based on equipped REGEN, up to max HP.
 function applyRegen() {
   // Spirit and Vitality grant passive regen on top of any REGEN rolled on gear.
-  const r = totalStat('REGEN') + Math.floor((player.attributes?.spirit||0) / 2)
+  let r = totalStat('REGEN') + Math.floor((player.attributes?.spirit||0) / 2)
             + Math.floor((player.attributes?.vitality||0) / 3);
+  if (player.class === 'templar') r += 2; // Templar mends faster between fights
   if (r > 0 && player.hp > 0 && player.hp < player.maxHp) {
     player.hp = Math.min(player.maxHp, player.hp + r);
     updateBars();
@@ -4469,7 +4633,7 @@ function move(dx, dy) {
   if (enemy) {
     attackEnemy(enemy);
     runEnemyTurn();
-    moveEscort();
+    moveQuestEntities();
     draw();
     return;
   }
@@ -4666,7 +4830,8 @@ function totalStat(name) {
 function mitigateDamage(raw, lvl) {
   const def = totalStat('DEF');
   const mitigation = def / (def + 18 + (lvl || dungeonLevel) * 6);
-  return Math.max(1, Math.round(raw * (1 - mitigation)));
+  // Warrior passive: shrug off a flat slice of every incoming blow.
+  return Math.max(1, Math.round(raw * (1 - mitigation) * classDmgTakenMult()));
 }
 
 // A readable label for an enemy in the log: bosses/elites use their name, plain
@@ -4692,13 +4857,15 @@ function adjacentEnemies(e) {
 // hits, bosses 9, vs the normal 4), so each kill is more turns of exposure to
 // retaliation rather than a bigger one-shot. Returns { dmg, isCrit }.
 function rollPlayerHit(e) {
-  const critChance = Math.min(0.6, 0.05 + (totalStat('CRIT') + totalStat('LCK')) * 0.01 + (player.attributes?.agility||0) * 0.015);
+  const rogueCrit = player.class === 'rogue' ? 0.08 : 0;
+  const critChance = Math.min(0.6, 0.05 + rogueCrit + (totalStat('CRIT') + totalStat('LCK')) * 0.01 + (player.attributes?.agility||0) * 0.015);
   const isCrit = Math.random() < critChance;
   let dmg = getWeaponDamage() + player.level * 2 + totalStat('ATK') + (player.attributes?.might||0) * 4;
   const hitDivisor = e.isBoss ? 9 : (e.isElite ? 6 : 4);
   const hitCap = Math.max(1, Math.floor(e.maxHp / hitDivisor));
   if (dmg > hitCap) dmg = Math.max(1, Math.round(hitCap * (rnd(80, 100) / 100)));
   if (buffs.power) dmg = Math.round(dmg * 1.5);
+  dmg = Math.round(dmg * classDmgDealtMult()); // Warrior hits harder
   if (isCrit) dmg = Math.round(dmg * 2.2);
   return { dmg: Math.max(1, dmg), isCrit };
 }
@@ -4864,7 +5031,7 @@ function tryRangedAttack(dx, dy) {
       attackEnemy(tgt, { ranged: true, style });
       // A ranged poke still passes the turn — foes get to close in.
       runEnemyTurn();
-      moveEscort();
+      moveQuestEntities();
       updateBars();
       draw();
       return true;
@@ -4873,9 +5040,111 @@ function tryRangedAttack(dx, dy) {
   return false;
 }
 
+// ── CLASS SKILLS ──
+// The active, MP-fueled ability granted by the player's class — cast with the ⚡
+// button or the R key. A skill spends MP, resolves its effect, then passes a
+// turn (the floor's foes act) and begins its cooldown. Failures (no target, not
+// enough mana, on cooldown) are reported in the log and cost nothing.
+function castSkill() {
+  const cls = playerClass();
+  if (!cls || !cls.skill) { log('Pick a class to gain its skill.'); return; }
+  if (inTown) { log('Save your skills for the dungeon.'); return; }
+  if (isPlayerStunned()) { log('You are stunned and can\'t cast!'); return; }
+  const sk = cls.skill;
+  if ((player.skillCd || 0) > 0) { log(`⏳ ${sk.name} is recharging (${player.skillCd} more turn${player.skillCd === 1 ? '' : 's'}).`); return; }
+  if (player.mp < sk.mp) { log(`💧 Not enough mana for ${sk.name} — need ${sk.mp} MP.`); return; }
+
+  let fired = false;
+  if (sk.id === 'cleave')        fired = skillCleave();
+  else if (sk.id === 'backstab') fired = skillBackstab();
+  else if (sk.id === 'firebolt') fired = skillFirebolt();
+  else if (sk.id === 'mend')     fired = skillMend();
+  if (!fired) return; // no valid target / nothing to do — don't spend MP or a turn
+
+  player.mp -= sk.mp;
+  updateBars();
+  // The cast costs a turn: foes act and escorts trail along. Set the cooldown
+  // AFTER runEnemyTurn so this very turn doesn't immediately tick it down.
+  runEnemyTurn();
+  moveQuestEntities();
+  player.skillCd = sk.cd;
+  updateBars();
+  draw();
+  saveGame();
+}
+
+// Foes orthogonally/diagonally adjacent to the player.
+function adjacentToPlayer() {
+  return enemies.filter(o => !o.dead && Math.abs(o.x - player.x) <= 1 && Math.abs(o.y - player.y) <= 1);
+}
+
+// Warrior — Cleave: a heavy swing that lands on every adjacent foe.
+function skillCleave() {
+  const adj = adjacentToPlayer();
+  if (!adj.length) { log('🪓 No foe within reach to cleave.'); return false; }
+  sfx('crit');
+  let total = 0;
+  adj.forEach(e => {
+    const h = rollPlayerHit(e);
+    const d = Math.max(1, Math.round(h.dmg * 1.5));
+    total += d;
+    dealDamage(e, d, true);
+  });
+  log(`🪓 ${HERO} cleaves ${adj.length} foe${adj.length === 1 ? '' : 's'} for ${total}!`, 'important');
+  return true;
+}
+
+// Rogue — Backstab: a guaranteed, oversized critical on one adjacent foe.
+function skillBackstab() {
+  const adj = adjacentToPlayer().sort((a, b) => a.hp - b.hp);
+  if (!adj.length) { log('🎯 No foe adjacent to backstab.'); return false; }
+  const e = adj[0];
+  let dmg = getWeaponDamage() + player.level * 2 + totalStat('ATK') + (player.attributes?.might || 0) * 4;
+  dmg = Math.round(dmg * 3.0 * classDmgDealtMult());
+  if (buffs.power) dmg = Math.round(dmg * 1.5);
+  dmg = Math.max(1, Math.min(dmg, Math.ceil(e.maxHp * 0.6))); // big, but no instant boss delete
+  sfx('crit');
+  dealDamage(e, dmg, true);
+  log(`🎯 CRITICAL! ${HERO} backstabs ${enemyLabel(e)} for ${dmg}!`, 'important');
+  return true;
+}
+
+// Mage — Firebolt: a ranged fire nuke on the nearest foe in range; no reprisal.
+function skillFirebolt() {
+  const range = 6;
+  const inRange = enemies
+    .filter(o => !o.dead && (Math.abs(o.x - player.x) + Math.abs(o.y - player.y)) <= range)
+    .sort((a, b) => (Math.abs(a.x - player.x) + Math.abs(a.y - player.y)) - (Math.abs(b.x - player.x) + Math.abs(b.y - player.y)));
+  if (!inRange.length) { log('🔥 No foe within range of your Firebolt.'); return false; }
+  const e = inRange[0];
+  const spirit = player.attributes?.spirit || 0;
+  let dmg = 16 + player.level * 3 + spirit * 6;
+  if (buffs.power) dmg = Math.round(dmg * 1.5);
+  dmg = Math.max(1, Math.round(dmg));
+  sfx('attack');
+  spawnFloatingText(player.x, player.y, '🔥', '#ff8844');
+  dealDamage(e, dmg, true);
+  log(`🔥 ${HERO} hurls a Firebolt at ${enemyLabel(e)} for ${dmg}!`, 'important');
+  return true;
+}
+
+// Templar — Mend: spend mana to restore a burst of health.
+function skillMend() {
+  if (player.hp >= player.maxHp) { log('✨ Already at full health.'); return false; }
+  const spirit = player.attributes?.spirit || 0;
+  const heal = Math.min(player.maxHp - player.hp, 40 + player.level * 4 + spirit * 8);
+  player.hp += heal;
+  sfx('potion');
+  spawnFloatingText(player.x, player.y, `+${heal}`, '#7fffaa');
+  log(`✨ ${HERO} channels Mend and recovers ${heal} HP.`, 'important');
+  return true;
+}
+
 // Run every nearby living enemy's turn once, bailing if the floor changes
 // mid-turn (e.g. a death warps you to the previous floor and rebuilds it).
 function runEnemyTurn() {
+  // Every passed turn (move, attack, or skill) ticks the class-skill cooldown.
+  if (player.skillCd > 0) player.skillCd--;
   const serial = floorSerial;
   enemies.filter(e => !e.dead).forEach(e => {
     if (floorSerial !== serial) return;
@@ -5370,6 +5639,27 @@ function updateBars() {
     // Pulse the heal button when you're hurt and actually have a potion to use.
     healBtn.classList.toggle('urgent', player.healPotions > 0 && player.hp < player.maxHp * 0.35);
   }
+  // Class-skill button: shows the skill icon, and its cooldown / mana cost.
+  const skillBtn = document.getElementById('skill-btn');
+  if (skillBtn) {
+    const cls = playerClass();
+    if (cls && cls.skill) {
+      const sk = cls.skill;
+      skillBtn.style.display = '';
+      const icon = document.getElementById('skill-icon');
+      const label = document.getElementById('skill-label');
+      if (icon) icon.textContent = sk.icon;
+      const cd = player.skillCd || 0;
+      const ready = cd === 0 && player.mp >= sk.mp && !inTown;
+      if (label) label.textContent = cd > 0 ? `${cd}` : `${sk.mp}MP`;
+      skillBtn.title = `${sk.name} — ${sk.desc} (${sk.mp} MP, ${sk.cd}-turn cooldown) · press R`;
+      skillBtn.classList.toggle('disabled', !ready);
+      skillBtn.classList.toggle('ready', ready && player.hp > 0);
+    } else {
+      skillBtn.style.display = 'none';
+    }
+  }
+
   // Red vignette warns when health is critical.
   const vig = document.getElementById('low-hp-vignette');
   if (vig) vig.classList.toggle('active', player.hp > 0 && player.hp < player.maxHp * 0.25);
@@ -5450,7 +5740,9 @@ function renderPanel() {
           <div class="item-type">${slotName}${pwr}</div>
         </div>
         ${equipable
-          ? `<button class="row-btn equip-row-btn ${isUpgrade?'upgrade-btn':''}" onclick="quickEquip(${i})">${equippedHere && isUpgrade?'SWAP':'EQUIP'}</button>`
+          ? (canEquipItem(item)
+              ? `<button class="row-btn equip-row-btn ${isUpgrade?'upgrade-btn':''}" onclick="quickEquip(${i})">${equippedHere && isUpgrade?'SWAP':'EQUIP'}</button>`
+              : `<button class="row-btn locked-row-btn" title="Your class can't wield this weapon" onclick="quickEquip(${i})">🔒</button>`)
           : ''}
       </div>`;
     }).join('');
@@ -5479,14 +5771,96 @@ function renderHero(el) {
       <button class="attr-plus" ${pts > 0 ? '' : 'disabled'} onclick="spendAttr('${key}')">+</button>
     </div>`;
   }).join('');
+  const cls = playerClass();
+  const classBlock = cls ? `
+    <div class="hero-class" style="border-color:${cls.color}">
+      <div class="hc-head"><span class="hc-icon">${cls.icon}</span>
+        <span class="hc-name" style="color:${cls.color}">${cls.name}</span></div>
+      <div class="hc-line">${cls.passive}</div>
+      <div class="hc-line">${cls.skill.icon} <b>${cls.skill.name}</b> — ${cls.skill.desc} <span style="opacity:0.7">(${cls.skill.mp} MP)</span></div>
+      <div class="hc-line" style="opacity:0.75">Weapons: ${cls.weapons.join(', ')}</div>
+      <div class="hc-line" style="opacity:0.6">Change class at the town Trainer 🎓</div>
+    </div>` : '';
   el.innerHTML = `
     <div class="hero-power">
       <div class="hp-label">⚡ POWER</div>
       <div class="hp-value">${playerPower()}</div>
     </div>
     <div class="hero-sub">Level ${player.level} · ${gearPower} from gear<br>Power = level + attributes + gear</div>
+    ${classBlock}
     <div class="hero-points">${pts > 0 ? `${pts} point${pts>1?'s':''} to spend!` : 'No points to spend — level up for more.'}</div>
     ${rows}`;
+}
+
+// ── CLASS SELECTION ──
+// The mandatory pick shown on a new game (and once for saves that predate
+// classes). Building the cards from CLASSES keeps it in sync with the data.
+function showClassPick() {
+  const ov = document.getElementById('class-overlay');
+  const sub = document.getElementById('class-sub');
+  const cards = document.getElementById('class-cards');
+  if (!ov) return;
+  sub.textContent = 'Pick a class — it shapes your starting stats, the weapons you can wield, and the special skill you cast. You can retrain later at the town Trainer.';
+  cards.innerHTML = CLASS_KEYS.map(k => {
+    const c = CLASSES[k];
+    return `<button class="class-card" style="border-left-color:${c.color}" onclick="chooseClass('${k}')">
+      <div class="cc-head"><span class="cc-icon">${c.icon}</span><span class="cc-name" style="color:${c.color}">${c.name}</span></div>
+      <div class="cc-blurb">${c.blurb}</div>
+      <div class="cc-detail">Passive: ${c.passive}<br>${c.skill.icon} ${c.skill.name}: ${c.skill.desc}<br>Weapons: ${c.weapons.join(', ')}</div>
+    </button>`;
+  }).join('');
+  ov.classList.add('open');
+}
+
+// Lock in a class from the new-game pick. A brand-new hero (level 1, nothing
+// invested) also gets the class's starting attribute bias baked in.
+function chooseClass(key) {
+  const cls = CLASSES[key];
+  if (!cls) return;
+  const spent = ATTR_KEYS.reduce((s, k) => s + (player.attributes?.[k] || 0), 0);
+  const isNew = player.level === 1 && spent === 0 && (player.attrPoints || 0) === 0;
+  player.class = key;
+  if (isNew) {
+    for (const [k, v] of Object.entries(cls.startAttrs)) player.attributes[k] = (player.attributes[k] || 0) + v;
+  }
+  player.skillCd = 0;
+  recomputeMaxStats();
+  player.hp = player.maxHp;
+  player.mp = player.maxMp;
+  revalidateWeapon(cls);
+  const ov = document.getElementById('class-overlay');
+  if (ov) ov.classList.remove('open');
+  log(`${cls.icon} You are a ${cls.name}! ${cls.passive}. Skill: ${cls.skill.icon} ${cls.skill.name} — press R to cast.`, 'important');
+  sfx('levelup');
+  updateBars(); renderPanel(); draw(); saveGame();
+}
+
+// If the (new) class can't wield the equipped weapon, stow it in the bag.
+function revalidateWeapon(cls) {
+  if (equipped.weapon && !canEquipItem(equipped.weapon)) {
+    log(`🔒 You stow the ${equipped.weapon.name} — a ${cls.name} can't wield it.`);
+    inventory.push(equipped.weapon);
+    equipped.weapon = null;
+  }
+}
+
+// Retraining at the town Trainer: change class for gold. Attributes are kept.
+function classChangeCost() { return 80 + (player.maxFloor || 1) * 10; }
+function changeClass(key) {
+  const cls = CLASSES[key];
+  if (!cls || player.class === key) return;
+  const cost = classChangeCost();
+  if (player.gold < cost) { log('Not enough gold to retrain.'); return; }
+  player.gold -= cost;
+  player.class = key;
+  player.skillCd = 0;
+  recomputeMaxStats();
+  if (player.hp > player.maxHp) player.hp = player.maxHp;
+  if (player.mp > player.maxMp) player.mp = player.maxMp;
+  revalidateWeapon(cls);
+  sfx('shrine');
+  log(`${cls.icon} You retrain as a ${cls.name}! Skill: ${cls.skill.icon} ${cls.skill.name}.`, 'important');
+  updateBars(); renderPanel(); renderTrainer(); draw(); saveGame();
 }
 
 function renderSlot(slot, label) {
@@ -5557,6 +5931,11 @@ function quickEquip(i) {
   if (!item) return;
   const slot = item.slot;
   if (!slot) { log(`${logItem(item)} can't be equipped.`); return; }
+  if (!canEquipItem(item)) {
+    const cls = playerClass();
+    log(`🔒 A ${cls.name} can't wield that — ${cls.name}s use ${cls.weapons.join(', ')}.`);
+    return;
+  }
   if (equipped[slot]) inventory.push(equipped[slot]); // swap old back into bag
   equipped[slot] = item;
   inventory.splice(i, 1);
@@ -5744,6 +6123,9 @@ document.querySelectorAll('.dpad-btn').forEach(btn => {
 });
 
 document.addEventListener('keydown', e => {
+  // Block gameplay keys while the mandatory class-pick overlay is open.
+  const cov = document.getElementById('class-overlay');
+  if (cov && cov.classList.contains('open')) return;
   if (e.key==='ArrowUp'||e.key==='w')    move(0,-1);
   if (e.key==='ArrowDown'||e.key==='s')  move(0,1);
   if (e.key==='ArrowLeft'||e.key==='a')  move(-1,0);
@@ -5751,6 +6133,7 @@ document.addEventListener('keydown', e => {
   if (e.key===' '||e.key==='f')          pickup();
   if (e.key==='q'||e.key==='Q')          useHealthPotion();
   if (e.key==='e'||e.key==='E')          useManaPotion();
+  if (e.key==='r'||e.key==='R')          castSkill();
   if (e.key==='t'||e.key==='T')          enterTown();
   if (e.key==='b'||e.key==='B'||e.key==='i'||e.key==='I') togglePanel();
 });
@@ -5796,6 +6179,10 @@ function loadGame() {
     if (!player.attributes) player.attributes = { might:0, vitality:0, agility:0, spirit:0 };
     for (const k of ['might','vitality','agility','spirit']) if (player.attributes[k] == null) player.attributes[k] = 0;
     if (player.attrPoints == null) player.attrPoints = 0;
+    // Migrate saves that predate the class system. A null class is fine — the
+    // init flow prompts the player to choose one. Drop any unknown class id.
+    if (player.class && !CLASSES[player.class]) player.class = null;
+    if (player.skillCd == null) player.skillCd = 0;
     // Migrate saves that predate the deepest-floor tracker / town hub.
     if (player.maxFloor == null) player.maxFloor = data.dungeonLevel || 1;
     // Migrate saves that predate cleared-floor tracking.
@@ -5888,6 +6275,9 @@ draw();
 updateBars();
 renderPanel();
 
+// New game (or a save from before classes existed) — make the player pick a class.
+if (!player.class) showClassPick();
+
 if (hadSave) {
   log(`Welcome back, level ${player.level} adventurer.`, 'important');
   if (inTown) log('You are in town. Walk up to an NPC, or take the 🌀 gate back into the dungeon.');
@@ -5900,7 +6290,8 @@ if (hadSave) {
 log('Progress auto-saves automatically as you play.');
 log('Tap 🎒 BAG (bottom-right) to open your loot.');
 log(`Tap the ❤️ flask to drink a ${logPotion('Health Potion')} when you're hurt. Enemies hit hard!`);
-log('⌨️ Keys: Q drink potion · E mana · T town · B open bag · Space/F use.');
+log('⌨️ Keys: Q drink potion · E mana · R class skill · T town · B open bag · Space/F use.');
+log('⚡ Your class grants a special skill — tap the ⚡ button (or press R) to spend mana on it.');
 log('⚡ Each item has a Power value; your total Power blends level, gear, and attributes.');
 log('💠 Level up to earn points, then raise attributes in the bag\'s HERO tab.');
 log('🗡️ Every weapon fights differently — axes cleave, daggers flurry, bows & staves strike at range, maces stun, scythes drain. Try them all!');
