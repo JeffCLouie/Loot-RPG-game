@@ -676,7 +676,7 @@
   <div class="hud-item" id="level-hud">Lv <span class="hud-val" id="level-num">1</span>
     <div class="xp-track"><div class="xp-fill" id="xp-bar" style="width:0%"></div></div>
   </div>
-  <div class="hud-item" id="enemies-hud">⚔️ <span class="hud-val" id="enemies-num">0</span></div>
+  <div class="hud-item" id="enemies-hud" title="Foes remaining — the stairs down stay sealed until the floor is clear">⚔️ <span class="hud-val" id="enemies-num">0</span> <span id="clear-status">🔒</span></div>
   <div class="hud-item" id="power-hud">⚡ <span class="hud-val" id="power-num">0</span></div>
   <div class="hud-item" id="pact-hud" style="display:none">🔮 <span class="hud-val" id="pact-num"></span></div>
   <div id="gold-display">💰 <span id="gold-count">0</span>g</div>
@@ -904,15 +904,31 @@ const STAT_POWER_WEIGHTS = { ATK:3, DEF:2, SPD:2, LCK:2, HP:1, MP:1, CRIT:4, REG
 // permanently outranking it.
 const TIER_POWER_BONUS = { junk:0, normal:1, uncommon:2, rare:4, epic:7, legendary:11, unique:16 };
 
-// Hero attributes — raised by spending points earned on each level up.
+// Hero attributes — raised by spending points earned on each level up. Levels
+// are slow and precious now (see checkLevelUp), so each point hits hard: a
+// single level's worth of points is a meaningful, build-defining jump.
 const ATTRIBUTES = {
-  might:    { label: '💪 Might',    short: 'MIG', desc: '+2 attack damage per point' },
-  vitality: { label: '❤️ Vitality', short: 'VIT', desc: '+10 max HP per point' },
-  agility:  { label: '🎯 Agility',  short: 'AGI', desc: '+1% crit chance per point' },
-  spirit:   { label: '✨ Spirit',   short: 'SPR', desc: '+6 max MP & regen per point' },
+  might:    { label: '💪 Might',    short: 'MIG', desc: '+4 attack damage per point' },
+  vitality: { label: '❤️ Vitality', short: 'VIT', desc: '+20 max HP per point' },
+  agility:  { label: '🎯 Agility',  short: 'AGI', desc: '+1.5% crit chance per point' },
+  spirit:   { label: '✨ Spirit',   short: 'SPR', desc: '+10 max MP & regen per point' },
 };
 const ATTR_KEYS = Object.keys(ATTRIBUTES);
 const ATTR_POINTS_PER_LEVEL = 3;
+
+// ── DEPTH THREAT ──
+// The single most important difficulty lever: enemy power compounds with depth.
+// On top of the linear (per-floor) base stats, every floor multiplies enemy HP
+// and damage by a growing factor, so danger accelerates faster than the player
+// can ever grind. Linear player growth (level, attributes, gear) can keep pace
+// for a while, then falls behind — which is the whole point: you should hit
+// floors you simply cannot clear yet, retreat, and come back stronger. Because
+// the curve is tied to DEPTH (not your level), grinding shallow floors stays
+// safe and lucrative while the deep stays deadly.
+//   floor 1 → 1.00x   floor 10 → ~2.1x   floor 20 → ~4.8x   floor 30 → ~11x
+function depthThreat(level) {
+  return Math.pow(1.085, Math.max(0, (level || 1) - 1));
+}
 
 // Total power of a single item: weighted sum of its stats + a rarity bonus.
 function itemPower(item) {
@@ -935,14 +951,14 @@ function playerPower() {
   let p = player.level * 10;
   for (const slot of SLOT_KEYS) if (equipped[slot]) p += itemPower(equipped[slot]);
   const a = player.attributes || {};
-  p += (a.might||0)*4 + (a.vitality||0)*3 + (a.agility||0)*3 + (a.spirit||0)*2;
+  p += (a.might||0)*7 + (a.vitality||0)*4 + (a.agility||0)*5 + (a.spirit||0)*3;
   return Math.round(p);
 }
 
 // Max HP/MP are derived from level + attributes so the formula stays consistent
 // across level ups, attribute spends, and loading an older save.
-function baseMaxHp() { return 92 + player.level*8 + (player.attributes?.vitality||0)*10; }
-function baseMaxMp() { return 56 + player.level*4 + (player.attributes?.spirit||0)*6; }
+function baseMaxHp() { return 92 + player.level*8 + (player.attributes?.vitality||0)*20; }
+function baseMaxMp() { return 56 + player.level*4 + (player.attributes?.spirit||0)*10; }
 function recomputeMaxStats() {
   player.maxHp = baseMaxHp();
   player.maxMp = baseMaxMp();
@@ -1005,15 +1021,54 @@ const FLOOR_MODS = [
   { id: 'haunted',  name: '👻 Haunted Halls',       dmgMult: 1.2,  lootMult: 1.3, eliteBonus: 0.15, desc: 'Restless spirits strike from the dark.' },
   { id: 'brittle',  name: '🍃 Brittle Bones',       dmgMult: 1,    lootMult: 1,   eliteBonus: 0,    desc: 'Foes are frail — strike them down fast.', hpMult: 0.55 },
   { id: 'bountiful',name: '🎁 Bountiful Floor',      dmgMult: 1.05, lootMult: 1.6, eliteBonus: 0,    desc: 'Chests hide around every corner.', chestBonus: 2 },
+  // A deliberate wall: a floor that may simply be beyond you right now. Rich if
+  // you can survive it, lethal if you can't — turn back and grind if you must.
+  { id: 'nightmare',name: '☠️ Nightmare Depths',     dmgMult: 1.7,  lootMult: 2.4, eliteBonus: 0.35, desc: 'Death itself stalks these halls. Turn back if you must.', hpMult: 1.45 },
 ];
 let floorMod = FLOOR_MODS[0];
 
+// ── FLOOR CLEAR CONDITION ──
+// You can no longer sprint past everything to the stairs: the way down is
+// sealed until the floor's hostiles are dealt with. `floorCleared` latches true
+// once the condition is met (a late mimic popping out won't re-seal you in).
+let floorCleared = false;
+// Fleeing treasure goblins don't block the exit — they're a bonus chase. Every
+// other living foe (mobs, elites, bosses, quest hordes, mimics) counts.
+function hostilesRemaining() {
+  return (enemies || []).filter(e => !e.dead && !e.isGoblin).length;
+}
+// Re-check after any kill (or floor setup). Once clear, announce and unseal.
+function updateFloorClear() {
+  if (!floorCleared && hostilesRemaining() === 0) {
+    floorCleared = true;
+    log('🔓 The floor is clear — the stairs down unseal!', 'important');
+    sfx('stairs');
+    updateBars();
+  }
+}
+// A short, themed description of what bars the stairs on this floor.
+function clearConditionLabel() {
+  const n = hostilesRemaining();
+  if (dungeonLevel % 5 === 0) return 'Slay the floor guardian and its minions to descend.';
+  if (n === 0) return 'The way down is already open.';
+  return `Defeat all ${n} foes on this floor to unseal the stairs down.`;
+}
+
 function rollFloorMod() {
-  // First floor is always normal so players learn the ropes.
-  if (dungeonLevel <= 1) { floorMod = FLOOR_MODS[0]; return; }
-  // ~55% normal, otherwise a random theme.
-  if (Math.random() < 0.55) { floorMod = FLOOR_MODS[0]; return; }
-  floorMod = pick(FLOOR_MODS.slice(1));
+  // First two floors are always normal so players learn the ropes.
+  if (dungeonLevel <= 2) { floorMod = FLOOR_MODS[0]; return; }
+  // The deeper you go, the less often a floor is plain — danger creeps in.
+  const calmChance = Math.max(0.3, 0.6 - dungeonLevel * 0.015);
+  if (Math.random() < calmChance) { floorMod = FLOOR_MODS[0]; return; }
+  // Nightmare floors are a rare spike that grows slightly more common with
+  // depth — the "you just can't clear this yet" moments the dungeon needs.
+  const nightmareChance = Math.min(0.22, 0.04 + dungeonLevel * 0.012);
+  if (dungeonLevel >= 6 && Math.random() < nightmareChance) {
+    floorMod = FLOOR_MODS[FLOOR_MODS.length - 1];
+    return;
+  }
+  // Otherwise a random non-nightmare theme.
+  floorMod = pick(FLOOR_MODS.slice(1, FLOOR_MODS.length - 1));
 }
 
 // Mystic pacts — bargains struck with the Wandering Mystic that reshape the
@@ -1583,13 +1638,20 @@ function generateMap() {
   if (Math.random() < 0.5) tryBuildVault(reach);
   // A mini-quest may take over the floor (after enemies/loot are placed).
   maybeSpawnQuest(reach);
+
+  // ── CLEAR CONDITION ── seal the stairs until the floor's hostiles are down.
+  // (A handful of floors can spawn with no blockers — those open immediately.)
+  floorCleared = false;
+  if (hostilesRemaining() === 0) floorCleared = true;
+  else log(`🔒 The stairs down are sealed. ${clearConditionLabel()}`, 'important');
 }
 
 // Build a standard floor-level foe at a tile (used for quest hordes).
 function makeQuestFoe(x, y) {
   const bandIdx = Math.min(Math.floor((dungeonLevel - 1) / 3), ENEMY_POOL.length - 1);
-  const hp = Math.round((14 + dungeonLevel * 8) * (floorMod.hpMult || 1));
-  const dmg = Math.round((4 + dungeonLevel * 1.7 + bandIdx) * (floorMod.dmgMult || 1));
+  const threat = depthThreat(dungeonLevel);
+  const hp = Math.round((16 + dungeonLevel * 9) * threat * (floorMod.hpMult || 1));
+  const dmg = Math.round((5 + dungeonLevel * 2.1 + bandIdx) * threat * (floorMod.dmgMult || 1));
   return { x, y, hp, maxHp: hp, type: pick(ENEMY_POOL[bandIdx]), level: dungeonLevel, dmg, dead: false };
 }
 
@@ -2016,8 +2078,9 @@ function spawnEnemies() {
         // with depth (with a gentle nudge from the hero's level so it keeps
         // pace as your power climbs). Its level also sets the loot it drops.
         const bossLevel = dungeonLevel + 2;
-        const bossHp = Math.round((40 + bossLevel * 26 + player.level * 4));
-        const bossDmg = Math.round(9 + bossLevel * 2.1 + player.level * 0.5);
+        const bossThreat = depthThreat(bossLevel);
+        const bossHp = Math.round((55 + bossLevel * 28) * bossThreat);
+        const bossDmg = Math.round((10 + bossLevel * 2.3) * bossThreat);
         enemies.push({
           x: ex, y: ey,
           hp: bossHp, maxHp: bossHp,
@@ -2035,8 +2098,9 @@ function spawnEnemies() {
         // Damage is meaningful because armor now mitigates by a percentage
         // rather than a flat subtraction.
         const mobLevel = dungeonLevel;
-        const baseHp = Math.max(1, Math.round((14 + mobLevel * 8) * (floorMod.hpMult || 1) * pfx('hp', 1)));
-        const baseDmg = Math.max(1, Math.round((4 + mobLevel * 1.7 + bandIdx) * (floorMod.dmgMult || 1) * pfx('dmg', 1)));
+        const threat = depthThreat(mobLevel);
+        const baseHp = Math.max(1, Math.round((16 + mobLevel * 9) * threat * (floorMod.hpMult || 1) * pfx('hp', 1)));
+        const baseDmg = Math.max(1, Math.round((5 + mobLevel * 2.1 + bandIdx) * threat * (floorMod.dmgMult || 1) * pfx('dmg', 1)));
         if (i === eliteIndex) {
           const eHp = Math.round(baseHp * 2.2);
           const eName = pick(ELITE_NAMES);
@@ -2476,23 +2540,32 @@ function draw() {
           const sy = py + (s / steps) * th * 0.5;
           ctx.fillRect(px + inset, sy, tw - inset*2, th * (0.5/steps) + 1);
         }
-        // glow
-        ctx.fillStyle = C.stairsGlow + '33';
+        // Sealed stairs glow an angry red and wear a padlock; once the floor is
+        // cleared they revert to the inviting gold exit. Colour alone signals
+        // whether the way down is open.
+        const sealed = !floorCleared;
+        const glowCol = sealed ? '#cc3322' : C.stairsGlow;
+        ctx.fillStyle = glowCol + '33';
         ctx.fillRect(px, py + th*0.55, tw, th*0.45);
-        ctx.fillStyle = C.stairsGlow;
+        ctx.fillStyle = glowCol;
         ctx.font = `bold ${Math.round(tw*0.42)}px serif`;
         ctx.textAlign = 'center';
         ctx.fillText('▼', px + tw/2, py + th*0.85);
         // Pulsing ring so the exit is easy to spot from across the room.
         const sp = 0.5 + 0.5*Math.sin(Date.now()/350);
         ctx.save();
-        ctx.strokeStyle = C.stairsGlow;
+        ctx.strokeStyle = glowCol;
         ctx.globalAlpha = 0.35 + 0.4*sp;
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.arc(px + tw/2, py + th/2, tw*(0.4 + 0.08*sp), 0, Math.PI*2);
         ctx.stroke();
         ctx.restore();
+        // Padlock over sealed stairs.
+        if (sealed) {
+          ctx.font = `${Math.round(tw*0.4)}px serif`;
+          ctx.fillText('🔒', px + tw/2, py + th*0.42);
+        }
       } else if (t === 3) {
         // Fountain of Healing — stone basin with glowing blue water
         ctx.fillStyle = (x+y)%2===0 ? C.floor : C.floorAlt;
@@ -3099,7 +3172,7 @@ function tickPact() {
 // Heal a little each turn based on equipped REGEN, up to max HP.
 function applyRegen() {
   // Spirit grants a small passive regen on top of any REGEN rolled on gear.
-  const r = totalStat('REGEN') + Math.floor((player.attributes?.spirit||0) / 3);
+  const r = totalStat('REGEN') + Math.floor((player.attributes?.spirit||0) / 2);
   if (r > 0 && player.hp > 0 && player.hp < player.maxHp) {
     player.hp = Math.min(player.maxHp, player.hp + r);
     updateBars();
@@ -3162,6 +3235,12 @@ function move(dx, dy) {
 
   // Stairs
   if (tile === 2) {
+    // Sealed until the floor is cleared — no sprinting straight to the exit.
+    if (!floorCleared) {
+      log(`🔒 The stairs are sealed. ${clearConditionLabel()}`, 'important');
+      sfx('click');
+      return;
+    }
     // Resolve an escort quest before leaving the floor.
     if (quest && quest.type === 'escort') {
       const near = (Math.abs(quest.npc.x - player.x) + Math.abs(quest.npc.y - player.y)) <= 3;
@@ -3326,15 +3405,17 @@ function attackEnemy(e) {
     : (e.name ? `${lvlTag}${e.name} ${e.type}` : `${lvlTag}${e.type}`)));
 
   // Critical hits scale off your combined CRIT + LCK stats and Agility attribute.
-  const critChance = Math.min(0.6, 0.05 + (totalStat('CRIT') + totalStat('LCK')) * 0.01 + (player.attributes?.agility||0) * 0.01);
+  const critChance = Math.min(0.6, 0.05 + (totalStat('CRIT') + totalStat('LCK')) * 0.01 + (player.attributes?.agility||0) * 0.015);
   const isCrit = Math.random() < critChance;
   // Might adds flat attack power on top of weapon damage, level, and gear ATK.
-  let dmg = getWeaponDamage() + player.level * 2 + totalStat('ATK') + (player.attributes?.might||0) * 2;
-  // Difficulty floor: a plain swing can't exceed a quarter of the enemy's max
-  // HP, so a normal fight always takes at least 4 hits. When a hit would cap,
-  // jitter it to 80-100% of the cap so the numbers don't read as an exact
-  // quarter every time (and it still never exceeds the cap).
-  const hitCap = Math.max(1, Math.floor(e.maxHp / 4));
+  let dmg = getWeaponDamage() + player.level * 2 + totalStat('ATK') + (player.attributes?.might||0) * 4;
+  // Difficulty floor: a plain swing can't exceed a fraction of the enemy's max
+  // HP, so fights always take several hits — and tougher foes resist burst even
+  // more, so every kill is more turns of exposure to retaliation rather than a
+  // bigger one-shot number. When a hit would cap, jitter it to 80-100% of the
+  // cap so the numbers don't read as an exact fraction every time.
+  const hitDivisor = e.isBoss ? 9 : (e.isElite ? 6 : 4);
+  const hitCap = Math.max(1, Math.floor(e.maxHp / hitDivisor));
   if (dmg > hitCap) dmg = Math.max(1, Math.round(hitCap * (rnd(80, 100) / 100)));
   // ...but crits and the Power buff punch straight through that cap.
   if (buffs.power) dmg = Math.round(dmg * 1.5);   // Shrine of Power
@@ -3347,7 +3428,7 @@ function attackEnemy(e) {
     e.dead = true;
     const xpMult = e.isBoss ? 5 : (e.isElite ? 2 : 1);
     const goldMult = e.isBoss ? 3 : (e.isElite ? 2 : 1);
-    const xp = Math.round(10 * dungeonLevel * xpMult * pfx('xp', 1));
+    const xp = Math.round(12 * dungeonLevel * xpMult * pfx('xp', 1));
     player.xp += xp;
     const gold = Math.round((rnd(2, 8) + dungeonLevel * 3) * goldMult * (floorMod.goldMult || 1) * pfx('gold', 1));
     player.gold += gold;
@@ -3393,6 +3474,8 @@ function attackEnemy(e) {
       screenFlash('#ffd24b');
     }
     checkLevelUp();
+    // With this foe down, the floor may now be clear — unseal the stairs if so.
+    updateFloorClear();
   } else {
     // Enemy strikes back. Damage scales with the enemy, mitigated by armor DEF.
     let raw = Math.round(e.dmg * rnd(80, 120) / 100);
@@ -3504,8 +3587,9 @@ function pickup() {
   // Rarely the chest is a Mimic — it springs to life and attacks.
   if (Math.random() < 0.10) {
     const mLevel = dungeonLevel + 1;
-    const hp = Math.round((14 + mLevel * 8) * 2.4);
-    const dmg = Math.round((4 + mLevel * 1.7) * 1.4);
+    const mThreat = depthThreat(mLevel);
+    const hp = Math.round((16 + mLevel * 9) * mThreat * 2.4);
+    const dmg = Math.round((5 + mLevel * 2.1) * mThreat * 1.4);
     // Find an open tile next to the player for the mimic to lunge from.
     let placed = false;
     const spots = [[1,0],[-1,0],[0,1],[0,-1]].sort(() => Math.random() - 0.5);
@@ -3594,8 +3678,17 @@ function pickup() {
   draw();
 }
 
+// XP needed to advance FROM a given level. Quadratic, so leveling slows sharply
+// as you climb: a level is now a rare milestone, not something you trip over
+// every few kills. Combined with kill XP that only scales linearly with depth,
+// this means you can't out-level the dungeon — depth always pulls ahead.
+//   Lv1→2: 150   Lv5→6: 1,310   Lv10→11: 4,560   Lv20→21: 17,060
+function xpForLevel(level) {
+  return Math.round(40 * level * level + 50 * level + 60);
+}
+
 function checkLevelUp() {
-  const needed = player.level * 50;
+  const needed = xpForLevel(player.level);
   if (player.xp >= needed) {
     player.xp -= needed;
     player.level++;
@@ -3646,8 +3739,11 @@ function updateBars() {
   setText('floor-num', dungeonLevel);
   setText('level-num', player.level);
   const xpBar = document.getElementById('xp-bar');
-  if (xpBar) xpBar.style.width = Math.min(100, player.xp / (player.level * 50) * 100) + '%';
+  if (xpBar) xpBar.style.width = Math.min(100, player.xp / xpForLevel(player.level) * 100) + '%';
   setText('enemies-num', (enemies || []).filter(e => !e.dead).length);
+  // Seal indicator: 🔒 while hostiles block the exit, 🔓 once the floor is clear.
+  const clearEl = document.getElementById('clear-status');
+  if (clearEl) clearEl.textContent = floorCleared ? '🔓' : '🔒';
   setText('power-num', playerPower());
 
   // Active mystic pact indicator (hidden when no pact is in effect).
@@ -4167,7 +4263,8 @@ if (hadSave) {
   log(`Resuming on dungeon level ${dungeonLevel}. Your gear is intact.`);
 } else {
   log('Welcome to the dungeon. Move to explore. USE to open chests.', 'important');
-  log('Reach the ▼ stairs to descend deeper.');
+  log('🔒 Clear a floor of its foes to unseal the ▼ stairs, then descend.', 'important');
+  log('⚠️ The deep scales faster than you can — expect floors you must grind for.');
 }
 log('Progress auto-saves automatically as you play.');
 log('Tap 🎒 BAG (bottom-right) to open your loot.');
