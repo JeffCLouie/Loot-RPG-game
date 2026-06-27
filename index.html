@@ -160,6 +160,14 @@
   .bag-btn:active { background: #6b4f2f; }
   .bag-btn.open { background: #6b4f2f; border-color: var(--gold); color: #fff; }
 
+  .sound-action {
+    background: #1f2a3a;
+    border-color: #2f4a6b;
+    color: #bcd5ff;
+  }
+  .sound-action:active { background: #2f4a6b; }
+  .sound-action.muted { background: #262626; border-color: #444; color: #888; }
+
   .newgame-action {
     background: #2a1a1a;
     border-color: #4a2a2a;
@@ -669,6 +677,9 @@
             </svg>
           </span><span class="action-label">BAG</span>
         </button>
+        <button class="action-btn sound-action" onclick="toggleSound()">
+          <span class="action-icon" id="sound-icon">🔊</span><span class="action-label" id="sound-label">ON</span>
+        </button>
         <button class="action-btn newgame-action" onclick="confirmNewGame()">
           <span class="action-icon">↻</span><span class="action-label">NEW</span>
         </button>
@@ -970,6 +981,174 @@ let mapData = [];
 let dungeonLevel = 1;
 
 // ══════════════════════════════════════════
+// AUDIO  (sound effects + background music)
+// ══════════════════════════════════════════
+// Everything here is synthesized live with the Web Audio API — no asset files —
+// so the game stays a single self-contained, trivially shareable HTML file.
+// The whole module is defensive: if audio is unavailable for any reason, the
+// game keeps running silently rather than throwing.
+const AUDIO_KEY = 'dungeonLootAudio';
+const audio = {
+  ctx: null, master: null, musicGain: null, sfxGain: null,
+  muted: false, started: false,
+};
+try { audio.muted = localStorage.getItem(AUDIO_KEY) === 'off'; } catch (e) {}
+
+// Lazily create the AudioContext and the gain graph (master → sfx / music).
+function audioInit() {
+  if (audio.ctx) return audio.ctx;
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    audio.ctx = new AC();
+    audio.master = audio.ctx.createGain();
+    audio.master.gain.value = audio.muted ? 0 : 0.9;
+    audio.master.connect(audio.ctx.destination);
+    audio.sfxGain = audio.ctx.createGain();
+    audio.sfxGain.gain.value = 0.6;
+    audio.sfxGain.connect(audio.master);
+    audio.musicGain = audio.ctx.createGain();
+    audio.musicGain.gain.value = 0.22;
+    audio.musicGain.connect(audio.master);
+  } catch (e) { audio.ctx = null; }
+  return audio.ctx;
+}
+
+// Browsers block audio until a user gesture — call this from the first input to
+// resume the context and kick off the looping background music.
+function audioUnlock() {
+  const ctx = audioInit();
+  if (!ctx) return;
+  if (ctx.state === 'suspended') { try { ctx.resume(); } catch (e) {} }
+  if (!audio.started) { audio.started = true; startMusic(); }
+}
+
+// A single shaped blip — the building block for every sound effect.
+function tone(freq, dur, when, type = 'square', vol = 0.5, slideTo = null) {
+  const ctx = audio.ctx;
+  if (!ctx) return;
+  const o = ctx.createOscillator();
+  const g = ctx.createGain();
+  o.type = type;
+  o.frequency.setValueAtTime(freq, when);
+  if (slideTo) o.frequency.exponentialRampToValueAtTime(Math.max(1, slideTo), when + dur);
+  g.gain.setValueAtTime(0.0001, when);
+  g.gain.exponentialRampToValueAtTime(vol, when + 0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+  o.connect(g); g.connect(audio.sfxGain);
+  o.start(when); o.stop(when + dur + 0.02);
+}
+
+// A burst of decaying white noise — used for impacts, traps, and death.
+function noise(dur, when, vol = 0.4) {
+  const ctx = audio.ctx;
+  if (!ctx) return;
+  const n = Math.max(1, Math.floor(ctx.sampleRate * dur));
+  const buf = ctx.createBuffer(1, n, ctx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
+  const src = ctx.createBufferSource(); src.buffer = buf;
+  const g = ctx.createGain(); g.gain.value = vol;
+  src.connect(g); g.connect(audio.sfxGain);
+  src.start(when); src.stop(when + dur);
+}
+
+// Named sound effects, each keyed to a game event.
+function sfx(name) {
+  if (audio.muted) return;
+  const ctx = audioInit();
+  if (!ctx || ctx.state === 'suspended') return;
+  const t = ctx.currentTime;
+  switch (name) {
+    case 'attack':  tone(220, 0.09, t, 'square', 0.4, 140); noise(0.05, t, 0.16); break;
+    case 'crit':    tone(330, 0.13, t, 'sawtooth', 0.5, 660); tone(660, 0.13, t + 0.02, 'square', 0.3); noise(0.09, t, 0.25); break;
+    case 'hurt':    tone(200, 0.18, t, 'sawtooth', 0.45, 70); break;
+    case 'kill':    tone(160, 0.18, t, 'square', 0.4, 50); noise(0.16, t, 0.28); break;
+    case 'boss':    tone(90, 0.5, t, 'sawtooth', 0.5, 40); tone(120, 0.5, t + 0.05, 'square', 0.3, 55); noise(0.3, t, 0.2); break;
+    case 'loot':    [523, 659, 784].forEach((f, i) => tone(f, 0.1, t + i * 0.06, 'square', 0.4)); break;
+    case 'gold':    tone(880, 0.06, t, 'square', 0.35); tone(1175, 0.07, t + 0.05, 'square', 0.3); break;
+    case 'potion':  tone(440, 0.1, t, 'sine', 0.4, 880); tone(660, 0.12, t + 0.08, 'sine', 0.3, 990); break;
+    case 'levelup': [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.16, t + i * 0.09, 'square', 0.45)); break;
+    case 'stairs':  [392, 330, 262].forEach((f, i) => tone(f, 0.14, t + i * 0.08, 'triangle', 0.4)); break;
+    case 'shrine':  tone(523, 0.4, t, 'sine', 0.35, 784); tone(659, 0.4, t + 0.04, 'sine', 0.25, 988); break;
+    case 'equip':   tone(330, 0.05, t, 'square', 0.3); tone(494, 0.07, t + 0.04, 'square', 0.3); break;
+    case 'buy':     tone(659, 0.07, t, 'square', 0.35); tone(988, 0.09, t + 0.06, 'square', 0.3); break;
+    case 'sell':    tone(494, 0.07, t, 'square', 0.35); tone(740, 0.08, t + 0.05, 'square', 0.3); break;
+    case 'death':   tone(330, 0.6, t, 'sawtooth', 0.5, 55); noise(0.5, t, 0.25); break;
+    case 'trap':    noise(0.3, t, 0.4); tone(140, 0.3, t, 'sawtooth', 0.4, 60); break;
+    case 'click':   tone(660, 0.04, t, 'square', 0.22); break;
+  }
+}
+
+// ── Background music ──
+// A looping minor-key dungeon theme: a wandering lead over a steady bass,
+// scheduled a fraction of a second ahead of the playhead so it never glitches.
+let musicTimer = null, musicStep = 0, musicNext = 0;
+const MUSIC_TEMPO = 0.26;   // seconds per eighth-note step (~115 BPM feel)
+// Frequencies in Hz; 0 = a rest. The lead wanders an A-minor scale.
+const MUSIC_LEAD = [
+  440, 523, 587, 659, 587, 523, 440, 392,
+  440, 523, 659, 587, 523, 440, 392, 330,
+  392, 440, 523, 440, 587, 523, 440, 330,
+  440, 392, 330, 392, 440, 523, 587, 659,
+];
+const MUSIC_BASS = [
+  110, 0, 165, 0, 110, 0, 147, 0,
+  110, 0, 165, 0, 98, 0, 131, 0,
+];
+function musicTone(freq, dur, when, type, vol) {
+  const ctx = audio.ctx;
+  if (!ctx) return;
+  const o = ctx.createOscillator();
+  const g = ctx.createGain();
+  o.type = type;
+  o.frequency.setValueAtTime(freq, when);
+  g.gain.setValueAtTime(0.0001, when);
+  g.gain.exponentialRampToValueAtTime(vol, when + 0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+  o.connect(g); g.connect(audio.musicGain);
+  o.start(when); o.stop(when + dur + 0.02);
+}
+function scheduleMusic() {
+  const ctx = audio.ctx;
+  if (!ctx || audio.muted || ctx.state === 'suspended') return;
+  // Schedule every step that falls inside the next 0.2s look-ahead window.
+  while (musicNext < ctx.currentTime + 0.2) {
+    const lead = MUSIC_LEAD[musicStep % MUSIC_LEAD.length];
+    const bass = MUSIC_BASS[musicStep % MUSIC_BASS.length];
+    if (lead) musicTone(lead, MUSIC_TEMPO * 0.9, musicNext, 'triangle', 0.5);
+    if (bass) musicTone(bass, MUSIC_TEMPO * 1.8, musicNext, 'square', 0.32);
+    musicStep++;
+    musicNext += MUSIC_TEMPO;
+  }
+}
+function startMusic() {
+  const ctx = audioInit();
+  if (!ctx) return;
+  musicNext = ctx.currentTime + 0.1;
+  if (musicTimer) clearInterval(musicTimer);
+  musicTimer = setInterval(scheduleMusic, 60);
+  scheduleMusic();
+}
+
+// Toggle all audio on/off, persist the choice, and refresh the button.
+function toggleSound() {
+  audio.muted = !audio.muted;
+  try { localStorage.setItem(AUDIO_KEY, audio.muted ? 'off' : 'on'); } catch (e) {}
+  if (audio.master) audio.master.gain.value = audio.muted ? 0 : 0.9;
+  if (!audio.muted) { audioUnlock(); sfx('click'); }
+  updateSoundButton();
+}
+function updateSoundButton() {
+  const ic = document.getElementById('sound-icon');
+  const lbl = document.getElementById('sound-label');
+  if (ic) ic.textContent = audio.muted ? '🔇' : '🔊';
+  if (lbl) lbl.textContent = audio.muted ? 'OFF' : 'ON';
+  const btn = document.querySelector('.sound-action');
+  if (btn) btn.classList.toggle('muted', audio.muted);
+}
+
+// ══════════════════════════════════════════
 // CANVAS SETUP
 // ══════════════════════════════════════════
 
@@ -1215,6 +1394,7 @@ function buyItem(i) {
   const price = stockPrice(s);
   if (player.gold < price) return;
   player.gold -= price;
+  sfx('buy');
   if (s.kind === 'potion') {
     if (s.heal) { player.healPotions++; player.healthPotionsBought++; log(`Bought a ${logPotion('Health Potion')}. (${player.healPotions} held)`, 'loot'); }
     if (s.mana) { player.manaPotions++; log(`Bought a ${logPotion('Mana Potion')}. (${player.manaPotions} held)`, 'loot'); }
@@ -1237,6 +1417,7 @@ function sellItem(i) {
   const sellPrice = Math.max(1, Math.round(item.value * 0.5));
   player.gold += sellPrice;
   inventory.splice(i, 1);
+  sfx('sell');
   log(`Sold ${logItem(item)} for ${sellPrice}g.`);
   updateBars();
   renderShop();
@@ -2047,6 +2228,7 @@ function activateShrine(nx, ny) {
   delete shrineData[ny+','+nx];
   player.x = nx; player.y = ny;
   const kind = info ? info.kind : 'power';
+  sfx(kind === 'blood' ? 'hurt' : 'shrine');
   switch (kind) {
     case 'power':
       buffs.power = 3;
@@ -2187,6 +2369,7 @@ function move(dx, dy) {
     dungeonLevel++;
     statusEffects = [];
     tickBuffs();
+    sfx('stairs');
     log(`Descended to dungeon level ${dungeonLevel}! You enter ${currentTheme().name}.`, 'important');
     player.x = 5; player.y = 5;
     generateMap();
@@ -2205,6 +2388,7 @@ function move(dx, dy) {
     mapData[ny][nx] = 0; // fountain is spent
     hasFountain = false;
     player.x = nx; player.y = ny;
+    sfx('potion');
     log(`⛲ The Fountain of Healing restores you fully! +2 ${logPotion('Health Potions')}.`, 'important');
     updateBars();
     saveGame();
@@ -2231,6 +2415,7 @@ function move(dx, dy) {
   if (gi !== -1) {
     const g = groundGold.splice(gi, 1)[0];
     player.gold += g.amount;
+    sfx('gold');
     spawnFloatingText(player.x, player.y, `+${g.amount}g`, '#ffd24b');
     log(`🪙 Picked up ${g.amount} gold!`, 'loot');
     updateBars();
@@ -2300,6 +2485,7 @@ function attackEnemy(e) {
   if (buffs.power) dmg = Math.round(dmg * 1.5);   // Shrine of Power
   if (isCrit) dmg = Math.round(dmg * 2.2);
   e.hp -= dmg;
+  sfx(isCrit ? 'crit' : 'attack');
   spawnFloatingText(e.x, e.y, isCrit ? `${dmg}!` : `${dmg}`, isCrit ? '#ffdd55' : '#fff');
   log(isCrit ? `💥 CRITICAL! ${HERO} hits ${label} for ${dmg}!` : `${HERO} hits ${label} for ${dmg} damage!`, isCrit ? 'important' : '');
   if (e.hp <= 0) {
@@ -2312,6 +2498,7 @@ function attackEnemy(e) {
     player.gold += gold;
     spawnFloatingText(e.x + 0.35, e.y, `+${gold}g`, '#ffd24b');
     log(`${label} defeated! +${xp} XP, +${gold}g`, 'important');
+    sfx(e.isBoss ? 'boss' : 'kill');
     if (e.isBoss) screenFlash('#ff3344');
     updateBars();
     // The floor modifier and an active Fortune buff sweeten every drop roll.
@@ -2357,6 +2544,7 @@ function attackEnemy(e) {
     if (buffs.guard) raw = Math.round(raw * 0.6);   // Shrine of Warding
     const edm = mitigateDamage(raw, e.level);
     player.hp = Math.max(0, player.hp - edm);
+    sfx('hurt');
     spawnFloatingText(player.x, player.y, `${edm}`, '#ff3344');
     log(`${label} hits ${HERO} back for ${edm}!`);
     if (player.hp <= player.maxHp * 0.25) screenFlash('#cc0000');
@@ -2398,6 +2586,7 @@ function enemyMove(e) {
       if (buffs.guard) raw = Math.round(raw * 0.6);   // Shrine of Warding
       const dmg = mitigateDamage(raw, e.level);
       player.hp = Math.max(0, player.hp-dmg);
+      sfx('hurt');
       spawnFloatingText(player.x, player.y, `${dmg}`, '#ff3344');
       log(`${e.name ? e.name + ' ' + e.type : e.type} attacks ${HERO} for ${dmg}!`);
       if (player.hp <= player.maxHp * 0.25) screenFlash('#cc0000');
@@ -2421,6 +2610,7 @@ function handleDeath() {
   player.hp = Math.floor(player.maxHp * 0.4);
   statusEffects = statusEffects.filter(s => s.target !== 'player');
   player.x = 5; player.y = 5;
+  sfx('death');
   log(`💀 ${HERO} was slain! Lost ${lostGold}g and crawled back to the entrance.`, 'important');
   // Respawn enemies/loot are kept; just regenerate enemy positions away from spawn.
   enemies.forEach(e => {
@@ -2473,6 +2663,7 @@ function pickup() {
       player.hp = Math.max(1, player.hp - bite);
       spawnFloatingText(player.x, player.y, `${bite}`, '#ff3344');
     }
+    sfx('trap');
     log('🧰 It\'s a MIMIC! The chest lunges at you!', 'important');
     screenFlash('#cc0000');
     updateBars();
@@ -2483,6 +2674,7 @@ function pickup() {
 
   // Very small chance the chest is trapped.
   if (Math.random() < 0.07) {
+    sfx('trap');
     if (Math.random() < 0.5) {
       const dmg = 4 + dungeonLevel * 2;
       player.hp = Math.max(1, player.hp - dmg);
@@ -2504,6 +2696,7 @@ function pickup() {
 
   // ~15% of chests surprise you with gold, a potion, or food instead of gear.
   if (Math.random() < 0.15) {
+    sfx('gold');
     const surprise = rnd(1, 3);
     if (surprise === 1) {
       const g = rnd(15, 40) + dungeonLevel * 4;
@@ -2528,6 +2721,7 @@ function pickup() {
   const item = generateItem(luck, chestIlvl);
   inventory.push(item);
   recordWardrobe(item);
+  sfx('loot');
   log(`${fancy ? '🎁' : '🧰'} Opened a ${fancy ? 'glittering ' : ''}chest: ${logItem(item)}`, 'loot');
   // Loot explosion: a lucky chest occasionally overflows with a bonus item.
   if (Math.random() < 0.12) {
@@ -2550,6 +2744,7 @@ function checkLevelUp() {
     recomputeMaxStats();        // level grants more base HP/MP
     player.hp = player.maxHp;   // a level up fully restores you
     player.mp = player.maxMp;
+    sfx('levelup');
     log(`⭐ LEVEL UP! You are now level ${player.level}!`, 'important');
     log(`💠 +${ATTR_POINTS_PER_LEVEL} attribute points — open the 🎒 bag's HERO tab to spend them.`, 'important');
     updateBars();
@@ -2623,6 +2818,7 @@ function useHealthPotion() {
   if (player.hp >= player.maxHp) { log('Already at full health.'); return; }
   player.healPotions--;
   player.hp = Math.min(player.maxHp, player.hp + HEAL_AMOUNT);
+  sfx('potion');
   log(`❤️ Drank a ${logPotion('Health Potion')}. +${HEAL_AMOUNT} HP (${player.healPotions} left)`, 'loot');
   updateBars();
   saveGame();
@@ -2809,6 +3005,7 @@ function quickEquip(i) {
   inventory.splice(i, 1);
   selectedItem = null;
   hideTooltip();
+  sfx('equip');
   log(`Equipped: ${logItem(item)}`, 'loot');
   recordWardrobe(item);
   renderPanel();
@@ -3121,6 +3318,13 @@ log(`Tap the ❤️ flask to drink a ${logPotion('Health Potion')} when you're h
 log('⌨️ Keys: Q drink potion · B open bag · Space/F use.');
 log('⚡ Each item has a Power value; your total Power blends level, gear, and attributes.');
 log('💠 Level up to earn points, then raise attributes in the bag\'s HERO tab.');
+
+// Reflect any saved mute preference on the SOUND button, then arm the audio:
+// browsers won't let sound start until the player interacts, so the first
+// gesture resumes the context and kicks off the looping music.
+updateSoundButton();
+['pointerdown', 'keydown', 'touchstart'].forEach(ev =>
+  window.addEventListener(ev, audioUnlock, { passive: true }));
 
 // Redraw once layout has settled so the camera fits the real canvas size.
 // On the web layout, also open + populate the permanent loot drawer.
