@@ -1060,7 +1060,11 @@
       background: none;
       border-top: none;
       width: auto;
-      z-index: 230;
+      /* Sits above the loot drawer (#side-panel, 250) and the town/shop
+         overlays (240/245). The control bar is a fixed stacking context, so its
+         z-index caps the settings popup nested inside it — keep it high enough
+         that the popped-out menu lands on top of the drawer instead of behind. */
+      z-index: 330;
     }
     #action-buttons { flex-direction: row; gap: 8px; }
     .action-btn { width: 46px; flex: none; }
