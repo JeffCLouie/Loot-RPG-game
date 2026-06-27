@@ -2777,10 +2777,8 @@ function upgradeEquipped(slot) {
 }
 
 // ── HEALER — rest to full, cure ailments, stock potions ──
-function restCost() { return 15 + player.level * 6 + (dungeonReturn || 1) * 4; }
 function openHealer() { openTownModal('⛑️ Healer'); renderHealer(); }
 function renderHealer() {
-  const cost = restCost();
   const full = player.hp >= player.maxHp && player.mp >= player.maxMp;
   const potHeal = 25 + (player.maxFloor || 1) * 5;
   const potMana = 20 + (player.maxFloor || 1) * 5;
@@ -2790,8 +2788,8 @@ function renderHealer() {
       <span class="loot-icon">❤️</span>
       <div class="shop-row-info"><div class="shop-row-name">Full Rest &amp; Cure</div>
         <div class="shop-row-sub">Restore all HP/MP and clear poison &amp; curses</div></div>
-      <span class="shop-price">${cost}g</span>
-      <button class="shop-buy-btn" ${(player.gold >= cost && !full) ? '' : 'disabled'} onclick="restHeal()">REST</button>
+      <span class="shop-price">Free</span>
+      <button class="shop-buy-btn" ${full ? 'disabled' : ''} onclick="restHeal()">REST</button>
     </div>
     <div class="shop-row">
       <span class="loot-icon">🧪</span>
@@ -2809,10 +2807,7 @@ function renderHealer() {
     </div>`);
 }
 function restHeal() {
-  const cost = restCost();
-  if (player.gold < cost) return;
   if (player.hp >= player.maxHp && player.mp >= player.maxMp) return;
-  player.gold -= cost;
   player.hp = player.maxHp; player.mp = player.maxMp;
   statusEffects = statusEffects.filter(s => s.target !== 'player');
   sfx('potion');
