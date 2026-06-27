@@ -1503,32 +1503,32 @@ function wallSpriteName(x, y) {
     : (mapData[yy][xx] === 1 || mapData[yy][xx] === 10);
   const oN = !isWall(x, y - 1), oE = !isWall(x + 1, y), oS = !isWall(x, y + 1), oW = !isWall(x - 1, y);
   const open = oN + oE + oS + oW;
-  // DawnLike directional walls for a carved (thick-rock) dungeon. The brick of a
-  // corner piece always sits on its two solid sides, so the same tile serves both
-  // inner corners (floor on two adjacent ORTHOGONAL sides) and outer corners
-  // (floor only on the DIAGONAL). Straight runs use H/V. Rock with no floor
-  // anywhere around it is buried and returns null → drawn as the dark background.
+  // DawnLike directional walls for a carved (thick-rock) dungeon. Mapping
+  // derived directly from the official Dungeon.tmx example. INNER corners (floor
+  // on two adjacent orthogonal sides) and OUTER corners (floor only on a
+  // diagonal) use DIFFERENT tiles — they're point-opposites of each other.
   if (open === 4) return 'wall_iso';           // isolated single block
   if (open === 3) {
-    // End of a standalone wall: the BOTTOM (floor below, wall above) uses the
-    // iso base piece; the TOP (floor above, wall below) is a normal vertical
-    // wall; a side opening is the end of a horizontal run.
+    // End of a standalone wall: BOTTOM (floor below, wall above) uses the iso
+    // base piece; TOP (floor above, wall below) is a plain vertical wall; a side
+    // opening is the end of a horizontal run.
     if (!oN) return 'wall_iso';
     if (!oS) return 'wall_V';
     return 'wall_H';
   }
-  if (oS && oE) return 'wall_TL';              // brick wraps top-left
-  if (oS && oW) return 'wall_TR';
-  if (oN && oE) return 'wall_BL';
-  if (oN && oW) return 'wall_BR';
-  if (oN || oS) return 'wall_H';               // floor above/below → horizontal edge
-  if (oE || oW) return 'wall_V';               // floor left/right → vertical edge
-  // No orthogonal floor: an outer corner of the rock wrapping a room — use the
-  // diagonal to choose which corner brick to show.
-  if (!isWall(x + 1, y + 1)) return 'wall_TL';
-  if (!isWall(x - 1, y + 1)) return 'wall_TR';
-  if (!isWall(x + 1, y - 1)) return 'wall_BL';
-  if (!isWall(x - 1, y - 1)) return 'wall_BR';
+  // Inner corners: brick fills the two SOLID sides.
+  if (oN && oE) return 'wall_TR';
+  if (oN && oW) return 'wall_TL';
+  if (oS && oE) return 'wall_BR';
+  if (oS && oW) return 'wall_BL';
+  // Straight edges.
+  if (oN || oS) return 'wall_H';               // floor above/below → horizontal
+  if (oE || oW) return 'wall_V';               // floor left/right → vertical
+  // Outer corners: floor only on a diagonal (rock wrapping a room's corner).
+  if (!isWall(x + 1, y + 1)) return 'wall_TL'; // floor SE
+  if (!isWall(x - 1, y + 1)) return 'wall_TR'; // floor SW
+  if (!isWall(x + 1, y - 1)) return 'wall_BL'; // floor NE
+  if (!isWall(x - 1, y - 1)) return 'wall_BR'; // floor NW
   return null;                                 // fully buried rock → background
 }
 
