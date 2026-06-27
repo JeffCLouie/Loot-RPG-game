@@ -21,6 +21,10 @@ at the site's root URL.
   the game stays trivially shareable and hostable.
 - **Pull the latest `main` before starting new work** to minimize merge
   conflicts.
+- **Don't check in — just do the work.** Don't ask for confirmation, present
+  options, or wait for approval. Make reasonable decisions, implement them, and
+  push to `main`. Only stop to ask if a request is genuinely impossible or
+  self-contradictory.
 
 ## Workflow Claude should follow
 
