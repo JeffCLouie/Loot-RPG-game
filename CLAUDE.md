@@ -5,14 +5,14 @@ Guidance for Claude Code when working in this repository.
 ## What this project is
 
 A loot-based pixel RPG that runs entirely in the browser. The whole game is a
-**single self-contained HTML file** (`loot-rpg.html`) — all HTML, CSS, and
+**single self-contained HTML file** (`index.html`) — all HTML, CSS, and
 JavaScript live in that one file. There is **no build step**, no framework, no
 package manager, and no dependencies to install. Open the file in a browser and
 it runs.
 
-The game is hosted via GitHub Pages, so whatever lands on the `main` branch goes
-live automatically. Since the file is `loot-rpg.html` (not `index.html`), the live
-URL ends in `/loot-rpg.html` rather than the bare repo root.
+The game is hosted via Netlify / GitHub Pages, so whatever lands on the `main`
+branch goes live automatically. The file is named `index.html` so it is served
+at the site's root URL.
 
 ## Hard rules
 
@@ -35,7 +35,7 @@ When asked to make a change:
 1. Pull the latest `main`.
 2. Create a descriptively named branch (e.g. `feature/boss-fights`,
    `fix/merchant-spawn`).
-3. Make the edit in `loot-rpg.html`.
+3. Make the edit in `index.html`.
 4. Commit with a clear message describing what changed and why.
 5. Push the branch and open a pull request summarizing the change.
 6. Do **not** merge the PR automatically — leave it for a human to review and
@@ -51,7 +51,7 @@ When asked to make a change:
 
 ## Before pushing
 
-- Open `loot-rpg.html` in a browser and confirm the game still loads and plays.
+- Open `index.html` in a browser and confirm the game still loads and plays.
   There are no automated tests, so a quick manual check is the safety net.
 - Sanity-check that the JavaScript has no syntax errors (the game silently fails
   to run if it does).

@@ -115,8 +115,17 @@
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation;
   }
-  .action-icon { font-size: 18px; line-height: 1; }
+  .action-icon { font-size: 18px; line-height: 1; display:flex; align-items:center; justify-content:center; }
+  .action-icon svg { display:block; }
   .action-label { font-size: 9px; letter-spacing: 1px; }
+
+  .heal-btn {
+    background: #6a1a2a;
+    border-color: #a03048;
+    color: #ffd5dd;
+  }
+  .heal-btn:active { background: #c02040; }
+  .heal-btn.empty { background: #2a1a1f; border-color: #3a2a2f; color: #6a4a52; }
 
   .bag-btn {
     background: #4a3520;
@@ -438,6 +447,22 @@
         <div></div>
       </div>
       <div id="action-buttons">
+        <button class="action-btn heal-btn" onclick="useHealthPotion()">
+          <span class="action-icon">
+            <svg width="20" height="22" viewBox="0 0 20 22" aria-label="health potion">
+              <!-- cork -->
+              <rect x="7.5" y="0" width="5" height="3.5" rx="1" fill="#caa15a"/>
+              <!-- neck -->
+              <rect x="8" y="3" width="4" height="4" fill="#d8d8e0"/>
+              <!-- glass bulb -->
+              <path d="M6 7 h8 a7 7 0 1 1 -8 0 z" fill="#3a1018" stroke="#d8d8e0" stroke-width="1.2"/>
+              <!-- red liquid -->
+              <path d="M6.6 10 h6.8 a5.6 5.6 0 1 1 -6.8 0 z" fill="#e01030"/>
+              <!-- shine highlight -->
+              <ellipse cx="8" cy="14" rx="1.1" ry="2" fill="#ff7a90" opacity="0.8"/>
+            </svg>
+          </span><span class="action-label" id="heal-label">0</span>
+        </button>
         <button class="action-btn bag-btn" onclick="togglePanel()">
           <span class="action-icon">🎒</span><span class="action-label">BAG</span>
         </button>
@@ -529,11 +554,12 @@ const HERO = '🧙';
 // STATE
 // ══════════════════════════════════════════
 
-let player = { x: 5, y: 5, hp: 100, maxHp: 100, mp: 60, maxMp: 60, gold: 0, level: 1, xp: 0 };
+let player = { x: 5, y: 5, hp: 100, maxHp: 100, mp: 60, maxMp: 60, gold: 0, level: 1, xp: 0, healPotions: 2, manaPotions: 0 };
 let inventory = [];
 let equipped = { head: null, chest: null, hands: null, legs: null, weapon: null, ring: null, amulet: null };
 let groundItems = []; // { x, y, item }
 let merchant = null;  // { x, y, stock: [...] } when present
+let hasFountain = false;
 let enemies = [];
 let currentTab = 'inv';
 let selectedItem = null;
@@ -595,6 +621,16 @@ function generateMap() {
   do { sx = rnd(2, MAP_W-2); sy = rnd(2, MAP_H-2); }
   while (mapData[sy][sx] !== 0 || (sx === player.x && sy === player.y));
   mapData[sy][sx] = 2; // stairs
+
+  // Rare Fountain of Healing (~8% of floors). Tile type 3.
+  hasFountain = false;
+  if (Math.random() < 0.08) {
+    let fx, fy, tries = 0;
+    do { fx = rnd(2, MAP_W-2); fy = rnd(2, MAP_H-2); tries++; }
+    while ((mapData[fy][fx] !== 0 || (fx === player.x && fy === player.y)) && tries < 100);
+    if (tries < 100) { mapData[fy][fx] = 3; hasFountain = true; }
+  }
+  if (hasFountain) log('⛲ You sense a healing presence somewhere on this floor...', 'important');
 
   spawnEnemies();
   spawnGroundLoot();
@@ -704,8 +740,8 @@ function buyItem(i) {
   if (!s || player.gold < s.price) return;
   player.gold -= s.price;
   if (s.kind === 'potion') {
-    if (s.heal) { player.hp = Math.min(player.maxHp, player.hp + s.heal); log(`Drank ${s.name}. +${s.heal} HP`, 'loot'); }
-    if (s.mana) { player.mp = Math.min(player.maxMp, player.mp + s.mana); log(`Drank ${s.name}. +${s.mana} MP`, 'loot'); }
+    if (s.heal) { player.healPotions++; log(`Bought a Health Potion. (${player.healPotions} held)`, 'loot'); }
+    if (s.mana) { player.manaPotions++; log(`Bought a Mana Potion. (${player.manaPotions} held)`, 'loot'); }
     // potions restock infinitely; gear is one-off
   } else {
     inventory.push(s.item);
@@ -741,11 +777,15 @@ function spawnEnemies() {
       ex = rnd(1, MAP_W-1); ey = rnd(1, MAP_H-1); tries++;
     } while ((mapData[ey][ex] !== 0 || (ex === player.x && ey === player.y) || getEnemyAt(ex,ey)) && tries < 100);
     if (tries < 100) {
+      const tierIdx = Math.min(dungeonLevel-1, 4);
+      // Damage scales with depth and enemy type; deeper monsters hit much harder.
+      const baseDmg = 4 + dungeonLevel * 2 + tierIdx * 2;
       enemies.push({
         x: ex, y: ey,
-        hp: 10 + dungeonLevel * 5,
-        maxHp: 10 + dungeonLevel * 5,
-        type: ['🐀','👹','💀','🧟','🐉'][Math.min(dungeonLevel-1, 4)],
+        hp: 10 + dungeonLevel * 6,
+        maxHp: 10 + dungeonLevel * 6,
+        type: ['🐀','👹','💀','🧟','🐉'][tierIdx],
+        dmg: baseDmg,
         dead: false,
       });
     }
@@ -754,7 +794,11 @@ function spawnEnemies() {
 
 function spawnGroundLoot() {
   groundItems = [];
-  const count = 1 + Math.floor(dungeonLevel / 2);
+  // Ground loot is now a rare lucky find — most floors have none.
+  // ~40% chance of a single item, with a small chance of a second on deeper floors.
+  let count = 0;
+  if (Math.random() < 0.4) count = 1;
+  if (count === 1 && dungeonLevel >= 4 && Math.random() < 0.25) count = 2;
   for (let i = 0; i < count; i++) {
     let gx, gy;
     let tries = 0;
@@ -928,6 +972,30 @@ function draw() {
         ctx.font = `bold ${Math.round(tw*0.42)}px serif`;
         ctx.textAlign = 'center';
         ctx.fillText('▼', px + tw/2, py + th*0.85);
+      } else if (t === 3) {
+        // Fountain of Healing — stone basin with glowing blue water
+        ctx.fillStyle = (x+y)%2===0 ? COLORS.floor : COLORS.floorAlt;
+        ctx.fillRect(px, py, tw, th);
+        // stone rim
+        ctx.fillStyle = '#5a5a72';
+        ctx.beginPath();
+        ctx.arc(px+tw/2, py+th/2, tw*0.42, 0, Math.PI*2);
+        ctx.fill();
+        // water, gently pulsing
+        const wp = 0.5 + 0.5*Math.sin(Date.now()/400);
+        ctx.fillStyle = `rgba(90,180,255,${0.7+0.3*wp})`;
+        ctx.beginPath();
+        ctx.arc(px+tw/2, py+th/2, tw*0.32, 0, Math.PI*2);
+        ctx.fill();
+        // glow
+        ctx.save();
+        ctx.shadowColor = '#8ad0ff';
+        ctx.shadowBlur = 10 * (tw/TILE);
+        ctx.fillStyle = '#bfe8ff';
+        ctx.beginPath();
+        ctx.arc(px+tw/2, py+th/2, tw*0.14, 0, Math.PI*2);
+        ctx.fill();
+        ctx.restore();
       } else {
         // Floor base with subtle checker
         ctx.fillStyle = (x+y)%2===0 ? COLORS.floor : COLORS.floorAlt;
@@ -1083,6 +1151,21 @@ function move(dx, dy) {
     return;
   }
 
+  // Fountain of Healing → full heal + bonus potions, then dries up.
+  if (tile === 3) {
+    player.hp = player.maxHp;
+    player.mp = player.maxMp;
+    player.healPotions += 2;
+    mapData[ny][nx] = 0; // fountain is spent
+    hasFountain = false;
+    player.x = nx; player.y = ny;
+    log('⛲ The Fountain of Healing restores you fully! +2 Health Potions.', 'important');
+    updateBars();
+    saveGame();
+    draw();
+    return;
+  }
+
   player.x = nx;
   player.y = ny;
 
@@ -1128,20 +1211,26 @@ function attackEnemy(e) {
     log(`${e.type} defeated! +${xp} XP, +${gold}g`, 'important');
     updateBars();
     // Drop loot
-    if (Math.random() < 0.35) {
+    if (Math.random() < 0.18) {
       const item = generateItem();
       groundItems.push({ x: e.x, y: e.y, item });
       log(`💎 ${e.type} dropped: ${item.name}`, 'loot');
     }
+    // Small chance of a health potion drop so you aren't solely merchant-reliant.
+    if (Math.random() < 0.08) {
+      player.healPotions++;
+      log(`❤️ ${e.type} dropped a Health Potion! (${player.healPotions} held)`, 'loot');
+      updateBars();
+    }
     checkLevelUp();
   } else {
-    // DEF from armor reduces incoming damage (never below 1).
-    const raw = rnd(1, 4) + dungeonLevel;
-    const edm = Math.max(1, raw - Math.floor(totalStat('DEF') / 3));
+    // Enemy strikes back. Damage scales with the enemy, reduced by armor DEF.
+    const raw = Math.round(e.dmg * rnd(80, 120) / 100);
+    const edm = Math.max(1, raw - Math.floor(totalStat('DEF') / 2));
     player.hp = Math.max(0, player.hp - edm);
     log(`${e.type} hits ${HERO} back for ${edm}!`);
     updateBars();
-    if (player.hp === 0) { log(`${HERO} died... respawning!`, 'important'); player.hp = player.maxHp; }
+    if (player.hp === 0) handleDeath();
   }
   saveGame();
   draw();
@@ -1170,10 +1259,12 @@ function enemyMove(e) {
     }
     if (nx === player.x && ny === player.y) {
       // Attack player
-      const dmg = rnd(1,4)+dungeonLevel;
+      const raw = Math.round(e.dmg * rnd(80, 120) / 100);
+      const dmg = Math.max(1, raw - Math.floor(totalStat('DEF') / 2));
       player.hp = Math.max(0, player.hp-dmg);
       log(`${e.type} attacks ${HERO} for ${dmg}!`);
       updateBars();
+      if (player.hp === 0) handleDeath();
       return;
     }
     e.x = nx; e.y = ny;
@@ -1182,6 +1273,22 @@ function enemyMove(e) {
 }
 
 function getEnemyAt(x,y) { return enemies.find(e=>!e.dead&&e.x===x&&e.y===y)||null; }
+
+// Death has a real cost now: you lose half your gold and are pulled back to the
+// floor's entrance with partial health. Potions and caution actually matter.
+function handleDeath() {
+  const lostGold = Math.floor(player.gold / 2);
+  player.gold -= lostGold;
+  player.hp = Math.floor(player.maxHp * 0.4);
+  player.x = 5; player.y = 5;
+  log(`💀 ${HERO} was slain! Lost ${lostGold}g and crawled back to the entrance.`, 'important');
+  // Respawn enemies/loot are kept; just regenerate enemy positions away from spawn.
+  enemies.forEach(e => {
+    if (!e.dead && Math.abs(e.x-5) + Math.abs(e.y-5) < 4) { e.x = rnd(8, MAP_W-2); e.y = rnd(8, MAP_H-2); }
+  });
+  updateBars();
+  saveGame();
+}
 
 function checkPickupProximity() {
   // Loot underfoot is shown on the map; no need to nag about it.
@@ -1220,6 +1327,21 @@ function updateBars() {
   document.getElementById('hp-text').textContent = player.hp;
   document.getElementById('mp-bar').style.width = (player.mp/player.maxMp*100)+'%';
   document.getElementById('gold-count').textContent = player.gold;
+  const healLabel = document.getElementById('heal-label');
+  const healBtn = document.querySelector('.heal-btn');
+  if (healLabel) healLabel.textContent = player.healPotions || 0;
+  if (healBtn) healBtn.classList.toggle('empty', !player.healPotions);
+}
+
+const HEAL_AMOUNT = 50;
+function useHealthPotion() {
+  if (!player.healPotions) { log('No health potions! Buy some from a merchant.'); return; }
+  if (player.hp >= player.maxHp) { log('Already at full health.'); return; }
+  player.healPotions--;
+  player.hp = Math.min(player.maxHp, player.hp + HEAL_AMOUNT);
+  log(`❤️ Drank a Health Potion. +${HEAL_AMOUNT} HP (${player.healPotions} left)`, 'loot');
+  updateBars();
+  saveGame();
 }
 
 function switchTab(tab) {
@@ -1434,6 +1556,8 @@ function loadGame() {
     if (!data.player) return false;
     player = data.player;
     if (player.gold == null) player.gold = 0;
+    if (player.healPotions == null) player.healPotions = 0;
+    if (player.manaPotions == null) player.manaPotions = 0;
     inventory = (data.inventory || []).filter(it => it && it.slot); // drop legacy typeKey-only items
     // Rebuild equipped into the new 7-slot shape; salvage any still-valid pieces into the bag.
     const freshEquipped = { head:null, chest:null, hands:null, legs:null, weapon:null, ring:null, amulet:null };
@@ -1498,6 +1622,7 @@ if (hadSave) {
 }
 log('Progress auto-saves automatically as you play.');
 log('Tap 🎒 BAG (bottom-right) to open your loot.');
+log('Tap the ❤️ flask to drink a Health Potion when you\'re hurt. Enemies hit hard!');
 
 // Redraw once layout has settled so the camera fits the real canvas size.
 requestAnimationFrame(() => { resizeCanvas(); draw(); });
@@ -1507,7 +1632,7 @@ window.addEventListener('load', () => { resizeCanvas(); draw(); });
 // so their robe glow pulses. Idle otherwise to save battery.
 let lastPulse = 0;
 function pulseLoop(ts) {
-  if (merchant && ts - lastPulse > 60) { lastPulse = ts; draw(); }
+  if ((merchant || hasFountain) && ts - lastPulse > 60) { lastPulse = ts; draw(); }
   requestAnimationFrame(pulseLoop);
 }
 requestAnimationFrame(pulseLoop);
