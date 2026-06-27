@@ -594,12 +594,13 @@
      This block is intentionally gated to pointer:fine + hover so the stacked
      mobile/touch layout above is left completely untouched. */
   @media (min-width: 760px) and (hover: hover) and (pointer: fine) {
-    /* Loot drawer: a real column in the flow (not an overlay), always open and
-       a little wider so the LOOT/GEAR/HERO tabs have room to breathe. */
+    /* Loot drawer: a real column in the flow (not an overlay), always open.
+       It grows with the viewport so wide screens don't leave dead space beside
+       the square map — the panel expands to absorb the right-hand slack. */
     #side-panel {
       position: static;
-      flex: 0 0 210px;
-      width: 210px;
+      flex: 0 0 clamp(210px, 22vw, 440px);
+      width: clamp(210px, 22vw, 440px);
       transform: none;
       opacity: 1;
       pointer-events: auto;
@@ -607,10 +608,19 @@
     }
     #side-panel.collapsed { transform: none; opacity: 1; pointer-events: auto; }
 
+    /* Header reserves room on the right for the floating action buttons that
+       move up into it on web, and stays tall enough to seat them. */
+    #header {
+      min-height: 46px;
+      padding-right: 178px;
+    }
+
     #game-wrap {
       position: relative;
       display: grid;
-      grid-template-columns: 250px 1fr;
+      /* Log column also grows with the viewport so the left-hand slack beside
+         the centered map is filled too. The map ('1fr') keeps the remainder. */
+      grid-template-columns: clamp(250px, 24vw, 480px) 1fr;
       grid-template-rows: 1fr;
     }
     /* Log: full-height left column. */
@@ -636,20 +646,21 @@
       align-self: center;
       flex: none;
     }
-    /* No bottom bar on web — heal + new float over the map's top-left so they
-       never cover the loot list. */
+    /* No bottom bar on web — the heal / sound / new-game buttons move up into
+       the header bar's top-right corner (fixed to the viewport). */
     #control-bar {
-      position: absolute;
-      top: 8px;
-      left: 258px;
+      position: fixed;
+      top: 5px;
+      right: 12px;
+      left: auto;
       padding: 0;
       background: none;
       border-top: none;
       width: auto;
-      z-index: 215;
+      z-index: 230;
     }
-    #action-buttons { flex-direction: row; gap: 6px; }
-    .action-btn { width: 52px; flex: none; }
+    #action-buttons { flex-direction: row; gap: 8px; }
+    .action-btn { width: 46px; flex: none; }
     /* Keyboard replaces the d-pad; the drawer stays open so no bag toggle. */
     #dpad { display: none; }
     .bag-btn { display: none; }
