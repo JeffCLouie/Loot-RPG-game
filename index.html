@@ -4095,9 +4095,9 @@ const THEMES = [
     floor:'#6b5d44', floorAlt:'#5e5139', wall:'#473d2c', wallTop:'#9a8255',
     brickA:'#574a34', brickB:'#4d4030', mortar:'#352e20', crack:'#2a2418',
     seam:'#3a3122', speckle:'#857143', accent:'rgba(130,180,95,0.25)', stairsGlow:'#ffe08a' },
-  { name: 'the Mossy Caverns',
-    floor:'#3f6b3a', floorAlt:'#356030', wall:'#2a4626', wallTop:'#7cbb5e',
-    brickA:'#3a5e34', brickB:'#31522d', mortar:'#22381f', crack:'#1c2c18',
+  { name: 'the Mossy Caverns', wallStyle: 'forest',
+    floor:'#3f6b3a', floorAlt:'#356030', wall:'#3a6b34', wallTop:'#7cbb5e',
+    brickA:'#4e8442', brickB:'#31522d', mortar:'#1c3318', crack:'#1c2c18',
     seam:'#284a24', speckle:'#74b557', accent:'rgba(185,235,115,0.30)', stairsGlow:'#dcff7a' },
   { name: 'the Lava Depths',
     floor:'#5e3225', floorAlt:'#4f291b', wall:'#3a1d13', wallTop:'#c2552c',
@@ -4221,6 +4221,105 @@ function drawHeroSprite(px, py, tw, th, scale) {
   ctx.restore();
 }
 
+// Off-map and wall/cracked-wall tiles count as "wall" for seamless edges.
+function isWallTile(x, y) {
+  if (x < 0 || y < 0 || x >= MAP_W || y >= MAP_H) return true;
+  const t = mapData[y][x];
+  return t === 1 || t === 10;
+}
+
+// Draw a natural wall tile. Rocky cliff for most themes, leafy trees for the
+// forest theme. Per-tile noise (from `seed`) keeps neighbours from cloning, and
+// faces exposed to open floor get lit rims / cast shadows for depth. A wall mass
+// is sunlit only along its crest (top tile), so stacked walls read as one cliff.
+function drawWall(px, py, tw, th, x, y, seed, C, cracked) {
+  if (C.wallStyle === 'forest') { drawForestWall(px, py, tw, th, x, y, seed, C, cracked); return; }
+  const h = Math.abs(seed);
+  const W = Math.max(1, Math.floor(tw)), H = Math.max(1, Math.floor(th));
+  const topLit = !isWallTile(x, y - 1);
+
+  // Base: vertical gradient — sunlit crest fading to shadow at the base.
+  const g = ctx.createLinearGradient(px, py, px, py + th);
+  if (topLit) { g.addColorStop(0, C.wallTop); g.addColorStop(0.28, C.wall); g.addColorStop(1, C.mortar); }
+  else { g.addColorStop(0, C.wall); g.addColorStop(1, C.mortar); }
+  ctx.fillStyle = g;
+  ctx.fillRect(px, py, tw, th);
+
+  // Rocky lumps — alternating light highlights and dark pockets, placed by seed.
+  const lumps = 3 + (h % 3);
+  for (let i = 0; i < lumps; i++) {
+    const hsh = (h >> (i * 2 + 1));
+    const lx = px + (hsh % W);
+    const ly = py + ((hsh >> 4) % H);
+    const r = tw * (0.12 + ((hsh >> 8) % 5) * 0.03);
+    ctx.globalAlpha = 0.3;
+    ctx.fillStyle = (i % 2 === 0) ? C.wallTop : C.mortar;
+    ctx.beginPath(); ctx.arc(lx, ly, r, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // Fine grain speckle.
+  ctx.fillStyle = 'rgba(0,0,0,0.12)';
+  for (let i = 0; i < 4; i++) {
+    const s = (h >> (i * 3 + 2));
+    ctx.fillRect(px + (s % W), py + ((s >> 3) % H), Math.max(1, tw * 0.06), Math.max(1, th * 0.06));
+  }
+
+  // Fissure on some tiles (always on a cracked wall).
+  if (cracked || h % 4 === 0) {
+    ctx.strokeStyle = cracked ? '#15151c' : C.crack;
+    ctx.lineWidth = Math.max(1, tw * 0.05);
+    const sx = px + tw * (0.3 + (h % 3) * 0.16);
+    const dir = (h % 2) ? 1 : -1;
+    ctx.beginPath();
+    ctx.moveTo(sx, py + th * 0.08);
+    ctx.lineTo(sx + tw * 0.12 * dir, py + th * 0.5);
+    ctx.lineTo(sx - tw * 0.06 * dir, py + th * 0.94);
+    ctx.stroke();
+  }
+
+  // Exposed faces: lit rim where open above/left, cast shadow where open right.
+  if (!isWallTile(x, y - 1)) { ctx.fillStyle = 'rgba(255,250,235,0.16)'; ctx.fillRect(px, py, tw, Math.max(1, th * 0.12)); }
+  if (!isWallTile(x - 1, y)) { ctx.fillStyle = 'rgba(255,250,235,0.06)'; ctx.fillRect(px, py, Math.max(1, tw * 0.1), th); }
+  if (!isWallTile(x + 1, y)) { ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.fillRect(px + tw - Math.max(1, tw * 0.16), py, Math.max(1, tw * 0.16), th); }
+
+  // Subtle hint that a cracked wall is breakable.
+  if (cracked) { ctx.strokeStyle = 'rgba(255,220,120,0.22)'; ctx.lineWidth = 1; ctx.strokeRect(px + 1, py + 1, tw - 2, th - 2); }
+}
+
+// Leafy-tree wall for the forest theme — overlapping canopies read as a thicket.
+function drawForestWall(px, py, tw, th, x, y, seed, C, cracked) {
+  const h = Math.abs(seed);
+  const W = Math.max(1, Math.floor(tw)), H = Math.max(1, Math.floor(th));
+  // Shadowed undergrowth base.
+  ctx.fillStyle = C.mortar;
+  ctx.fillRect(px, py, tw, th);
+  // Trunk.
+  ctx.fillStyle = '#4a2f1c';
+  ctx.fillRect(px + tw / 2 - tw * 0.08, py + th * 0.5, tw * 0.16, th * 0.5);
+  // Canopy: layered blobs in three greens, placed by seed so each tile differs.
+  const cols = [C.wall, C.brickA, C.wallTop];
+  const blobs = 4 + (h % 3);
+  for (let i = 0; i < blobs; i++) {
+    const hsh = (h >> (i * 2 + 1));
+    const cx = px + tw * (0.2 + (hsh % 6) * 0.1);
+    const cy = py + th * (0.12 + ((hsh >> 4) % 5) * 0.09);
+    const r = tw * (0.22 + ((hsh >> 8) % 4) * 0.04);
+    ctx.fillStyle = cols[i % cols.length];
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+  }
+  // Shadow pocket for depth.
+  ctx.fillStyle = 'rgba(0,0,0,0.18)';
+  ctx.beginPath(); ctx.arc(px + tw * 0.72, py + th * 0.62, tw * 0.26, 0, Math.PI * 2); ctx.fill();
+  // Sun-dappled highlights.
+  ctx.fillStyle = 'rgba(220,255,160,0.25)';
+  for (let i = 0; i < 3; i++) {
+    const s = (h >> (i * 3 + 2));
+    ctx.fillRect(px + (s % W), py + ((s >> 3) % H), Math.max(1, tw * 0.07), Math.max(1, th * 0.07));
+  }
+  if (cracked) { ctx.strokeStyle = 'rgba(255,220,120,0.3)'; ctx.lineWidth = 1; ctx.strokeRect(px + 1, py + 1, tw - 2, th - 2); }
+}
+
 function draw() {
   const W = canvas.width, H = canvas.height;
   const C = currentTheme();
@@ -4278,37 +4377,7 @@ function draw() {
       }
 
       if (t === 1) {
-        // Wall base
-        ctx.fillStyle = C.wall;
-        ctx.fillRect(px, py, tw, th);
-        // Brick rows with mortar lines
-        const rows = 3;
-        const rh = th / rows;
-        for (let r = 0; r < rows; r++) {
-          const ry = py + r * rh;
-          const offset = (r % 2) * (tw / 2);
-          // brick face shading
-          ctx.fillStyle = (r % 2 === 0) ? C.brickA : C.brickB;
-          ctx.fillRect(px, ry + 1, tw, rh - 1.5);
-          // vertical mortar gap
-          ctx.fillStyle = C.mortar;
-          ctx.fillRect(px + (offset % tw), ry, Math.max(1, tw*0.06), rh);
-          ctx.fillRect(px + ((offset + tw/2) % tw), ry, Math.max(1, tw*0.06), rh);
-          // horizontal mortar
-          ctx.fillRect(px, ry, tw, Math.max(1, th*0.05));
-        }
-        // top highlight ridge
-        ctx.fillStyle = C.wallTop;
-        ctx.fillRect(px, py, tw, Math.max(1, th*0.12));
-        // per-block shade variation so the masonry isn't uniform
-        const wv = (Math.abs(seed >> 3) % 5) - 2;   // -2..+2
-        if (wv > 0) { ctx.fillStyle = `rgba(255,248,230,${wv * 0.022})`; ctx.fillRect(px, py, tw, th); }
-        else if (wv < 0) { ctx.fillStyle = `rgba(0,0,0,${(-wv) * 0.03})`; ctx.fillRect(px, py, tw, th); }
-        // occasional crack
-        if (seed % 5 === 0) {
-          ctx.fillStyle = C.crack;
-          ctx.fillRect(px + tw*0.5, py + th*0.3, Math.max(1,tw*0.06), th*0.4);
-        }
+        drawWall(px, py, tw, th, x, y, seed, C, false);
       } else if (t === 2) {
         // Stair pit
         ctx.fillStyle = '#0d0d14';
@@ -4474,23 +4543,8 @@ function draw() {
         ctx.fill();
         ctx.restore();
       } else if (t === 10) {
-        // Cracked wall — a normal wall with an obvious fracture (breakable).
-        ctx.fillStyle = C.wall;
-        ctx.fillRect(px, py, tw, th);
-        ctx.fillStyle = C.brickB;
-        ctx.fillRect(px+1, py+1, tw-2, th-2);
-        ctx.strokeStyle = '#15151c';
-        ctx.lineWidth = Math.max(1.5, tw*0.07);
-        ctx.beginPath();
-        ctx.moveTo(px+tw*0.5, py);
-        ctx.lineTo(px+tw*0.38, py+th*0.4);
-        ctx.lineTo(px+tw*0.6, py+th*0.6);
-        ctx.lineTo(px+tw*0.45, py+th);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(px+tw*0.55, py+th*0.55);
-        ctx.lineTo(px+tw*0.85, py+th*0.7);
-        ctx.stroke();
+        // Cracked wall — natural rock with an obvious breakable fracture.
+        drawWall(px, py, tw, th, x, y, seed, C, true);
       } else if (t === 11) {
         // Locked vault door — heavy timber with a brass lock.
         ctx.fillStyle = C.floor;
