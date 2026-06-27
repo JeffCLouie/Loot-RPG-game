@@ -552,8 +552,8 @@ const TIERS = {
   uncommon:  { color: '#44bb44', weight: 20 },
   rare:      { color: '#4488ff', weight: 10 },
   epic:      { color: '#aa44ff', weight: 4  },
-  legendary: { color: '#ff8800', weight: 1  },
-  unique:    { color: '#ff2222', weight: 0.5},
+  legendary: { color: '#ff8800', weight: 3  },
+  unique:    { color: '#ff2222', weight: 1.5},
 };
 
 const PREFIXES = ['Ancient','Cursed','Blazing','Frozen','Runic','Shadow','Divine','Storm','Iron','Blood','Soul','Void'];
@@ -1356,6 +1356,9 @@ function draw() {
   ctx.fillText(HERO, px + tw/2, py + th/2 + th*0.04);
   ctx.shadowBlur = 0;
 
+  // Auras from equipped legendary/unique gear, layered over the hero.
+  drawGearEffects(px + tw/2, py + th/2, tw * 0.5);
+
   // Player status effect icons
   const pEffects = statusEffects.filter(s => s.target === 'player');
   if (pEffects.length) {
@@ -1390,6 +1393,106 @@ function draw() {
 
 function spawnFloatingText(x, y, text, color) {
   floatingTexts.push({ x, y, text, color, start: Date.now(), duration: 800 });
+}
+
+// Each equipped legendary/unique item projects its own signature aura around
+// the hero — a distinct animated effect per slot, tinted by the item's tier
+// color (orange = legendary, red = unique). Multiple high-tier pieces stack,
+// so a fully kitted-out hero shimmers with several effects at once.
+function drawGearEffects(cx, cy, r) {
+  const t = Date.now() / 1000;
+  for (const slot of SLOT_KEYS) {
+    const it = equipped[slot];
+    if (!it || (it.tier !== 'legendary' && it.tier !== 'unique')) continue;
+    const color = TIERS[it.tier].color;
+    ctx.save();
+    ctx.shadowColor = color;
+    switch (slot) {
+      case 'weapon': { // orbiting blade glints
+        ctx.shadowBlur = 10; ctx.fillStyle = color;
+        for (let i = 0; i < 3; i++) {
+          const a = t * 2.2 + i * (Math.PI * 2 / 3);
+          ctx.beginPath();
+          ctx.arc(cx + Math.cos(a) * r, cy + Math.sin(a) * r, r * 0.1, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        break;
+      }
+      case 'chest': { // expanding shockwave rings
+        ctx.strokeStyle = color; ctx.lineWidth = 2;
+        for (let i = 0; i < 2; i++) {
+          const p = (t * 0.7 + i * 0.5) % 1;
+          ctx.globalAlpha = (1 - p) * 0.55;
+          ctx.beginPath();
+          ctx.arc(cx, cy, r * (0.5 + p * 0.9), 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        break;
+      }
+      case 'head': { // hovering halo
+        ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.shadowBlur = 10;
+        ctx.globalAlpha = 0.6 + 0.3 * Math.sin(t * 3);
+        ctx.beginPath();
+        ctx.ellipse(cx, cy - r * 0.85, r * 0.45, r * 0.16, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        break;
+      }
+      case 'hands': { // crackling lightning on both sides
+        ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.shadowBlur = 8;
+        ctx.globalAlpha = 0.4 + 0.6 * Math.abs(Math.sin(t * 9));
+        for (const dir of [-1, 1]) {
+          ctx.beginPath();
+          ctx.moveTo(cx + dir * r * 0.8, cy - r * 0.5);
+          for (let k = 1; k <= 4; k++) {
+            ctx.lineTo(cx + dir * r * (0.8 + 0.18 * Math.sin(t * 9 + k)), cy - r * 0.5 + k * r * 0.28);
+          }
+          ctx.stroke();
+        }
+        break;
+      }
+      case 'legs': { // rising embers
+        ctx.fillStyle = color; ctx.shadowBlur = 6;
+        for (let i = 0; i < 4; i++) {
+          const ph = (t * 0.6 + i * 0.25) % 1;
+          ctx.globalAlpha = (1 - ph) * 0.8;
+          ctx.beginPath();
+          ctx.arc(cx + Math.sin(i * 1.7 + t) * r * 0.5, cy + r * 0.6 - ph * r * 1.4, r * 0.07, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        break;
+      }
+      case 'ring': { // fast tight-orbit orbs
+        ctx.fillStyle = color; ctx.shadowBlur = 8;
+        for (let i = 0; i < 2; i++) {
+          const a = -t * 4 + i * Math.PI;
+          ctx.beginPath();
+          ctx.arc(cx + Math.cos(a) * r * 0.55, cy + Math.sin(a) * r * 0.55, r * 0.08, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        break;
+      }
+      case 'amulet': { // twinkling star burst
+        ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.shadowBlur = 10;
+        ctx.globalAlpha = 0.6 + 0.4 * Math.sin(t * 4);
+        const len = r * 0.5, a = t * 1.5;
+        for (let k = 0; k < 4; k++) {
+          const ang = a + k * Math.PI / 2;
+          ctx.beginPath();
+          ctx.moveTo(cx - Math.cos(ang) * len, cy - r * 0.1 - Math.sin(ang) * len);
+          ctx.lineTo(cx + Math.cos(ang) * len, cy - r * 0.1 + Math.sin(ang) * len);
+          ctx.stroke();
+        }
+        break;
+      }
+    }
+    ctx.restore();
+  }
+}
+
+// True while any equipped piece is legendary/unique, so the animation loop
+// keeps repainting to drive those auras.
+function hasGlowGear() {
+  return SLOT_KEYS.some(s => equipped[s] && (equipped[s].tier === 'legendary' || equipped[s].tier === 'unique'));
 }
 
 // ══════════════════════════════════════════
@@ -2069,7 +2172,7 @@ window.addEventListener('load', () => { resizeCanvas(); draw(); });
 let lastPulse = 0;
 function pulseLoop(ts) {
   const hasElite = enemies.some(e => !e.dead && e.isElite);
-  if ((merchant || hasFountain || floatingTexts.length || statusEffects.length || hasElite) && ts - lastPulse > 60) { lastPulse = ts; draw(); }
+  if ((merchant || hasFountain || floatingTexts.length || statusEffects.length || hasElite || hasGlowGear()) && ts - lastPulse > 60) { lastPulse = ts; draw(); }
   requestAnimationFrame(pulseLoop);
 }
 requestAnimationFrame(pulseLoop);
