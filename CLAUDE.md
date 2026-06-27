@@ -35,6 +35,31 @@ When asked to make a change:
 5. Push and merge directly to `main` so Netlify auto-deploys — do not open a PR
    or wait for approval.
 
+## Pull requests: merge and conflicts automatically
+
+When work happens on a PR instead of straight on `main` (for example, when a
+task pins development to a feature branch), drive it to a merged state without
+waiting for manual review:
+
+- **Auto-merge new PRs.** Once a PR you opened is pushed and green (or has no CI,
+  which is the normal state for this single-file project), merge it into `main`
+  yourself — do not wait for approval. Prefer enabling auto-merge so it lands as
+  soon as any checks pass; if checks are absent, merge immediately.
+- **Resolve merge conflicts automatically.** If a PR (or a `git pull`/rebase)
+  conflicts with `main`, resolve it yourself:
+  1. Pull/fetch the latest `main` and rebase or merge it into the branch.
+  2. Resolve every conflict in `index.html` by hand, keeping **both** sides'
+     intent — combine the changes rather than blindly taking one side. The whole
+     game is one file, so conflicts are almost always mergeable.
+  3. After resolving, re-verify the JavaScript has no syntax errors (this is the
+     only safety net), then continue the merge and push.
+- **Always leave `main` deployable.** Because Netlify auto-deploys `main`, never
+  merge a state with a syntax error. Run the syntax check after any conflict
+  resolution before completing the merge.
+- Only stop and ask the user when a conflict is genuinely ambiguous (two changes
+  that can't both be true at once) or when the user explicitly asked to hold the
+  PR open.
+
 ## Commit conventions
 
 - Use short, descriptive subject lines under ~72 characters.
