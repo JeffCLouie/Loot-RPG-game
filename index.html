@@ -270,12 +270,21 @@
   .loot-icon {
     flex-shrink: 0;
     width: 22px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     text-align: center;
     font-size: 16px;
     line-height: 1;
     filter: drop-shadow(0 1px 1px rgba(0,0,0,0.6));
   }
-  .slot-icon { width: 18px; font-size: 14px; }
+  .slot-icon { width: 18px; height: 18px; font-size: 14px; }
+  /* Vector item icons: silhouettes tinted to rarity, sized to their container. */
+  .svg-icon { width: 18px; height: 18px; display: block; }
+  .slot-icon .svg-icon { width: 16px; height: 16px; }
+  .cos-chip .svg-icon { width: 18px; height: 18px; }
+  .cos-preview .svg-icon { width: 20px; height: 20px; margin: 0 auto; }
 
   /* ── COSMETICS / APPEARANCE ── */
   .cos-head { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 8px; }
@@ -809,41 +818,125 @@ const SLOT_KEYS = Object.keys(SLOTS);
 const SLOT_WEIGHTS = { weapon:22, chest:15, head:13, hands:13, legs:13, ring:12, amulet:12 };
 
 // ── ITEM ICONS ──
-// Every base item name maps to an emoji so loot can be *seen*: a small picture
-// next to each bag row, and — for head/chest/weapon — drawn right onto the hero
-// sprite so the character visibly wears its gear. Keyed by the base word found
-// in an item's name (e.g. "Ancient Helm of Power" → "Helm" → 🪖).
+// Every base item name maps to a vector-icon *key* (see ICON_PATHS below) so loot
+// can be *seen*: a small picture next to each bag row, and — for head/chest/weapon
+// — drawn right onto the hero sprite so the character visibly wears its gear.
+// Keyed by the base word found in an item's name (e.g. "Ancient Helm of Power" →
+// "Helm" → "helm"). The icons are flat silhouettes that get tinted to each item's
+// rarity colour, so deeper loot literally glows brighter on the hero.
 const ITEM_ICONS = {
   // head
-  Helm:'🪖', Cap:'🧢', Crown:'👑', Hood:'👒', Circlet:'🎩',
+  Helm:'helm', Cap:'cap', Crown:'crown', Hood:'hood', Circlet:'circlet',
   // chest
-  Chestplate:'🛡️', Robe:'🥼', Cuirass:'🦺', Tunic:'👕', Mail:'⛓️',
+  Chestplate:'chestplate', Robe:'robe', Cuirass:'cuirass', Tunic:'tunic', Mail:'mail',
   // hands
-  Gauntlets:'🧤', Gloves:'🧤', Bracers:'🧤', Grips:'🧤',
+  Gauntlets:'gloves', Gloves:'gloves', Bracers:'gloves', Grips:'gloves',
   // legs
-  Greaves:'👖', Leggings:'👖', Tassets:'👖', Trousers:'👖',
+  Greaves:'legs', Leggings:'legs', Tassets:'legs', Trousers:'legs',
   // weapon
-  Sword:'🗡️', Axe:'🪓', Dagger:'🔪', Staff:'🪄', Bow:'🏹', Mace:'🔨', Spear:'🔱', Scythe:'⚔️',
+  Sword:'sword', Axe:'axe', Dagger:'dagger', Staff:'staff', Bow:'bow', Mace:'mace', Spear:'spear', Scythe:'scythe',
   // ring
-  Ring:'💍', Band:'💍', Signet:'💍', Loop:'💍',
+  Ring:'ring', Band:'ring', Signet:'ring', Loop:'ring',
   // amulet
-  Amulet:'📿', Pendant:'📿', Necklace:'📿', Talisman:'🧿', Charm:'🔮',
+  Amulet:'amulet', Pendant:'amulet', Necklace:'amulet', Talisman:'talisman', Charm:'orb',
 };
-const SLOT_ICONS = { head:'🪖', chest:'🛡️', hands:'🧤', legs:'👖', weapon:'⚔️', ring:'💍', amulet:'📿' };
+const SLOT_ICONS = { head:'helm', chest:'chestplate', hands:'gloves', legs:'legs', weapon:'sword', ring:'ring', amulet:'amulet' };
+
+// Vector geometry for every icon key, as SVG path data in a 0–100 box. Each path
+// is drawn two ways: inline as <svg> in the menus, and via Path2D on the hero
+// sprite — both tinted to the item's rarity colour. The even-odd fill rule lets
+// inner subpaths punch holes (the ring's centre, the mail's links, the talisman's
+// eye). To add a new look: drop a path here and point a base name at its key in
+// ITEM_ICONS above. (Pasted game-icons.net paths work too — author them at 0–512
+// and change the viewBox in iconMarkup/drawIconPath to match.)
+const ICON_PATHS = {
+    sword: 'M50 6 L57 18 L57 60 L50 68 L43 60 L43 18 Z M30 60 L70 60 L70 68 L30 68 Z M46 68 L54 68 L54 84 L46 84 Z M50 82 L57 89 L50 96 L43 89 Z',
+    dagger: 'M50 10 L56 22 L54 50 L46 50 L44 22 Z M36 50 L64 50 L64 56 L36 56 Z M46 56 L54 56 L54 78 L46 78 Z M50 76 L55 82 L50 88 L45 82 Z',
+    axe: 'M47 10 L53 10 L53 92 L47 92 Z M53 14 L78 9 C90 26 90 34 78 53 L53 48 Z M47 15 L40 13 L40 30 L47 30 Z',
+    mace: 'M47 44 L53 44 L53 92 L47 92 Z M50 6 L57 18 L70 14 L64 26 L78 33 L64 38 L66 52 L52 44 L38 52 L40 38 L26 33 L40 26 L34 14 L46 18 Z',
+    spear: 'M50 4 C61 16 61 26 56 34 L52 30 L52 94 L48 94 L48 30 L44 34 C39 26 39 16 50 4 Z',
+    staff: 'M47 30 L53 30 L53 94 L47 94 Z M50 4 C62 4 70 14 70 24 C70 36 60 44 50 44 C40 44 30 36 30 24 C30 14 38 4 50 4 Z M50 14 C44 14 40 18 40 24 C40 30 44 34 50 34 C56 34 60 30 60 24 C60 18 56 14 50 14 Z',
+    bow: 'M44 6 C18 28 18 72 44 94 L50 86 C28 66 28 34 50 14 Z M45 8 L48 8 L48 92 L45 92 Z M44 47 L84 47 L84 53 L44 53 Z M82 41 L96 50 L82 59 Z M44 41 L54 50 L44 59 Z',
+    scythe: 'M42 92 L50 92 L66 22 L58 20 Z M64 18 C40 10 16 24 10 46 C26 32 48 32 62 40 Z',
+    helm: 'M22 58 C22 22 78 22 78 58 L78 66 L22 66 Z M16 64 L84 64 L84 76 L16 76 Z M46 30 L54 30 L54 64 L46 64 Z',
+    cap: 'M26 52 C26 26 74 26 74 52 L74 58 L26 58 Z M62 56 L88 62 L88 70 L62 64 Z',
+    crown: 'M16 32 L30 54 L42 30 L50 56 L58 30 L70 54 L84 32 L84 72 L16 72 Z',
+    hood: 'M50 6 C30 8 18 30 20 60 L28 88 L72 88 L80 60 C82 30 70 8 50 6 Z M50 34 C40 34 36 46 38 60 L42 80 L58 80 L62 60 C64 46 60 34 50 34 Z',
+    circlet: 'M14 48 C14 64 86 64 86 48 L86 56 C86 72 14 72 14 56 Z M50 34 L60 48 L50 62 L40 48 Z',
+    chestplate: 'M28 16 L42 24 L58 24 L72 16 L80 32 L74 80 L50 90 L26 80 L20 32 Z M48 30 L52 30 L52 78 L48 78 Z',
+    cuirass: 'M28 16 L42 24 L58 24 L72 16 L80 32 L74 80 L50 90 L26 80 L20 32 Z M24 44 L76 44 L76 50 L24 50 Z M26 60 L74 60 L74 66 L26 66 Z',
+    mail: 'M28 22 L40 22 L50 28 L60 22 L72 22 L76 40 L70 46 L70 86 L30 86 L30 46 L24 40 ZM37 41 C38.657 41 40 42.343 40 44 C40 45.657 38.657 47 37 47 C35.343 47 34 45.657 34 44 C34 42.343 35.343 41 37 41 ZM46 41 C47.657 41 49 42.343 49 44 C49 45.657 47.657 47 46 47 C44.343 47 43 45.657 43 44 C43 42.343 44.343 41 46 41 ZM55 41 C56.657 41 58 42.343 58 44 C58 45.657 56.657 47 55 47 C53.343 47 52 45.657 52 44 C52 42.343 53.343 41 55 41 ZM64 41 C65.657 41 67 42.343 67 44 C67 45.657 65.657 47 64 47 C62.343 47 61 45.657 61 44 C61 42.343 62.343 41 64 41 ZM41 50 C42.657 50 44 51.343 44 53 C44 54.657 42.657 56 41 56 C39.343 56 38 54.657 38 53 C38 51.343 39.343 50 41 50 ZM50 50 C51.657 50 53 51.343 53 53 C53 54.657 51.657 56 50 56 C48.343 56 47 54.657 47 53 C47 51.343 48.343 50 50 50 ZM59 50 C60.657 50 62 51.343 62 53 C62 54.657 60.657 56 59 56 C57.343 56 56 54.657 56 53 C56 51.343 57.343 50 59 50 ZM37 59 C38.657 59 40 60.343 40 62 C40 63.657 38.657 65 37 65 C35.343 65 34 63.657 34 62 C34 60.343 35.343 59 37 59 ZM46 59 C47.657 59 49 60.343 49 62 C49 63.657 47.657 65 46 65 C44.343 65 43 63.657 43 62 C43 60.343 44.343 59 46 59 ZM55 59 C56.657 59 58 60.343 58 62 C58 63.657 56.657 65 55 65 C53.343 65 52 63.657 52 62 C52 60.343 53.343 59 55 59 ZM64 59 C65.657 59 67 60.343 67 62 C67 63.657 65.657 65 64 65 C62.343 65 61 63.657 61 62 C61 60.343 62.343 59 64 59 ZM41 68 C42.657 68 44 69.343 44 71 C44 72.657 42.657 74 41 74 C39.343 74 38 72.657 38 71 C38 69.343 39.343 68 41 68 ZM50 68 C51.657 68 53 69.343 53 71 C53 72.657 51.657 74 50 74 C48.343 74 47 72.657 47 71 C47 69.343 48.343 68 50 68 ZM59 68 C60.657 68 62 69.343 62 71 C62 72.657 60.657 74 59 74 C57.343 74 56 72.657 56 71 C56 69.343 57.343 68 59 68 ZM37 77 C38.657 77 40 78.343 40 80 C40 81.657 38.657 83 37 83 C35.343 83 34 81.657 34 80 C34 78.343 35.343 77 37 77 ZM46 77 C47.657 77 49 78.343 49 80 C49 81.657 47.657 83 46 83 C44.343 83 43 81.657 43 80 C43 78.343 44.343 77 46 77 ZM55 77 C56.657 77 58 78.343 58 80 C58 81.657 56.657 83 55 83 C53.343 83 52 81.657 52 80 C52 78.343 53.343 77 55 77 ZM64 77 C65.657 77 67 78.343 67 80 C67 81.657 65.657 83 64 83 C62.343 83 61 81.657 61 80 C61 78.343 62.343 77 64 77 Z',
+    robe: 'M40 14 L60 14 L74 40 L66 46 L72 90 L28 90 L34 46 L26 40 Z M50 14 L56 26 L50 32 L44 26 Z',
+    tunic: 'M30 22 L40 16 L60 16 L70 22 L84 40 L72 50 L66 42 L66 84 L34 84 L34 42 L28 50 L16 40 Z',
+    gloves: 'M30 56 L30 36 Q30 26 50 26 Q70 26 70 36 L70 56 Z M30 42 Q19 44 21 55 L30 55 Z M26 56 L74 56 L74 90 L26 90 Z M40 28 L43 28 L43 50 L40 50 Z M48.5 26 L51.5 26 L51.5 50 L48.5 50 Z M57 28 L60 28 L60 50 L57 50 Z',
+    legs: 'M28 14 L72 14 L72 92 L54 92 L50 48 L46 92 L28 92 Z',
+    ring: 'M50 32 C65.464 32 78 44.536 78 60 C78 75.464 65.464 88 50 88 C34.536 88 22 75.464 22 60 C22 44.536 34.536 32 50 32 ZM50 44 C58.837 44 66 51.163 66 60 C66 68.837 58.837 76 50 76 C41.163 76 34 68.837 34 60 C34 51.163 41.163 44 50 44 ZM50 2 L61 16 L50 30 L39 16 Z',
+    amulet: 'M16 22 C30 50 70 50 84 22 L78 18 C66 40 34 40 22 18 Z M50 40 L64 62 L50 86 L36 62 Z',
+    orb: 'M50 18 C66.569 18 80 31.431 80 48 C80 64.569 66.569 78 50 78 C33.431 78 20 64.569 20 48 C20 31.431 33.431 18 50 18 ZM38 31 C41.866 31 45 34.134 45 38 C45 41.866 41.866 45 38 45 C34.134 45 31 41.866 31 38 C31 34.134 34.134 31 38 31 ZM40 80 L60 80 L66 92 L34 92 Z',
+    talisman: 'M50 12 C70.987 12 88 29.013 88 50 C88 70.987 70.987 88 50 88 C29.013 88 12 70.987 12 50 C12 29.013 29.013 12 50 12 ZM50 26 C63.255 26 74 36.745 74 50 C74 63.255 63.255 74 50 74 C36.745 74 26 63.255 26 50 C26 36.745 36.745 26 50 26 ZM50 39 C56.075 39 61 43.925 61 50 C61 56.075 56.075 61 50 61 C43.925 61 39 56.075 39 50 C39 43.925 43.925 39 50 39 Z',
+};
+
+// Map every legacy emoji (from the old icon system) to its new vector key, so
+// saved wardrobe looks and cosmetic choices survive the switch.
+const LEGACY_EMOJI_KEYS = {
+  '🪖':'helm','🧢':'cap','👑':'crown','🥷':'hood','👒':'hood','👲':'circlet','🎩':'circlet',
+  '🛡️':'chestplate','🛡':'chestplate','🥼':'robe','🦺':'cuirass','👕':'tunic','⛓️':'mail','⛓':'mail',
+  '🧤':'gloves','👖':'legs',
+  '🗡️':'sword','🗡':'sword','🪓':'axe','🔪':'dagger','🪄':'staff','🏹':'bow','🔨':'mace','🔱':'spear','⚔️':'scythe','⚔':'scythe',
+  '💍':'ring','📿':'amulet','🧿':'talisman','🔮':'orb',
+};
+const ICON_EMPTY_COLOR = '#5a5a68';
+// Rarity tint for an item's icon (muted grey when there's nothing to colour).
+function tierColor(item) { return (item && TIERS[item.tier] && TIERS[item.tier].color) || ICON_EMPTY_COLOR; }
+// Inline-SVG markup for a vector icon key, tinted `color`. Non-key values (potion
+// or other emoji) pass straight through, so the same call sites render both.
+function iconMarkup(val, color) {
+  const d = ICON_PATHS[val];
+  if (!d) return val || '';
+  const c = color || ICON_EMPTY_COLOR;
+  return `<svg class="svg-icon" viewBox="0 0 100 100" aria-hidden="true"><path d="${d}" fill="${c}" stroke="${c}" stroke-width="3" stroke-linejoin="round" fill-rule="evenodd"/></svg>`;
+}
+// Scale a #rrggbb colour toward black (f<1) for shading; passes other formats through.
+function shadeColor(hex, f) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex || '');
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  return `rgb(${Math.round(((n>>16)&255)*f)},${Math.round(((n>>8)&255)*f)},${Math.round((n&255)*f)})`;
+}
+// Draw a vector icon key onto the canvas, centred at (cx,cy) and `size` px wide.
+function drawIconPath(key, cx, cy, size, color) {
+  const d = ICON_PATHS[key];
+  if (!d) { ctx.fillStyle = '#fff'; ctx.fillText(key, cx, cy); return; } // legacy emoji fallback
+  const p = new Path2D(d), s = size / 100;
+  ctx.save();
+  ctx.translate(cx - size/2, cy - size/2);
+  ctx.scale(s, s);
+  ctx.fillStyle = color; ctx.strokeStyle = color;
+  ctx.lineWidth = 3; ctx.lineJoin = 'round';
+  ctx.fill(p, 'evenodd'); ctx.stroke(p);
+  ctx.restore();
+}
 // Slots that actually change how the hero sprite looks.
 const VISUAL_SLOTS = ['head','chest','weapon'];
 
 // Resolve an emoji picture for any item. New items carry a stored `icon`; older
 // saved items are matched by the base word in their name, falling back to a
 // generic per-slot icon (or a potion flask for non-gear).
+function iconKeyFromName(name, slot) {
+  for (const base of Object.keys(ITEM_ICONS)) {
+    if (new RegExp('\\b' + base + '\\b').test(name || '')) return ITEM_ICONS[base];
+  }
+  return SLOT_ICONS[slot] || 'amulet';
+}
+// Potions (and other slotless items) keep their emoji flask.
+function potionIcon(item) { return /\bMana\b/i.test((item && item.name) || '') ? '🔷' : '🧪'; }
 function itemIcon(item) {
   if (!item) return '';
-  if (item.icon) return item.icon;
-  if (!item.slot) return '🧪';
-  for (const base of Object.keys(ITEM_ICONS)) {
-    if (new RegExp('\\b' + base + '\\b').test(item.name || '')) return ITEM_ICONS[base];
-  }
-  return SLOT_ICONS[item.slot] || '❔';
+  // Trust a stored icon only if it's a known vector key; otherwise re-resolve by
+  // name so gear saved under the old emoji system heals to the right vector icon.
+  if (item.icon && ICON_PATHS[item.icon]) return item.icon;
+  if (!item.slot) return potionIcon(item);
+  return iconKeyFromName(item.name, item.slot);
 }
 
 // Remember every distinct look the player has discovered, per visual slot, so
@@ -1764,8 +1857,9 @@ function renderShop() {
         if (isUpgrade) name = '<span class="up-arrow">▲</span> ' + name;
       }
       const sicon = s.kind === 'potion' ? (s.heal ? '🧪' : '🔷') : itemIcon(s.item);
+      const scolor = s.kind === 'potion' ? null : tierColor(s.item);
       return `<div class="shop-row ${isUpgrade?'upgrade':''}">
-        <span class="loot-icon">${sicon}</span>
+        <span class="loot-icon">${iconMarkup(sicon, scolor)}</span>
         <div class="shop-row-info ${cls}">
           <div class="shop-row-name">${name}</div>
           <div class="shop-row-sub">${sub}</div>
@@ -1786,7 +1880,7 @@ function renderShop() {
       const sellPrice = Math.max(1, Math.round(item.value * 0.5));
       const stats = item.stats ? itemStatLine(item) : '';
       return `<div class="shop-row">
-        <span class="loot-icon">${itemIcon(item)}</span>
+        <span class="loot-icon">${iconMarkup(itemIcon(item), tierColor(item))}</span>
         <div class="shop-row-info item-${item.tier}">
           <div class="shop-row-name">${item.name}</div>
           <div class="shop-row-sub">${item.slot ? SLOTS[item.slot].label.replace(/^\S+\s/, '') : 'potion'}</div>
@@ -2307,26 +2401,27 @@ function drawHeroSprite(px, py, tw, th, scale) {
   ctx.beginPath(); ctx.arc(cx - eDx, eY, eR, 0, Math.PI*2); ctx.fill();
   ctx.beginPath(); ctx.arc(cx + eDx, eY, eR, 0, Math.PI*2); ctx.fill();
 
-  // ── worn gear emoji, each in its zone ──
+  // ── worn gear, each drawn in its zone and tinted to its rarity colour ──
   ctx.shadowColor = 'rgba(0,0,0,0.55)';
   ctx.shadowBlur = 2*scale;
+  const headColor   = equipped.head   ? (TIERS[equipped.head.tier]?.color   || '#cfd3da') : '#cfd3da';
+  const weaponColor = equipped.weapon ? (TIERS[equipped.weapon.tier]?.color || '#cfd3da') : '#cfd3da';
 
   if (chestIcon) {
-    ctx.font = `${Math.round(tw*0.34)}px serif`;
-    ctx.fillText(chestIcon, cx, torsoTop + torsoH*0.46);
+    // The torso is already painted the chest's rarity colour, so etch the piece's
+    // silhouette on top in a darker shade of it so robe/plate/mail stay legible.
+    drawIconPath(chestIcon, cx, torsoTop + torsoH*0.50, tw*0.42, shadeColor(chestTier || '#cfd3da', 0.5));
   }
   if (headIcon) {
-    // Sit the helm on the crown of the head, overlapping the top slightly.
-    ctx.font = `${Math.round(tw*0.42)}px serif`;
-    ctx.fillText(headIcon, cx, headCY - headR*0.62);
+    // Sit the headgear on the crown of the head, overlapping the top slightly.
+    drawIconPath(headIcon, cx, headCY - headR*0.32, tw*0.54, headColor);
   }
   if (weaponIcon) {
     // Held in the right hand, tilted so it reads as a wielded weapon.
     ctx.save();
-    ctx.translate(torsoX + torsoW + tw*0.10, torsoTop + torsoH*0.42);
+    ctx.translate(torsoX + torsoW + tw*0.12, torsoTop + torsoH*0.42);
     ctx.rotate(-0.5);
-    ctx.font = `${Math.round(tw*0.46)}px serif`;
-    ctx.fillText(weaponIcon, 0, 0);
+    drawIconPath(weaponIcon, 0, 0, tw*0.60, weaponColor);
     ctx.restore();
   }
   ctx.restore();
@@ -3675,7 +3770,7 @@ function renderPanel() {
       const pwr = equipable ? `<span class="item-power">⚡${ip}${deltaTag}</span>` : '';
       return `
       <div class="loot-item item-${item.tier} ${selectedItem===i?'selected':''} ${isUpgrade?'upgrade':''}">
-        <span class="loot-icon">${itemIcon(item)}</span>
+        <span class="loot-icon">${iconMarkup(itemIcon(item), tierColor(item))}</span>
         <div class="loot-info" onclick="selectItem(${i}, this)"
              onmouseenter="showTooltip(event,${i})" onmouseleave="hideTooltip()">
           <div class="item-name">${isUpgrade?'<span class="up-arrow">▲</span> ':''}${item.name}</div>
@@ -3727,7 +3822,7 @@ function renderSlot(slot, label) {
     <div class="slot-info" onclick="tapSlot('${slot}', this)"
          onmouseenter="hoverSlot(event,'${slot}')" onmouseleave="hideTooltip()">
       <span class="slot-label">${label}</span>
-      <span class="loot-icon slot-icon">${item ? itemIcon(item) : SLOT_ICONS[slot]}</span>
+      <span class="loot-icon slot-icon">${item ? iconMarkup(itemIcon(item), tierColor(item)) : iconMarkup(SLOT_ICONS[slot], ICON_EMPTY_COLOR)}</span>
       <span class="slot-item ${item ? 'item-'+item.tier : ''}">
         ${item ? item.name + ` <span class="item-power">⚡${itemPower(item)}</span>` : '<span class="slot-empty">— empty —</span>'}
       </span>
@@ -3752,13 +3847,13 @@ function renderCosmetics() {
     // One tappable chip per discovered look.
     chips += looks.map(l =>
       `<button class="cos-chip ${override === l.icon ? 'sel' : ''}"
-         title="${(l.name || '').replace(/"/g,'')}" onclick="pickCosmetic('${slot}','${l.icon}')">${l.icon}</button>`
+         title="${(l.name || '').replace(/"/g,'')}" onclick="pickCosmetic('${slot}','${l.icon}')">${iconMarkup(l.icon, '#dddde6')}</button>`
     ).join('');
     const empty = looks.length ? '' :
       `<div class="cos-empty">Find ${COS_LABELS[slot].replace(/^\S+\s/, '').toLowerCase()} loot to unlock looks.</div>`;
     return `<div class="cos-block">
       <div class="cos-blk-head">
-        <span class="cos-preview">${shown || '—'}</span>
+        <span class="cos-preview">${shown ? iconMarkup(shown, '#cfcfe0') : '—'}</span>
         <span class="cos-slot-label">${COS_LABELS[slot]}</span>
       </div>
       <div class="cos-chips">${chips}</div>
@@ -4042,6 +4137,19 @@ function loadGame() {
     if (!player.cosmetics) player.cosmetics = { head:null, chest:null, weapon:null };
     if (!player.wardrobe) player.wardrobe = { head:[], chest:[], weapon:[] };
     for (const s of VISUAL_SLOTS) if (!player.wardrobe[s]) player.wardrobe[s] = [];
+    // Migrate icons from the old emoji system to vector-icon keys: re-stamp gear,
+    // rebuild each saved wardrobe look from its name (deduping by key), and convert
+    // any chosen cosmetic. Gear without a recognised key heals on next access.
+    inventory.forEach(it => { if (it.slot) it.icon = itemIcon(it); });
+    Object.values(equipped).forEach(it => { if (it && it.slot) it.icon = itemIcon(it); });
+    for (const slot of VISUAL_SLOTS) {
+      const seen = new Set();
+      player.wardrobe[slot] = (player.wardrobe[slot] || [])
+        .map(w => ({ icon: iconKeyFromName(w.name, slot), name: w.name }))
+        .filter(w => w.icon && !seen.has(w.icon) && seen.add(w.icon));
+      const cur = player.cosmetics[slot];
+      if (cur && !ICON_PATHS[cur]) player.cosmetics[slot] = LEGACY_EMOJI_KEYS[cur] || null;
+    }
     inventory.forEach(recordWardrobe);
     Object.values(equipped).forEach(recordWardrobe);
     dungeonLevel = data.dungeonLevel || 1;
