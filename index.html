@@ -257,6 +257,52 @@
   @keyframes upgPulse { 0%,100% { box-shadow: 0 0 4px rgba(68,187,68,0.4); } 50% { box-shadow: 0 0 11px rgba(68,187,68,0.85); } }
   .loot-info { flex: 1; cursor: pointer; min-width: 0; }
   .loot-info .item-name { overflow: hidden; text-overflow: ellipsis; }
+  /* Little item picture shown at the start of each loot / gear / shop row. */
+  .loot-icon {
+    flex-shrink: 0;
+    width: 22px;
+    text-align: center;
+    font-size: 16px;
+    line-height: 1;
+    filter: drop-shadow(0 1px 1px rgba(0,0,0,0.6));
+  }
+  .slot-icon { width: 18px; font-size: 14px; }
+
+  /* ── COSMETICS / APPEARANCE ── */
+  .cos-head { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 8px; }
+  .cos-title { font-size: 11px; color: #c9a84a; letter-spacing: 1px; margin-bottom: 2px; }
+  .cos-sub { font-size: 9px; color: #555; margin-bottom: 6px; }
+  .cos-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    margin-bottom: 4px;
+    font-size: 10px;
+  }
+  .cos-preview { width: 26px; text-align: center; font-size: 18px; line-height: 1; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.6)); }
+  .cos-info { flex: 1; min-width: 0; }
+  .cos-slot-label { color: #888; }
+  .cos-source { font-size: 9px; color: #666; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cos-btn {
+    flex-shrink: 0;
+    border: none;
+    border-radius: 4px;
+    background: #3a3a5a;
+    color: #fff;
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
+    font-size: 10px;
+    padding: 6px 8px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  .cos-btn:active { background: #55557a; }
+  .cos-btn.reset { background: #4a2e2e; font-size: 12px; width: 28px; padding: 6px 0; }
+  .cos-btn.reset:active { background: var(--hp); }
 
   /* Inline action buttons on loot/gear rows */
   .row-btn {
@@ -684,6 +730,63 @@ const SLOT_KEYS = Object.keys(SLOTS);
 // Roll weights for which slot a dropped item belongs to.
 const SLOT_WEIGHTS = { weapon:22, chest:15, head:13, hands:13, legs:13, ring:12, amulet:12 };
 
+// ── ITEM ICONS ──
+// Every base item name maps to an emoji so loot can be *seen*: a small picture
+// next to each bag row, and — for head/chest/weapon — drawn right onto the hero
+// sprite so the character visibly wears its gear. Keyed by the base word found
+// in an item's name (e.g. "Ancient Helm of Power" → "Helm" → 🪖).
+const ITEM_ICONS = {
+  // head
+  Helm:'🪖', Cap:'🧢', Crown:'👑', Hood:'🥷', Circlet:'👲',
+  // chest
+  Chestplate:'🛡️', Robe:'🥼', Cuirass:'🦺', Tunic:'👕', Mail:'⛓️',
+  // hands
+  Gauntlets:'🧤', Gloves:'🧤', Bracers:'🧤', Grips:'🧤',
+  // legs
+  Greaves:'👖', Leggings:'👖', Tassets:'👖', Trousers:'👖',
+  // weapon
+  Sword:'🗡️', Axe:'🪓', Dagger:'🔪', Staff:'🪄', Bow:'🏹', Mace:'🔨', Spear:'🔱', Scythe:'⚔️',
+  // ring
+  Ring:'💍', Band:'💍', Signet:'💍', Loop:'💍',
+  // amulet
+  Amulet:'📿', Pendant:'📿', Necklace:'📿', Talisman:'🧿', Charm:'🔮',
+};
+const SLOT_ICONS = { head:'🪖', chest:'🛡️', hands:'🧤', legs:'👖', weapon:'⚔️', ring:'💍', amulet:'📿' };
+// Slots that actually change how the hero sprite looks.
+const VISUAL_SLOTS = ['head','chest','weapon'];
+
+// Resolve an emoji picture for any item. New items carry a stored `icon`; older
+// saved items are matched by the base word in their name, falling back to a
+// generic per-slot icon (or a potion flask for non-gear).
+function itemIcon(item) {
+  if (!item) return '';
+  if (item.icon) return item.icon;
+  if (!item.slot) return '🧪';
+  for (const base of Object.keys(ITEM_ICONS)) {
+    if (new RegExp('\\b' + base + '\\b').test(item.name || '')) return ITEM_ICONS[base];
+  }
+  return SLOT_ICONS[item.slot] || '❔';
+}
+
+// Remember every distinct look the player has discovered, per visual slot, so
+// the wardrobe (cosmetics) can offer it later — even after the item is sold.
+function recordWardrobe(item) {
+  if (!item || !item.slot || !VISUAL_SLOTS.includes(item.slot)) return;
+  if (!player.wardrobe) player.wardrobe = { head:[], chest:[], weapon:[] };
+  const list = player.wardrobe[item.slot] || (player.wardrobe[item.slot] = []);
+  const icon = itemIcon(item);
+  if (!list.some(w => w.icon === icon)) list.push({ icon, name: (item.name || '').replace(/^☠\s*/, '') });
+}
+
+// The emoji actually drawn on the sprite for a visual slot: a chosen cosmetic
+// look wins; otherwise it mirrors whatever is equipped there; null = nothing.
+function visualIcon(slot) {
+  const cos = player.cosmetics && player.cosmetics[slot];
+  if (cos) return cos;
+  const it = equipped[slot];
+  return it ? itemIcon(it) : null;
+}
+
 const POTIONS = ['Health Potion','Mana Potion','Elixir'];
 
 const TIERS = {
@@ -841,7 +944,11 @@ function rollFloorMod() {
 
 let player = { x: 5, y: 5, hp: 100, maxHp: 100, mp: 60, maxMp: 60, gold: 0, level: 1, xp: 0, healPotions: 2, manaPotions: 0, healthPotionsBought: 0,
   // Hero attributes raised by spending points earned on level up.
-  attributes: { might: 0, vitality: 0, agility: 0, spirit: 0 }, attrPoints: 0 };
+  attributes: { might: 0, vitality: 0, agility: 0, spirit: 0 }, attrPoints: 0,
+  // Chosen cosmetic looks per visual slot (null = mirror equipped gear), plus the
+  // wardrobe of every look the player has ever found.
+  cosmetics: { head: null, chest: null, weapon: null },
+  wardrobe: { head: [], chest: [], weapon: [] } };
 let inventory = [];
 let equipped = { head: null, chest: null, hands: null, legs: null, weapon: null, ring: null, amulet: null };
 let groundItems = []; // chests on the floor: { x, y } — loot is rolled when opened
@@ -1067,7 +1174,9 @@ function renderShop() {
         cls = 'item-' + s.item.tier;
         stats = itemStatLine(s.item);
       }
+      const sicon = s.kind === 'potion' ? (s.heal ? '🧪' : '🔷') : itemIcon(s.item);
       return `<div class="shop-row">
+        <span class="loot-icon">${sicon}</span>
         <div class="shop-row-info ${cls}">
           <div class="shop-row-name">${name}</div>
           <div class="shop-row-sub">${sub}</div>
@@ -1087,6 +1196,7 @@ function renderShop() {
       const sellPrice = Math.max(1, Math.round(item.value * 0.5));
       const stats = item.stats ? itemStatLine(item) : '';
       return `<div class="shop-row">
+        <span class="loot-icon">${itemIcon(item)}</span>
         <div class="shop-row-info item-${item.tier}">
           <div class="shop-row-name">${item.name}</div>
           <div class="shop-row-sub">${item.slot ? SLOTS[item.slot].label.replace(/^\S+\s/, '') : 'potion'}</div>
@@ -1111,6 +1221,7 @@ function buyItem(i) {
     // potions restock infinitely; gear is one-off
   } else {
     inventory.push(s.item);
+    recordWardrobe(s.item);
     log(`Bought ${logItem(s.item)}!`, 'loot');
     merchant.stock.splice(i, 1);
   }
@@ -1389,7 +1500,7 @@ function generateItem(rolls = 1, ilvl = null) {
   let value = Math.round(baseValue * (1 + lvl * 0.12));
 
   const item = { id: Math.random(), name, tier, slot, ilvl: lvl, stats, value,
-    flavor: pick(FLAVOR[tier]) };
+    flavor: pick(FLAVOR[tier]), icon: ITEM_ICONS[baseName] || SLOT_ICONS[slot] };
 
   // Cursed items (~12% of uncommon+): a big stat boost paired with a penalty.
   // The negative stat flows straight through totalStat(), so the drawback is real.
@@ -1447,6 +1558,34 @@ const THEMES = [
     seam:'#1a1226', speckle:'#5a4a82', accent:'rgba(190,120,255,0.3)', stairsGlow:'#d9a0ff' },
 ];
 function currentTheme() { return THEMES[(dungeonLevel - 1) % THEMES.length]; }
+
+// Layer the hero's worn gear over the base sprite. Chest sits on the torso, head
+// caps the top, and the weapon is held off to the side — each only drawn when the
+// matching slot has gear equipped or a cosmetic look chosen.
+function drawWornGear(px, py, tw, th, scale) {
+  const cx = px + tw/2, cy = py + th/2;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.shadowColor = 'rgba(0,0,0,0.6)';
+  ctx.shadowBlur = 3 * scale;
+
+  const chest = visualIcon('chest');
+  if (chest) {
+    ctx.font = `${Math.round(tw * 0.4)}px serif`;
+    ctx.fillText(chest, cx, cy + th*0.26);
+  }
+  const head = visualIcon('head');
+  if (head) {
+    ctx.font = `${Math.round(tw * 0.42)}px serif`;
+    ctx.fillText(head, cx, py + th*0.16);
+  }
+  const weapon = visualIcon('weapon');
+  if (weapon) {
+    ctx.font = `${Math.round(tw * 0.46)}px serif`;
+    ctx.fillText(weapon, px + tw*0.78, cy + th*0.04);
+  }
+  ctx.shadowBlur = 0;
+}
 
 function draw() {
   const W = canvas.width, H = canvas.height;
@@ -1770,6 +1909,10 @@ function draw() {
   ctx.textBaseline = 'middle';
   ctx.fillText(HERO, px + tw/2, py + th/2 + th*0.04);
   ctx.shadowBlur = 0;
+
+  // ── WORN GEAR ── draw the hero's equipped (or cosmetic) head/chest/weapon
+  // right on top of the sprite so the character visibly wears its loot.
+  drawWornGear(px, py, tw, th, scale);
 
   // Player status effect icons
   const pEffects = statusEffects.filter(s => s.target === 'player');
@@ -2384,11 +2527,13 @@ function pickup() {
   const chestIlvl = chest.ilvl || dungeonLevel;
   const item = generateItem(luck, chestIlvl);
   inventory.push(item);
+  recordWardrobe(item);
   log(`${fancy ? '🎁' : '🧰'} Opened a ${fancy ? 'glittering ' : ''}chest: ${logItem(item)}`, 'loot');
   // Loot explosion: a lucky chest occasionally overflows with a bonus item.
   if (Math.random() < 0.12) {
     const bonus = generateItem(luck, chestIlvl);
     inventory.push(bonus);
+    recordWardrobe(bonus);
     log(`✨ The chest overflows — bonus loot: ${logItem(bonus)}!`, 'important');
   }
   renderPanel();
@@ -2527,6 +2672,7 @@ function renderPanel() {
       const pwr = equipable ? `<span class="item-power">⚡${ip}${deltaTag}</span>` : '';
       return `
       <div class="loot-item item-${item.tier} ${selectedItem===i?'selected':''} ${isUpgrade?'upgrade':''}">
+        <span class="loot-icon">${itemIcon(item)}</span>
         <div class="loot-info" onclick="selectItem(${i}, this)"
              onmouseenter="showTooltip(event,${i})" onmouseleave="hideTooltip()">
           <div class="item-name">${isUpgrade?'<span class="up-arrow">▲</span> ':''}${item.name}</div>
@@ -2539,7 +2685,8 @@ function renderPanel() {
     }).join('');
   } else if (currentTab === 'equip') {
     el.innerHTML = SLOT_KEYS.map(s => renderSlot(s, SLOTS[s].label)).join('') +
-      `<div style="margin-top:8px;font-size:10px;color:#555">Tap EQUIP on any loot<br>item to gear up.</div>`;
+      `<div style="margin-top:8px;font-size:10px;color:#555">Tap EQUIP on any loot<br>item to gear up.</div>` +
+      renderCosmetics();
   } else {
     renderHero(el);
   }
@@ -2577,12 +2724,78 @@ function renderSlot(slot, label) {
     <div class="slot-info" onclick="tapSlot('${slot}', this)"
          onmouseenter="hoverSlot(event,'${slot}')" onmouseleave="hideTooltip()">
       <span class="slot-label">${label}</span>
+      <span class="loot-icon slot-icon">${item ? itemIcon(item) : SLOT_ICONS[slot]}</span>
       <span class="slot-item ${item ? 'item-'+item.tier : ''}">
         ${item ? item.name + ` <span class="item-power">⚡${itemPower(item)}</span>` : '<span class="slot-empty">— empty —</span>'}
       </span>
     </div>
     ${item ? `<button class="row-btn unequip-row-btn" onclick="unequip('${slot}')">✕</button>` : ''}
   </div>`;
+}
+
+// COSMETICS: change how the hero *looks* without changing what's equipped. Pick
+// from the wardrobe of looks you've found, per visual slot (head / chest / weapon).
+const COS_LABELS = { head: '🪖 Head', chest: '🛡 Chest', weapon: '⚔ Weapon' };
+function renderCosmetics() {
+  if (!player.cosmetics) player.cosmetics = { head:null, chest:null, weapon:null };
+  if (!player.wardrobe) player.wardrobe = { head:[], chest:[], weapon:[] };
+  const rows = VISUAL_SLOTS.map(slot => {
+    const looks = player.wardrobe[slot] || [];
+    const override = player.cosmetics[slot];
+    const shown = visualIcon(slot);
+    // Describe where the current look comes from.
+    let source;
+    if (override) {
+      const w = looks.find(l => l.icon === override);
+      source = `Cosmetic: ${w ? w.name : 'custom look'}`;
+    } else if (equipped[slot]) {
+      source = `Matches equipped`;
+    } else {
+      source = `Nothing worn`;
+    }
+    const canChange = looks.length > 0;
+    return `<div class="cos-row">
+      <span class="cos-preview">${shown || '—'}</span>
+      <div class="cos-info">
+        <div class="cos-slot-label">${COS_LABELS[slot]}</div>
+        <div class="cos-source">${source}</div>
+      </div>
+      <button class="cos-btn" ${canChange ? '' : 'disabled style="opacity:.4"'} onclick="cycleCosmetic('${slot}')">LOOK</button>
+      ${override ? `<button class="cos-btn reset" title="Match equipped" onclick="resetCosmetic('${slot}')">✕</button>` : ''}
+    </div>`;
+  }).join('');
+  return `<div class="cos-head">
+    <div class="cos-title">👁 APPEARANCE</div>
+    <div class="cos-sub">Wear the look of any loot you've found. Tap LOOK to cycle styles.</div>
+    ${rows}
+  </div>`;
+}
+
+// Cycle a slot's look through: match-equipped → each discovered wardrobe look → back.
+function cycleCosmetic(slot) {
+  if (!player.wardrobe) return;
+  const looks = player.wardrobe[slot] || [];
+  if (!looks.length) return;
+  const options = [null, ...looks.map(l => l.icon)];
+  const cur = player.cosmetics[slot] || null;
+  let idx = options.findIndex(o => o === cur);
+  if (idx < 0) idx = 0;
+  const next = options[(idx + 1) % options.length];
+  player.cosmetics[slot] = next;
+  const label = next ? (looks.find(l => l.icon === next)?.name || 'new look') : 'matching your gear';
+  log(`Appearance — ${COS_LABELS[slot].replace(/^\S+\s/, '')} now ${next ? next + ' ' + label : label}.`);
+  renderPanel();
+  draw();
+  saveGame();
+}
+
+// Clear a cosmetic override so the slot mirrors equipped gear again.
+function resetCosmetic(slot) {
+  if (!player.cosmetics) return;
+  player.cosmetics[slot] = null;
+  renderPanel();
+  draw();
+  saveGame();
 }
 
 // One-tap equip: route an item straight to its own slot.
@@ -2597,7 +2810,9 @@ function quickEquip(i) {
   selectedItem = null;
   hideTooltip();
   log(`Equipped: ${logItem(item)}`, 'loot');
+  recordWardrobe(item);
   renderPanel();
+  draw();          // re-skin the sprite with the newly worn gear
   saveGame();
 }
 
@@ -2609,6 +2824,7 @@ function unequip(slot) {
   hideTooltip();
   log(`Unequipped: ${logItem(item)}`);
   renderPanel();
+  draw();          // sprite drops the gear it was wearing
   saveGame();
 }
 
@@ -2835,6 +3051,13 @@ function loadGame() {
       }
     });
     equipped = freshEquipped;
+    // Migrate saves that predate cosmetics: ensure the shape exists, then seed the
+    // wardrobe from whatever gear the player is already carrying or wearing.
+    if (!player.cosmetics) player.cosmetics = { head:null, chest:null, weapon:null };
+    if (!player.wardrobe) player.wardrobe = { head:[], chest:[], weapon:[] };
+    for (const s of VISUAL_SLOTS) if (!player.wardrobe[s]) player.wardrobe[s] = [];
+    inventory.forEach(recordWardrobe);
+    Object.values(equipped).forEach(recordWardrobe);
     dungeonLevel = data.dungeonLevel || 1;
     // Restore shrine buffs, tolerating older saves that predate them.
     buffs = Object.assign({ power: 0, guard: 0, fortune: 0 }, data.buffs || {});
