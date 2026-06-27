@@ -66,6 +66,7 @@
   #floor-hud { color: #9fd0ff; }
   #enemies-hud { color: #ff9a9a; }
   #level-hud { color: var(--gold); }
+  #power-hud { color: #ffd24b; }
   .xp-track { width: 46px; height: 6px; background: #45455e; border: 1px solid #000; border-radius: 3px; overflow: hidden; }
   .xp-fill { height: 100%; background: linear-gradient(180deg, #ffe9a0, var(--gold)); box-shadow: 0 0 5px var(--gold); transition: width 0.2s; }
 
@@ -208,6 +209,24 @@
     border-bottom: 2px solid transparent;
   }
   .tab-btn.active { color: var(--gold); border-bottom-color: var(--gold); }
+  /* HERO tab glows gold while unspent attribute points are waiting. */
+  .tab-btn.has-points { color: #ffe9a0; animation: tabGlow 1.1s ease-in-out infinite; }
+  @keyframes tabGlow { 0%,100% { text-shadow: 0 0 0 rgba(255,210,75,0); } 50% { text-shadow: 0 0 8px rgba(255,210,75,0.95); } }
+
+  /* ── HERO / ATTRIBUTES PANEL ── */
+  .hero-power { text-align: center; padding: 8px 4px; margin-bottom: 6px; border: 1px solid var(--border); border-radius: 6px; background: #14140f; }
+  .hero-power .hp-label { font-size: 10px; color: #888; letter-spacing: 1px; }
+  .hero-power .hp-value { font-size: 22px; font-weight: bold; color: #ffd24b; text-shadow: 0 0 10px rgba(255,210,75,0.6); }
+  .hero-sub { font-size: 10px; color: #888; text-align: center; margin-bottom: 8px; line-height: 1.5; }
+  .hero-points { text-align: center; font-size: 11px; color: #ffe9a0; margin-bottom: 8px; font-weight: bold; }
+  .attr-row { display: flex; align-items: center; gap: 6px; padding: 5px 4px; border: 1px solid var(--border); border-radius: 5px; margin-bottom: 5px; }
+  .attr-info { flex: 1; min-width: 0; }
+  .attr-name { font-size: 11px; font-weight: bold; color: #d8d8e0; }
+  .attr-desc { font-size: 9px; color: #777; line-height: 1.3; }
+  .attr-val { font-size: 14px; font-weight: bold; color: #ffd24b; width: 24px; text-align: center; flex-shrink: 0; }
+  .attr-plus { flex-shrink: 0; width: 30px; height: 30px; border: none; border-radius: 5px; background: #2e7d32; color: #fff; font-size: 18px; font-weight: bold; cursor: pointer; line-height: 1; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+  .attr-plus:active { background: #44bb44; }
+  .attr-plus:disabled { background: #2a2a3a; color: #555; cursor: not-allowed; }
 
   #panel-content { flex: 1; overflow-y: auto; padding: 6px; }
   #panel-content::-webkit-scrollbar { width: 4px; }
@@ -229,6 +248,13 @@
   }
   .loot-item:hover { background: #1e1e2e; border-color: var(--border); }
   .loot-item.selected { background: #1e1e30; border-color: #444; }
+  /* Upgrade highlight: this item has more power than what's in its slot. */
+  .loot-item.upgrade { border-color: #2e7d32; background: rgba(46,125,50,0.12); box-shadow: 0 0 6px rgba(68,187,68,0.25); }
+  .loot-item.upgrade:hover { background: rgba(46,125,50,0.2); }
+  .up-arrow { color: #5ee08a; font-weight: bold; }
+  .equip-row-btn.upgrade-btn { background: #1b8f3a; box-shadow: 0 0 8px rgba(68,187,68,0.6); animation: upgPulse 1.3s ease-in-out infinite; }
+  .equip-row-btn.upgrade-btn:active { background: #44bb44; }
+  @keyframes upgPulse { 0%,100% { box-shadow: 0 0 4px rgba(68,187,68,0.4); } 50% { box-shadow: 0 0 11px rgba(68,187,68,0.85); } }
   .loot-info { flex: 1; cursor: pointer; min-width: 0; }
   .loot-info .item-name { overflow: hidden; text-overflow: ellipsis; }
 
@@ -271,6 +297,8 @@
 
   .item-name { font-weight: bold; }
   .item-type { font-size: 10px; opacity: 0.7; }
+  /* Item power badge — a single gold number shown alongside an item's stats. */
+  .item-power { color: #ffd24b; font-weight: bold; opacity: 0.95; margin-left: 5px; white-space: nowrap; }
 
   /* ── TOOLTIP ── */
   #tooltip {
@@ -470,6 +498,7 @@
     <div class="xp-track"><div class="xp-fill" id="xp-bar" style="width:0%"></div></div>
   </div>
   <div class="hud-item" id="enemies-hud">⚔️ <span class="hud-val" id="enemies-num">0</span></div>
+  <div class="hud-item" id="power-hud">⚡ <span class="hud-val" id="power-num">0</span></div>
   <div id="gold-display">💰 <span id="gold-count">0</span>g</div>
 </div>
 
@@ -534,6 +563,7 @@
     <div class="panel-tab">
       <button class="tab-btn active" id="tab-inv" onclick="switchTab('inv')">LOOT</button>
       <button class="tab-btn" id="tab-equip" onclick="switchTab('equip')">GEAR</button>
+      <button class="tab-btn" id="tab-hero" onclick="switchTab('hero')">HERO</button>
     </div>
     <div id="panel-content"></div>
   </div>
@@ -611,6 +641,59 @@ const FLAVOR = {
 const STAT_NAMES = ['ATK','DEF','SPD','LCK','HP','MP','CRIT','REGEN'];
 const HERO = '🧙';
 
+// ── POWER & ATTRIBUTES ──
+// Every equippable item has a single "power" number summarising how strong it is:
+// each stat is worth a weighted amount, plus a flat bonus for its rarity tier.
+// The player's overall power is built from their level, attributes, and gear.
+const STAT_POWER_WEIGHTS = { ATK:3, DEF:2, SPD:2, LCK:2, HP:1, MP:1, CRIT:4, REGEN:5, DMG:3 };
+const TIER_POWER_BONUS = { junk:0, normal:1, uncommon:3, rare:7, epic:14, legendary:28, unique:50 };
+
+// Hero attributes — raised by spending points earned on each level up.
+const ATTRIBUTES = {
+  might:    { label: '💪 Might',    short: 'MIG', desc: '+2 attack damage per point' },
+  vitality: { label: '❤️ Vitality', short: 'VIT', desc: '+10 max HP per point' },
+  agility:  { label: '🎯 Agility',  short: 'AGI', desc: '+1% crit chance per point' },
+  spirit:   { label: '✨ Spirit',   short: 'SPR', desc: '+6 max MP & regen per point' },
+};
+const ATTR_KEYS = Object.keys(ATTRIBUTES);
+const ATTR_POINTS_PER_LEVEL = 3;
+
+// Total power of a single item: weighted sum of its stats + a rarity bonus.
+function itemPower(item) {
+  if (!item || !item.stats) return 0;
+  let p = 0;
+  for (const [k, v] of Object.entries(item.stats)) {
+    if (k === 'DMG') {
+      const [lo, hi] = String(v).split('-').map(Number);
+      p += ((lo + hi) / 2) * STAT_POWER_WEIGHTS.DMG;
+    } else if (typeof v === 'number') {
+      p += v * (STAT_POWER_WEIGHTS[k] || 1);
+    }
+  }
+  p += TIER_POWER_BONUS[item.tier] || 0;
+  return Math.max(0, Math.round(p));
+}
+
+// The player's overall power: a blend of level, spent attributes, and equipped gear.
+function playerPower() {
+  let p = player.level * 10;
+  for (const slot of SLOT_KEYS) if (equipped[slot]) p += itemPower(equipped[slot]);
+  const a = player.attributes || {};
+  p += (a.might||0)*4 + (a.vitality||0)*3 + (a.agility||0)*3 + (a.spirit||0)*2;
+  return Math.round(p);
+}
+
+// Max HP/MP are derived from level + attributes so the formula stays consistent
+// across level ups, attribute spends, and loading an older save.
+function baseMaxHp() { return 92 + player.level*8 + (player.attributes?.vitality||0)*10; }
+function baseMaxMp() { return 56 + player.level*4 + (player.attributes?.spirit||0)*6; }
+function recomputeMaxStats() {
+  player.maxHp = baseMaxHp();
+  player.maxMp = baseMaxMp();
+  if (player.hp > player.maxHp) player.hp = player.maxHp;
+  if (player.mp > player.maxMp) player.mp = player.maxMp;
+}
+
 const FOODS = [
   { emoji: '🍖', name: 'Drumstick',   heal: 15 },
   { emoji: '🍗', name: 'Roast Leg',   heal: 20 },
@@ -677,7 +760,9 @@ function rollFloorMod() {
 // STATE
 // ══════════════════════════════════════════
 
-let player = { x: 5, y: 5, hp: 100, maxHp: 100, mp: 60, maxMp: 60, gold: 0, level: 1, xp: 0, healPotions: 2, manaPotions: 0, healthPotionsBought: 0 };
+let player = { x: 5, y: 5, hp: 100, maxHp: 100, mp: 60, maxMp: 60, gold: 0, level: 1, xp: 0, healPotions: 2, manaPotions: 0, healthPotionsBought: 0,
+  // Hero attributes raised by spending points earned on level up.
+  attributes: { might: 0, vitality: 0, agility: 0, spirit: 0 }, attrPoints: 0 };
 let inventory = [];
 let equipped = { head: null, chest: null, hands: null, legs: null, weapon: null, ring: null, amulet: null };
 let groundItems = []; // chests on the floor: { x, y } — loot is rolled when opened
@@ -821,11 +906,12 @@ function stockPrice(s) {
   return s.price;
 }
 
-// Compact one-line summary of an item's stats, e.g. "8-12 DMG · +3 ATK".
+// Compact one-line summary of an item's stats, e.g. "⚡14 · 8-12 DMG · +3 ATK".
 function itemStatLine(item) {
-  return Object.entries(item.stats).map(([k, v]) =>
+  const body = Object.entries(item.stats).map(([k, v]) =>
     (typeof v === 'string') ? `${v} ${k}` : `${v < 0 ? '' : '+'}${v} ${k}`
   ).join(' · ');
+  return item.slot ? `⚡${itemPower(item)}${body ? ' · ' + body : ''}` : body;
 }
 
 function openShop() {
@@ -969,8 +1055,10 @@ function spawnEnemies() {
       if (isBossFloor && i === 0) {
         const bossIdx = Math.min(Math.floor(dungeonLevel / 5) - 1, BOSSES.length - 1);
         const boss = BOSSES[bossIdx];
-        const bossHp = (10 + dungeonLevel * 6) * 3;
-        const bossDmg = (3 + dungeonLevel) * 1.5;
+        // Bosses scale with the floor and, gently, with the hero's own level so
+        // they keep pace as your power (gear + attributes) climbs.
+        const bossHp = Math.round((12 + dungeonLevel * 7 + player.level * 2) * 3);
+        const bossDmg = (3 + dungeonLevel + player.level * 0.4) * 1.6;
         enemies.push({
           x: ex, y: ey,
           hp: bossHp, maxHp: bossHp,
@@ -981,10 +1069,11 @@ function spawnEnemies() {
         });
         log(`⚠️ ${boss.name} ${boss.type} guards this floor!`, 'important');
       } else {
-        // Floor modifiers scale base health and damage up or down.
-        // A small global bump (×1.15) makes every foe a touch tougher.
-        const baseHp = Math.round((10 + dungeonLevel * 6) * (floorMod.hpMult || 1) * 1.15);
-        const baseDmg = Math.round((3 + dungeonLevel + bandIdx) * (floorMod.dmgMult || 1) * 1.15);
+        // Floor modifiers scale base health and damage up or down. Enemies also
+        // scale gently with the hero's level so the game keeps its bite as your
+        // power grows from gear and spent attribute points.
+        const baseHp = Math.round((12 + dungeonLevel * 7 + player.level * 2) * (floorMod.hpMult || 1));
+        const baseDmg = Math.round((3 + dungeonLevel + bandIdx + player.level * 0.4) * (floorMod.dmgMult || 1));
         if (i === eliteIndex) {
           const eHp = Math.round(baseHp * 2.2);
           const eName = pick(ELITE_NAMES);
@@ -1660,7 +1749,8 @@ function tickBuffs() {
 
 // Heal a little each turn based on equipped REGEN, up to max HP.
 function applyRegen() {
-  const r = totalStat('REGEN');
+  // Spirit grants a small passive regen on top of any REGEN rolled on gear.
+  const r = totalStat('REGEN') + Math.floor((player.attributes?.spirit||0) / 3);
   if (r > 0 && player.hp > 0 && player.hp < player.maxHp) {
     player.hp = Math.min(player.maxHp, player.hp + r);
     updateBars();
@@ -1778,10 +1868,11 @@ function attackEnemy(e) {
   const label = e.isBoss ? `${e.name} ${e.type}`
     : (e.isElite ? `${e.name || 'Elite'} ${e.type}` : e.type);
 
-  // Critical hits scale off your combined CRIT + LCK stats over a small base.
-  const critChance = Math.min(0.6, 0.05 + (totalStat('CRIT') + totalStat('LCK')) * 0.01);
+  // Critical hits scale off your combined CRIT + LCK stats and Agility attribute.
+  const critChance = Math.min(0.6, 0.05 + (totalStat('CRIT') + totalStat('LCK')) * 0.01 + (player.attributes?.agility||0) * 0.01);
   const isCrit = Math.random() < critChance;
-  let dmg = getWeaponDamage() + player.level * 2 + totalStat('ATK');
+  // Might adds flat attack power on top of weapon damage, level, and gear ATK.
+  let dmg = getWeaponDamage() + player.level * 2 + totalStat('ATK') + (player.attributes?.might||0) * 2;
   if (buffs.power) dmg = Math.round(dmg * 1.5);   // Shrine of Power
   if (isCrit) dmg = Math.round(dmg * 2.2);
   e.hp -= dmg;
@@ -1980,12 +2071,34 @@ function checkLevelUp() {
   if (player.xp >= needed) {
     player.xp -= needed;
     player.level++;
-    player.maxHp += 10;
-    player.hp = player.maxHp;
+    player.attrPoints = (player.attrPoints || 0) + ATTR_POINTS_PER_LEVEL;
+    recomputeMaxStats();        // level grants more base HP/MP
+    player.hp = player.maxHp;   // a level up fully restores you
+    player.mp = player.maxMp;
     log(`⭐ LEVEL UP! You are now level ${player.level}!`, 'important');
+    log(`💠 +${ATTR_POINTS_PER_LEVEL} attribute points — open the 🎒 bag's HERO tab to spend them.`, 'important');
     updateBars();
+    renderPanel();
     saveGame();
+    // Recurse in case multiple levels were gained from one big XP haul.
+    checkLevelUp();
   }
+}
+
+// Spend one earned point to permanently raise a hero attribute.
+function spendAttr(key) {
+  if (!ATTRIBUTES[key]) return;
+  if (!player.attrPoints || player.attrPoints <= 0) { log('No attribute points to spend.'); return; }
+  if (!player.attributes) player.attributes = { might:0, vitality:0, agility:0, spirit:0 };
+  player.attributes[key] = (player.attributes[key] || 0) + 1;
+  player.attrPoints--;
+  // Raising Vitality/Spirit immediately grants the extra HP/MP it unlocks.
+  if (key === 'vitality') { const before = player.maxHp; recomputeMaxStats(); player.hp += (player.maxHp - before); }
+  else if (key === 'spirit') { const before = player.maxMp; recomputeMaxStats(); player.mp += (player.maxMp - before); }
+  log(`${ATTRIBUTES[key].label} raised to ${player.attributes[key]}.`, 'loot');
+  updateBars();
+  renderPanel();
+  saveGame();
 }
 
 // ══════════════════════════════════════════
@@ -2006,6 +2119,15 @@ function updateBars() {
   const xpBar = document.getElementById('xp-bar');
   if (xpBar) xpBar.style.width = Math.min(100, player.xp / (player.level * 50) * 100) + '%';
   setText('enemies-num', (enemies || []).filter(e => !e.dead).length);
+  setText('power-num', playerPower());
+
+  // Nudge the HERO tab when there are unspent attribute points to spend.
+  const heroTab = document.getElementById('tab-hero');
+  if (heroTab) {
+    const pts = player.attrPoints || 0;
+    heroTab.textContent = pts > 0 ? `HERO (${pts})` : 'HERO';
+    heroTab.classList.toggle('has-points', pts > 0);
+  }
 
   const healLabel = document.getElementById('heal-label');
   const healBtn = document.querySelector('.heal-btn');
@@ -2035,6 +2157,7 @@ function switchTab(tab) {
   currentTab = tab;
   document.getElementById('tab-inv').classList.toggle('active', tab==='inv');
   document.getElementById('tab-equip').classList.toggle('active', tab==='equip');
+  document.getElementById('tab-hero').classList.toggle('active', tab==='hero');
   renderPanel();
 }
 
@@ -2059,22 +2182,63 @@ function renderPanel() {
     el.innerHTML = rows.map(({ item, i }) => {
       const equipable = !!item.slot;
       const slotName = item.slot ? SLOTS[item.slot].label.replace(/^\S+\s/, '') : 'potion';
+      // Compare this item's power to whatever currently fills its slot, so we can
+      // flag upgrades and show the power swing (▲+5 / ▼-2).
+      const ip = equipable ? itemPower(item) : 0;
+      const equippedHere = equipable ? equipped[item.slot] : null;
+      const delta = equipable ? ip - (equippedHere ? itemPower(equippedHere) : 0) : 0;
+      const isUpgrade = equipable && delta > 0;
+      let deltaTag = '';
+      if (equippedHere) {
+        const c = delta > 0 ? '#5ee08a' : (delta < 0 ? '#e0556b' : '#888');
+        const arrow = delta > 0 ? '▲' : (delta < 0 ? '▼' : '=');
+        deltaTag = ` <span style="color:${c}">${arrow}${delta>0?'+':''}${delta}</span>`;
+      }
+      const pwr = equipable ? `<span class="item-power">⚡${ip}${deltaTag}</span>` : '';
       return `
-      <div class="loot-item item-${item.tier} ${selectedItem===i?'selected':''}">
+      <div class="loot-item item-${item.tier} ${selectedItem===i?'selected':''} ${isUpgrade?'upgrade':''}">
         <div class="loot-info" onclick="selectItem(${i}, this)"
              onmouseenter="showTooltip(event,${i})" onmouseleave="hideTooltip()">
-          <div class="item-name">${item.name}</div>
-          <div class="item-type">${slotName}</div>
+          <div class="item-name">${isUpgrade?'<span class="up-arrow">▲</span> ':''}${item.name}</div>
+          <div class="item-type">${slotName}${pwr}</div>
         </div>
         ${equipable
-          ? `<button class="row-btn equip-row-btn" onclick="quickEquip(${i})">EQUIP</button>`
+          ? `<button class="row-btn equip-row-btn ${isUpgrade?'upgrade-btn':''}" onclick="quickEquip(${i})">${equippedHere && isUpgrade?'SWAP':'EQUIP'}</button>`
           : ''}
       </div>`;
     }).join('');
-  } else {
+  } else if (currentTab === 'equip') {
     el.innerHTML = SLOT_KEYS.map(s => renderSlot(s, SLOTS[s].label)).join('') +
       `<div style="margin-top:8px;font-size:10px;color:#555">Tap EQUIP on any loot<br>item to gear up.</div>`;
+  } else {
+    renderHero(el);
   }
+}
+
+// HERO tab: overall power, attribute points, and the attributes you can raise.
+function renderHero(el) {
+  const a = player.attributes || { might:0, vitality:0, agility:0, spirit:0 };
+  const pts = player.attrPoints || 0;
+  const gearPower = SLOT_KEYS.reduce((s, k) => s + (equipped[k] ? itemPower(equipped[k]) : 0), 0);
+  const rows = ATTR_KEYS.map(key => {
+    const at = ATTRIBUTES[key];
+    return `<div class="attr-row">
+      <div class="attr-info">
+        <div class="attr-name">${at.label}</div>
+        <div class="attr-desc">${at.desc}</div>
+      </div>
+      <span class="attr-val">${a[key] || 0}</span>
+      <button class="attr-plus" ${pts > 0 ? '' : 'disabled'} onclick="spendAttr('${key}')">+</button>
+    </div>`;
+  }).join('');
+  el.innerHTML = `
+    <div class="hero-power">
+      <div class="hp-label">⚡ POWER</div>
+      <div class="hp-value">${playerPower()}</div>
+    </div>
+    <div class="hero-sub">Level ${player.level} · ${gearPower} from gear<br>Power = level + attributes + gear</div>
+    <div class="hero-points">${pts > 0 ? `${pts} point${pts>1?'s':''} to spend!` : 'No points to spend — level up for more.'}</div>
+    ${rows}`;
 }
 
 function renderSlot(slot, label) {
@@ -2084,7 +2248,7 @@ function renderSlot(slot, label) {
          onmouseenter="hoverSlot(event,'${slot}')" onmouseleave="hideTooltip()">
       <span class="slot-label">${label}</span>
       <span class="slot-item ${item ? 'item-'+item.tier : ''}">
-        ${item ? item.name : '<span class="slot-empty">— empty —</span>'}
+        ${item ? item.name + ` <span class="item-power">⚡${itemPower(item)}</span>` : '<span class="slot-empty">— empty —</span>'}
       </span>
     </div>
     ${item ? `<button class="row-btn unequip-row-btn" onclick="unequip('${slot}')">✕</button>` : ''}
@@ -2206,9 +2370,17 @@ function showTooltipForItem(item, anchor) {
     const style = negative ? ' style="color:#e0556b"' : '';
     return `<div class="tt-stat"${style}>${val} ${k}</div>`;
   }).join('') || '<div class="tt-stat" style="color:#666">No bonuses</div>';
+  const power = item.slot ? itemPower(item) : 0;
+  // Compare against the currently-equipped piece in the same slot, if any.
+  let powerDelta = '';
+  if (item.slot && equipped[item.slot] && equipped[item.slot] !== item) {
+    const d = power - itemPower(equipped[item.slot]);
+    if (d !== 0) powerDelta = ` <span style="color:${d>0?'#5ee08a':'#e0556b'}">(${d>0?'+':''}${d})</span>`;
+  }
   ttEl.innerHTML = `
     <div class="tt-name" style="color:${tier.color}">${item.name}</div>
     <div class="tt-tier" style="color:${tier.color}">${item.slot ? SLOTS[item.slot].label : 'potion'}</div>
+    ${item.slot ? `<div style="color:#ffd24b;font-weight:bold;font-size:11px;margin:3px 0">⚡ Power: ${power}${powerDelta}</div>` : ''}
     ${stats}
     <div style="color:#c8a84b;font-size:10px;margin-top:3px">Value: ${item.value}g</div>
     <div class="tt-flavor">${item.flavor}</div>
@@ -2314,6 +2486,10 @@ function loadGame() {
     if (player.healPotions == null) player.healPotions = 0;
     if (player.healthPotionsBought == null) player.healthPotionsBought = 0;
     if (player.manaPotions == null) player.manaPotions = 0;
+    // Migrate saves that predate hero attributes.
+    if (!player.attributes) player.attributes = { might:0, vitality:0, agility:0, spirit:0 };
+    for (const k of ['might','vitality','agility','spirit']) if (player.attributes[k] == null) player.attributes[k] = 0;
+    if (player.attrPoints == null) player.attrPoints = 0;
     inventory = (data.inventory || []).filter(it => it && it.slot); // drop legacy typeKey-only items
     // Rebuild equipped into the new 7-slot shape; salvage any still-valid pieces into the bag.
     const freshEquipped = { head:null, chest:null, hands:null, legs:null, weapon:null, ring:null, amulet:null };
@@ -2329,6 +2505,11 @@ function loadGame() {
     dungeonLevel = data.dungeonLevel || 1;
     // Restore shrine buffs, tolerating older saves that predate them.
     buffs = Object.assign({ power: 0, guard: 0, fortune: 0 }, data.buffs || {});
+    // Recompute derived max HP/MP from the (possibly updated) formula so older
+    // saves line up with the current attribute system, then clamp current values.
+    recomputeMaxStats();
+    if (player.hp == null || player.hp > player.maxHp) player.hp = player.maxHp;
+    if (player.mp == null || player.mp > player.maxMp) player.mp = player.maxMp;
     // Always spawn at the safe start tile on a freshly generated floor
     player.x = 5; player.y = 5;
     return true;
@@ -2382,6 +2563,8 @@ log('Progress auto-saves automatically as you play.');
 log('Tap 🎒 BAG (bottom-right) to open your loot.');
 log(`Tap the ❤️ flask to drink a ${logPotion('Health Potion')} when you're hurt. Enemies hit hard!`);
 log('⌨️ Keys: Q drink potion · B open bag · Space/F use.');
+log('⚡ Each item has a Power value; your total Power blends level, gear, and attributes.');
+log('💠 Level up to earn points, then raise attributes in the bag\'s HERO tab.');
 
 // Redraw once layout has settled so the camera fits the real canvas size.
 requestAnimationFrame(() => { resizeCanvas(); draw(); });
