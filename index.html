@@ -282,7 +282,9 @@
     font-size: 11px;
     min-width: 160px;
     max-width: 220px;
-    z-index: 100;
+    /* Above the side panel (200) and control bar (210) so it never hides
+       behind the drawer; below the non-interactive screen flash (300). */
+    z-index: 250;
     pointer-events: auto;
     cursor: pointer;
     line-height: 1.6;
@@ -2059,7 +2061,7 @@ function renderPanel() {
       const slotName = item.slot ? SLOTS[item.slot].label.replace(/^\S+\s/, '') : 'potion';
       return `
       <div class="loot-item item-${item.tier} ${selectedItem===i?'selected':''}">
-        <div class="loot-info" onclick="selectItem(${i})"
+        <div class="loot-info" onclick="selectItem(${i}, this)"
              onmouseenter="showTooltip(event,${i})" onmouseleave="hideTooltip()">
           <div class="item-name">${item.name}</div>
           <div class="item-type">${slotName}</div>
@@ -2078,7 +2080,8 @@ function renderPanel() {
 function renderSlot(slot, label) {
   const item = equipped[slot];
   return `<div class="equip-slot">
-    <div class="slot-info" onclick="tapSlot('${slot}')">
+    <div class="slot-info" onclick="tapSlot('${slot}', this)"
+         onmouseenter="hoverSlot(event,'${slot}')" onmouseleave="hideTooltip()">
       <span class="slot-label">${label}</span>
       <span class="slot-item ${item ? 'item-'+item.tier : ''}">
         ${item ? item.name : '<span class="slot-empty">— empty —</span>'}
@@ -2115,17 +2118,25 @@ function unequip(slot) {
   saveGame();
 }
 
-function tapSlot(slot) {
+function tapSlot(slot, el) {
   // Toggle the equipped item's stat tooltip.
   if (tooltipShowing === 'slot:'+slot) { hideTooltip(); return; }
   const item = equipped[slot];
   if (item) {
-    showTooltipForItem(item);
+    showTooltipForItem(item, el);
     tooltipShowing = 'slot:'+slot;
   }
 }
 
-function selectItem(i) {
+// Desktop hover for gear slots (mirrors the loot list). Doesn't set
+// tooltipShowing so it stays a transient preview that clears on mouseleave.
+function hoverSlot(e, slot) {
+  if (tooltipShowing) return; // don't fight a tapped-open tooltip
+  const item = equipped[slot];
+  if (item) showTooltipForItem(item, e.currentTarget);
+}
+
+function selectItem(i, el) {
   // Toggle: tapping the already-open item again closes its tooltip.
   if (selectedItem === i && tooltipShowing === 'item:'+i) {
     selectedItem = null;
@@ -2134,8 +2145,10 @@ function selectItem(i) {
     return;
   }
   selectedItem = i;
+  // Capture the row's screen position before renderPanel() rebuilds (detaches) it.
+  const anchorTop = el ? el.getBoundingClientRect().top : null;
   renderPanel();
-  showTooltipForItem(inventory[i]);
+  showTooltipForItem(inventory[i], anchorTop);
   tooltipShowing = 'item:'+i;
 }
 
@@ -2144,10 +2157,46 @@ const ttEl = document.getElementById('tooltip');
 let tooltipShowing = null; // 'item:N' or 'slot:weapon' etc, or null
 
 function showTooltip(e, i) {
-  showTooltipForItem(inventory[i], e.clientX, e.clientY);
+  showTooltipForItem(inventory[i], e.currentTarget);
 }
 
-function showTooltipForItem(item, x, y) {
+// Place the tooltip just left of the side panel, vertically aligned with the
+// row/slot it describes, so it never overlaps the drawer or floats in the
+// middle of the screen. Falls back to a centered position when there isn't
+// room to the left (narrow / mobile screens) or no anchor is given.
+function positionTooltip(anchor) {
+  const gap = 8;
+  const tt = ttEl.getBoundingClientRect();
+  const panel = document.getElementById('side-panel');
+  const pr = panel.getBoundingClientRect();
+  // anchor may be a live element, a captured top coordinate (number), or null.
+  let anchorTop = null;
+  if (typeof anchor === 'number') {
+    anchorTop = anchor;
+  } else if (anchor && typeof anchor.getBoundingClientRect === 'function') {
+    const r = anchor.getBoundingClientRect();
+    // A re-rendered row leaves a detached element with an all-zero rect; ignore it.
+    if (r.width || r.height || r.top) anchorTop = r.top;
+  }
+  let left, top;
+  if (anchorTop !== null) {
+    left = pr.left - tt.width - gap; // tuck it to the left of the open drawer
+    top = anchorTop;
+    if (left < gap) left = Math.max(gap, (window.innerWidth - tt.width) / 2);
+  } else {
+    left = Math.max(gap, (window.innerWidth - tt.width) / 2);
+    top = 70;
+  }
+  // Keep the whole tooltip on screen.
+  left = Math.min(left, window.innerWidth - tt.width - gap);
+  left = Math.max(gap, left);
+  top = Math.min(top, window.innerHeight - tt.height - gap);
+  top = Math.max(gap, top);
+  ttEl.style.left = left + 'px';
+  ttEl.style.top = top + 'px';
+}
+
+function showTooltipForItem(item, anchor) {
   if (!item) return;
   const tier = TIERS[item.tier];
   const stats = Object.entries(item.stats).map(([k,v]) => {
@@ -2165,14 +2214,8 @@ function showTooltipForItem(item, x, y) {
     <div class="tt-flavor">${item.flavor}</div>
     <div style="color:#555;font-size:9px;margin-top:5px">Tap anywhere to close</div>`;
   ttEl.style.display = 'block';
-  if (x !== undefined) {
-    ttEl.style.left = Math.min(x+10, window.innerWidth-230)+'px';
-    ttEl.style.top  = Math.min(y+10, window.innerHeight-220)+'px';
-  } else {
-    // Centered-ish for taps from the panel
-    ttEl.style.left = Math.max(10, window.innerWidth/2 - 110)+'px';
-    ttEl.style.top  = '70px';
-  }
+  // Measure after it's visible, then anchor it relative to the panel/row.
+  positionTooltip(anchor);
 }
 
 function hideTooltip() { ttEl.style.display = 'none'; tooltipShowing = null; }
