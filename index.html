@@ -1,0 +1,1516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Dungeon Loot</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0a0a0f;
+    --panel: #11111a;
+    --border: #2a2a3a;
+    --text: #c8c8d0;
+    --gold: #c8a84b;
+    --hp: #cc2233;
+    --mp: #2244cc;
+
+    /* Loot tiers */
+    --junk:      #6b6b6b;
+    --normal:    #e8e8e8;
+    --uncommon:  #44bb44;
+    --rare:      #4488ff;
+    --epic:      #aa44ff;
+    --legendary: #ff8800;
+    --unique:    #ff2222;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  /* ── HEADER ── */
+  #header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 10px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  #header h1 { color: var(--gold); font-size: 14px; letter-spacing: 2px; }
+  #stats { display: flex; gap: 10px; font-size: 11px; }
+  .stat-bar { display: flex; align-items: center; gap: 4px; }
+  .bar-track { width: 60px; height: 8px; background: #1a1a2a; border: 1px solid var(--border); border-radius: 2px; }
+  .bar-fill { height: 100%; border-radius: 1px; transition: width 0.2s; }
+  .hp-fill  { background: var(--hp); }
+  .mp-fill  { background: var(--mp); }
+  #gold-display { color: var(--gold); font-size: 11px; }
+
+  /* ── MAIN LAYOUT ── */
+  #main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* ── GAME CANVAS ── */
+  #game-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  canvas {
+    display: block;
+    image-rendering: pixelated;
+    width: 100%;
+    flex: 1;
+    min-height: 0;
+    touch-action: none;
+  }
+
+  /* ── BOTTOM CONTROL BAR (thumb zone) ── */
+  #control-bar {
+    display: flex;
+    align-items: stretch;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 8px;
+    background: var(--panel);
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  #action-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    justify-content: center;
+  }
+  .action-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    width: 58px;
+    flex: 1;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    font-family: 'Courier New', monospace;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  .action-icon { font-size: 18px; line-height: 1; }
+  .action-label { font-size: 9px; letter-spacing: 1px; }
+
+  .bag-btn {
+    background: #4a3520;
+    border-color: #6b4f2f;
+    color: #e8d5b5;
+  }
+  .bag-btn:active { background: #6b4f2f; }
+  .bag-btn.open { background: #6b4f2f; border-color: var(--gold); color: #fff; }
+
+  .newgame-action {
+    background: #2a1a1a;
+    border-color: #4a2a2a;
+    color: #c89090;
+  }
+  .newgame-action:active { background: var(--hp); color: #fff; }
+  .newgame-action.armed { background: var(--hp); color: #fff; border-color: #fff; }
+
+  /* ── SIDE PANEL ── */
+  #side-panel {
+    width: 142px;
+    flex-shrink: 0;
+    background: var(--panel);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition: width 0.18s ease, opacity 0.18s ease;
+  }
+  #side-panel.collapsed {
+    width: 0;
+    opacity: 0;
+    border-left: none;
+  }
+
+  .panel-tab {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+  }
+  .tab-btn {
+    flex: 1;
+    padding: 5px 0;
+    background: none;
+    border: none;
+    color: #666;
+    font-family: 'Courier New', monospace;
+    font-size: 10px;
+    cursor: pointer;
+    letter-spacing: 1px;
+    border-bottom: 2px solid transparent;
+  }
+  .tab-btn.active { color: var(--gold); border-bottom-color: var(--gold); }
+
+  #panel-content { flex: 1; overflow-y: auto; padding: 6px; }
+  #panel-content::-webkit-scrollbar { width: 4px; }
+  #panel-content::-webkit-scrollbar-track { background: var(--bg); }
+  #panel-content::-webkit-scrollbar-thumb { background: var(--border); }
+
+  /* ── LOOT LIST ── */
+  .loot-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px;
+    margin-bottom: 3px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    font-size: 11px;
+    line-height: 1.3;
+    transition: background 0.1s;
+  }
+  .loot-item:hover { background: #1e1e2e; border-color: var(--border); }
+  .loot-item.selected { background: #1e1e30; border-color: #444; }
+  .loot-info { flex: 1; cursor: pointer; min-width: 0; }
+  .loot-info .item-name { overflow: hidden; text-overflow: ellipsis; }
+
+  /* Inline action buttons on loot/gear rows */
+  .row-btn {
+    flex-shrink: 0;
+    border: none;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  .equip-row-btn {
+    background: #2e7d32;
+    color: #fff;
+    font-size: 10px;
+    letter-spacing: 1px;
+    padding: 7px 9px;
+  }
+  .equip-row-btn:active { background: #44bb44; }
+  .unequip-row-btn {
+    background: #5a2a2a;
+    color: #fff;
+    font-size: 12px;
+    width: 28px;
+    height: 28px;
+    line-height: 1;
+  }
+  .unequip-row-btn:active { background: var(--hp); }
+
+  .item-junk      { color: var(--junk); }
+  .item-normal    { color: var(--normal); }
+  .item-uncommon  { color: var(--uncommon); }
+  .item-rare      { color: var(--rare); }
+  .item-epic      { color: var(--epic); }
+  .item-legendary { color: var(--legendary); }
+  .item-unique    { color: var(--unique); }
+
+  .item-name { font-weight: bold; }
+  .item-type { font-size: 10px; opacity: 0.7; }
+
+  /* ── TOOLTIP ── */
+  #tooltip {
+    position: fixed;
+    display: none;
+    background: #0e0e1a;
+    border: 1px solid var(--border);
+    padding: 8px 10px;
+    font-size: 11px;
+    min-width: 160px;
+    max-width: 220px;
+    z-index: 100;
+    pointer-events: auto;
+    cursor: pointer;
+    line-height: 1.6;
+  }
+  #tooltip .tt-name { font-weight: bold; font-size: 12px; margin-bottom: 4px; }
+  #tooltip .tt-stat { color: #8899bb; }
+  #tooltip .tt-flavor { color: #666; font-style: italic; margin-top: 4px; font-size: 10px; }
+  #tooltip .tt-tier { font-size: 10px; opacity: 0.7; }
+
+  /* ── EQUIPMENT ── */
+  .equip-slot {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    margin-bottom: 4px;
+    min-height: 30px;
+    font-size: 10px;
+  }
+  .slot-info { display: flex; align-items: center; gap: 6px; flex: 1; cursor: pointer; min-width: 0; }
+  .slot-label { color: #555; width: 36px; flex-shrink: 0; }
+  .slot-item { flex: 1; font-size: 10px; overflow: hidden; text-overflow: ellipsis; }
+  .slot-empty { color: #333; }
+
+  /* ── LOG ── */
+  /* ── BOTTOM ROW: log (left) + dpad (right) ── */
+  #bottom-row {
+    display: flex;
+    align-items: stretch;
+    border-top: 1px solid var(--border);
+    flex: 0 0 130px;
+    min-height: 90px;
+    max-height: 28vh;
+    overflow: hidden;
+  }
+
+  #log {
+    background: var(--panel);
+    padding: 6px 8px;
+    font-size: 12px;
+    flex: 1;
+    overflow-y: auto;
+  }
+  #log::-webkit-scrollbar { width: 3px; }
+  #log::-webkit-scrollbar-thumb { background: var(--border); }
+  .log-line { color: #b8b8c8; line-height: 1.55; }
+  .log-line.important { color: #ffffff; }
+  .log-line.loot { color: #6fe06f; }
+
+  /* ── CONTROLS (mobile) ── */
+  #dpad {
+    display: grid;
+    grid-template-columns: repeat(3, 52px);
+    grid-template-rows: repeat(3, 52px);
+    gap: 4px;
+    flex-shrink: 0;
+  }
+  .dpad-btn {
+    background: #1a1a2a;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 22px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  .dpad-btn:active { background: #2a2a3a; }
+  .dpad-center {
+    background: #1e1e2e;
+    border-color: var(--gold);
+    color: var(--gold);
+    font-size: 12px;
+    letter-spacing: 0;
+  }
+
+  #empty-panel { color: #333; text-align: center; padding: 20px 0; font-size: 11px; }
+
+  /* ── SHOP MODAL ── */
+  #shop-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+    padding: 16px;
+  }
+  #shop-overlay.open { display: flex; }
+  #shop-modal {
+    background: #14101c;
+    border: 2px solid #6b4f9f;
+    border-radius: 10px;
+    width: 100%;
+    max-width: 340px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 0 30px rgba(140,90,255,0.4);
+  }
+  #shop-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    background: linear-gradient(90deg,#3a2a5a,#5a3a7a);
+    border-bottom: 1px solid #6b4f9f;
+  }
+  #shop-title { color: #e8d5ff; font-size: 14px; font-weight: bold; }
+  #shop-close {
+    background: none; border: none; color: #c8b5e8;
+    font-size: 18px; cursor: pointer; padding: 0 4px;
+  }
+  #shop-gold {
+    padding: 8px 12px; font-size: 12px; color: var(--gold);
+    border-bottom: 1px solid var(--border);
+  }
+  #shop-tabs { display: flex; border-bottom: 1px solid var(--border); }
+  .shop-tab {
+    flex: 1; padding: 8px 0; background: none; border: none;
+    color: #777; font-family: 'Courier New', monospace; font-size: 12px;
+    letter-spacing: 2px; cursor: pointer; border-bottom: 2px solid transparent;
+  }
+  .shop-tab.active { color: var(--gold); border-bottom-color: var(--gold); }
+  #shop-content { overflow-y: auto; padding: 8px; }
+
+  .shop-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px; margin-bottom: 4px;
+    border: 1px solid var(--border); border-radius: 5px;
+  }
+  .shop-row-info { flex: 1; min-width: 0; }
+  .shop-row-name { font-weight: bold; font-size: 12px; }
+  .shop-row-sub { font-size: 10px; opacity: 0.7; }
+  .shop-price { color: var(--gold); font-size: 11px; flex-shrink: 0; }
+  .shop-buy-btn, .shop-sell-btn {
+    flex-shrink: 0; border: none; border-radius: 5px; cursor: pointer;
+    font-family: 'Courier New', monospace; font-weight: bold;
+    font-size: 11px; padding: 8px 10px; color: #fff;
+    -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  }
+  .shop-buy-btn { background: #2e7d32; }
+  .shop-buy-btn:active { background: #44bb44; }
+  .shop-buy-btn:disabled { background: #333; color: #666; cursor: not-allowed; }
+  .shop-sell-btn { background: #8a6a1a; }
+  .shop-sell-btn:active { background: var(--gold); }
+  .shop-empty { color: #555; text-align: center; padding: 24px 0; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div id="header">
+  <h1>⚔ DUNGEON LOOT</h1>
+  <div id="stats">
+    <div class="stat-bar">
+      <span style="color:var(--hp);font-size:10px">HP</span>
+      <div class="bar-track"><div class="bar-fill hp-fill" id="hp-bar" style="width:100%"></div></div>
+      <span id="hp-text" style="font-size:10px">100</span>
+    </div>
+    <div class="stat-bar">
+      <span style="color:var(--mp);font-size:10px">MP</span>
+      <div class="bar-track"><div class="bar-fill mp-fill" id="mp-bar" style="width:100%"></div></div>
+    </div>
+  </div>
+  <div id="gold-display">💰 <span id="gold-count">0</span>g</div>
+</div>
+
+<!-- MAIN -->
+<div id="main">
+  <div id="game-wrap">
+    <canvas id="canvas"></canvas>
+    <div id="bottom-row">
+      <div id="log"></div>
+    </div>
+    <div id="control-bar">
+      <div id="dpad">
+        <div></div>
+        <button class="dpad-btn" data-dir="up">▲</button>
+        <div></div>
+        <button class="dpad-btn" data-dir="left">◀</button>
+        <button class="dpad-btn dpad-center" data-dir="pickup">PICK</button>
+        <button class="dpad-btn" data-dir="right">▶</button>
+        <div></div>
+        <button class="dpad-btn" data-dir="down">▼</button>
+        <div></div>
+      </div>
+      <div id="action-buttons">
+        <button class="action-btn bag-btn" onclick="togglePanel()">
+          <span class="action-icon">🎒</span><span class="action-label">BAG</span>
+        </button>
+        <button class="action-btn newgame-action" onclick="confirmNewGame()">
+          <span class="action-icon">↻</span><span class="action-label">NEW</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="side-panel" class="collapsed">
+    <div class="panel-tab">
+      <button class="tab-btn active" id="tab-inv" onclick="switchTab('inv')">LOOT</button>
+      <button class="tab-btn" id="tab-equip" onclick="switchTab('equip')">GEAR</button>
+    </div>
+    <div id="panel-content"></div>
+  </div>
+</div>
+
+<div id="tooltip"></div>
+
+<div id="shop-overlay" onclick="if(event.target===this)closeShop()">
+  <div id="shop-modal">
+    <div id="shop-header">
+      <span id="shop-title">🧙‍♂️ Wandering Merchant</span>
+      <button id="shop-close" onclick="closeShop()">✕</button>
+    </div>
+    <div id="shop-gold">Your gold: <span id="shop-gold-count">0</span>g</div>
+    <div id="shop-tabs">
+      <button class="shop-tab active" id="shoptab-buy" onclick="shopTab('buy')">BUY</button>
+      <button class="shop-tab" id="shoptab-sell" onclick="shopTab('sell')">SELL</button>
+    </div>
+    <div id="shop-content"></div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════
+// CONSTANTS & DATA
+// ══════════════════════════════════════════
+
+const TILE = 16;
+const MAP_W = 20, MAP_H = 20;
+
+// Each equipment slot, with the base item names that roll for it.
+const SLOTS = {
+  head:   { label: '🪖 Head',   names: ['Helm','Cap','Crown','Hood','Circlet'] },
+  chest:  { label: '🛡 Chest',  names: ['Chestplate','Robe','Cuirass','Tunic','Mail'] },
+  hands:  { label: '🧤 Hands',  names: ['Gauntlets','Gloves','Bracers','Grips'] },
+  legs:   { label: '👖 Legs',   names: ['Greaves','Leggings','Tassets','Trousers'] },
+  weapon: { label: '⚔ Weapon', names: ['Sword','Axe','Dagger','Staff','Bow','Mace','Spear','Scythe'] },
+  ring:   { label: '💍 Ring',   names: ['Ring','Band','Signet','Loop'] },
+  amulet: { label: '📿 Amulet', names: ['Amulet','Pendant','Necklace','Talisman','Charm'] },
+};
+const SLOT_KEYS = Object.keys(SLOTS);
+
+// Roll weights for which slot a dropped item belongs to.
+const SLOT_WEIGHTS = { weapon:22, chest:15, head:13, hands:13, legs:13, ring:12, amulet:12 };
+
+const POTIONS = ['Health Potion','Mana Potion','Elixir'];
+
+const TIERS = {
+  junk:      { color: '#6b6b6b', weight: 30 },
+  normal:    { color: '#e8e8e8', weight: 35 },
+  uncommon:  { color: '#44bb44', weight: 20 },
+  rare:      { color: '#4488ff', weight: 10 },
+  epic:      { color: '#aa44ff', weight: 4  },
+  legendary: { color: '#ff8800', weight: 1  },
+  unique:    { color: '#ff2222', weight: 0.5},
+};
+
+const PREFIXES = ['Ancient','Cursed','Blazing','Frozen','Runic','Shadow','Divine','Storm','Iron','Blood','Soul','Void'];
+const SUFFIXES = ['of Power','of Doom','of the Fallen','of Light','of Ages','of Chaos','of the Ancients','of Fury'];
+
+const FLAVOR = {
+  junk:      ['Smells odd.','Someone threw this away.','Barely worth carrying.'],
+  normal:    ['Reliable. Nothing more.','Solid craftsmanship.','Gets the job done.'],
+  uncommon:  ['Faint magic hums within.','A cut above the rest.','Green with envy.'],
+  rare:      ['The air crackles around it.','Forged in a dying star.','Few have seen its like.'],
+  epic:      ['Power radiates from within.','Whispers of forgotten gods.','Even dragons fear this.'],
+  legendary: ['Songs are sung of this.','History bends around it.','The gods weep with jealousy.'],
+  unique:    ['Only one exists. You found it.','The world trembles.','Destiny has chosen you.'],
+};
+
+const STAT_NAMES = ['ATK','DEF','SPD','LCK','HP','MP','CRIT'];
+const HERO = '🧙';
+
+// ══════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════
+
+let player = { x: 5, y: 5, hp: 100, maxHp: 100, mp: 60, maxMp: 60, gold: 0, level: 1, xp: 0 };
+let inventory = [];
+let equipped = { head: null, chest: null, hands: null, legs: null, weapon: null, ring: null, amulet: null };
+let groundItems = []; // { x, y, item }
+let merchant = null;  // { x, y, stock: [...] } when present
+let enemies = [];
+let currentTab = 'inv';
+let selectedItem = null;
+let mapData = [];
+let dungeonLevel = 1;
+
+// ══════════════════════════════════════════
+// CANVAS SETUP
+// ══════════════════════════════════════════
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+function resizeCanvas() {
+  canvas.width  = canvas.offsetWidth;
+  canvas.height = canvas.offsetHeight;
+}
+resizeCanvas();
+window.addEventListener('resize', () => { resizeCanvas(); draw(); });
+
+let panelOpen = false;
+function togglePanel() {
+  panelOpen = !panelOpen;
+  const panel = document.getElementById('side-panel');
+  const btn = document.querySelector('.bag-btn');
+  panel.classList.toggle('collapsed', !panelOpen);
+  btn.classList.toggle('open', panelOpen);
+  btn.querySelector('.action-label').textContent = panelOpen ? 'CLOSE' : 'BAG';
+  if (panelOpen) renderPanel();
+  // Canvas width changes with the panel; resize + redraw after the CSS transition.
+  setTimeout(() => { resizeCanvas(); draw(); }, 200);
+}
+
+// ══════════════════════════════════════════
+// MAP GENERATION
+// ══════════════════════════════════════════
+
+function generateMap() {
+  mapData = [];
+  for (let y = 0; y < MAP_H; y++) {
+    mapData[y] = [];
+    for (let x = 0; x < MAP_W; x++) {
+      // Border walls
+      if (x === 0 || y === 0 || x === MAP_W-1 || y === MAP_H-1) {
+        mapData[y][x] = 1;
+      } else {
+        // Random walls ~20%
+        mapData[y][x] = Math.random() < 0.18 ? 1 : 0;
+      }
+    }
+  }
+  // Ensure spawn clear
+  for (let dy = -1; dy <= 1; dy++)
+    for (let dx = -1; dx <= 1; dx++)
+      if (mapData[player.y+dy]) mapData[player.y+dy][player.x+dx] = 0;
+
+  // Add stairs down
+  let sx, sy;
+  do { sx = rnd(2, MAP_W-2); sy = rnd(2, MAP_H-2); }
+  while (mapData[sy][sx] !== 0 || (sx === player.x && sy === player.y));
+  mapData[sy][sx] = 2; // stairs
+
+  spawnEnemies();
+  spawnGroundLoot();
+  spawnMerchant();
+}
+
+function spawnMerchant() {
+  merchant = null;
+  // The roaming merchant appears on roughly 1 in 3 floors.
+  if (Math.random() > 0.34) return;
+  let mx, my, tries = 0;
+  do {
+    mx = rnd(1, MAP_W-1); my = rnd(1, MAP_H-1); tries++;
+  } while ((mapData[my][mx] !== 0 || (mx === player.x && my === player.y) || getEnemyAt(mx,my)) && tries < 100);
+  if (tries >= 100) return;
+  // Build a small randomized stock: potions + a couple of gamble-priced gear pieces.
+  const stock = [
+    { kind: 'potion', name: 'Health Potion', heal: 40, price: 25 + dungeonLevel*5 },
+    { kind: 'potion', name: 'Mana Potion',   mana: 30, price: 20 + dungeonLevel*5 },
+  ];
+  const gearCount = rnd(2, 3);
+  for (let i = 0; i < gearCount; i++) {
+    const item = generateItem();
+    stock.push({ kind: 'gear', item, price: Math.max(10, Math.round(item.value * 1.4)) });
+  }
+  merchant = { x: mx, y: my, stock };
+  log('✨ A robed merchant has wandered onto this floor...', 'important');
+}
+
+// ══════════════════════════════════════════
+// SHOP
+// ══════════════════════════════════════════
+
+let shopCurrentTab = 'buy';
+
+function openShop() {
+  if (!merchant) return;
+  shopCurrentTab = 'buy';
+  document.getElementById('shop-overlay').classList.add('open');
+  renderShop();
+  log('The merchant spreads out their wares.');
+}
+
+function closeShop() {
+  document.getElementById('shop-overlay').classList.remove('open');
+}
+
+function shopTab(tab) {
+  shopCurrentTab = tab;
+  document.getElementById('shoptab-buy').classList.toggle('active', tab==='buy');
+  document.getElementById('shoptab-sell').classList.toggle('active', tab==='sell');
+  renderShop();
+}
+
+function renderShop() {
+  document.getElementById('shop-gold-count').textContent = player.gold;
+  const el = document.getElementById('shop-content');
+  if (!merchant) { closeShop(); return; }
+
+  if (shopCurrentTab === 'buy') {
+    if (merchant.stock.length === 0) {
+      el.innerHTML = '<div class="shop-empty">Sold out! Come back later.</div>';
+      return;
+    }
+    el.innerHTML = merchant.stock.map((s, i) => {
+      const afford = player.gold >= s.price;
+      let name, sub, cls = '';
+      if (s.kind === 'potion') {
+        name = s.name;
+        sub = s.heal ? `Restores ${s.heal} HP` : `Restores ${s.mana} MP`;
+      } else {
+        name = s.item.name;
+        sub = SLOTS[s.item.slot].label.replace(/^\S+\s/, '');
+        cls = 'item-' + s.item.tier;
+      }
+      return `<div class="shop-row">
+        <div class="shop-row-info ${cls}">
+          <div class="shop-row-name">${name}</div>
+          <div class="shop-row-sub">${sub}</div>
+        </div>
+        <span class="shop-price">${s.price}g</span>
+        <button class="shop-buy-btn" ${afford?'':'disabled'} onclick="buyItem(${i})">BUY</button>
+      </div>`;
+    }).join('');
+  } else {
+    // SELL tab — sell anything in your bag at its value.
+    if (inventory.length === 0) {
+      el.innerHTML = '<div class="shop-empty">Nothing to sell.<br>Go find some loot!</div>';
+      return;
+    }
+    el.innerHTML = inventory.map((item, i) => {
+      const sellPrice = Math.max(1, Math.round(item.value * 0.5));
+      return `<div class="shop-row">
+        <div class="shop-row-info item-${item.tier}">
+          <div class="shop-row-name">${item.name}</div>
+          <div class="shop-row-sub">${item.slot ? SLOTS[item.slot].label.replace(/^\S+\s/, '') : 'potion'}</div>
+        </div>
+        <span class="shop-price">${sellPrice}g</span>
+        <button class="shop-sell-btn" onclick="sellItem(${i})">SELL</button>
+      </div>`;
+    }).join('');
+  }
+}
+
+function buyItem(i) {
+  const s = merchant.stock[i];
+  if (!s || player.gold < s.price) return;
+  player.gold -= s.price;
+  if (s.kind === 'potion') {
+    if (s.heal) { player.hp = Math.min(player.maxHp, player.hp + s.heal); log(`Drank ${s.name}. +${s.heal} HP`, 'loot'); }
+    if (s.mana) { player.mp = Math.min(player.maxMp, player.mp + s.mana); log(`Drank ${s.name}. +${s.mana} MP`, 'loot'); }
+    // potions restock infinitely; gear is one-off
+  } else {
+    inventory.push(s.item);
+    log(`Bought ${s.item.name}!`, 'loot');
+    merchant.stock.splice(i, 1);
+  }
+  updateBars();
+  renderShop();
+  renderPanel();
+  saveGame();
+}
+
+function sellItem(i) {
+  const item = inventory[i];
+  if (!item) return;
+  const sellPrice = Math.max(1, Math.round(item.value * 0.5));
+  player.gold += sellPrice;
+  inventory.splice(i, 1);
+  log(`Sold ${item.name} for ${sellPrice}g.`);
+  updateBars();
+  renderShop();
+  renderPanel();
+  saveGame();
+}
+
+function spawnEnemies() {
+  enemies = [];
+  const count = 4 + dungeonLevel * 2;
+  for (let i = 0; i < count; i++) {
+    let ex, ey;
+    let tries = 0;
+    do {
+      ex = rnd(1, MAP_W-1); ey = rnd(1, MAP_H-1); tries++;
+    } while ((mapData[ey][ex] !== 0 || (ex === player.x && ey === player.y) || getEnemyAt(ex,ey)) && tries < 100);
+    if (tries < 100) {
+      enemies.push({
+        x: ex, y: ey,
+        hp: 10 + dungeonLevel * 5,
+        maxHp: 10 + dungeonLevel * 5,
+        type: ['🐀','👹','💀','🧟','🐉'][Math.min(dungeonLevel-1, 4)],
+        dead: false,
+      });
+    }
+  }
+}
+
+function spawnGroundLoot() {
+  groundItems = [];
+  const count = 1 + Math.floor(dungeonLevel / 2);
+  for (let i = 0; i < count; i++) {
+    let gx, gy;
+    let tries = 0;
+    do {
+      gx = rnd(1, MAP_W-1); gy = rnd(1, MAP_H-1); tries++;
+    } while (mapData[gy][gx] !== 0 && tries < 100);
+    if (tries < 100) groundItems.push({ x: gx, y: gy, item: generateItem() });
+  }
+}
+
+// ══════════════════════════════════════════
+// ITEM GENERATION
+// ══════════════════════════════════════════
+
+function rollTier() {
+  const entries = Object.entries(TIERS);
+  const total = entries.reduce((s, [,v]) => s + v.weight, 0);
+  let roll = Math.random() * total;
+  for (const [k, v] of entries) {
+    roll -= v.weight;
+    if (roll <= 0) return k;
+  }
+  return 'normal';
+}
+
+function generateItem() {
+  const tier = rollTier();
+  const slot = weighted(SLOT_WEIGHTS);
+  const baseName = pick(SLOTS[slot].names);
+
+  let name = baseName;
+  if (tier === 'uncommon') name = pick(PREFIXES) + ' ' + baseName;
+  if (tier === 'rare')     name = pick(PREFIXES) + ' ' + baseName + ' ' + pick(SUFFIXES);
+  if (tier === 'epic')     name = pick(PREFIXES) + ' ' + baseName + ' ' + pick(SUFFIXES);
+  if (tier === 'legendary') name = pick(PREFIXES) + ' ' + baseName + ' ' + pick(SUFFIXES);
+  if (tier === 'unique')   name = 'The ' + pick(PREFIXES) + ' ' + baseName;
+
+  // Stats per item are smaller now, since a full loadout has 7 slots.
+  const statCount = { junk:0, normal:1, uncommon:1, rare:2, epic:3, legendary:3, unique:4 }[tier];
+  const stats = {};
+  const mult = { junk:0.4, normal:0.7, uncommon:1, rare:1.4, epic:2, legendary:3, unique:4.5 }[tier];
+  const lvl = dungeonLevel;
+
+  // Headline stat by slot: weapons deal damage, armor gives defense, jewelry gives utility.
+  if (slot === 'weapon') {
+    const base = Math.max(1, Math.floor((rnd(2,4) + lvl) * mult));
+    const spread = Math.max(1, Math.floor(base * 0.4));
+    stats.DMG = `${base}-${base + spread}`;
+  } else if (slot === 'head' || slot === 'chest' || slot === 'hands' || slot === 'legs') {
+    // Bigger armor pieces give more DEF than smaller ones.
+    const slotDef = { chest: 1.3, legs: 1.0, head: 0.8, hands: 0.7 }[slot];
+    stats.DEF = Math.max(1, Math.floor((rnd(1,3) + lvl) * mult * slotDef));
+  }
+  // ring/amulet have no fixed headline — they roll pure bonus stats below.
+
+  const extraCount = (slot === 'ring' || slot === 'amulet')
+    ? statCount + 1        // jewelry gets an extra rolled stat instead of a headline
+    : Math.max(0, statCount - 1);
+  const statPool = STAT_NAMES.filter(s => !(s in stats))
+    .sort(() => Math.random()-0.5).slice(0, extraCount);
+  statPool.forEach(s => { stats[s] = Math.max(1, Math.floor((rnd(1,3) + lvl*0.5) * mult)); });
+
+  const value = { junk:1, normal:5, uncommon:20, rare:80, epic:300, legendary:1200, unique:5000 }[tier];
+
+  return { id: Math.random(), name, tier, slot, stats, value,
+    flavor: pick(FLAVOR[tier]) };
+}
+
+function weighted(obj) {
+  const total = Object.values(obj).reduce((a,b)=>a+b,0);
+  let r = Math.random()*total;
+  for (const [k,v] of Object.entries(obj)) { r-=v; if(r<=0) return k; }
+  return Object.keys(obj)[0];
+}
+
+// ══════════════════════════════════════════
+// DRAW
+// ══════════════════════════════════════════
+
+const COLORS = {
+  floor: '#2e2e42',
+  floorAlt: '#26263a',
+  wall: '#4a4a66',
+  wallTop: '#64648a',
+  stairs: '#5a4400',
+  stairsGlow: '#ffd24b',
+};
+
+function draw() {
+  const W = canvas.width, H = canvas.height;
+  ctx.fillStyle = '#0a0a0f';
+  ctx.fillRect(0, 0, W, H);
+
+  // ── FOLLOW CAMERA ──
+  // Aim to show ~VIEW_TILES across the shorter axis, so tiles are large.
+  const VIEW_TILES = 11;
+  const tw = Math.ceil(Math.min(W, H) / VIEW_TILES);
+  const th = tw;
+
+  // Center the camera on the player, then clamp so we never scroll past edges.
+  let camX = player.x * tw + tw/2 - W/2;
+  let camY = player.y * th + th/2 - H/2;
+  const maxCamX = MAP_W * tw - W;
+  const maxCamY = MAP_H * th - H;
+  // If the map is smaller than the viewport on an axis, center it instead.
+  camX = (MAP_W * tw <= W) ? -(W - MAP_W*tw)/2 : Math.max(0, Math.min(camX, maxCamX));
+  camY = (MAP_H * th <= H) ? -(H - MAP_H*th)/2 : Math.max(0, Math.min(camY, maxCamY));
+
+  const offX = Math.round(-camX);
+  const offY = Math.round(-camY);
+  const scale = tw / TILE; // for glow blur sizing, relative to base tile
+
+  // Only draw tiles within the visible window (perf + clean edges)
+  const x0 = Math.max(0, Math.floor(camX / tw));
+  const y0 = Math.max(0, Math.floor(camY / th));
+  const x1 = Math.min(MAP_W, Math.ceil((camX + W) / tw));
+  const y1 = Math.min(MAP_H, Math.ceil((camY + H) / th));
+
+  // Draw tiles
+  for (let y = y0; y < y1; y++) {
+    for (let x = x0; x < x1; x++) {
+      const px = offX + x * tw, py = offY + y * th;
+      const t = mapData[y][x];
+      const seed = (x * 73856093) ^ (y * 19349663); // deterministic per-tile
+
+      if (t === 1) {
+        // Wall base
+        ctx.fillStyle = COLORS.wall;
+        ctx.fillRect(px, py, tw, th);
+        // Brick rows with mortar lines
+        const rows = 3;
+        const rh = th / rows;
+        for (let r = 0; r < rows; r++) {
+          const ry = py + r * rh;
+          const offset = (r % 2) * (tw / 2);
+          // brick face shading
+          ctx.fillStyle = (r % 2 === 0) ? '#56567a' : '#4e4e70';
+          ctx.fillRect(px, ry + 1, tw, rh - 1.5);
+          // vertical mortar gap
+          ctx.fillStyle = '#33334a';
+          ctx.fillRect(px + (offset % tw), ry, Math.max(1, tw*0.06), rh);
+          ctx.fillRect(px + ((offset + tw/2) % tw), ry, Math.max(1, tw*0.06), rh);
+          // horizontal mortar
+          ctx.fillRect(px, ry, tw, Math.max(1, th*0.05));
+        }
+        // top highlight ridge
+        ctx.fillStyle = COLORS.wallTop;
+        ctx.fillRect(px, py, tw, Math.max(1, th*0.12));
+        // occasional crack
+        if (seed % 5 === 0) {
+          ctx.fillStyle = '#2a2a3c';
+          ctx.fillRect(px + tw*0.5, py + th*0.3, Math.max(1,tw*0.06), th*0.4);
+        }
+      } else if (t === 2) {
+        // Stair pit
+        ctx.fillStyle = '#0d0d14';
+        ctx.fillRect(px, py, tw, th);
+        // descending steps
+        const steps = 4;
+        for (let s = 0; s < steps; s++) {
+          const shade = 20 + s * 14;
+          ctx.fillStyle = `rgb(${shade+30},${shade+22},${Math.floor(shade*0.4)})`;
+          const inset = (s / steps) * tw * 0.4;
+          const sy = py + (s / steps) * th * 0.5;
+          ctx.fillRect(px + inset, sy, tw - inset*2, th * (0.5/steps) + 1);
+        }
+        // glow
+        ctx.fillStyle = COLORS.stairsGlow + '33';
+        ctx.fillRect(px, py + th*0.55, tw, th*0.45);
+        ctx.fillStyle = COLORS.stairsGlow;
+        ctx.font = `bold ${Math.round(tw*0.42)}px serif`;
+        ctx.textAlign = 'center';
+        ctx.fillText('▼', px + tw/2, py + th*0.85);
+      } else {
+        // Floor base with subtle checker
+        ctx.fillStyle = (x+y)%2===0 ? COLORS.floor : COLORS.floorAlt;
+        ctx.fillRect(px, py, tw, th);
+        // flagstone seams
+        ctx.fillStyle = '#1c1c2c';
+        ctx.fillRect(px, py, tw, 1);
+        ctx.fillRect(px, py, 1, th);
+        // speckle / rubble (deterministic)
+        const speckles = (seed % 4);
+        ctx.fillStyle = '#3a3a52';
+        for (let s = 0; s < speckles; s++) {
+          const sx = px + ((seed >> (s*3+1)) % tw);
+          const sy = py + ((seed >> (s*2+2)) % th);
+          ctx.fillRect(sx, sy, Math.max(1, tw*0.08), Math.max(1, th*0.08));
+        }
+        // occasional moss tint
+        if (seed % 11 === 0) {
+          ctx.fillStyle = 'rgba(90,140,70,0.3)';
+          ctx.fillRect(px+tw*0.2, py+th*0.2, tw*0.5, th*0.5);
+        }
+      }
+    }
+  }
+
+  // Ground loot glows
+  groundItems.forEach(({ x, y, item }) => {
+    const px = offX + x * tw, py = offY + y * th;
+    const c = TIERS[item.tier].color;
+    // dark backing disc for separation
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.beginPath();
+    ctx.arc(px + tw/2, py + th/2, tw*0.34, 0, Math.PI*2);
+    ctx.fill();
+    // glowing gem
+    ctx.shadowColor = c;
+    ctx.shadowBlur = 12 * scale;
+    ctx.fillStyle = c;
+    const s = Math.max(4, tw * 0.34);
+    ctx.fillRect(px + (tw-s)/2, py + (th-s)/2, s, s);
+    // bright center highlight
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(px + tw/2 - s*0.12, py + th/2 - s*0.12, s*0.24, s*0.24);
+    ctx.shadowBlur = 0;
+  });
+
+  // Merchant (roaming trader in bright robes)
+  if (merchant) {
+    const px = offX + merchant.x * tw, py = offY + merchant.y * th;
+    // pulsing rainbow-ish glow so they stand out as special
+    const t = (Date.now() % 2000) / 2000;
+    const hue = Math.floor(t * 360);
+    ctx.save();
+    ctx.fillStyle = `hsla(${hue},90%,60%,0.35)`;
+    ctx.beginPath();
+    ctx.arc(px + tw/2, py + th/2, tw*0.55, 0, Math.PI*2);
+    ctx.fill();
+    // bright robe body
+    ctx.fillStyle = `hsl(${hue},85%,55%)`;
+    ctx.fillRect(px + tw*0.28, py + tw*0.4, tw*0.44, tw*0.5);
+    ctx.fillStyle = `hsl(${(hue+60)%360},85%,60%)`;
+    ctx.fillRect(px + tw*0.34, py + tw*0.5, tw*0.32, tw*0.18);
+    ctx.restore();
+    // merchant sprite on top
+    ctx.font = `${Math.round(tw * 0.74)}px serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🧙‍♂️', px + tw/2, py + th/2 + th*0.02);
+    // little "$" tag above
+    ctx.fillStyle = '#ffd24b';
+    ctx.font = `bold ${Math.round(tw*0.34)}px serif`;
+    ctx.fillText('💰', px + tw/2, py - th*0.02);
+  }
+
+  // Enemies
+  enemies.filter(e => !e.dead).forEach(e => {
+    const px = offX + e.x * tw, py = offY + e.y * th;
+    // dark backing disc so the sprite reads against floor
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.beginPath();
+    ctx.arc(px + tw/2, py + th/2, tw*0.42, 0, Math.PI*2);
+    ctx.fill();
+    ctx.font = `${Math.round(tw * 0.78)}px serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(e.type, px + tw/2, py + th/2 + th*0.04);
+
+    // HP bar
+    if (e.hp < e.maxHp) {
+      const bw = tw - 2, bh = Math.max(2, th * 0.14);
+      ctx.fillStyle = '#000';
+      ctx.fillRect(px, py, bw+2, bh+1);
+      ctx.fillStyle = '#3a0000';
+      ctx.fillRect(px+1, py, bw, bh);
+      ctx.fillStyle = '#ff3344';
+      ctx.fillRect(px+1, py, bw * (e.hp/e.maxHp), bh);
+    }
+  });
+
+  // Player
+  const px = offX + player.x * tw, py = offY + player.y * th;
+  // glowing aura ring
+  ctx.fillStyle = 'rgba(255,225,120,0.18)';
+  ctx.beginPath();
+  ctx.arc(px + tw/2, py + th/2, tw*0.5, 0, Math.PI*2);
+  ctx.fill();
+  // dark backing disc
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  ctx.beginPath();
+  ctx.arc(px + tw/2, py + th/2, tw*0.42, 0, Math.PI*2);
+  ctx.fill();
+  ctx.shadowColor = '#ffffaa';
+  ctx.shadowBlur = 12 * scale;
+  ctx.font = `${Math.round(tw * 0.84)}px serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(HERO, px + tw/2, py + th/2 + th*0.04);
+  ctx.shadowBlur = 0;
+}
+
+// ══════════════════════════════════════════
+// MOVEMENT & COMBAT
+// ══════════════════════════════════════════
+
+function move(dx, dy) {
+  const nx = player.x + dx, ny = player.y + dy;
+  if (nx < 0 || ny < 0 || nx >= MAP_W || ny >= MAP_H) return;
+
+  const tile = mapData[ny][nx];
+  if (tile === 1) return; // wall
+
+  // Enemy collision → attack
+  const enemy = getEnemyAt(nx, ny);
+  if (enemy) {
+    attackEnemy(enemy);
+    return;
+  }
+
+  // Merchant → open shop (don't step onto them)
+  if (merchant && merchant.x === nx && merchant.y === ny) {
+    openShop();
+    return;
+  }
+
+  // Stairs
+  if (tile === 2) {
+    dungeonLevel++;
+    log(`Descended to dungeon level ${dungeonLevel}!`, 'important');
+    player.x = 5; player.y = 5;
+    generateMap();
+    saveGame();
+    draw();
+    return;
+  }
+
+  player.x = nx;
+  player.y = ny;
+
+  // Enemy AI
+  enemies.filter(e => !e.dead).forEach(e => {
+    const dist = Math.abs(e.x - player.x) + Math.abs(e.y - player.y);
+    if (dist <= 6) enemyMove(e);
+  });
+
+  checkPickupProximity();
+  draw();
+}
+
+function getWeaponDamage() {
+  const w = equipped.weapon;
+  if (w && w.stats.DMG) {
+    const [lo, hi] = w.stats.DMG.split('-').map(Number);
+    return rnd(lo, hi);
+  }
+  return rnd(1, 3); // bare fists
+}
+
+// Sum a flat stat (ATK, DEF, etc.) across all equipped gear.
+function totalStat(name) {
+  let sum = 0;
+  for (const slot of SLOT_KEYS) {
+    const it = equipped[slot];
+    if (it && typeof it.stats[name] === 'number') sum += it.stats[name];
+  }
+  return sum;
+}
+
+function attackEnemy(e) {
+  const dmg = getWeaponDamage() + player.level * 2 + totalStat('ATK');
+  e.hp -= dmg;
+  log(`${HERO} hits ${e.type} for ${dmg} damage!`);
+  if (e.hp <= 0) {
+    e.dead = true;
+    const xp = 10 * dungeonLevel;
+    player.xp += xp;
+    const gold = rnd(2, 8) + dungeonLevel * 3;
+    player.gold += gold;
+    log(`${e.type} defeated! +${xp} XP, +${gold}g`, 'important');
+    updateBars();
+    // Drop loot
+    if (Math.random() < 0.35) {
+      const item = generateItem();
+      groundItems.push({ x: e.x, y: e.y, item });
+      log(`💎 ${e.type} dropped: ${item.name}`, 'loot');
+    }
+    checkLevelUp();
+  } else {
+    // DEF from armor reduces incoming damage (never below 1).
+    const raw = rnd(1, 4) + dungeonLevel;
+    const edm = Math.max(1, raw - Math.floor(totalStat('DEF') / 3));
+    player.hp = Math.max(0, player.hp - edm);
+    log(`${e.type} hits ${HERO} back for ${edm}!`);
+    updateBars();
+    if (player.hp === 0) { log(`${HERO} died... respawning!`, 'important'); player.hp = player.maxHp; }
+  }
+  saveGame();
+  draw();
+}
+
+function enemyMove(e) {
+  const dx = Math.sign(player.x - e.x);
+  const dy = Math.sign(player.y - e.y);
+  // Try horizontal then vertical
+  const options = [];
+  if (dx !== 0) options.push([dx, 0]);
+  if (dy !== 0) options.push([0, dy]);
+  options.push([dx, dy]);
+  for (const [mx, my] of options) {
+    const nx = e.x+mx, ny = e.y+my;
+    if (nx < 0||ny < 0||nx >= MAP_W||ny >= MAP_H) continue;
+    if (mapData[ny][nx] !== 0) continue;
+    if (getEnemyAt(nx,ny)) continue;
+    if (merchant && merchant.x === nx && merchant.y === ny) continue;
+    // For diagonal moves, don't allow squeezing through a wall corner:
+    // at least one of the two orthogonally-adjacent tiles must be open.
+    if (mx !== 0 && my !== 0) {
+      const sideClearX = mapData[e.y][e.x+mx] === 0;
+      const sideClearY = mapData[e.y+my][e.x] === 0;
+      if (!sideClearX && !sideClearY) continue;
+    }
+    if (nx === player.x && ny === player.y) {
+      // Attack player
+      const dmg = rnd(1,4)+dungeonLevel;
+      player.hp = Math.max(0, player.hp-dmg);
+      log(`${e.type} attacks ${HERO} for ${dmg}!`);
+      updateBars();
+      return;
+    }
+    e.x = nx; e.y = ny;
+    return;
+  }
+}
+
+function getEnemyAt(x,y) { return enemies.find(e=>!e.dead&&e.x===x&&e.y===y)||null; }
+
+function checkPickupProximity() {
+  // Loot underfoot is shown on the map; no need to nag about it.
+}
+
+function pickup() {
+  const idx = groundItems.findIndex(g => g.x===player.x && g.y===player.y);
+  if (idx === -1) { log('Nothing here to pick up.'); return; }
+  const { item } = groundItems.splice(idx, 1)[0];
+  inventory.push(item);
+  log(`Picked up: ${item.name}`, 'loot');
+  renderPanel();
+  saveGame();
+  draw();
+}
+
+function checkLevelUp() {
+  const needed = player.level * 50;
+  if (player.xp >= needed) {
+    player.xp -= needed;
+    player.level++;
+    player.maxHp += 10;
+    player.hp = player.maxHp;
+    log(`⭐ LEVEL UP! You are now level ${player.level}!`, 'important');
+    updateBars();
+    saveGame();
+  }
+}
+
+// ══════════════════════════════════════════
+// UI
+// ══════════════════════════════════════════
+
+function updateBars() {
+  document.getElementById('hp-bar').style.width = (player.hp/player.maxHp*100)+'%';
+  document.getElementById('hp-text').textContent = player.hp;
+  document.getElementById('mp-bar').style.width = (player.mp/player.maxMp*100)+'%';
+  document.getElementById('gold-count').textContent = player.gold;
+}
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.getElementById('tab-inv').classList.toggle('active', tab==='inv');
+  document.getElementById('tab-equip').classList.toggle('active', tab==='equip');
+  renderPanel();
+}
+
+function renderPanel() {
+  const el = document.getElementById('panel-content');
+  if (currentTab === 'inv') {
+    if (inventory.length === 0) {
+      el.innerHTML = '<div id="empty-panel">No items yet.<br>Explore!</div>';
+      return;
+    }
+    el.innerHTML = inventory.map((item, i) => {
+      const equipable = !!item.slot;
+      const slotName = item.slot ? SLOTS[item.slot].label.replace(/^\S+\s/, '') : 'potion';
+      return `
+      <div class="loot-item item-${item.tier} ${selectedItem===i?'selected':''}">
+        <div class="loot-info" onclick="selectItem(${i})"
+             onmouseenter="showTooltip(event,${i})" onmouseleave="hideTooltip()">
+          <div class="item-name">${item.name}</div>
+          <div class="item-type">${slotName}</div>
+        </div>
+        ${equipable
+          ? `<button class="row-btn equip-row-btn" onclick="quickEquip(${i})">EQUIP</button>`
+          : ''}
+      </div>`;
+    }).join('');
+  } else {
+    el.innerHTML = SLOT_KEYS.map(s => renderSlot(s, SLOTS[s].label)).join('') +
+      `<div style="margin-top:8px;font-size:10px;color:#555">Tap EQUIP on any loot<br>item to gear up.</div>`;
+  }
+}
+
+function renderSlot(slot, label) {
+  const item = equipped[slot];
+  return `<div class="equip-slot">
+    <div class="slot-info" onclick="tapSlot('${slot}')">
+      <span class="slot-label">${label}</span>
+      <span class="slot-item ${item ? 'item-'+item.tier : ''}">
+        ${item ? item.name : '<span class="slot-empty">— empty —</span>'}
+      </span>
+    </div>
+    ${item ? `<button class="row-btn unequip-row-btn" onclick="unequip('${slot}')">✕</button>` : ''}
+  </div>`;
+}
+
+// One-tap equip: route an item straight to its own slot.
+function quickEquip(i) {
+  const item = inventory[i];
+  if (!item) return;
+  const slot = item.slot;
+  if (!slot) { log(`${item.name} can't be equipped.`); return; }
+  if (equipped[slot]) inventory.push(equipped[slot]); // swap old back into bag
+  equipped[slot] = item;
+  inventory.splice(i, 1);
+  selectedItem = null;
+  hideTooltip();
+  log(`Equipped: ${item.name}`, 'loot');
+  renderPanel();
+  saveGame();
+}
+
+function unequip(slot) {
+  const item = equipped[slot];
+  if (!item) return;
+  inventory.push(item);
+  equipped[slot] = null;
+  hideTooltip();
+  log(`Unequipped: ${item.name}`);
+  renderPanel();
+  saveGame();
+}
+
+function tapSlot(slot) {
+  // Toggle the equipped item's stat tooltip.
+  if (tooltipShowing === 'slot:'+slot) { hideTooltip(); return; }
+  const item = equipped[slot];
+  if (item) {
+    showTooltipForItem(item);
+    tooltipShowing = 'slot:'+slot;
+  }
+}
+
+function selectItem(i) {
+  // Toggle: tapping the already-open item again closes its tooltip.
+  if (selectedItem === i && tooltipShowing === 'item:'+i) {
+    selectedItem = null;
+    hideTooltip();
+    renderPanel();
+    return;
+  }
+  selectedItem = i;
+  renderPanel();
+  showTooltipForItem(inventory[i]);
+  tooltipShowing = 'item:'+i;
+}
+
+// ── TOOLTIP ──
+const ttEl = document.getElementById('tooltip');
+let tooltipShowing = null; // 'item:N' or 'slot:weapon' etc, or null
+
+function showTooltip(e, i) {
+  showTooltipForItem(inventory[i], e.clientX, e.clientY);
+}
+
+function showTooltipForItem(item, x, y) {
+  if (!item) return;
+  const tier = TIERS[item.tier];
+  const stats = Object.entries(item.stats).map(([k,v]) => {
+    // DMG is a range string like "8-12"; others are flat numbers.
+    const val = (typeof v === 'string') ? v : '+'+v;
+    return `<div class="tt-stat">${val} ${k}</div>`;
+  }).join('') || '<div class="tt-stat" style="color:#666">No bonuses</div>';
+  ttEl.innerHTML = `
+    <div class="tt-name" style="color:${tier.color}">${item.name}</div>
+    <div class="tt-tier" style="color:${tier.color}">${item.slot ? SLOTS[item.slot].label : 'potion'}</div>
+    ${stats}
+    <div style="color:#c8a84b;font-size:10px;margin-top:3px">Value: ${item.value}g</div>
+    <div class="tt-flavor">${item.flavor}</div>
+    <div style="color:#555;font-size:9px;margin-top:5px">Tap anywhere to close</div>`;
+  ttEl.style.display = 'block';
+  if (x !== undefined) {
+    ttEl.style.left = Math.min(x+10, window.innerWidth-230)+'px';
+    ttEl.style.top  = Math.min(y+10, window.innerHeight-220)+'px';
+  } else {
+    // Centered-ish for taps from the panel
+    ttEl.style.left = Math.max(10, window.innerWidth/2 - 110)+'px';
+    ttEl.style.top  = '70px';
+  }
+}
+
+function hideTooltip() { ttEl.style.display = 'none'; tooltipShowing = null; }
+
+// Dismiss the tooltip when tapping anywhere (the tooltip, the map, the log, etc.),
+// except when tapping a loot item or gear slot (those manage it themselves).
+document.addEventListener('click', (e) => {
+  if (ttEl.style.display === 'block' &&
+      !e.target.closest('.loot-info') &&
+      !e.target.closest('.slot-info') &&
+      !e.target.closest('.row-btn') &&
+      !e.target.closest('.tab-btn')) {
+    hideTooltip();
+    if (selectedItem !== null) { selectedItem = null; renderPanel(); }
+  }
+}, true);
+
+// ── LOG ──
+function log(msg, cls='') {
+  const el = document.getElementById('log');
+  el.innerHTML += `<div class="log-line ${cls}">${msg}</div>`;
+  el.scrollTop = el.scrollHeight;
+}
+
+// ══════════════════════════════════════════
+// INPUT
+// ══════════════════════════════════════════
+
+document.querySelectorAll('.dpad-btn').forEach(btn => {
+  const handler = () => {
+    const dir = btn.dataset.dir;
+    if (dir === 'up')     move(0,-1);
+    if (dir === 'down')   move(0, 1);
+    if (dir === 'left')   move(-1,0);
+    if (dir === 'right')  move(1, 0);
+    if (dir === 'pickup') pickup();
+  };
+  btn.addEventListener('click', handler);
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key==='ArrowUp'||e.key==='w')    move(0,-1);
+  if (e.key==='ArrowDown'||e.key==='s')  move(0,1);
+  if (e.key==='ArrowLeft'||e.key==='a')  move(-1,0);
+  if (e.key==='ArrowRight'||e.key==='d') move(1,0);
+  if (e.key===' '||e.key==='f')          pickup();
+});
+
+// ══════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════
+
+function rnd(a,b) { return Math.floor(Math.random()*(b-a+1))+a; }
+function pick(arr) { return arr[Math.floor(Math.random()*arr.length)]; }
+
+// ══════════════════════════════════════════
+// SAVE / LOAD
+// ══════════════════════════════════════════
+
+const SAVE_KEY = 'dungeonLoot_save_v1';
+
+function saveGame() {
+  try {
+    const data = {
+      player, inventory, equipped, dungeonLevel,
+      ts: Date.now(),
+    };
+    localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+  } catch (e) {
+    // localStorage unavailable (e.g. inside artifact preview) — fail silently
+  }
+}
+
+function loadGame() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return false;
+    const data = JSON.parse(raw);
+    if (!data.player) return false;
+    player = data.player;
+    if (player.gold == null) player.gold = 0;
+    inventory = (data.inventory || []).filter(it => it && it.slot); // drop legacy typeKey-only items
+    // Rebuild equipped into the new 7-slot shape; salvage any still-valid pieces into the bag.
+    const freshEquipped = { head:null, chest:null, hands:null, legs:null, weapon:null, ring:null, amulet:null };
+    const old = data.equipped || {};
+    Object.values(old).forEach(it => {
+      if (it && it.slot && freshEquipped.hasOwnProperty(it.slot) && !freshEquipped[it.slot]) {
+        freshEquipped[it.slot] = it;
+      } else if (it && it.slot) {
+        inventory.push(it);
+      }
+    });
+    equipped = freshEquipped;
+    dungeonLevel = data.dungeonLevel || 1;
+    // Always spawn at the safe start tile on a freshly generated floor
+    player.x = 5; player.y = 5;
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+function wipeSave() {
+  try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
+  location.reload();
+}
+
+let newGameArmed = false;
+function confirmNewGame() {
+  const btn = document.querySelector('.newgame-action');
+  const label = btn.querySelector('.action-label');
+  if (!newGameArmed) {
+    newGameArmed = true;
+    btn.classList.add('armed');
+    label.textContent = 'SURE?';
+    log('Tap SURE? again to wipe your save and start over.', 'important');
+    setTimeout(() => {
+      newGameArmed = false;
+      btn.classList.remove('armed');
+      label.textContent = 'NEW';
+    }, 3000);
+    return;
+  }
+  wipeSave();
+}
+
+// ══════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════
+
+const hadSave = loadGame();
+generateMap();
+draw();
+updateBars();
+renderPanel();
+
+if (hadSave) {
+  log(`Welcome back, level ${player.level} adventurer.`, 'important');
+  log(`Resuming on dungeon level ${dungeonLevel}. Your gear is intact.`);
+} else {
+  log('Welcome to the dungeon. Move to explore. PICK to grab loot.', 'important');
+  log('Reach the ▼ stairs to descend deeper.');
+}
+log('Progress auto-saves automatically as you play.');
+log('Tap 🎒 BAG (bottom-right) to open your loot.');
+
+// Redraw once layout has settled so the camera fits the real canvas size.
+requestAnimationFrame(() => { resizeCanvas(); draw(); });
+window.addEventListener('load', () => { resizeCanvas(); draw(); });
+
+// Gentle animation loop: only repaints while a merchant is on the floor,
+// so their robe glow pulses. Idle otherwise to save battery.
+let lastPulse = 0;
+function pulseLoop(ts) {
+  if (merchant && ts - lastPulse > 60) { lastPulse = ts; draw(); }
+  requestAnimationFrame(pulseLoop);
+}
+requestAnimationFrame(pulseLoop);
+</script>
+</body>
+</html>
