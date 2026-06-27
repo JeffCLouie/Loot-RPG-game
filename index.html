@@ -67,6 +67,7 @@
   #enemies-hud { color: #ff9a9a; }
   #level-hud { color: var(--gold); }
   #power-hud { color: #ffd24b; }
+  #pact-hud { color: #7fe0d0; }
   .xp-track { width: 46px; height: 6px; background: #45455e; border: 1px solid #000; border-radius: 3px; overflow: hidden; }
   .xp-fill { height: 100%; background: linear-gradient(180deg, #ffe9a0, var(--gold)); box-shadow: 0 0 5px var(--gold); transition: width 0.2s; }
 
@@ -516,6 +517,56 @@
   .shop-sell-btn:active { background: var(--gold); }
   .shop-empty { color: #555; text-align: center; padding: 24px 0; font-size: 12px; }
 
+  /* ── MYSTIC MODAL ── (the Wandering Mystic sells floor-spanning pacts) */
+  #mystic-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+    display: none; align-items: center; justify-content: center;
+    z-index: 200; padding: 16px;
+  }
+  #mystic-overlay.open { display: flex; }
+  #mystic-modal {
+    background: #0c1418; border: 2px solid #2f7f8a; border-radius: 10px;
+    width: 100%; max-width: 340px; max-height: 80vh;
+    display: flex; flex-direction: column; overflow: hidden;
+    box-shadow: 0 0 30px rgba(60,220,210,0.35);
+  }
+  #mystic-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 12px; background: linear-gradient(90deg,#143a44,#1d5a66);
+    border-bottom: 1px solid #2f7f8a;
+  }
+  #mystic-title { color: #cffaf2; font-size: 14px; font-weight: bold; }
+  #mystic-close {
+    background: none; border: none; color: #a5e8e0;
+    font-size: 18px; cursor: pointer; padding: 0 4px;
+  }
+  #mystic-gold {
+    padding: 8px 12px; font-size: 12px; color: var(--gold);
+    border-bottom: 1px solid var(--border);
+  }
+  #mystic-active {
+    padding: 8px 12px; font-size: 11px; color: #7fe0d0; line-height: 1.4;
+    border-bottom: 1px solid var(--border); background: rgba(60,220,210,0.06);
+  }
+  #mystic-content { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 8px; }
+  .pact-card {
+    padding: 8px; margin-bottom: 8px;
+    border: 1px solid #2f5f66; border-radius: 6px; background: rgba(60,220,210,0.04);
+  }
+  .pact-name { font-weight: bold; font-size: 12px; color: #cffaf2; }
+  .pact-desc { font-size: 10px; opacity: 0.8; margin: 2px 0 6px; line-height: 1.35; }
+  .pact-durations { display: flex; gap: 6px; }
+  .pact-buy-btn {
+    flex: 1; border: none; border-radius: 5px; cursor: pointer;
+    font-family: 'Courier New', monospace; font-weight: bold; font-size: 10px;
+    padding: 7px 4px; color: #fff; background: #1d6a72; line-height: 1.3;
+    -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  }
+  .pact-buy-btn:active { background: #2fb0a8; }
+  .pact-buy-btn:disabled { background: #2a2a2a; color: #666; cursor: not-allowed; }
+  .pact-buy-btn .pact-floors { display: block; font-size: 11px; }
+  .pact-buy-btn .pact-cost { display: block; opacity: 0.85; font-size: 10px; }
+
   /* Brief full-screen colour flash for crits, low HP, and big events. */
   #screen-flash {
     position: fixed; inset: 0; pointer-events: none; z-index: 300;
@@ -617,6 +668,7 @@
   </div>
   <div class="hud-item" id="enemies-hud">⚔️ <span class="hud-val" id="enemies-num">0</span></div>
   <div class="hud-item" id="power-hud">⚡ <span class="hud-val" id="power-num">0</span></div>
+  <div class="hud-item" id="pact-hud" style="display:none">🔮 <span class="hud-val" id="pact-num"></span></div>
   <div id="gold-display">💰 <span id="gold-count">0</span>g</div>
 </div>
 
@@ -708,6 +760,18 @@
       <button class="shop-tab" id="shoptab-sell" onclick="shopTab('sell')">SELL</button>
     </div>
     <div id="shop-content"></div>
+  </div>
+</div>
+
+<div id="mystic-overlay" onclick="if(event.target===this)closeMystic()">
+  <div id="mystic-modal">
+    <div id="mystic-header">
+      <span id="mystic-title">🔮 Wandering Mystic</span>
+      <button id="mystic-close" onclick="closeMystic()">✕</button>
+    </div>
+    <div id="mystic-gold">Your gold: <span id="mystic-gold-count">0</span>g</div>
+    <div id="mystic-active" style="display:none"></div>
+    <div id="mystic-content"></div>
   </div>
 </div>
 
@@ -942,6 +1006,51 @@ function rollFloorMod() {
   floorMod = pick(FLOOR_MODS.slice(1));
 }
 
+// Mystic pacts — bargains struck with the Wandering Mystic that reshape the
+// next N floors. Each pact's `fx` multipliers stack on top of whatever floor
+// modifier rolls. Multipliers default to 1, bonuses (elite/goldPiles) to 0.
+//   dmg  — enemy damage      hp   — enemy health
+//   loot — drop quality      gold — gold from kills/piles
+//   xp   — XP from kills      elite — bonus elite spawn chance
+//   enemy — enemy count       goldPiles — extra coin piles per floor
+const MYSTIC_PACTS = [
+  { id:'blood',   icon:'🩸', name:'Blood Pact',
+    desc:'Foes hit harder and have more health — but their hoards and loot swell.',
+    base:55, fx:{ dmg:1.4, hp:1.35, loot:1.6, gold:1.8 } },
+  { id:'mercy',   icon:'🕊️', name:"Mystic's Mercy",
+    desc:'The dungeon softens — enemies grow weaker and frailer.',
+    base:50, fx:{ dmg:0.6, hp:0.65 } },
+  { id:'midas',   icon:'💰', name:'Midas Boon',
+    desc:'Gold pours from every kill, and coin piles litter the floors.',
+    base:55, fx:{ gold:2.5, goldPiles:2 } },
+  { id:'trial',   icon:'⚔️', name:'Trial of Champions',
+    desc:'Elites stalk every hall — deadly, but they spill legends and XP.',
+    base:80, fx:{ elite:0.45, dmg:1.25, hp:1.2, loot:1.9, xp:1.6 } },
+  { id:'scholar', icon:'📖', name:"Scholar's Pact",
+    desc:'Every kill teaches twice as much — XP flows freely.',
+    base:45, fx:{ xp:2 } },
+  { id:'glass',   icon:'💎', name:'Glass Gambit',
+    desc:'You and your foes turn to glass — everyone dies fast, loot runs richer.',
+    base:65, fx:{ dmg:1.6, hp:0.4, loot:1.3 } },
+];
+
+// Duration tiers offered for every pact. The per-floor cost drops in bulk, so
+// 30 floors is cheaper per-floor than buying one at a time.
+const PACT_DURATIONS = [
+  { floors: 1,  mult: 1 },
+  { floors: 10, mult: 7 },
+  { floors: 30, mult: 18 },
+];
+
+// What a given pact + duration costs right now. Scales gently with depth so it
+// stays meaningful as gold piles up.
+function pactPrice(pactDef, dur) {
+  return Math.round(pactDef.base * dur.mult * (1 + dungeonLevel * 0.08));
+}
+
+// Active-pact accessors (mirror the `(floorMod.x || default)` style used below).
+function pfx(field, dflt) { return (pact && pact.fx[field] != null) ? pact.fx[field] : dflt; }
+
 // ══════════════════════════════════════════
 // STATE
 // ══════════════════════════════════════════
@@ -957,6 +1066,8 @@ let inventory = [];
 let equipped = { head: null, chest: null, hands: null, legs: null, weapon: null, ring: null, amulet: null };
 let groundItems = []; // chests on the floor: { x, y } — loot is rolled when opened
 let merchant = null;  // { x, y, stock: [...] } when present
+let mystic = null;    // { x, y } — the Wandering Mystic, when present this floor
+let pact = null;      // active pact: { id, icon, name, desc, floors, fx } or null
 let hasFountain = false;
 let shrineData = {};  // "y,x" -> { kind } for shrine tiles on this floor
 const SHRINE_KINDS = ['power','guard','fortune','blood','wisdom'];
@@ -1396,6 +1507,7 @@ function generateMap() {
   spawnEnemies();
   spawnGroundLoot();
   spawnMerchant();
+  spawnMystic();
   // Vault is built last so its chest survives spawnGroundLoot resetting the list.
   if (Math.random() < 0.5) tryBuildVault(reach);
 }
@@ -1427,6 +1539,22 @@ function spawnMerchant() {
   merchant = { x: mx, y: my, stock, sale };
   log('✨ A robed merchant has wandered onto this floor...', 'important');
   if (sale < 1) log('🏷️ The merchant is holding a flash sale — 30% off everything!', 'important');
+}
+
+// The Wandering Mystic — a second wanderer who takes gold to bend the next
+// 1/10/30 floors to a pact of your choosing. Appears on roughly 1 in 4 floors,
+// independent of the merchant (but never sharing a tile with one).
+function spawnMystic() {
+  mystic = null;
+  if (Math.random() > 0.26) return;
+  let mx, my, tries = 0;
+  do {
+    mx = rnd(1, MAP_W-1); my = rnd(1, MAP_H-1); tries++;
+  } while ((mapData[my][mx] !== 0 || (mx === player.x && my === player.y) || getEnemyAt(mx,my)
+            || (merchant && merchant.x === mx && merchant.y === my)) && tries < 100);
+  if (tries >= 100) return;
+  mystic = { x: mx, y: my };
+  log('🔮 A hooded mystic beckons from the shadows...', 'important');
 }
 
 // ══════════════════════════════════════════
@@ -1568,6 +1696,67 @@ function sellItem(i) {
   saveGame();
 }
 
+// ══════════════════════════════════════════
+// MYSTIC (pact vendor)
+// ══════════════════════════════════════════
+
+function openMystic() {
+  if (!mystic) return;
+  document.getElementById('mystic-overlay').classList.add('open');
+  renderMystic();
+  log('The mystic studies you, weighing what the depths might become.');
+}
+
+function closeMystic() {
+  document.getElementById('mystic-overlay').classList.remove('open');
+}
+
+function renderMystic() {
+  document.getElementById('mystic-gold-count').textContent = player.gold;
+  // Active-pact banner.
+  const active = document.getElementById('mystic-active');
+  if (pact) {
+    active.style.display = '';
+    active.innerHTML = `${pact.icon} <b>${pact.name}</b> — ${pact.floors} floor${pact.floors === 1 ? '' : 's'} remaining.<br>Strike a new pact to replace it.`;
+  } else {
+    active.style.display = 'none';
+  }
+  // One card per pact, with a buy button for each duration.
+  document.getElementById('mystic-content').innerHTML = MYSTIC_PACTS.map((p, i) => {
+    const buttons = PACT_DURATIONS.map(dur => {
+      const price = pactPrice(p, dur);
+      const afford = player.gold >= price;
+      return `<button class="pact-buy-btn" ${afford ? '' : 'disabled'} onclick="buyPact(${i}, ${dur.floors})">
+        <span class="pact-floors">${dur.floors}f</span>
+        <span class="pact-cost">${price}g</span>
+      </button>`;
+    }).join('');
+    return `<div class="pact-card">
+      <div class="pact-name">${p.icon} ${p.name}</div>
+      <div class="pact-desc">${p.desc}</div>
+      <div class="pact-durations">${buttons}</div>
+    </div>`;
+  }).join('');
+}
+
+function buyPact(i, floors) {
+  const def = MYSTIC_PACTS[i];
+  if (!def) return;
+  const dur = PACT_DURATIONS.find(d => d.floors === floors);
+  if (!dur) return;
+  const price = pactPrice(def, dur);
+  if (player.gold < price) return;
+  player.gold -= price;
+  // `floors` counts the next N floors you descend into; tickPact() consumes one
+  // after each floor is generated (see the stairs handler), so this is exact.
+  pact = { id: def.id, icon: def.icon, name: def.name, desc: def.desc, floors, fx: def.fx };
+  log(`${def.icon} You strike the ${def.name} — sealed for the next ${floors} floor${floors === 1 ? '' : 's'}. (-${price}g)`, 'important');
+  updateBars();
+  renderMystic();
+  renderPanel();
+  saveGame();
+}
+
 function spawnEnemies() {
   enemies = [];
   const isBossFloor = dungeonLevel % 5 === 0;
@@ -1576,6 +1765,7 @@ function spawnEnemies() {
     : Math.min(3 + Math.floor(dungeonLevel * 0.7), 10);
   // Some floor modifiers crowd the level with extra foes.
   if (!isBossFloor && floorMod.enemyMult) count = Math.round(count * floorMod.enemyMult);
+  if (!isBossFloor && pfx('enemy', 1) !== 1) count = Math.max(1, Math.round(count * pfx('enemy', 1)));
 
   // Pick 2-3 enemy types for this floor from the depth-appropriate band, so
   // each floor has variety while every monster stays around the same level.
@@ -1587,7 +1777,7 @@ function spawnEnemies() {
 
   // ~20% of non-boss floors feature a single glowing "elite" with better loot;
   // certain floor modifiers raise that chance.
-  const eliteChance = 0.2 + (floorMod.eliteBonus || 0);
+  const eliteChance = 0.2 + (floorMod.eliteBonus || 0) + pfx('elite', 0);
   const eliteIndex = (!isBossFloor && Math.random() < eliteChance) ? rnd(0, count - 1) : -1;
 
   for (let i = 0; i < count; i++) {
@@ -1619,11 +1809,12 @@ function spawnEnemies() {
       } else {
         // Every monster is the level of its floor, so foes get incrementally
         // harder the deeper you dive. HP and damage scale off that level (floor
-        // modifiers still nudge them up or down). Damage is meaningful because
-        // armor now mitigates by a percentage rather than a flat subtraction.
+        // modifiers and any active mystic pact still nudge them up or down).
+        // Damage is meaningful because armor now mitigates by a percentage
+        // rather than a flat subtraction.
         const mobLevel = dungeonLevel;
-        const baseHp = Math.round((14 + mobLevel * 8) * (floorMod.hpMult || 1));
-        const baseDmg = Math.round((4 + mobLevel * 1.7 + bandIdx) * (floorMod.dmgMult || 1));
+        const baseHp = Math.max(1, Math.round((14 + mobLevel * 8) * (floorMod.hpMult || 1) * pfx('hp', 1)));
+        const baseDmg = Math.max(1, Math.round((4 + mobLevel * 1.7 + bandIdx) * (floorMod.dmgMult || 1) * pfx('dmg', 1)));
         if (i === eliteIndex) {
           const eHp = Math.round(baseHp * 2.2);
           const eName = pick(ELITE_NAMES);
@@ -1718,7 +1909,7 @@ function spawnGroundLoot() {
   }
   // Scatter coin piles — a few on most floors, lots during a Gold Rush.
   groundGold = [];
-  let coinCount = (Math.random() < 0.5 ? 1 : 0) + (floorMod.goldPiles || 0);
+  let coinCount = (Math.random() < 0.5 ? 1 : 0) + (floorMod.goldPiles || 0) + pfx('goldPiles', 0);
   for (let i = 0; i < coinCount; i++) {
     let cx, cy, tries = 0;
     do {
@@ -2329,6 +2520,33 @@ function draw() {
     ctx.fillText('💰', px + tw/2, py - th*0.02);
   }
 
+  // Wandering Mystic (hooded pact-vendor with a teal mystical aura)
+  if (mystic) {
+    const px = offX + mystic.x * tw, py = offY + mystic.y * th;
+    // slow breathing teal glow so they read as arcane, distinct from the merchant
+    const t = (Date.now() % 2600) / 2600;
+    const pulse = 0.22 + 0.16 * (0.5 + 0.5 * Math.sin(t * Math.PI * 2));
+    ctx.save();
+    ctx.fillStyle = `rgba(70,225,210,${pulse})`;
+    ctx.beginPath();
+    ctx.arc(px + tw/2, py + th/2, tw*0.55, 0, Math.PI*2);
+    ctx.fill();
+    // dark hooded robe
+    ctx.fillStyle = '#1d4a52';
+    ctx.fillRect(px + tw*0.3, py + tw*0.4, tw*0.4, tw*0.5);
+    ctx.fillStyle = '#2fb0a8';
+    ctx.fillRect(px + tw*0.36, py + tw*0.5, tw*0.28, tw*0.16);
+    ctx.restore();
+    // mystic sprite on top
+    ctx.font = `${Math.round(tw * 0.74)}px serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🧙', px + tw/2, py + th/2 + th*0.02);
+    // crystal-ball tag above
+    ctx.font = `bold ${Math.round(tw*0.34)}px serif`;
+    ctx.fillText('🔮', px + tw/2, py - th*0.02);
+  }
+
   // Enemies
   enemies.filter(e => !e.dead).forEach(e => {
     const px = offX + e.x * tw, py = offY + e.y * th;
@@ -2621,6 +2839,17 @@ function tickBuffs() {
   for (const k of Object.keys(buffs)) if (buffs[k] > 0) buffs[k]--;
 }
 
+// Consume one floor from the active pact. Called after a new floor is generated
+// so the floor just entered still gets the effect, then expires cleanly.
+function tickPact() {
+  if (!pact) return;
+  pact.floors--;
+  if (pact.floors <= 0) {
+    log(`${pact.icon} The ${pact.name} fades — the depths return to their natural state.`, 'important');
+    pact = null;
+  }
+}
+
 // ══════════════════════════════════════════
 // MOVEMENT & COMBAT
 // ══════════════════════════════════════════
@@ -2677,6 +2906,12 @@ function move(dx, dy) {
     return;
   }
 
+  // Mystic → open the pact menu (don't step onto them)
+  if (mystic && mystic.x === nx && mystic.y === ny) {
+    openMystic();
+    return;
+  }
+
   // Shrine → activate it (grants a buff or instant effect), then stand on it.
   if (tile === 5) {
     activateShrine(nx, ny);
@@ -2692,6 +2927,7 @@ function move(dx, dy) {
     log(`Descended to dungeon level ${dungeonLevel}! You enter ${currentTheme().name}.`, 'important');
     player.x = 5; player.y = 5;
     generateMap();
+    tickPact();   // floor just entered keeps the pact, then it counts down
     maybeFloorEvent();
     updateBars();
     saveGame();
@@ -2844,17 +3080,17 @@ function attackEnemy(e) {
     e.dead = true;
     const xpMult = e.isBoss ? 5 : (e.isElite ? 2 : 1);
     const goldMult = e.isBoss ? 3 : (e.isElite ? 2 : 1);
-    const xp = 10 * dungeonLevel * xpMult;
+    const xp = Math.round(10 * dungeonLevel * xpMult * pfx('xp', 1));
     player.xp += xp;
-    const gold = Math.round((rnd(2, 8) + dungeonLevel * 3) * goldMult * (floorMod.goldMult || 1));
+    const gold = Math.round((rnd(2, 8) + dungeonLevel * 3) * goldMult * (floorMod.goldMult || 1) * pfx('gold', 1));
     player.gold += gold;
     spawnFloatingText(e.x + 0.35, e.y, `+${gold}g`, '#ffd24b');
     log(`${label} defeated! +${xp} XP, +${gold}g`, 'important');
     sfx(e.isBoss ? 'boss' : 'kill');
     if (e.isBoss) screenFlash('#ff3344');
     updateBars();
-    // The floor modifier and an active Fortune buff sweeten every drop roll.
-    const lootMult = (floorMod.lootMult || 1) * (buffs.fortune ? 1.5 : 1);
+    // The floor modifier, an active Fortune buff, and any pact sweeten every drop roll.
+    const lootMult = (floorMod.lootMult || 1) * (buffs.fortune ? 1.5 : 1) * pfx('loot', 1);
     // Drop a chest — bosses and elites always drop, with richer loot. The luck
     // value is how many rarity rolls the chest makes (more rolls = better odds).
     if (e.isBoss || e.isElite || Math.random() < 0.18 * lootMult) {
@@ -2925,6 +3161,7 @@ function enemyMove(e) {
     if (mapData[ny][nx] !== 0) continue;
     if (getEnemyAt(nx,ny)) continue;
     if (merchant && merchant.x === nx && merchant.y === ny) continue;
+    if (mystic && mystic.x === nx && mystic.y === ny) continue;
     // For diagonal moves, don't allow squeezing through a wall corner:
     // at least one of the two orthogonally-adjacent tiles must be open.
     if (mx !== 0 && my !== 0) {
@@ -3144,6 +3381,19 @@ function updateBars() {
   if (xpBar) xpBar.style.width = Math.min(100, player.xp / (player.level * 50) * 100) + '%';
   setText('enemies-num', (enemies || []).filter(e => !e.dead).length);
   setText('power-num', playerPower());
+
+  // Active mystic pact indicator (hidden when no pact is in effect).
+  const pactHud = document.getElementById('pact-hud');
+  if (pactHud) {
+    if (pact) {
+      pactHud.style.display = '';
+      pactHud.firstChild.textContent = pact.icon + ' ';
+      setText('pact-num', pact.floors);
+      pactHud.title = `${pact.name} — ${pact.floors} floor${pact.floors === 1 ? '' : 's'} left`;
+    } else {
+      pactHud.style.display = 'none';
+    }
+  }
 
   // Nudge the HERO tab when there are unspent attribute points to spend.
   const heroTab = document.getElementById('tab-hero');
@@ -3548,7 +3798,7 @@ const SAVE_KEY = 'dungeonLoot_save_v1';
 function saveGame() {
   try {
     const data = {
-      player, inventory, equipped, dungeonLevel, buffs,
+      player, inventory, equipped, dungeonLevel, buffs, pact,
       ts: Date.now(),
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
@@ -3594,6 +3844,9 @@ function loadGame() {
     dungeonLevel = data.dungeonLevel || 1;
     // Restore shrine buffs, tolerating older saves that predate them.
     buffs = Object.assign({ power: 0, guard: 0, fortune: 0 }, data.buffs || {});
+    // Restore an active mystic pact, tolerating older saves (and dropping a
+    // malformed one rather than letting it break floor generation).
+    pact = (data.pact && data.pact.fx && data.pact.floors > 0) ? data.pact : null;
     // Recompute derived max HP/MP from the (possibly updated) formula so older
     // saves line up with the current attribute system, then clamp current values.
     recomputeMaxStats();
@@ -3674,7 +3927,7 @@ let lastPulse = 0;
 function pulseLoop(ts) {
   const hasElite = enemies.some(e => !e.dead && e.isElite);
   const hasShrine = Object.keys(shrineData).length > 0;
-  if ((merchant || hasFountain || hasShrine || floatingTexts.length || statusEffects.length || hasElite) && ts - lastPulse > 60) { lastPulse = ts; draw(); }
+  if ((merchant || mystic || hasFountain || hasShrine || floatingTexts.length || statusEffects.length || hasElite) && ts - lastPulse > 60) { lastPulse = ts; draw(); }
   requestAnimationFrame(pulseLoop);
 }
 requestAnimationFrame(pulseLoop);
