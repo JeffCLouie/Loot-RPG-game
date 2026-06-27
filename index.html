@@ -848,7 +848,8 @@
        It grows with the viewport so wide screens don't leave dead space beside
        the square map — the panel expands to absorb the right-hand slack. */
     #side-panel {
-      position: static;
+      position: relative; /* relative + z-index so it stays above town/shop menus */
+      z-index: 250;
       flex: 0 0 clamp(210px, 22vw, 440px);
       width: clamp(210px, 22vw, 440px);
       transform: none;
@@ -857,6 +858,21 @@
       box-shadow: none;
     }
     #side-panel.collapsed { transform: none; opacity: 1; pointer-events: auto; }
+
+    /* Town / shop / mystic menus are confined to the MAP area on web: their
+       right edge stops at the loot drawer column so LOOT / GEAR / HERO stay
+       visible and clickable while a service is open. The modal grows to fill
+       the play area instead of floating as a small centered box. */
+    #town-overlay, #shop-overlay, #mystic-overlay {
+      right: clamp(210px, 22vw, 440px);
+      background: rgba(0,0,0,0.55);
+    }
+    #town-modal, #shop-modal, #mystic-modal {
+      width: 100%;
+      max-width: 560px;
+      height: 100%;
+      max-height: calc(100vh - 32px);
+    }
 
     /* Header reserves room on the right for the floating action buttons that
        move up into it on web, and stays tall enough to seat them. */
