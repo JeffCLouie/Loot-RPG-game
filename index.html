@@ -1127,11 +1127,11 @@ function draw() {
     const alpha = 1 - t * t;
     ctx.save();
     ctx.globalAlpha = Math.max(0, alpha);
-    ctx.font = `${Math.round(tw * 0.34)}px sans-serif`;
+    ctx.font = `${Math.round(tw * 0.28)}px sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+    ctx.lineWidth = 2;
     ctx.strokeText(ft.text, px, py);
     ctx.fillStyle = ft.color;
     ctx.fillText(ft.text, px, py);
