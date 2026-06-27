@@ -2055,8 +2055,11 @@ function attackEnemy(e) {
   // Might adds flat attack power on top of weapon damage, level, and gear ATK.
   let dmg = getWeaponDamage() + player.level * 2 + totalStat('ATK') + (player.attributes?.might||0) * 2;
   // Difficulty floor: a plain swing can't exceed a quarter of the enemy's max
-  // HP, so a normal fight always takes at least 4 hits...
-  dmg = Math.min(dmg, Math.max(1, Math.floor(e.maxHp / 4)));
+  // HP, so a normal fight always takes at least 4 hits. When a hit would cap,
+  // jitter it to 80-100% of the cap so the numbers don't read as an exact
+  // quarter every time (and it still never exceeds the cap).
+  const hitCap = Math.max(1, Math.floor(e.maxHp / 4));
+  if (dmg > hitCap) dmg = Math.max(1, Math.round(hitCap * (rnd(80, 100) / 100)));
   // ...but crits and the Power buff punch straight through that cap.
   if (buffs.power) dmg = Math.round(dmg * 1.5);   // Shrine of Power
   if (isCrit) dmg = Math.round(dmg * 2.2);
