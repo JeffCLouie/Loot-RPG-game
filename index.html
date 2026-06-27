@@ -350,9 +350,13 @@
   .sk-pop .pop-buy:disabled { background: #2a2a3a; color: #666; cursor: not-allowed; }
   .sk-pop .pop-buy.maxed { background: #2e7d32; color: #cdebcf; }
 
-  /* ── SKILL BAR (learned actives, above the control bar) ── */
+  /* ── SKILL BAR (baseline class skill + learned actives) ── */
   #skill-bar { display: flex; gap: 5px; justify-content: center; flex-wrap: wrap; padding: 4px 6px; }
   .skillbar-btn { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; min-width: 42px; padding: 3px 5px; border-radius: 7px; border: 1px solid #4a3a7a; background: #2a1f4a; color: #cbb8ff; cursor: pointer; font-family: 'Courier New', monospace; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+  /* The baseline class skill is marked off in gold so it reads as the primary, always-available ability. */
+  .skillbar-btn.baseline { border-color: var(--frame); background: #3a2f1a; color: #f0e0b8; }
+  .skillbar-btn.baseline .sb-key { color: var(--gold); }
+  .skillbar-btn.baseline.disabled { background: #211c2a; border-color: #33304a; color: #6a647a; }
   .skillbar-btn .sb-key { position: absolute; top: 1px; left: 3px; font-size: 8px; color: #8a7fc0; }
   .skillbar-btn .sb-icon { font-size: 17px; line-height: 1; }
   .skillbar-btn .sb-info { font-size: 8px; letter-spacing: 0.5px; }
@@ -1091,6 +1095,9 @@
     }
     .action-icon { font-size: 21px; }
     .action-label { font-size: 9px; }
+    /* The class skill now lives on the skill bar (above the log), so drop the
+       redundant ⚡ button from the bottom nav to keep it uncluttered. */
+    .skill-btn { display: none !important; }
 
     /* Drawer: full-width sheet over the dungeon, stopping above the nav bar so
        its bottom rows stay readable instead of slipping behind the buttons. */
@@ -1226,6 +1233,9 @@
     }
     .action-icon { font-size: 21px; }
     .action-label { font-size: 9px; }
+    /* The class skill now lives on the skill bar (above the log), so drop the
+       redundant ⚡ button from the bottom nav to keep it uncluttered. */
+    .skill-btn { display: none !important; }
 
     /* Drawer: full-width sheet over the dungeon, stopping above the nav bar so
        its bottom rows stay readable instead of slipping behind the buttons. */
@@ -1303,12 +1313,14 @@
 <div id="main">
   <div id="game-wrap">
     <canvas id="canvas"></canvas>
+    <!-- Active skills (baseline class skill + any learned tree actives). Sits
+         between the map and the log so it's reachable in the thumb zone on
+         mobile. Populated by renderSkillBar(); hidden in town / before a class
+         is chosen. -->
+    <div id="skill-bar" style="display:none"></div>
     <div id="bottom-row">
       <div id="log"></div>
     </div>
-    <!-- Learned active skills (beyond the baseline class skill). Populated by
-         renderSkillBar(); hidden when you have no extra actives or are in town. -->
-    <div id="skill-bar" style="display:none"></div>
     <div id="control-bar">
       <div id="dpad">
         <div></div>
@@ -8623,19 +8635,24 @@ function positionSkillPop() {
   pop.style.top = top + 'px';
 }
 
-// The on-screen bar of LEARNED active skills (everything beyond the baseline class
-// skill, which keeps its own ⚡ button). Number keys 1–4 cast these in order.
+// The on-screen bar of active skills: the baseline class skill first (keyed R,
+// matching the R key / ⚡ button), then any learned tree actives (keyed 1–4,
+// matching the number keys). Showing the baseline here means mobile players, who
+// have no keyboard and where the ⚡ button is dropped from the nav bar, can still
+// see and cast their class skill. Hidden in town and before a class is chosen.
 function renderSkillBar() {
   const bar = document.getElementById('skill-bar');
   if (!bar) return;
-  const extras = activeSkillList().filter(s => !s.baseline);
-  if (!extras.length || inTown) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+  const skills = activeSkillList();
+  if (!skills.length || inTown) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
   bar.style.display = 'flex';
-  bar.innerHTML = extras.map((s, i) => {
+  let extraNum = 0;
+  bar.innerHTML = skills.map((s) => {
     const cd = skillCd(s.id);
     const ready = cd === 0 && player.mp >= s.mp && player.hp > 0;
-    return `<button class="skillbar-btn ${ready ? 'ready' : 'disabled'}" title="${s.name} — ${s.desc} (${s.mp} MP, ${s.cd}-turn cooldown) · press ${i + 1}" onclick="castSkillById('${s.id}')">
-      <span class="sb-key">${i + 1}</span><span class="sb-icon">${s.icon}</span><span class="sb-info">${cd > 0 ? cd : s.mp + 'MP'}</span>
+    const key = s.baseline ? 'R' : String(++extraNum);
+    return `<button class="skillbar-btn ${s.baseline ? 'baseline ' : ''}${ready ? 'ready' : 'disabled'}" title="${s.name} — ${s.desc} (${s.mp} MP, ${s.cd}-turn cooldown) · press ${key}" onclick="castSkillById('${s.id}')">
+      <span class="sb-key">${key}</span><span class="sb-icon">${s.icon}</span><span class="sb-info">${cd > 0 ? cd : s.mp + 'MP'}</span>
     </button>`;
   }).join('');
 }
