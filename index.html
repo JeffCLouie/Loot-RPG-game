@@ -3315,7 +3315,7 @@ function renderHealer() {
     <div class="shop-row">
       <span class="loot-icon">🧪</span>
       <div class="shop-row-info"><div class="shop-row-name">Health Potion</div>
-        <div class="shop-row-sub">Drink for +${HEAL_AMOUNT} HP (you hold ${player.healPotions || 0})</div></div>
+        <div class="shop-row-sub">Restores ${Math.round(HEAL_PERCENT * 100)}% HP (you hold ${player.healPotions || 0})</div></div>
       <span class="shop-price">${potHeal}g</span>
       <button class="shop-buy-btn" ${player.gold >= potHeal ? '' : 'disabled'} onclick="buyTownPotion('heal',${potHeal})">BUY</button>
     </div>
@@ -6570,14 +6570,18 @@ function updateBars() {
   if (vig) vig.classList.toggle('active', player.hp > 0 && player.hp < player.maxHp * 0.25);
 }
 
-const HEAL_AMOUNT = 50;
+// Health potions restore a percentage of max HP, so they scale with you
+// instead of becoming useless at high levels.
+const HEAL_PERCENT = 0.30;
+function healPotionAmount() { return Math.max(1, Math.round(player.maxHp * HEAL_PERCENT)); }
 function useHealthPotion() {
   if (!player.healPotions) { log('No health potions! Buy some from a merchant.'); return; }
   if (player.hp >= player.maxHp) { log('Already at full health.'); return; }
   player.healPotions--;
-  player.hp = Math.min(player.maxHp, player.hp + HEAL_AMOUNT);
+  const heal = Math.min(player.maxHp - player.hp, healPotionAmount());
+  player.hp += heal;
   sfx('potion');
-  log(`❤️ Drank a ${logPotion('Health Potion')}. +${HEAL_AMOUNT} HP (${player.healPotions} left)`, 'loot');
+  log(`❤️ Drank a ${logPotion('Health Potion')}. +${heal} HP (${player.healPotions} left)`, 'loot');
   updateBars();
   saveGame();
 }
