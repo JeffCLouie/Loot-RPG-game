@@ -4188,6 +4188,28 @@ const THEMES = [
     floor:'#4d3c72', floorAlt:'#433463', wall:'#312452', wallTop:'#a684e0',
     brickA:'#463674', brickB:'#3b2d62', mortar:'#271d45', crack:'#cca4ff',
     seam:'#2f2452', speckle:'#9070d6', accent:'rgba(205,160,255,0.32)', stairsGlow:'#e6c0ff' },
+
+  // ── Outdoor nature themes ── grassy floors with leafy/conifer tree walls.
+  { name: 'the Sunlit Forest', wallStyle: 'forest',
+    floor:'#4e8a3a', floorAlt:'#59993f', wall:'#3f7a32', wallTop:'#88d65e',
+    brickA:'#5cab44', brickB:'#386f2c', mortar:'#244a1e', crack:'#1c2c18',
+    seam:'#2e5a26', speckle:'#74bd50', accent:'rgba(225,255,150,0.28)', stairsGlow:'#f2ff9a' },
+  { name: 'the Cherry Blossom Grove', wallStyle: 'forest',
+    floor:'#5a9a4a', floorAlt:'#66a652', wall:'#e88fb8', wallTop:'#ffd6e8',
+    brickA:'#f4aecb', brickB:'#d77aa6', mortar:'#7a4862', crack:'#5a2c44',
+    seam:'#3a6a30', speckle:'#ffc6de', accent:'rgba(255,214,236,0.32)', stairsGlow:'#ffe9f4' },
+  { name: 'the Autumn Woods', wallStyle: 'forest',
+    floor:'#6a5a30', floorAlt:'#5e4f28', wall:'#c8722a', wallTop:'#f7ca58',
+    brickA:'#e0903a', brickB:'#a85620', mortar:'#4a2e18', crack:'#3a2210',
+    seam:'#4a3a1e', speckle:'#d89a4a', accent:'rgba(255,200,110,0.30)', stairsGlow:'#ffd87a' },
+  { name: 'the Pine Highlands', wallStyle: 'pine',
+    floor:'#4a6452', floorAlt:'#415a49', wall:'#28503a', wallTop:'#d6ecde',
+    brickA:'#356a48', brickB:'#1f4030', mortar:'#1c3328', crack:'#16261e',
+    seam:'#2a463a', speckle:'#8fc0a2', accent:'rgba(214,240,226,0.28)', stairsGlow:'#e6f8ee' },
+  { name: 'the Emerald Jungle', wallStyle: 'forest',
+    floor:'#2f6b3a', floorAlt:'#285e33', wall:'#1f5e2e', wallTop:'#55bb64',
+    brickA:'#2f8a44', brickB:'#184a24', mortar:'#143a1c', crack:'#0e2814',
+    seam:'#1e4a26', speckle:'#5fc070', accent:'rgba(150,255,150,0.30)', stairsGlow:'#bdff9a' },
 ];
 function currentTheme() { return THEMES[(dungeonLevel - 1) % THEMES.length]; }
 
@@ -4307,6 +4329,7 @@ function isWallTile(x, y) {
 // is sunlit only along its crest (top tile), so stacked walls read as one cliff.
 function drawWall(px, py, tw, th, x, y, seed, C, cracked) {
   if (C.wallStyle === 'forest') { drawForestWall(px, py, tw, th, x, y, seed, C, cracked); return; }
+  if (C.wallStyle === 'pine') { drawPineWall(px, py, tw, th, x, y, seed, C, cracked); return; }
   const h = Math.abs(seed);
   const W = Math.max(1, Math.floor(tw)), H = Math.max(1, Math.floor(th));
   const topLit = !isWallTile(x, y - 1);
@@ -4390,6 +4413,43 @@ function drawForestWall(px, py, tw, th, x, y, seed, C, cracked) {
     const s = (h >> (i * 3 + 2));
     ctx.fillRect(px + (s % W), py + ((s >> 3) % H), Math.max(1, tw * 0.07), Math.max(1, th * 0.07));
   }
+  if (cracked) { ctx.strokeStyle = 'rgba(255,220,120,0.3)'; ctx.lineWidth = 1; ctx.strokeRect(px + 1, py + 1, tw - 2, th - 2); }
+}
+
+// Conifer wall for alpine themes — stacked triangular tiers with snow-bright
+// tips, slightly offset per tile so a stand of pines reads as a forest.
+function drawPineWall(px, py, tw, th, x, y, seed, C, cracked) {
+  const h = Math.abs(seed);
+  // Shadowed groundcover base.
+  ctx.fillStyle = C.mortar;
+  ctx.fillRect(px, py, tw, th);
+  // Trunk.
+  ctx.fillStyle = '#4a2f1c';
+  ctx.fillRect(px + tw / 2 - tw * 0.06, py + th * 0.74, tw * 0.12, th * 0.26);
+  // Three conifer tiers, widest at the bottom; lighter/snowier toward the top.
+  const cx = px + tw / 2 + ((h % 3) - 1) * tw * 0.05;
+  const tierCols = [C.wallTop, C.brickA, C.wall];
+  for (let i = 0; i < 3; i++) {
+    const t0 = i / 3;
+    const topY = py + th * (0.06 + t0 * 0.26);
+    const botY = py + th * (0.40 + t0 * 0.26);
+    const halfW = tw * (0.16 + t0 * 0.17);
+    ctx.fillStyle = tierCols[i];
+    ctx.beginPath();
+    ctx.moveTo(cx, topY);
+    ctx.lineTo(cx - halfW, botY);
+    ctx.lineTo(cx + halfW, botY);
+    ctx.closePath();
+    ctx.fill();
+  }
+  // Snow-bright cap on the very tip.
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.beginPath();
+  ctx.moveTo(cx, py + th * 0.06);
+  ctx.lineTo(cx - tw * 0.06, py + th * 0.16);
+  ctx.lineTo(cx + tw * 0.06, py + th * 0.16);
+  ctx.closePath();
+  ctx.fill();
   if (cracked) { ctx.strokeStyle = 'rgba(255,220,120,0.3)'; ctx.lineWidth = 1; ctx.strokeRect(px + 1, py + 1, tw - 2, th - 2); }
 }
 
