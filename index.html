@@ -717,7 +717,11 @@ const HERO = '🧙';
 // each stat is worth a weighted amount, plus a flat bonus for its rarity tier.
 // The player's overall power is built from their level, attributes, and gear.
 const STAT_POWER_WEIGHTS = { ATK:3, DEF:2, SPD:2, LCK:2, HP:1, MP:1, CRIT:4, REGEN:5, DMG:3 };
-const TIER_POWER_BONUS = { junk:0, normal:1, uncommon:3, rare:7, epic:14, legendary:28, unique:50 };
+// A small flat nudge per rarity — kept low on purpose so an item's power is
+// driven mostly by its (item-level-scaled) stats. This is what lets a deep
+// common eventually out-power an early legendary instead of the tier bonus
+// permanently outranking it.
+const TIER_POWER_BONUS = { junk:0, normal:1, uncommon:2, rare:4, epic:7, legendary:11, unique:16 };
 
 // Hero attributes — raised by spending points earned on each level up.
 const ATTRIBUTES = {
@@ -984,8 +988,9 @@ function spawnMerchant() {
   ];
   const gearCount = rnd(2, 3);
   for (let i = 0; i < gearCount; i++) {
-    // Merchants deal in better goods: extra rarity rolls on top of progression.
-    const item = generateItem(3);
+    // Merchants deal in better goods: extra rarity rolls on top of progression,
+    // and they stock gear geared a touch above the current floor.
+    const item = generateItem(3, dungeonLevel + 1);
     stock.push({ kind: 'gear', item, price: Math.max(10, Math.round(item.value * 1.4)) });
   }
   // Sometimes the merchant runs a flash sale — everything 30% off.
@@ -1160,25 +1165,30 @@ function spawnEnemies() {
       if (isBossFloor && i === 0) {
         const bossIdx = Math.min(Math.floor(dungeonLevel / 5) - 1, BOSSES.length - 1);
         const boss = BOSSES[bossIdx];
-        // Bosses scale with the floor and, gently, with the hero's own level so
-        // they keep pace as your power (gear + attributes) climbs.
-        const bossHp = Math.round((12 + dungeonLevel * 7 + player.level * 2) * 3);
-        const bossDmg = (3 + dungeonLevel + player.level * 0.4) * 1.6;
+        // A boss is a couple of levels above its floor, and scales primarily
+        // with depth (with a gentle nudge from the hero's level so it keeps
+        // pace as your power climbs). Its level also sets the loot it drops.
+        const bossLevel = dungeonLevel + 2;
+        const bossHp = Math.round((40 + bossLevel * 26 + player.level * 4));
+        const bossDmg = Math.round(9 + bossLevel * 2.1 + player.level * 0.5);
         enemies.push({
           x: ex, y: ey,
           hp: bossHp, maxHp: bossHp,
           type: boss.type, name: boss.name,
-          dmg: Math.round(bossDmg),
+          level: bossLevel,
+          dmg: bossDmg,
           dead: false, isBoss: true,
           statusChance: 0.25,
         });
         log(`⚠️ ${boss.name} ${boss.type} guards this floor!`, 'important');
       } else {
-        // Floor modifiers scale base health and damage up or down. Enemies also
-        // scale gently with the hero's level so the game keeps its bite as your
-        // power grows from gear and spent attribute points.
-        const baseHp = Math.round((12 + dungeonLevel * 7 + player.level * 2) * (floorMod.hpMult || 1));
-        const baseDmg = Math.round((3 + dungeonLevel + bandIdx + player.level * 0.4) * (floorMod.dmgMult || 1));
+        // Every monster is the level of its floor, so foes get incrementally
+        // harder the deeper you dive. HP and damage scale off that level (floor
+        // modifiers still nudge them up or down). Damage is meaningful because
+        // armor now mitigates by a percentage rather than a flat subtraction.
+        const mobLevel = dungeonLevel;
+        const baseHp = Math.round((14 + mobLevel * 8) * (floorMod.hpMult || 1));
+        const baseDmg = Math.round((4 + mobLevel * 1.7 + bandIdx) * (floorMod.dmgMult || 1));
         if (i === eliteIndex) {
           const eHp = Math.round(baseHp * 2.2);
           const eName = pick(ELITE_NAMES);
@@ -1187,6 +1197,7 @@ function spawnEnemies() {
             hp: eHp, maxHp: eHp,
             type: pick(floorTypes),
             name: eName,
+            level: mobLevel + 1,   // elites are a notch above the floor — richer loot
             dmg: Math.round(baseDmg * 1.4),
             dead: false, isElite: true,
           });
@@ -1196,6 +1207,7 @@ function spawnEnemies() {
             x: ex, y: ey,
             hp: baseHp, maxHp: baseHp,
             type: pick(floorTypes),
+            level: mobLevel,
             dmg: baseDmg,
             dead: false,
           };
@@ -1215,10 +1227,11 @@ function spawnEnemies() {
       gx = rnd(1, MAP_W-1); gy = rnd(1, MAP_H-1); tries++;
     } while ((mapData[gy][gx] !== 0 || (gx === player.x && gy === player.y) || getEnemyAt(gx,gy)) && tries < 100);
     if (tries < 100) {
-      const gHp = Math.round((10 + dungeonLevel * 6) * 1.2);
+      const gHp = Math.round((12 + dungeonLevel * 7) * 1.2);
       enemies.push({
         x: gx, y: gy, hp: gHp, maxHp: gHp,
         type: '👺', name: 'Treasure', dmg: 1,
+        level: dungeonLevel + 2,   // its jackpot chest drops gear a bit above the floor
         dead: false, isGoblin: true,
       });
       log('👺 A Treasure Goblin scurries about — catch it before it escapes!', 'important');
@@ -1255,7 +1268,7 @@ function spawnGroundLoot() {
     do {
       gx = rnd(1, MAP_W-1); gy = rnd(1, MAP_H-1); tries++;
     } while (mapData[gy][gx] !== 0 && tries < 100);
-    if (tries < 100) groundItems.push({ x: gx, y: gy, luck: chestLuck });
+    if (tries < 100) groundItems.push({ x: gx, y: gy, luck: chestLuck, ilvl: dungeonLevel });
   }
   // Spawn food — a rare find: most floors have none.
   groundFood = [];
@@ -1315,10 +1328,14 @@ function rollTier(rolls = 1) {
   return best;
 }
 
-function generateItem(rolls = 1) {
+function generateItem(rolls = 1, ilvl = null) {
   const tier = rollTier(rolls);
   const slot = weighted(SLOT_WEIGHTS);
   const baseName = pick(SLOTS[slot].names);
+  // Item level: how deep this drop is geared for. Higher item level means
+  // bigger raw stats regardless of rarity, so loot from deeper floors steadily
+  // outweighs rarer loot found earlier. Defaults to the current dungeon depth.
+  const lvl = Math.max(1, Math.round(ilvl != null ? ilvl : dungeonLevel));
 
   let name = baseName;
   if (tier === 'uncommon') name = pick(PREFIXES) + ' ' + baseName;
@@ -1330,23 +1347,27 @@ function generateItem(rolls = 1) {
   // Stats per item are smaller now, since a full loadout has 7 slots.
   const statCount = { junk:0, normal:1, uncommon:1, rare:2, epic:3, legendary:3, unique:4 }[tier];
   const stats = {};
-  const mult = { junk:0.4, normal:0.7, uncommon:1, rare:1.4, epic:2, legendary:3, unique:4.5 }[tier];
-  // Weapon damage uses a gentler curve so epic+ weapons aren't overpowered.
-  const dmgMult = { junk:0.4, normal:0.7, uncommon:0.9, rare:1.15, epic:1.5, legendary:2, unique:2.6 }[tier];
-  const lvl = dungeonLevel;
+  // Rarity multiplier. Deliberately compressed (~4x from junk to unique, vs the
+  // old ~11x) so that item level — not rarity — is the dominant driver. With a
+  // gentler rarity spread, a high-item-level common eventually out-stats a
+  // low-item-level legendary, while rarity still clearly matters at equal depth.
+  const mult = { junk:0.6, normal:0.85, uncommon:1.1, rare:1.45, epic:1.9, legendary:2.5, unique:3.2 }[tier];
+  // Weapon damage uses a slightly gentler curve so epic+ weapons aren't overpowered.
+  const dmgMult = { junk:0.55, normal:0.8, uncommon:1, rare:1.3, epic:1.65, legendary:2.1, unique:2.6 }[tier];
 
   // Headline stat by slot: weapons deal damage, armor gives defense, jewelry gives utility.
+  // Each headline scales linearly with item level, so depth steadily lifts raw power.
   if (slot === 'weapon') {
-    const base = Math.max(1, Math.floor((rnd(2,4) + lvl) * dmgMult));
+    const base = Math.max(1, Math.floor((2 + lvl * 1.2 + rnd(0,2)) * dmgMult));
     const spread = Math.max(1, Math.floor(base * 0.4));
     stats.DMG = `${base}-${base + spread}`;
   } else if (slot === 'head' || slot === 'chest' || slot === 'hands' || slot === 'legs') {
     // Bigger armor pieces give more DEF than smaller ones.
     const slotDef = { chest: 1.3, legs: 1.0, head: 0.8, hands: 0.7 }[slot];
-    stats.DEF = Math.max(1, Math.floor((rnd(1,3) + lvl) * mult * slotDef));
+    stats.DEF = Math.max(1, Math.floor((1 + lvl + rnd(0,2)) * mult * slotDef));
     // Gloves also grant a little attack power — far less than a weapon.
     if (slot === 'hands') {
-      stats.ATK = Math.max(1, Math.floor((rnd(1,2) + lvl * 0.25) * mult * 0.6));
+      stats.ATK = Math.max(1, Math.floor((1 + lvl * 0.35) * mult * 0.6));
     }
   }
   // ring/amulet have no fixed headline — they roll pure bonus stats below.
@@ -1357,15 +1378,17 @@ function generateItem(rolls = 1) {
   const statPool = STAT_NAMES.filter(s => !(s in stats))
     .sort(() => Math.random()-0.5).slice(0, extraCount);
   statPool.forEach(s => {
-    let v = Math.max(1, Math.floor((rnd(1,3) + lvl*0.5) * mult));
+    let v = Math.max(1, Math.floor((1 + lvl * 0.6 + rnd(0,2)) * mult));
     // Regen is applied every step, so keep the per-item value modest.
     if (s === 'REGEN') v = Math.max(1, Math.round(v * 0.4));
     stats[s] = v;
   });
 
-  let value = { junk:1, normal:5, uncommon:20, rare:80, epic:300, legendary:1200, unique:5000 }[tier];
+  // Base value by rarity, lifted by item level so deeper gear is worth more.
+  const baseValue = { junk:1, normal:5, uncommon:20, rare:80, epic:300, legendary:1200, unique:5000 }[tier];
+  let value = Math.round(baseValue * (1 + lvl * 0.12));
 
-  const item = { id: Math.random(), name, tier, slot, stats, value,
+  const item = { id: Math.random(), name, tier, slot, ilvl: lvl, stats, value,
     flavor: pick(FLAVOR[tier]) };
 
   // Cursed items (~12% of uncommon+): a big stat boost paired with a penalty.
@@ -2099,12 +2122,25 @@ function totalStat(name) {
   return sum;
 }
 
+// Armor reduces incoming damage by a *percentage* with diminishing returns,
+// measured against the attacker's level rather than subtracting a flat amount.
+// Old behaviour (raw - DEF/2) let stacked armor floor almost every hit to 1, so
+// you were never threatened at depth; this keeps armor valuable while ensuring
+// deeper, higher-level foes always land a real blow. Returns final damage (≥1).
+function mitigateDamage(raw, lvl) {
+  const def = totalStat('DEF');
+  const mitigation = def / (def + 18 + (lvl || dungeonLevel) * 6);
+  return Math.max(1, Math.round(raw * (1 - mitigation)));
+}
+
 function attackEnemy(e) {
   // A readable label: bosses/elites use their name, plain foes use their sprite.
-  const label = e.isBoss ? `${e.name} ${e.type}`
-    : (e.isElite ? `${e.name || 'Elite'} ${e.type}`
+  // A level tag makes the depth-based difficulty curve legible at a glance.
+  const lvlTag = e.level ? `Lv${e.level} ` : '';
+  const label = e.isBoss ? `${lvlTag}${e.name} ${e.type}`
+    : (e.isElite ? `${lvlTag}${e.name || 'Elite'} ${e.type}`
     : (e.isGoblin ? 'Treasure Goblin 👺'
-    : (e.name ? `${e.name} ${e.type}` : e.type)));
+    : (e.name ? `${lvlTag}${e.name} ${e.type}` : `${lvlTag}${e.type}`)));
 
   // Critical hits scale off your combined CRIT + LCK stats and Agility attribute.
   const critChance = Math.min(0.6, 0.05 + (totalStat('CRIT') + totalStat('LCK')) * 0.01 + (player.attributes?.agility||0) * 0.01);
@@ -2142,7 +2178,7 @@ function attackEnemy(e) {
     if (e.isBoss || e.isElite || Math.random() < 0.18 * lootMult) {
       let luck = e.isBoss ? 6 : (e.isElite ? 3 : 1);
       if (buffs.fortune) luck += 1;
-      groundItems.push({ x: e.x, y: e.y, luck });
+      groundItems.push({ x: e.x, y: e.y, luck, ilvl: e.level || dungeonLevel });
       const fancy = luck > 1;
       log(`${fancy ? '🎁' : '🧰'} ${label} dropped a ${fancy ? 'glittering ' : ''}chest!`, 'loot');
     }
@@ -2160,23 +2196,23 @@ function attackEnemy(e) {
     if (e.isGoblin) {
       const bonus = 30 + dungeonLevel * 8;
       player.gold += bonus;
-      groundItems.push({ x: e.x, y: e.y, luck: 6 });
+      groundItems.push({ x: e.x, y: e.y, luck: 6, ilvl: e.level || dungeonLevel });
       spawnFloatingText(e.x, e.y, `+${bonus}g`, '#ffd24b');
       log(`💰 The Treasure Goblin bursts — +${bonus}g and a glittering chest!`, 'loot');
       updateBars();
     }
     // Vanishingly rare super-drop: the air shimmers and a fabled chest appears.
     if (Math.random() < 0.02) {
-      groundItems.push({ x: e.x, y: e.y, luck: 6 });
+      groundItems.push({ x: e.x, y: e.y, luck: 6, ilvl: (e.level || dungeonLevel) + 1 });
       log('✨ The air shimmers — a fabled chest materializes!', 'important');
       screenFlash('#ffd24b');
     }
     checkLevelUp();
   } else {
-    // Enemy strikes back. Damage scales with the enemy, reduced by armor DEF.
+    // Enemy strikes back. Damage scales with the enemy, mitigated by armor DEF.
     let raw = Math.round(e.dmg * rnd(80, 120) / 100);
     if (buffs.guard) raw = Math.round(raw * 0.6);   // Shrine of Warding
-    const edm = Math.max(1, raw - Math.floor(totalStat('DEF') / 2));
+    const edm = mitigateDamage(raw, e.level);
     player.hp = Math.max(0, player.hp - edm);
     spawnFloatingText(player.x, player.y, `${edm}`, '#ff3344');
     log(`${label} hits ${HERO} back for ${edm}!`);
@@ -2217,7 +2253,7 @@ function enemyMove(e) {
       // Attack player
       let raw = Math.round(e.dmg * rnd(80, 120) / 100);
       if (buffs.guard) raw = Math.round(raw * 0.6);   // Shrine of Warding
-      const dmg = Math.max(1, raw - Math.floor(totalStat('DEF') / 2));
+      const dmg = mitigateDamage(raw, e.level);
       player.hp = Math.max(0, player.hp-dmg);
       spawnFloatingText(player.x, player.y, `${dmg}`, '#ff3344');
       log(`${e.name ? e.name + ' ' + e.type : e.type} attacks ${HERO} for ${dmg}!`);
@@ -2275,21 +2311,22 @@ function pickup() {
 
   // Rarely the chest is a Mimic — it springs to life and attacks.
   if (Math.random() < 0.10) {
-    const hp = Math.round((10 + dungeonLevel * 6) * 2.5);
-    const dmg = Math.round((3 + dungeonLevel) * 1.4);
+    const mLevel = dungeonLevel + 1;
+    const hp = Math.round((14 + mLevel * 8) * 2.4);
+    const dmg = Math.round((4 + mLevel * 1.7) * 1.4);
     // Find an open tile next to the player for the mimic to lunge from.
     let placed = false;
     const spots = [[1,0],[-1,0],[0,1],[0,-1]].sort(() => Math.random() - 0.5);
     for (const [ox, oy] of spots) {
       const mx = player.x + ox, my = player.y + oy;
       if (mx>=0 && my>=0 && mx<MAP_W && my<MAP_H && mapData[my][mx]===0 && !getEnemyAt(mx,my)) {
-        enemies.push({ x: mx, y: my, hp, maxHp: hp, dmg, type: '🧰', name: 'Mimic', dead: false, isElite: true });
+        enemies.push({ x: mx, y: my, hp, maxHp: hp, dmg, type: '🧰', name: 'Mimic', level: mLevel, dead: false, isElite: true });
         placed = true; break;
       }
     }
     if (!placed) {
       // No room to spawn — it just bites you on the spot instead.
-      const bite = Math.max(1, dmg - Math.floor(totalStat('DEF') / 2));
+      const bite = mitigateDamage(dmg, mLevel);
       player.hp = Math.max(1, player.hp - bite);
       spawnFloatingText(player.x, player.y, `${bite}`, '#ff3344');
     }
@@ -2344,12 +2381,13 @@ function pickup() {
     return;
   }
 
-  const item = generateItem(luck);
+  const chestIlvl = chest.ilvl || dungeonLevel;
+  const item = generateItem(luck, chestIlvl);
   inventory.push(item);
   log(`${fancy ? '🎁' : '🧰'} Opened a ${fancy ? 'glittering ' : ''}chest: ${logItem(item)}`, 'loot');
   // Loot explosion: a lucky chest occasionally overflows with a bonus item.
   if (Math.random() < 0.12) {
-    const bonus = generateItem(luck);
+    const bonus = generateItem(luck, chestIlvl);
     inventory.push(bonus);
     log(`✨ The chest overflows — bonus loot: ${logItem(bonus)}!`, 'important');
   }
@@ -2669,9 +2707,12 @@ function showTooltipForItem(item, anchor) {
     const d = power - itemPower(equipped[item.slot]);
     if (d !== 0) powerDelta = ` <span style="color:${d>0?'#5ee08a':'#e0556b'}">(${d>0?'+':''}${d})</span>`;
   }
+  // Item level: drives raw stat size, so it's worth surfacing alongside power.
+  const ilvlLine = (item.slot && item.ilvl)
+    ? `<span style="color:#7fb0ff;font-weight:bold">ilvl ${item.ilvl}</span>` : '';
   ttEl.innerHTML = `
     <div class="tt-name" style="color:${tier.color}">${item.name}</div>
-    <div class="tt-tier" style="color:${tier.color}">${item.slot ? SLOTS[item.slot].label : 'potion'}</div>
+    <div class="tt-tier" style="color:${tier.color}">${item.slot ? SLOTS[item.slot].label : 'potion'}${ilvlLine ? ' · ' + ilvlLine : ''}</div>
     ${item.slot ? `<div style="color:#ffd24b;font-weight:bold;font-size:11px;margin:3px 0">⚡ Power: ${power}${powerDelta}</div>` : ''}
     ${stats}
     <div style="color:#c8a84b;font-size:10px;margin-top:3px">Value: ${item.value}g</div>
