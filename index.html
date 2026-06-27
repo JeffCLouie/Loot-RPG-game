@@ -577,6 +577,45 @@
   .pact-buy-btn .pact-floors { display: block; font-size: 11px; }
   .pact-buy-btn .pact-cost { display: block; opacity: 0.85; font-size: 10px; }
 
+  /* ── TOWN MODAL ── (blacksmith / healer / trainer / dungeon gate) */
+  #town-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+    display: none; align-items: center; justify-content: center;
+    z-index: 200; padding: 16px;
+  }
+  #town-overlay.open { display: flex; }
+  #town-modal {
+    background: #16120c; border: 2px solid #9f7a3f; border-radius: 10px;
+    width: 100%; max-width: 340px; max-height: 80vh;
+    display: flex; flex-direction: column; overflow: hidden;
+    box-shadow: 0 0 30px rgba(255,200,100,0.3);
+  }
+  #town-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 12px; background: linear-gradient(90deg,#3a2e14,#5a4520);
+    border-bottom: 1px solid #9f7a3f;
+  }
+  #town-title { color: #ffe9b0; font-size: 14px; font-weight: bold; }
+  #town-close {
+    background: none; border: none; color: #e8d5a8;
+    font-size: 18px; cursor: pointer; padding: 0 4px;
+  }
+  #town-gold {
+    padding: 8px 12px; font-size: 12px; color: var(--gold);
+    border-bottom: 1px solid var(--border);
+  }
+  #town-content { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 8px; }
+  .town-blurb { font-size: 11px; color: #b9a98a; margin-bottom: 8px; line-height: 1.4; }
+  .gate-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+  .gate-floor {
+    padding: 10px 0; border: 1px solid var(--border); border-radius: 5px;
+    background: #221a10; color: #ffe9b0; font-family: 'Courier New', monospace;
+    font-weight: bold; cursor: pointer; -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  .gate-floor:active { background: #5a4520; }
+  .gate-floor.current { border-color: var(--gold); color: var(--gold); }
+
   /* Brief full-screen colour flash for crits, low HP, and big events. */
   #screen-flash {
     position: fixed; inset: 0; pointer-events: none; z-index: 300;
@@ -718,6 +757,9 @@
             </svg>
           </span><span class="action-label" id="heal-label">0</span>
         </button>
+        <button class="action-btn town-action" onclick="enterTown()">
+          <span class="action-icon">🏰</span><span class="action-label">TOWN</span>
+        </button>
         <button class="action-btn bag-btn" onclick="togglePanel()">
           <span class="action-icon">
             <svg width="20" height="20" viewBox="0 0 20 20" aria-label="bag">
@@ -782,6 +824,17 @@
     <div id="mystic-gold">Your gold: <span id="mystic-gold-count">0</span>g</div>
     <div id="mystic-active" style="display:none"></div>
     <div id="mystic-content"></div>
+  </div>
+</div>
+
+<div id="town-overlay" onclick="if(event.target===this)closeTown()">
+  <div id="town-modal">
+    <div id="town-header">
+      <span id="town-title">Town</span>
+      <button id="town-close" onclick="closeTown()">✕</button>
+    </div>
+    <div id="town-gold">Your gold: <span id="town-gold-count">0</span>g</div>
+    <div id="town-content"></div>
   </div>
 </div>
 
@@ -906,10 +959,10 @@ const TIER_POWER_BONUS = { junk:0, normal:1, uncommon:2, rare:4, epic:7, legenda
 
 // Hero attributes — raised by spending points earned on each level up.
 const ATTRIBUTES = {
-  might:    { label: '💪 Might',    short: 'MIG', desc: '+2 attack damage per point' },
-  vitality: { label: '❤️ Vitality', short: 'VIT', desc: '+10 max HP per point' },
-  agility:  { label: '🎯 Agility',  short: 'AGI', desc: '+1% crit chance per point' },
-  spirit:   { label: '✨ Spirit',   short: 'SPR', desc: '+6 max MP & regen per point' },
+  might:    { label: '💪 Might',    short: 'MIG', desc: '+3 attack damage per point' },
+  vitality: { label: '❤️ Vitality', short: 'VIT', desc: '+14 max HP & regen per point' },
+  agility:  { label: '🎯 Agility',  short: 'AGI', desc: '+1.5% crit & +1.2% dodge per point' },
+  spirit:   { label: '✨ Spirit',   short: 'SPR', desc: '+8 max MP, regen & spell power per point' },
 };
 const ATTR_KEYS = Object.keys(ATTRIBUTES);
 const ATTR_POINTS_PER_LEVEL = 3;
@@ -941,8 +994,14 @@ function playerPower() {
 
 // Max HP/MP are derived from level + attributes so the formula stays consistent
 // across level ups, attribute spends, and loading an older save.
-function baseMaxHp() { return 92 + player.level*8 + (player.attributes?.vitality||0)*10; }
-function baseMaxMp() { return 56 + player.level*4 + (player.attributes?.spirit||0)*6; }
+function baseMaxHp() { return 92 + player.level*8 + (player.attributes?.vitality||0)*14; }
+function baseMaxMp() { return 56 + player.level*4 + (player.attributes?.spirit||0)*8; }
+
+// Chance to completely avoid an incoming hit, driven by Agility and gear SPD.
+// Capped so you can never become untouchable.
+function playerDodge() {
+  return Math.min(0.35, (player.attributes?.agility||0) * 0.012 + totalStat('SPD') * 0.006);
+}
 function recomputeMaxStats() {
   player.maxHp = baseMaxHp();
   player.maxMp = baseMaxMp();
@@ -980,13 +1039,71 @@ const ENEMY_POOL = [
   ['🐉','👿','😈','🧌','🦖','🦕','🐙','🦑','👾','🧞','🦏','🦬','🐲','🦞'],
 ];
 
+// Bosses guard every 5th floor. Each has a distinct fighting style: a movement
+// `behavior` (see BEHAVIORS) and a signature `ability` that fires during combat.
 const BOSSES = [
-  { type: '👑', name: 'Rat King',      floor: 5  },
-  { type: '🔥', name: 'Inferno Demon', floor: 10 },
-  { type: '🐲', name: 'Elder Dragon',  floor: 15 },
-  { type: '💀', name: 'Death Knight',  floor: 20 },
-  { type: '👁', name: 'The All-Seer',  floor: 25 },
+  { type: '👑', name: 'Rat King',      floor: 5,  behavior: 'chaser', ability: 'summon',   blurb: 'calls vermin to swarm you' },
+  { type: '🔥', name: 'Inferno Demon', floor: 10, behavior: 'caster', ability: 'firebolt', blurb: 'hurls fire from across the room' },
+  { type: '🐲', name: 'Elder Dragon',  floor: 15, behavior: 'brute',  ability: 'enrage',   blurb: 'flies into a rage as it bleeds' },
+  { type: '💀', name: 'Death Knight',  floor: 20, behavior: 'chaser', ability: 'lifesteal',blurb: 'drains your life to heal itself' },
+  { type: '👁', name: 'The All-Seer',  floor: 25, behavior: 'caster', ability: 'curse',    blurb: 'hexes you from afar' },
 ];
+
+// ── ENEMY AI BEHAVIOURS ──
+// Each archetype defines HOW a monster moves and fights, so foes feel distinct
+// instead of all shuffling toward you in a line. The actual pathing toward the
+// player is shared (BFS in enemyPathStep) — these flags layer personality on top.
+//   speed     — tiles moved per turn (swift vermin take two)
+//   range     — how far it can strike (ranged casters reach across the room)
+//   erratic   — chance per step to dart in a random direction instead
+//   slow      — acts only every other turn (heavy brutes), but hits harder
+//   hitMult   — melee damage multiplier
+//   ambush    — stays still until you're within N tiles, then pounces
+//   ranged    — attacks from a distance and tries to keep its spacing
+//   keepAway  — ranged foes back off when you close within this many tiles
+//   packRush  — closes faster when you're wounded (wolves hunt in packs)
+const BEHAVIORS = {
+  chaser:  { speed: 1, range: 1 },
+  swift:   { speed: 2, range: 1, erratic: 0.25 },
+  erratic: { speed: 1, range: 1, erratic: 0.6 },
+  lurker:  { speed: 1, range: 1, ambush: 3 },
+  brute:   { speed: 1, range: 1, slow: true, hitMult: 1.5 },
+  caster:  { speed: 1, range: 4, ranged: true, keepAway: 2, castChance: 0.7 },
+  pack:    { speed: 1, range: 1, packRush: true },
+};
+// Map each enemy sprite to a behaviour; anything unlisted hunts you down (chaser).
+const ENEMY_BEHAVIOR = {
+  '🐀':'swift','🐁':'swift','🐜':'swift','🦗':'swift','🪲':'swift','🪳':'swift','🐝':'swift','🦟':'swift','🐛':'swift',
+  '🦇':'erratic','👻':'erratic','🦨':'erratic','🦅':'erratic',
+  '🐍':'lurker','🦂':'lurker','🦎':'lurker','🐙':'lurker','🦑':'lurker','🐸':'lurker','🐌':'lurker',
+  '🐻':'brute','🐗':'brute','🦏':'brute','🦬':'brute','🧌':'brute','🦖':'brute','🦕':'brute','🐉':'brute','🐲':'brute','🦞':'brute','🧟':'brute','🐊':'brute','🦔':'brute',
+  '🧛':'caster','👿':'caster','😈':'caster','👾':'caster','🧞':'caster',
+  '🐺':'pack','🐅':'pack',
+};
+function behaviorFor(type) { return ENEMY_BEHAVIOR[type] || 'chaser'; }
+
+// ── WEAPON ATTACK STYLES ──
+// Each weapon base name swings differently, so loadout shapes how you fight:
+//   slash  (Sword)  — balanced strike, light follow-through onto a 2nd foe
+//   cleave (Axe)    — hits every adjacent enemy at once
+//   flurry (Dagger) — two rapid lighter hits, extra crit
+//   bolt   (Staff)  — magic blast at range, spends a little MP
+//   shot   (Bow)    — fires across the room, no counterattack from afar
+//   crush  (Mace)   — heavy blow that can stun
+//   thrust (Spear)  — reaches one extra tile, striking without reprisal
+//   reap   (Scythe) — wide arc that heals you for part of the damage dealt
+const WEAPON_STYLES = {
+  Sword:'slash', Axe:'cleave', Dagger:'flurry', Staff:'bolt',
+  Bow:'shot', Mace:'crush', Spear:'thrust', Scythe:'reap',
+};
+function weaponStyle() {
+  const w = equipped.weapon;
+  if (!w || !w.name) return 'fist';
+  for (const base of Object.keys(WEAPON_STYLES)) {
+    if (new RegExp('\\b' + base + '\\b').test(w.name)) return WEAPON_STYLES[base];
+  }
+  return 'slash';
+}
 
 // Names rolled for elite (named) enemies and mimics, so a glowing foe feels
 // like a personality rather than just a tougher sprite.
@@ -1066,6 +1183,9 @@ function pfx(field, dflt) { return (pact && pact.fx[field] != null) ? pact.fx[fi
 // ══════════════════════════════════════════
 
 let player = { x: 5, y: 5, hp: 100, maxHp: 100, mp: 60, maxMp: 60, gold: 0, level: 1, xp: 0, healPotions: 2, manaPotions: 0, healthPotionsBought: 0,
+  // Deepest dungeon floor reached — the Dungeon Gate in town lets you re-enter
+  // on any floor up to this, so you can backtrack to grind levels and gear.
+  maxFloor: 1,
   // Hero attributes raised by spending points earned on level up.
   attributes: { might: 0, vitality: 0, agility: 0, spirit: 0 }, attrPoints: 0,
   // Chosen cosmetic looks per visual slot (null = mirror equipped gear), plus the
@@ -1101,6 +1221,19 @@ let currentTab = 'inv';
 let selectedItem = null;
 let mapData = [];
 let dungeonLevel = 1;
+
+// ── TOWN (safe hub you can warp to) ──
+// When true, the map is the town plaza rather than a dungeon floor: no enemies,
+// just NPCs offering services and a gate back into the dungeon. `townNpcs` holds
+// the friendly folk you can walk up to; `dungeonReturn` is the floor the gate
+// drops you onto when you re-enter.
+let inTown = false;
+let townNpcs = [];
+let dungeonReturn = 1;
+// Bumped whenever the active floor is rebuilt (descend, death-retreat, town).
+// Enemy-turn loops capture it and bail if it changes mid-turn, so a death that
+// warps you to a fresh floor can't let stale foes keep acting.
+let floorSerial = 0;
 
 // ══════════════════════════════════════════
 // AUDIO  (sound effects + background music)
@@ -1397,6 +1530,8 @@ function tryBuildVault(reach) {
 }
 
 function generateMap() {
+  inTown = false;
+  floorSerial++;
   rollFloorMod();
   // ~35% of floors get a subtle colour wash for atmosphere.
   floorTint = Math.random() < 0.35 ? pick(FLOOR_TINTS) : null;
@@ -1914,6 +2049,304 @@ function buyPact(i, floors) {
   saveGame();
 }
 
+// ══════════════════════════════════════════
+// TOWN  (safe hub with NPC services + dungeon gate)
+// ══════════════════════════════════════════
+
+// Warp to the town plaza from anywhere in the dungeon. Dungeon progress is
+// untouched — re-enter through the Dungeon Gate to drop back in on any floor
+// you've reached, so you can backtrack to grind levels and gear.
+function enterTown() {
+  if (inTown) return;
+  closeShop(); closeMystic(); closeTown();
+  dungeonReturn = dungeonLevel;
+  buildTown();
+  sfx('stairs');
+  log('🏰 You step through a shimmering gate into the safety of town.', 'important');
+  log('Walk up to the townsfolk for their services. The 🌀 Dungeon Gate takes you back below.');
+  updateBars();
+  draw();
+  saveGame();
+}
+
+// Lay out the walled town plaza and place its NPCs.
+function buildTown() {
+  inTown = true;
+  floorSerial++;
+  // Clear every dungeon-only entity so nothing lingers into the safe hub.
+  enemies = []; merchant = null; mystic = null;
+  groundItems = []; groundFood = []; groundGold = [];
+  quest = null; teleporters = {}; shrineData = {};
+  hasFountain = false; groundKey = null; hasKey = false;
+  floorMod = FLOOR_MODS[0]; floorTint = '#251f12';
+  statusEffects = statusEffects.filter(s => s.target === 'player');
+
+  // Solid border wall, open plaza within.
+  mapData = [];
+  for (let y = 0; y < MAP_H; y++) {
+    mapData[y] = [];
+    for (let x = 0; x < MAP_W; x++) {
+      mapData[y][x] = (x === 0 || y === 0 || x === MAP_W - 1 || y === MAP_H - 1) ? 1 : 0;
+    }
+  }
+
+  // The townsfolk, each offering a service when you walk into them.
+  townNpcs = [
+    { x: 4,  y: 4,  emoji: '🧙‍♂️', name: 'Merchant',     kind: 'merchant', tag: '💰' },
+    { x: 8,  y: 4,  emoji: '⚒️',   name: 'Blacksmith',   kind: 'smith',    tag: '🔧' },
+    { x: 12, y: 4,  emoji: '⛑️',   name: 'Healer',       kind: 'healer',   tag: '❤️' },
+    { x: 15, y: 5,  emoji: '🔮',   name: 'Mystic',       kind: 'mystic',   tag: '🔮' },
+    { x: 5,  y: 9,  emoji: '🎓',   name: 'Trainer',      kind: 'trainer',  tag: '✨' },
+    { x: 14, y: 11, emoji: '🌀',   name: 'Dungeon Gate', kind: 'gate',     tag: '⬇️' },
+  ];
+
+  // Enter near the bottom-centre of the plaza.
+  player.x = 10; player.y = MAP_H - 3;
+  startPos = { x: player.x, y: player.y };
+  recomputeMaxStats();
+}
+
+// Walk the plaza; bumping an NPC opens their service (you never step onto them).
+function townMove(dx, dy) {
+  const nx = player.x + dx, ny = player.y + dy;
+  if (nx < 0 || ny < 0 || nx >= MAP_W || ny >= MAP_H) return;
+  if (mapData[ny][nx] === 1) return;
+  const npc = townNpcs.find(n => n.x === nx && n.y === ny);
+  if (npc) { openTownService(npc.kind); return; }
+  player.x = nx; player.y = ny;
+  draw();
+}
+
+function openTownService(kind) {
+  if (kind === 'merchant') {
+    // A well-stocked town merchant: potions plus several gear pieces geared to
+    // the deepest floor you've reached, so shopping stays relevant.
+    const ilvl = Math.max(dungeonReturn, player.maxFloor || 1);
+    const stock = [
+      { kind: 'potion', name: 'Health Potion', heal: 40, price: 25 + ilvl * 5 },
+      { kind: 'potion', name: 'Mana Potion',   mana: 30, price: 20 + ilvl * 5 },
+    ];
+    const gearCount = rnd(4, 6);
+    for (let i = 0; i < gearCount; i++) {
+      const item = generateItem(3, ilvl + 1);
+      stock.push({ kind: 'gear', item, price: Math.max(10, Math.round(item.value * 1.4)) });
+    }
+    merchant = { x: 0, y: 0, stock, sale: 1, town: true };
+    openShop();
+    return;
+  }
+  if (kind === 'mystic')  { mystic = { x: 0, y: 0, town: true }; openMystic(); return; }
+  if (kind === 'smith')   { openSmith();   return; }
+  if (kind === 'healer')  { openHealer();  return; }
+  if (kind === 'trainer') { openTrainer(); return; }
+  if (kind === 'gate')    { openGate();    return; }
+}
+
+// One reusable overlay backs the smith / healer / trainer / gate panels.
+function openTownModal(title) {
+  document.getElementById('town-title').textContent = title;
+  document.getElementById('town-overlay').classList.add('open');
+}
+function closeTown() {
+  const ov = document.getElementById('town-overlay');
+  if (ov) ov.classList.remove('open');
+}
+function setTownContent(html) {
+  document.getElementById('town-gold-count').textContent = player.gold;
+  document.getElementById('town-content').innerHTML = html;
+}
+
+// ── BLACKSMITH — permanently upgrade equipped gear ──
+function upgradeCost(item) {
+  const lv = item.upgrades || 0;
+  return Math.round((40 + itemPower(item) * 6) * (1 + lv * 0.6));
+}
+function openSmith() { openTownModal('⚒️ Blacksmith'); renderSmith(); }
+function renderSmith() {
+  const rows = SLOT_KEYS.map(slot => {
+    const it = equipped[slot];
+    if (!it) {
+      return `<div class="shop-row"><div class="shop-row-info"><div class="shop-row-name" style="opacity:.45">${SLOTS[slot].label} — empty</div></div></div>`;
+    }
+    const cost = upgradeCost(it);
+    const afford = player.gold >= cost;
+    return `<div class="shop-row">
+      <span class="loot-icon">${itemIcon(it)}</span>
+      <div class="shop-row-info item-${it.tier}">
+        <div class="shop-row-name">${it.name}${it.upgrades ? ` <span style="color:#ffd24b">+${it.upgrades}</span>` : ''}</div>
+        <div class="shop-row-stats">${itemStatLine(it)}</div>
+      </div>
+      <span class="shop-price">${cost}g</span>
+      <button class="shop-buy-btn" ${afford ? '' : 'disabled'} onclick="upgradeEquipped('${slot}')">FORGE</button>
+    </div>`;
+  }).join('');
+  setTownContent(`<div class="town-blurb">The smith reforges your equipped gear — each forging boosts its stats and power. Costs climb the more a piece is upgraded.</div>${rows}`);
+}
+function upgradeEquipped(slot) {
+  const it = equipped[slot];
+  if (!it) return;
+  const cost = upgradeCost(it);
+  if (player.gold < cost) return;
+  player.gold -= cost;
+  it.upgrades = (it.upgrades || 0) + 1;
+  // Boost positive stats ~15% (min +1) and widen weapon DMG; leave curse penalties be.
+  for (const k of Object.keys(it.stats)) {
+    const v = it.stats[k];
+    if (typeof v === 'number' && v > 0) {
+      it.stats[k] = v + Math.max(1, Math.round(v * 0.15));
+    } else if (typeof v === 'string' && v.includes('-')) {
+      const [lo, hi] = v.split('-').map(Number);
+      it.stats[k] = `${lo + Math.max(1, Math.round(lo * 0.15))}-${hi + Math.max(1, Math.round(hi * 0.15))}`;
+    }
+  }
+  it.value = Math.round((it.value || 1) * 1.3);
+  sfx('equip');
+  log(`⚒️ The smith reforges your ${it.name} to +${it.upgrades}!`, 'loot');
+  updateBars(); renderPanel(); renderSmith(); saveGame();
+}
+
+// ── HEALER — rest to full, cure ailments, stock potions ──
+function restCost() { return 15 + player.level * 6 + (dungeonReturn || 1) * 4; }
+function openHealer() { openTownModal('⛑️ Healer'); renderHealer(); }
+function renderHealer() {
+  const cost = restCost();
+  const full = player.hp >= player.maxHp && player.mp >= player.maxMp;
+  const potHeal = 25 + (player.maxFloor || 1) * 5;
+  const potMana = 20 + (player.maxFloor || 1) * 5;
+  setTownContent(`
+    <div class="town-blurb">The healer mends your wounds and sells restoratives for the road.</div>
+    <div class="shop-row">
+      <span class="loot-icon">❤️</span>
+      <div class="shop-row-info"><div class="shop-row-name">Full Rest &amp; Cure</div>
+        <div class="shop-row-sub">Restore all HP/MP and clear poison &amp; curses</div></div>
+      <span class="shop-price">${cost}g</span>
+      <button class="shop-buy-btn" ${(player.gold >= cost && !full) ? '' : 'disabled'} onclick="restHeal()">REST</button>
+    </div>
+    <div class="shop-row">
+      <span class="loot-icon">🧪</span>
+      <div class="shop-row-info"><div class="shop-row-name">Health Potion</div>
+        <div class="shop-row-sub">Drink for +${HEAL_AMOUNT} HP (you hold ${player.healPotions || 0})</div></div>
+      <span class="shop-price">${potHeal}g</span>
+      <button class="shop-buy-btn" ${player.gold >= potHeal ? '' : 'disabled'} onclick="buyTownPotion('heal',${potHeal})">BUY</button>
+    </div>
+    <div class="shop-row">
+      <span class="loot-icon">🔷</span>
+      <div class="shop-row-info"><div class="shop-row-name">Mana Potion</div>
+        <div class="shop-row-sub">Drink with E for +${MANA_AMOUNT} MP (you hold ${player.manaPotions || 0})</div></div>
+      <span class="shop-price">${potMana}g</span>
+      <button class="shop-buy-btn" ${player.gold >= potMana ? '' : 'disabled'} onclick="buyTownPotion('mana',${potMana})">BUY</button>
+    </div>`);
+}
+function restHeal() {
+  const cost = restCost();
+  if (player.gold < cost) return;
+  if (player.hp >= player.maxHp && player.mp >= player.maxMp) return;
+  player.gold -= cost;
+  player.hp = player.maxHp; player.mp = player.maxMp;
+  statusEffects = statusEffects.filter(s => s.target !== 'player');
+  sfx('potion');
+  log('⛑️ The healer restores you to full and cleanses every ailment.', 'loot');
+  updateBars(); renderHealer(); saveGame();
+}
+function buyTownPotion(which, cost) {
+  if (player.gold < cost) return;
+  player.gold -= cost;
+  if (which === 'heal') { player.healPotions++; player.healthPotionsBought++; log(`Bought a ${logPotion('Health Potion')}. (${player.healPotions} held)`, 'loot'); }
+  else { player.manaPotions++; log(`Bought a ${logPotion('Mana Potion')}. (${player.manaPotions} held)`, 'loot'); }
+  sfx('buy');
+  updateBars(); renderHealer(); saveGame();
+}
+
+// ── TRAINER — respec spent attribute points ──
+function respecCost() {
+  const spent = ATTR_KEYS.reduce((s, k) => s + (player.attributes?.[k] || 0), 0);
+  return 50 + spent * 20 + player.level * 5;
+}
+function openTrainer() { openTownModal('🎓 Trainer'); renderTrainer(); }
+function renderTrainer() {
+  const a = player.attributes || {};
+  const spent = ATTR_KEYS.reduce((s, k) => s + (a[k] || 0), 0);
+  const cost = respecCost();
+  const rows = ATTR_KEYS.map(k => `<div class="shop-row">
+      <div class="shop-row-info"><div class="shop-row-name">${ATTRIBUTES[k].label}: ${a[k] || 0}</div>
+      <div class="shop-row-sub">${ATTRIBUTES[k].desc}</div></div></div>`).join('');
+  setTownContent(`
+    <div class="town-blurb">The trainer can unlearn your attributes, returning all ${spent} spent point${spent === 1 ? '' : 's'} to spend anew (you have ${player.attrPoints || 0} unspent).</div>
+    ${rows}
+    <div class="shop-row">
+      <span class="loot-icon">🔄</span>
+      <div class="shop-row-info"><div class="shop-row-name">Respec Attributes</div>
+        <div class="shop-row-sub">Refund every point you've spent</div></div>
+      <span class="shop-price">${cost}g</span>
+      <button class="shop-buy-btn" ${(player.gold >= cost && spent > 0) ? '' : 'disabled'} onclick="respecAttrs()">RESET</button>
+    </div>`);
+}
+function respecAttrs() {
+  const spent = ATTR_KEYS.reduce((s, k) => s + (player.attributes?.[k] || 0), 0);
+  const cost = respecCost();
+  if (spent <= 0 || player.gold < cost) return;
+  player.gold -= cost;
+  player.attrPoints = (player.attrPoints || 0) + spent;
+  player.attributes = { might: 0, vitality: 0, agility: 0, spirit: 0 };
+  recomputeMaxStats();
+  if (player.hp > player.maxHp) player.hp = player.maxHp;
+  if (player.mp > player.maxMp) player.mp = player.maxMp;
+  sfx('shrine');
+  log(`🎓 You unlearn your attributes — ${spent} point${spent === 1 ? '' : 's'} returned to spend.`, 'important');
+  updateBars(); renderPanel(); renderTrainer(); saveGame();
+}
+
+// ── DUNGEON GATE — choose any reached floor to re-enter ──
+function openGate() { openTownModal('🌀 Dungeon Gate'); renderGate(); }
+function renderGate() {
+  const maxF = Math.max(1, player.maxFloor || 1);
+  let buttons = '';
+  for (let f = 1; f <= maxF; f++) {
+    const deepest = f === maxF;
+    buttons += `<button class="gate-floor ${f === dungeonReturn ? 'current' : ''}" onclick="enterDungeonAt(${f})">${f}${deepest ? ' ▾' : ''}</button>`;
+  }
+  setTownContent(`
+    <div class="town-blurb">Step back into the dungeon on any floor you've reached (deepest: ${maxF}). Lower floors are great for grinding levels and gear before pushing deeper.</div>
+    <div class="gate-grid">${buttons}</div>`);
+}
+function enterDungeonAt(f) {
+  const maxF = Math.max(1, player.maxFloor || 1);
+  f = Math.max(1, Math.min(maxF, f));
+  closeTown();
+  dungeonLevel = f;
+  statusEffects = [];
+  player.x = 5; player.y = 5;
+  generateMap();   // clears inTown and builds the chosen floor
+  maybeFloorEvent();
+  sfx('stairs');
+  log(`🌀 You step through the gate onto dungeon floor ${f}.`, 'important');
+  updateBars(); draw(); saveGame();
+}
+
+// Draw the friendly townsfolk on top of the plaza, with a glow + name label.
+function drawTownNpcs(offX, offY, tw, th, scale) {
+  townNpcs.forEach(n => {
+    const px = offX + n.x * tw, py = offY + n.y * th;
+    const t = (Date.now() % 2400) / 2400;
+    const pulse = 0.18 + 0.12 * (0.5 + 0.5 * Math.sin(t * Math.PI * 2));
+    ctx.save();
+    ctx.fillStyle = n.kind === 'gate' ? `rgba(150,90,255,${pulse + 0.12})` : `rgba(255,210,120,${pulse})`;
+    ctx.beginPath();
+    ctx.arc(px + tw / 2, py + th / 2, tw * 0.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    ctx.font = `${Math.round(tw * 0.72)}px serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(n.emoji, px + tw / 2, py + th / 2 + th * 0.02);
+    ctx.font = `bold ${Math.round(tw * 0.32)}px serif`;
+    ctx.fillText(n.tag, px + tw / 2, py - th * 0.04);
+    ctx.font = `bold ${Math.round(tw * 0.2)}px monospace`;
+    ctx.fillStyle = '#ffe9b0';
+    ctx.fillText(n.name, px + tw / 2, py + th * 0.92);
+  });
+}
+
 function spawnEnemies() {
   enemies = [];
   const isBossFloor = dungeonLevel % 5 === 0;
@@ -1936,6 +2369,11 @@ function spawnEnemies() {
   // certain floor modifiers raise that chance.
   const eliteChance = 0.2 + (floorMod.eliteBonus || 0) + pfx('elite', 0);
   const eliteIndex = (!isBossFloor && Math.random() < eliteChance) ? rnd(0, count - 1) : -1;
+
+  // Difficulty tracks the hero, not just the floor: once you out-level the depth
+  // (e.g. by grinding lower floors from town), foes toughen so fights stay real.
+  const lvlGap = Math.max(0, player.level - dungeonLevel);
+  const threatScale = 1 + lvlGap * 0.06;
 
   for (let i = 0; i < count; i++) {
     let ex, ey;
@@ -1960,9 +2398,12 @@ function spawnEnemies() {
           level: bossLevel,
           dmg: bossDmg,
           dead: false, isBoss: true,
-          statusChance: 0.25,
+          statusChance: boss.ability === 'curse' ? 0.45 : 0.25,
+          behavior: boss.behavior,
+          bossAbility: boss.ability,
+          cd: 3,            // turns before the signature ability can fire again
         });
-        log(`⚠️ ${boss.name} ${boss.type} guards this floor!`, 'important');
+        log(`⚠️ ${boss.name} ${boss.type} guards this floor — it ${boss.blurb}!`, 'important');
       } else {
         // Every monster is the level of its floor, so foes get incrementally
         // harder the deeper you dive. HP and damage scale off that level (floor
@@ -1970,29 +2411,33 @@ function spawnEnemies() {
         // Damage is meaningful because armor now mitigates by a percentage
         // rather than a flat subtraction.
         const mobLevel = dungeonLevel;
-        const baseHp = Math.max(1, Math.round((14 + mobLevel * 8) * (floorMod.hpMult || 1) * pfx('hp', 1)));
-        const baseDmg = Math.max(1, Math.round((4 + mobLevel * 1.7 + bandIdx) * (floorMod.dmgMult || 1) * pfx('dmg', 1)));
+        const baseHp = Math.max(1, Math.round((14 + mobLevel * 8) * (floorMod.hpMult || 1) * pfx('hp', 1) * threatScale));
+        const baseDmg = Math.max(1, Math.round((4 + mobLevel * 1.7 + bandIdx) * (floorMod.dmgMult || 1) * pfx('dmg', 1) * threatScale));
         if (i === eliteIndex) {
           const eHp = Math.round(baseHp * 2.2);
           const eName = pick(ELITE_NAMES);
+          const eType = pick(floorTypes);
           enemies.push({
             x: ex, y: ey,
             hp: eHp, maxHp: eHp,
-            type: pick(floorTypes),
+            type: eType,
             name: eName,
             level: mobLevel + 1,   // elites are a notch above the floor — richer loot
             dmg: Math.round(baseDmg * 1.4),
             dead: false, isElite: true,
+            behavior: behaviorFor(eType),
           });
           log(`✨ ${eName}, a glowing elite, prowls this floor — slay it for richer loot!`, 'important');
         } else {
+          const mType = pick(floorTypes);
           const mob = {
             x: ex, y: ey,
             hp: baseHp, maxHp: baseHp,
-            type: pick(floorTypes),
+            type: mType,
             level: mobLevel,
             dmg: baseDmg,
             dead: false,
+            behavior: behaviorFor(mType),
           };
           // ~22% of regular foes carry a random affix that shakes up the fight.
           if (Math.random() < 0.22) applyAffix(mob);
@@ -2649,8 +3094,8 @@ function draw() {
     ctx.restore();
   }
 
-  // Merchant (roaming trader in bright robes)
-  if (merchant) {
+  // Merchant (roaming trader in bright robes) — never the town stand-in.
+  if (merchant && !inTown) {
     const px = offX + merchant.x * tw, py = offY + merchant.y * th;
     // pulsing rainbow-ish glow so they stand out as special
     const t = (Date.now() % 2000) / 2000;
@@ -2678,7 +3123,7 @@ function draw() {
   }
 
   // Wandering Mystic (hooded pact-vendor with a teal mystical aura)
-  if (mystic) {
+  if (mystic && !inTown) {
     const px = offX + mystic.x * tw, py = offY + mystic.y * th;
     // slow breathing teal glow so they read as arcane, distinct from the merchant
     const t = (Date.now() % 2600) / 2600;
@@ -2703,6 +3148,9 @@ function draw() {
     ctx.font = `bold ${Math.round(tw*0.34)}px serif`;
     ctx.fillText('🔮', px + tw/2, py - th*0.02);
   }
+
+  // Town NPCs (only present in the safe hub).
+  if (inTown) drawTownNpcs(offX, offY, tw, th, scale);
 
   // Enemies
   enemies.filter(e => !e.dead).forEach(e => {
@@ -3033,15 +3481,24 @@ function tickPact() {
 
 // Heal a little each turn based on equipped REGEN, up to max HP.
 function applyRegen() {
-  // Spirit grants a small passive regen on top of any REGEN rolled on gear.
-  const r = totalStat('REGEN') + Math.floor((player.attributes?.spirit||0) / 3);
+  // Spirit and Vitality grant passive regen on top of any REGEN rolled on gear.
+  const r = totalStat('REGEN') + Math.floor((player.attributes?.spirit||0) / 3)
+            + Math.floor((player.attributes?.vitality||0) / 3);
   if (r > 0 && player.hp > 0 && player.hp < player.maxHp) {
     player.hp = Math.min(player.maxHp, player.hp + r);
+    updateBars();
+  }
+  // Mana trickles back each turn (faster with Spirit) so staff bolts stay usable.
+  const mr = 1 + Math.floor((player.attributes?.spirit||0) / 4);
+  if (player.hp > 0 && player.mp < player.maxMp) {
+    player.mp = Math.min(player.maxMp, player.mp + mr);
     updateBars();
   }
 }
 
 function move(dx, dy) {
+  // In the safe town hub, movement just walks the plaza and talks to NPCs.
+  if (inTown) { townMove(dx, dy); return; }
   if (isPlayerStunned()) {
     tickStatusEffects();
     applyRegen();
@@ -3070,10 +3527,15 @@ function move(dx, dy) {
     log('🔑 You unlock the vault door!', 'important');
   }
 
-  // Enemy collision → attack
+  // Enemy collision → attack. The strike costs a turn, so every other enemy
+  // gets to act too: the one you hit retaliates, and the rest close in — get
+  // surrounded and you'll take hits from every side each time you swing.
   const enemy = getEnemyAt(nx, ny);
   if (enemy) {
     attackEnemy(enemy);
+    runEnemyTurn();
+    moveEscort();
+    draw();
     return;
   }
 
@@ -3112,6 +3574,7 @@ function move(dx, dy) {
       quest = null;
     }
     dungeonLevel++;
+    player.maxFloor = Math.max(player.maxFloor || 1, dungeonLevel);
     statusEffects = [];
     tickBuffs();
     sfx('stairs');
@@ -3141,6 +3604,12 @@ function move(dx, dy) {
     draw();
     return;
   }
+
+  // No one adjacent in this direction, and the tile ahead is open: a ranged or
+  // reach weapon (bow/staff/spear) looses a shot at the first foe down the line
+  // instead of stepping forward. Checked here — after NPC/shrine/stair handling
+  // — so walking into a merchant still opens their shop.
+  if (tryRangedAttack(dx, dy)) return;
 
   player.x = nx;
   player.y = ny;
@@ -3210,11 +3679,8 @@ function move(dx, dy) {
     }
   }
 
-  // Enemy AI
-  enemies.filter(e => !e.dead).forEach(e => {
-    const dist = Math.abs(e.x - player.x) + Math.abs(e.y - player.y);
-    if (dist <= 6) enemyMove(e);
-  });
+  // Enemy AI — every step is a turn for the foes too.
+  runEnemyTurn();
   moveEscort();
 
   checkPickupProximity();
@@ -3251,166 +3717,472 @@ function mitigateDamage(raw, lvl) {
   return Math.max(1, Math.round(raw * (1 - mitigation)));
 }
 
-function attackEnemy(e) {
-  // A readable label: bosses/elites use their name, plain foes use their sprite.
-  // A level tag makes the depth-based difficulty curve legible at a glance.
+// A readable label for an enemy in the log: bosses/elites use their name, plain
+// foes just their sprite, with a Lv tag so the difficulty curve is legible.
+function enemyLabel(e) {
   const lvlTag = e.level ? `Lv${e.level} ` : '';
-  const label = e.isBoss ? `${lvlTag}${e.name} ${e.type}`
-    : (e.isElite ? `${lvlTag}${e.name || 'Elite'} ${e.type}`
-    : (e.isGoblin ? 'Treasure Goblin 👺'
-    : (e.name ? `${lvlTag}${e.name} ${e.type}` : `${lvlTag}${e.type}`)));
+  if (e.isGoblin) return 'Treasure Goblin 👺';
+  if (e.name) return `${lvlTag}${e.name} ${e.type}`;
+  return `${lvlTag}${e.type}`;
+}
 
-  // Critical hits scale off your combined CRIT + LCK stats and Agility attribute.
-  const critChance = Math.min(0.6, 0.05 + (totalStat('CRIT') + totalStat('LCK')) * 0.01 + (player.attributes?.agility||0) * 0.01);
+// Chance for the player to dodge an incoming hit (Agility + gear SPD).
+function rollDodge() { return Math.random() < playerDodge(); }
+
+// Enemies orthogonally/diagonally adjacent to e (for cleaving weapons).
+function adjacentEnemies(e) {
+  return enemies.filter(o => !o.dead && o !== e && Math.abs(o.x - e.x) <= 1 && Math.abs(o.y - e.y) <= 1);
+}
+
+// Roll one player swing: weapon damage + level + gear ATK + Might, capped so a
+// plain hit can't exceed a quarter of the foe's max HP; crits and the Power buff
+// punch through that cap. Returns { dmg, isCrit }.
+function rollPlayerHit(e) {
+  const critChance = Math.min(0.6, 0.05 + (totalStat('CRIT') + totalStat('LCK')) * 0.01 + (player.attributes?.agility||0) * 0.015);
   const isCrit = Math.random() < critChance;
-  // Might adds flat attack power on top of weapon damage, level, and gear ATK.
-  let dmg = getWeaponDamage() + player.level * 2 + totalStat('ATK') + (player.attributes?.might||0) * 2;
-  // Difficulty floor: a plain swing can't exceed a quarter of the enemy's max
-  // HP, so a normal fight always takes at least 4 hits. When a hit would cap,
-  // jitter it to 80-100% of the cap so the numbers don't read as an exact
-  // quarter every time (and it still never exceeds the cap).
+  let dmg = getWeaponDamage() + player.level * 2 + totalStat('ATK') + (player.attributes?.might||0) * 3;
   const hitCap = Math.max(1, Math.floor(e.maxHp / 4));
   if (dmg > hitCap) dmg = Math.max(1, Math.round(hitCap * (rnd(80, 100) / 100)));
-  // ...but crits and the Power buff punch straight through that cap.
-  if (buffs.power) dmg = Math.round(dmg * 1.5);   // Shrine of Power
+  if (buffs.power) dmg = Math.round(dmg * 1.5);
   if (isCrit) dmg = Math.round(dmg * 2.2);
+  return { dmg: Math.max(1, dmg), isCrit };
+}
+
+// Apply already-rolled damage to a foe and show the number. Returns true if it
+// died (rewards handled by onEnemyDefeated).
+function dealDamage(e, dmg, isCrit) {
+  if (e.dead) return true;
   e.hp -= dmg;
-  sfx(isCrit ? 'crit' : 'attack');
   spawnFloatingText(e.x, e.y, isCrit ? `${dmg}!` : `${dmg}`, isCrit ? '#ffdd55' : '#fff');
-  log(isCrit ? `💥 CRITICAL! ${HERO} hits ${label} for ${dmg}!` : `${HERO} hits ${label} for ${dmg} damage!`, isCrit ? 'important' : '');
-  if (e.hp <= 0) {
-    e.dead = true;
-    const xpMult = e.isBoss ? 5 : (e.isElite ? 2 : 1);
-    const goldMult = e.isBoss ? 3 : (e.isElite ? 2 : 1);
-    const xp = Math.round(10 * dungeonLevel * xpMult * pfx('xp', 1));
-    player.xp += xp;
-    const gold = Math.round((rnd(2, 8) + dungeonLevel * 3) * goldMult * (floorMod.goldMult || 1) * pfx('gold', 1));
-    player.gold += gold;
-    spawnFloatingText(e.x + 0.35, e.y, `+${gold}g`, '#ffd24b');
-    log(`${label} defeated! +${xp} XP, +${gold}g`, 'important');
-    sfx(e.isBoss ? 'boss' : 'kill');
-    if (e.isBoss) screenFlash('#ff3344');
-    updateBars();
-    // The floor modifier, an active Fortune buff, and any pact sweeten every drop roll.
-    const lootMult = (floorMod.lootMult || 1) * (buffs.fortune ? 1.5 : 1) * pfx('loot', 1);
-    // Drop a chest — bosses and elites always drop, with richer loot. The luck
-    // value is how many rarity rolls the chest makes (more rolls = better odds).
-    if (e.isBoss || e.isElite || Math.random() < 0.18 * lootMult) {
-      let luck = e.isBoss ? 6 : (e.isElite ? 3 : 1);
-      if (buffs.fortune) luck += 1;
-      groundItems.push({ x: e.x, y: e.y, luck, ilvl: e.level || dungeonLevel });
-      const fancy = luck > 1;
-      log(`${fancy ? '🎁' : '🧰'} ${label} dropped a ${fancy ? 'glittering ' : ''}chest!`, 'loot');
-    }
-    if (Math.random() < 0.20 * lootMult) {
-      player.healPotions++;
-      log(`❤️ ${label} dropped a ${logPotion('Health Potion')}! (${player.healPotions} held)`, 'loot');
-      updateBars();
-    }
-    if (Math.random() < 0.06) {
-      const f = pick(FOODS);
-      groundFood.push({ x: e.x, y: e.y, ...f });
-      log(`${f.emoji} ${label} dropped ${f.name}!`, 'loot');
-    }
-    // Treasure Goblin jackpot — a fat gold burst plus a guaranteed rich chest.
-    if (e.isGoblin) {
-      const bonus = 30 + dungeonLevel * 8;
-      player.gold += bonus;
-      groundItems.push({ x: e.x, y: e.y, luck: 6, ilvl: e.level || dungeonLevel });
-      spawnFloatingText(e.x, e.y, `+${bonus}g`, '#ffd24b');
-      log(`💰 The Treasure Goblin bursts — +${bonus}g and a glittering chest!`, 'loot');
-      updateBars();
-    }
-    // Vanishingly rare super-drop: the air shimmers and a fabled chest appears.
-    if (Math.random() < 0.02) {
-      groundItems.push({ x: e.x, y: e.y, luck: 6, ilvl: (e.level || dungeonLevel) + 1 });
-      log('✨ The air shimmers — a fabled chest materializes!', 'important');
-      screenFlash('#ffd24b');
-    }
-    checkLevelUp();
-  } else {
-    // Enemy strikes back. Damage scales with the enemy, mitigated by armor DEF.
-    let raw = Math.round(e.dmg * rnd(80, 120) / 100);
-    if (buffs.guard) raw = Math.round(raw * 0.6);   // Shrine of Warding
-    const edm = mitigateDamage(raw, e.level);
-    player.hp = Math.max(0, player.hp - edm);
-    sfx('hurt');
-    spawnFloatingText(player.x, player.y, `${edm}`, '#ff3344');
-    log(`${label} hits ${HERO} back for ${edm}!`);
-    if (player.hp <= player.maxHp * 0.25) screenFlash('#cc0000');
-    tryBossStatusProc(e);
-    updateBars();
-    if (player.hp === 0) handleDeath();
+  if (e.hp <= 0) { onEnemyDefeated(e); return true; }
+  return false;
+}
+
+// Everything that happens when a foe falls: XP, gold, and the loot rolls.
+function onEnemyDefeated(e) {
+  e.dead = true;
+  const label = enemyLabel(e);
+  const xpMult = e.isBoss ? 5 : (e.isElite ? 2 : 1);
+  const goldMult = e.isBoss ? 3 : (e.isElite ? 2 : 1);
+  const xp = Math.round(10 * dungeonLevel * xpMult * pfx('xp', 1));
+  player.xp += xp;
+  const gold = Math.round((rnd(2, 8) + dungeonLevel * 3) * goldMult * (floorMod.goldMult || 1) * pfx('gold', 1));
+  player.gold += gold;
+  spawnFloatingText(e.x + 0.35, e.y, `+${gold}g`, '#ffd24b');
+  log(`${label} defeated! +${xp} XP, +${gold}g`, 'important');
+  sfx(e.isBoss ? 'boss' : 'kill');
+  if (e.isBoss) screenFlash('#ff3344');
+  updateBars();
+  // Minions summoned by a boss never drop loot — only XP/gold above.
+  if (e.minion) { checkLevelUp(); return; }
+  // The floor modifier, an active Fortune buff, and any pact sweeten every drop roll.
+  const lootMult = (floorMod.lootMult || 1) * (buffs.fortune ? 1.5 : 1) * pfx('loot', 1);
+  // Drop a chest — bosses and elites always drop, with richer loot. The luck
+  // value is how many rarity rolls the chest makes (more rolls = better odds).
+  if (e.isBoss || e.isElite || Math.random() < 0.18 * lootMult) {
+    let luck = e.isBoss ? 6 : (e.isElite ? 3 : 1);
+    if (buffs.fortune) luck += 1;
+    groundItems.push({ x: e.x, y: e.y, luck, ilvl: e.level || dungeonLevel });
+    const fancy = luck > 1;
+    log(`${fancy ? '🎁' : '🧰'} ${label} dropped a ${fancy ? 'glittering ' : ''}chest!`, 'loot');
   }
+  if (Math.random() < 0.20 * lootMult) {
+    player.healPotions++;
+    log(`❤️ ${label} dropped a ${logPotion('Health Potion')}! (${player.healPotions} held)`, 'loot');
+    updateBars();
+  }
+  if (Math.random() < 0.06) {
+    const f = pick(FOODS);
+    groundFood.push({ x: e.x, y: e.y, ...f });
+    log(`${f.emoji} ${label} dropped ${f.name}!`, 'loot');
+  }
+  // Treasure Goblin jackpot — a fat gold burst plus a guaranteed rich chest.
+  if (e.isGoblin) {
+    const bonus = 30 + dungeonLevel * 8;
+    player.gold += bonus;
+    groundItems.push({ x: e.x, y: e.y, luck: 6, ilvl: e.level || dungeonLevel });
+    spawnFloatingText(e.x, e.y, `+${bonus}g`, '#ffd24b');
+    log(`💰 The Treasure Goblin bursts — +${bonus}g and a glittering chest!`, 'loot');
+    updateBars();
+  }
+  // Vanishingly rare super-drop: the air shimmers and a fabled chest appears.
+  if (Math.random() < 0.02) {
+    groundItems.push({ x: e.x, y: e.y, luck: 6, ilvl: (e.level || dungeonLevel) + 1 });
+    log('✨ The air shimmers — a fabled chest materializes!', 'important');
+    screenFlash('#ffd24b');
+  }
+  checkLevelUp();
+}
+
+// The player attacks an enemy. The equipped weapon's style shapes the swing:
+// cleaving arcs, dagger flurries, stunning crushes, life-stealing reaps, and
+// ranged pokes that draw no counter. `opts.ranged` marks shots fired from afar
+// (bow/staff/spear reach), which never provoke a melee counterattack.
+function attackEnemy(e, opts = {}) {
+  const style = opts.style || weaponStyle();
+  const ranged = !!opts.ranged;
+  const label = enemyLabel(e);
+  let anyCrit = false, dealtTotal = 0;
+
+  const swing = (target, mult = 1) => {
+    if (target.dead) return;
+    const h = rollPlayerHit(target);
+    const d = Math.max(1, Math.round(h.dmg * mult));
+    if (h.isCrit) anyCrit = true;
+    dealtTotal += d;
+    dealDamage(target, d, h.isCrit);
+  };
+
+  if (style === 'flurry') {
+    // Dagger: two quick lighter strikes, extra crit rolled per hit.
+    sfx('attack'); swing(e, 0.62); swing(e, 0.62);
+    log(`🔪 ${HERO} knifes ${label} twice for ${dealtTotal}${anyCrit ? '!' : ''}`, anyCrit ? 'important' : '');
+  } else {
+    sfx(anyCrit ? 'crit' : 'attack');
+    swing(e);
+    const verb = style === 'shot' ? '🏹 shoots' : style === 'bolt' ? '🔮 blasts'
+      : style === 'thrust' ? '🔱 skewers' : style === 'cleave' ? '🪓 hews'
+      : style === 'reap' ? '⚔️ reaps' : style === 'crush' ? '🔨 smashes' : 'hits';
+    log(anyCrit ? `💥 CRITICAL! ${HERO} ${verb} ${label} for ${dealtTotal}!`
+                : `${HERO} ${verb} ${label} for ${dealtTotal}!`, anyCrit ? 'important' : '');
+  }
+
+  // Cleave (Axe) / Reap (Scythe): the blow carries into other adjacent foes.
+  if (style === 'cleave' || style === 'reap') {
+    adjacentEnemies(e).forEach(o => {
+      const before = dealtTotal;
+      swing(o, 0.7);
+      if (dealtTotal > before) spawnFloatingText(o.x, o.y, `${dealtTotal - before}`, '#ffbb66');
+    });
+  }
+
+  // Crush (Mace): heavy blows have a good chance to stun a surviving foe.
+  if (style === 'crush' && !e.dead && Math.random() < 0.5) {
+    applyStatusEffect(e, 'stun', 1, 'player');
+    log(`🔨 ${label} is stunned by the blow!`, 'important');
+  }
+
+  // Reap (Scythe): siphon a quarter of all damage dealt back as health.
+  if (style === 'reap' && dealtTotal > 0 && player.hp < player.maxHp) {
+    const got = Math.min(Math.max(1, Math.round(dealtTotal * 0.25)), player.maxHp - player.hp);
+    if (got > 0) { player.hp += got; spawnFloatingText(player.x, player.y, `+${got}`, '#7fffaa'); }
+  }
+
+  // Every attack costs a turn: after your swing resolves, the caller runs the
+  // enemy turn (runEnemyTurn) so the foe you hit strikes back AND any others
+  // crowding you close in or pile on. `ranged` shots simply don't pin you in
+  // melee — the distant target approaches instead of countering.
   tryPlayerStatusProc(e);
+  updateBars();
   saveGame();
-  draw();
+}
+
+// Ranged & reach weapons: fired from move() when you press toward a foe with no
+// one adjacent. Scans the pressed direction for the first enemy within range and
+// strikes it without reprisal. Returns true if a shot was loosed.
+function tryRangedAttack(dx, dy) {
+  if (dx === 0 && dy === 0) return false;
+  if (getEnemyAt(player.x + dx, player.y + dy)) return false; // adjacent → normal melee
+  const style = weaponStyle();
+  let range, mpCost = 0;
+  if (style === 'shot') range = 4;
+  else if (style === 'bolt') { range = 4; mpCost = 4; }
+  else if (style === 'thrust') range = 2;
+  else return false;
+  if (mpCost && player.mp < mpCost) return false;
+  let x = player.x, y = player.y;
+  for (let step = 1; step <= range; step++) {
+    x += dx; y += dy;
+    if (x < 0 || y < 0 || x >= MAP_W || y >= MAP_H) break;
+    const t = mapData[y][x];
+    if (t === 1 || t === 6 || t === 10 || t === 11) break; // wall / deep water / sealed
+    const tgt = getEnemyAt(x, y);
+    if (tgt) {
+      if (mpCost) { player.mp -= mpCost; }
+      attackEnemy(tgt, { ranged: true, style });
+      // A ranged poke still passes the turn — foes get to close in.
+      runEnemyTurn();
+      moveEscort();
+      updateBars();
+      draw();
+      return true;
+    }
+  }
+  return false;
+}
+
+// Run every nearby living enemy's turn once, bailing if the floor changes
+// mid-turn (e.g. a death warps you to the previous floor and rebuilds it).
+function runEnemyTurn() {
+  const serial = floorSerial;
+  enemies.filter(e => !e.dead).forEach(e => {
+    if (floorSerial !== serial) return;
+    const dist = Math.abs(e.x - player.x) + Math.abs(e.y - player.y);
+    if (dist <= 8) enemyMove(e);
+  });
+}
+
+// ── ENEMY AI ──
+
+// Can an enemy occupy (x,y)? Walls/water/occupants block; the player's tile is
+// never "free" (you path *to* it as a goal, then attack instead of stepping on).
+function enemyTileFree(x, y) {
+  if (x < 0 || y < 0 || x >= MAP_W || y >= MAP_H) return false;
+  if (mapData[y][x] !== 0) return false;
+  if (x === player.x && y === player.y) return false;
+  if (getEnemyAt(x, y)) return false;
+  if (merchant && merchant.x === x && merchant.y === y) return false;
+  if (mystic && mystic.x === x && mystic.y === y) return false;
+  return true;
+}
+
+const ENEMY_DIRS = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
+
+// Breadth-first search from an enemy to (tx,ty); returns the first [dx,dy] step
+// along a shortest path, or null if unreachable. This is what lets foes route
+// around walls instead of grinding into them.
+function enemyPathStep(e, tx, ty) {
+  const W = MAP_W, H = MAP_H;
+  const start = e.y * W + e.x, goal = ty * W + tx;
+  if (start === goal) return null;
+  const came = new Array(W * H).fill(-2);
+  came[start] = -1;
+  const queue = [start];
+  let qi = 0, found = false;
+  while (qi < queue.length) {
+    const cur = queue[qi++];
+    if (cur === goal) { found = true; break; }
+    const cx = cur % W, cy = (cur - cx) / W;
+    for (const [dx, dy] of ENEMY_DIRS) {
+      const nx = cx + dx, ny = cy + dy;
+      if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+      const ni = ny * W + nx;
+      if (came[ni] !== -2) continue;
+      const isGoal = (nx === tx && ny === ty);
+      if (!isGoal && !enemyTileFree(nx, ny)) continue;
+      // Don't cut diagonally through a wall corner.
+      if (dx !== 0 && dy !== 0 && mapData[cy][nx] !== 0 && mapData[ny][cx] !== 0) continue;
+      came[ni] = cur;
+      queue.push(ni);
+    }
+  }
+  if (!found) return null;
+  let cur = goal;
+  while (came[cur] !== start) { cur = came[cur]; if (cur < 0) return null; }
+  const cx = cur % W, cy = (cur - cx) / W;
+  return [cx - e.x, cy - e.y];
 }
 
 function enemyMove(e) {
-  // Treasure goblins flee — they move directly away from you and never attack.
-  const flee = e.isGoblin;
-  const dx = (flee ? -1 : 1) * Math.sign(player.x - e.x);
-  const dy = (flee ? -1 : 1) * Math.sign(player.y - e.y);
-  // Try horizontal then vertical
-  const options = [];
-  if (dx !== 0) options.push([dx, 0]);
-  if (dy !== 0) options.push([0, dy]);
-  options.push([dx, dy]);
-  for (const [mx, my] of options) {
-    const nx = e.x+mx, ny = e.y+my;
-    if (nx < 0||ny < 0||nx >= MAP_W||ny >= MAP_H) continue;
-    if (mapData[ny][nx] !== 0) continue;
-    if (getEnemyAt(nx,ny)) continue;
-    if (merchant && merchant.x === nx && merchant.y === ny) continue;
-    if (mystic && mystic.x === nx && mystic.y === ny) continue;
-    // For diagonal moves, don't allow squeezing through a wall corner:
-    // at least one of the two orthogonally-adjacent tiles must be open.
-    if (mx !== 0 && my !== 0) {
-      const sideClearX = mapData[e.y][e.x+mx] === 0;
-      const sideClearY = mapData[e.y+my][e.x] === 0;
-      if (!sideClearX && !sideClearY) continue;
-    }
-    if (nx === player.x && ny === player.y) {
-      // Attack player
-      let raw = Math.round(e.dmg * rnd(80, 120) / 100);
-      if (buffs.guard) raw = Math.round(raw * 0.6);   // Shrine of Warding
-      const dmg = mitigateDamage(raw, e.level);
-      player.hp = Math.max(0, player.hp-dmg);
-      sfx('hurt');
-      spawnFloatingText(player.x, player.y, `${dmg}`, '#ff3344');
-      log(`${e.name ? e.name + ' ' + e.type : e.type} attacks ${HERO} for ${dmg}!`);
-      if (player.hp <= player.maxHp * 0.25) screenFlash('#cc0000');
-      tryBossStatusProc(e);   // venomous/boss foes can inflict poison or stun
-      updateBars();
-      if (player.hp === 0) handleDeath();
+  if (e.dead) return;
+  if (e.isGoblin) { goblinFlee(e); return; }
+  // Stunned foes lose their turn.
+  if (statusEffects.some(s => s.target === e && s.effect === 'stun')) return;
+
+  const beh = BEHAVIORS[e.behavior] || BEHAVIORS.chaser;
+  const dist = Math.abs(e.x - player.x) + Math.abs(e.y - player.y);
+
+  // Bosses weigh their signature ability first; some abilities end the turn.
+  if (e.isBoss && bossSpecial(e, dist, beh)) return;
+
+  // Heavy brutes act only every other turn — slow, but they hit like a truck.
+  if (beh.slow) { e.tick = (e.tick || 0) + 1; if (e.tick % 2 === 1) return; }
+
+  // Lurkers stay coiled until you stray close, then commit to the hunt.
+  if (beh.ambush) {
+    if (!e.roused && dist > beh.ambush) return;
+    e.roused = true;
+  }
+
+  // Ranged casters strike from afar and keep their spacing.
+  if (beh.ranged) {
+    if (dist <= 1) { stepAwayFromPlayer(e); return; }
+    if (dist <= beh.range && hasLineToPlayer(e) && Math.random() < (beh.castChance || 0.7)) {
+      enemyRangedAttack(e);
       return;
     }
-    e.x = nx; e.y = ny;
+    if (dist < beh.keepAway) { stepAwayFromPlayer(e); return; }
+    const step = enemyPathStep(e, player.x, player.y);
+    if (step) enemyStep(e, step[0], step[1]);
     return;
   }
+
+  // Melee archetypes path toward you; swift vermin and rushing packs move twice.
+  let steps = beh.speed || 1;
+  if (beh.packRush && player.hp < player.maxHp * 0.5) steps = 2;
+  for (let s = 0; s < steps; s++) {
+    if (beh.erratic && Math.random() < beh.erratic) { enemyWander(e); continue; }
+    const step = enemyPathStep(e, player.x, player.y);
+    if (!step) break;
+    const [mx, my] = step;
+    if (e.x + mx === player.x && e.y + my === player.y) { enemyAttackPlayer(e); return; }
+    if (!enemyStep(e, mx, my)) break;
+    if (Math.abs(e.x - player.x) + Math.abs(e.y - player.y) === 0) break;
+  }
+}
+
+// Move an enemy one tile if free (with corner-cut guard). Returns true on move.
+function enemyStep(e, mx, my) {
+  const nx = e.x + mx, ny = e.y + my;
+  if (!enemyTileFree(nx, ny)) return false;
+  if (mx !== 0 && my !== 0 && mapData[e.y][e.x + mx] !== 0 && mapData[e.y + my][e.x] !== 0) return false;
+  e.x = nx; e.y = ny;
+  return true;
+}
+
+// Drift to a random adjacent free tile (erratic flutterers like bats/ghosts).
+function enemyWander(e) {
+  const dirs = ENEMY_DIRS.slice().sort(() => Math.random() - 0.5);
+  for (const [mx, my] of dirs) {
+    if (e.x + mx === player.x && e.y + my === player.y) { enemyAttackPlayer(e); return; }
+    if (enemyStep(e, mx, my)) return;
+  }
+}
+
+// Back away from the player — ranged foes maintaining their distance.
+function stepAwayFromPlayer(e) {
+  const away = ENEMY_DIRS
+    .map(([mx, my]) => ({ mx, my, d: Math.abs(e.x + mx - player.x) + Math.abs(e.y + my - player.y) }))
+    .sort((a, b) => b.d - a.d);
+  for (const o of away) if (enemyStep(e, o.mx, o.my)) return;
+}
+
+// Goblins sprint directly away and never attack.
+function goblinFlee(e) {
+  const away = ENEMY_DIRS
+    .map(([mx, my]) => ({ mx, my, d: Math.abs(e.x + mx - player.x) + Math.abs(e.y + my - player.y) }))
+    .filter(o => o.d > 0)
+    .sort((a, b) => b.d - a.d);
+  for (const o of away) if (enemyStep(e, o.mx, o.my)) return;
+}
+
+// A melee enemy strikes the player from an adjacent tile.
+function enemyAttackPlayer(e) {
+  const beh = BEHAVIORS[e.behavior] || BEHAVIORS.chaser;
+  if (rollDodge()) {
+    spawnFloatingText(player.x, player.y, 'DODGE', '#9fe8ff');
+    log(`💨 ${HERO} dodges ${enemyLabel(e)}!`);
+    return;
+  }
+  let raw = Math.round(e.dmg * rnd(80, 120) / 100);
+  if (beh.hitMult) raw = Math.round(raw * beh.hitMult);
+  if (buffs.guard) raw = Math.round(raw * 0.6);
+  const dmg = mitigateDamage(raw, e.level);
+  player.hp = Math.max(0, player.hp - dmg);
+  sfx('hurt');
+  spawnFloatingText(player.x, player.y, `${dmg}`, '#ff3344');
+  log(`${enemyLabel(e)} attacks ${HERO} for ${dmg}!`);
+  if (player.hp <= player.maxHp * 0.25) screenFlash('#cc0000');
+  if (e.bossAbility === 'lifesteal') bossLifesteal(e, dmg);
+  tryBossStatusProc(e);
+  updateBars();
+  if (player.hp === 0) handleDeath();
+}
+
+// A ranged enemy flings a bolt at the player from a distance.
+function enemyRangedAttack(e) {
+  if (rollDodge()) {
+    spawnFloatingText(player.x, player.y, 'DODGE', '#9fe8ff');
+    log(`💨 ${HERO} sidesteps ${enemyLabel(e)}'s bolt!`);
+    return;
+  }
+  let raw = Math.round(e.dmg * rnd(75, 110) / 100);
+  if (buffs.guard) raw = Math.round(raw * 0.6);
+  const dmg = mitigateDamage(raw, e.level);
+  player.hp = Math.max(0, player.hp - dmg);
+  sfx(e.isBoss ? 'boss' : 'hurt');
+  spawnFloatingText(player.x, player.y, `${dmg}`, '#c77dff');
+  log(`✨ ${enemyLabel(e)} strikes ${HERO} from afar for ${dmg}!`);
+  if (player.hp <= player.maxHp * 0.25) screenFlash('#cc0000');
+  tryBossStatusProc(e);
+  updateBars();
+  if (player.hp === 0) handleDeath();
+}
+
+// Rough line of sight: step a straight line from foe to player and fail if a
+// wall (or deep water / sealed door) blocks it, so casters don't fire through rock.
+function hasLineToPlayer(e) {
+  let x = e.x, y = e.y, guard = 0;
+  while ((x !== player.x || y !== player.y) && guard++ < 64) {
+    x += Math.sign(player.x - x);
+    y += Math.sign(player.y - y);
+    if (x === player.x && y === player.y) break;
+    const t = mapData[y][x];
+    if (t === 1 || t === 6 || t === 10 || t === 11) return false;
+  }
+  return true;
+}
+
+// ── BOSS SIGNATURE ABILITIES ──
+function bossLifesteal(e, dmg) {
+  const heal = Math.max(1, Math.round(dmg * 0.6));
+  e.hp = Math.min(e.maxHp, e.hp + heal);
+  spawnFloatingText(e.x, e.y, `+${heal}`, '#cc44ff');
+}
+
+// Returns true if the boss spent its whole turn on a special (so it skips moving).
+function bossSpecial(e, dist, beh) {
+  // Elder Dragon enrages once, the instant it drops below 40% HP.
+  if (e.bossAbility === 'enrage' && !e.enraged && e.hp < e.maxHp * 0.4) {
+    e.enraged = true;
+    e.dmg = Math.round(e.dmg * 1.5);
+    log(`🐲 ${e.name} ROARS and flies into a rage!`, 'important');
+    screenFlash('#ff3344');
+    return true;
+  }
+  e.cd = (e.cd || 0) - 1;
+  if (e.cd > 0) return false;
+  // Rat King summons a knot of vermin around itself.
+  if (e.bossAbility === 'summon' && dist <= 8) {
+    const n = summonMinions(e, rnd(1, 2));
+    if (n > 0) {
+      e.cd = 5;
+      log(`👑 ${e.name} summons ${n} vermin to swarm you!`, 'important');
+      return true;
+    }
+  }
+  return false;
+}
+
+// Place up to n weak minions on free tiles adjacent to the boss. Returns count.
+function summonMinions(boss, n) {
+  let placed = 0;
+  const spots = ENEMY_DIRS.slice().sort(() => Math.random() - 0.5);
+  for (const [dx, dy] of spots) {
+    if (placed >= n) break;
+    const x = boss.x + dx, y = boss.y + dy;
+    if (!enemyTileFree(x, y)) continue;
+    const hp = Math.max(1, Math.round(10 + dungeonLevel * 4));
+    enemies.push({
+      x, y, hp, maxHp: hp,
+      type: '🐀', level: dungeonLevel,
+      dmg: Math.max(1, Math.round(3 + dungeonLevel)),
+      dead: false, behavior: 'swift', minion: true,
+    });
+    placed++;
+  }
+  return placed;
 }
 
 function getEnemyAt(x,y) { return enemies.find(e=>!e.dead&&e.x===x&&e.y===y)||null; }
 
-// Death has a real cost now: you lose half your gold and are pulled back to the
-// floor's entrance with partial health. Potions and caution actually matter.
+// Death now bumps you back to the PREVIOUS floor (freshly regenerated) at low
+// health, minus half your gold — a real setback, but you keep your level, gear,
+// and progress. Dying on floor 1 just rebuilds floor 1.
 function handleDeath() {
   const lostGold = Math.floor(player.gold / 2);
   player.gold -= lostGold;
-  player.hp = Math.floor(player.maxHp * 0.4);
   statusEffects = statusEffects.filter(s => s.target !== 'player');
-  player.x = startPos.x; player.y = startPos.y;
   sfx('death');
-  log(`💀 ${HERO} was slain! Lost ${lostGold}g and crawled back to the entrance.`, 'important');
-  // Shove any enemies crowding the entrance off to a random floor tile.
-  enemies.forEach(e => {
-    if (!e.dead && Math.abs(e.x-startPos.x) + Math.abs(e.y-startPos.y) < 4) {
-      const c = randomFloorTile(); if (c) { e.x = c.x; e.y = c.y; }
-    }
-  });
+  const prevFloor = Math.max(1, dungeonLevel - 1);
+  log(`💀 ${HERO} was slain! Lost ${lostGold}g and retreated to floor ${prevFloor}.`, 'important');
+  dungeonLevel = prevFloor;
+  generateMap();   // rebuilds the previous floor and places you at its entrance
+  player.hp = Math.max(1, Math.floor(player.maxHp * 0.4));
+  player.mp = Math.max(player.mp, Math.floor(player.maxMp * 0.4));
   updateBars();
   saveGame();
+  draw();
 }
 
 function checkPickupProximity() {
@@ -3422,10 +4194,7 @@ function checkPickupProximity() {
 function passTurn() {
   tickStatusEffects();
   applyRegen();
-  enemies.filter(e => !e.dead).forEach(e => {
-    const dist = Math.abs(e.x - player.x) + Math.abs(e.y - player.y);
-    if (dist <= 6) enemyMove(e);
-  });
+  runEnemyTurn();
   moveEscort();
   draw();
   saveGame();
@@ -3627,6 +4396,18 @@ function useHealthPotion() {
   player.hp = Math.min(player.maxHp, player.hp + HEAL_AMOUNT);
   sfx('potion');
   log(`❤️ Drank a ${logPotion('Health Potion')}. +${HEAL_AMOUNT} HP (${player.healPotions} left)`, 'loot');
+  updateBars();
+  saveGame();
+}
+
+const MANA_AMOUNT = 40;
+function useManaPotion() {
+  if (!player.manaPotions) { log('No mana potions! Buy some from a merchant or the healer.'); return; }
+  if (player.mp >= player.maxMp) { log('Already at full mana.'); return; }
+  player.manaPotions--;
+  player.mp = Math.min(player.maxMp, player.mp + MANA_AMOUNT);
+  sfx('potion');
+  log(`🔷 Drank a ${logPotion('Mana Potion')}. +${MANA_AMOUNT} MP (${player.manaPotions} left)`, 'loot');
   updateBars();
   saveGame();
 }
@@ -3982,6 +4763,8 @@ document.addEventListener('keydown', e => {
   if (e.key==='ArrowRight'||e.key==='d') move(1,0);
   if (e.key===' '||e.key==='f')          pickup();
   if (e.key==='q'||e.key==='Q')          useHealthPotion();
+  if (e.key==='e'||e.key==='E')          useManaPotion();
+  if (e.key==='t'||e.key==='T')          enterTown();
   if (e.key==='b'||e.key==='B'||e.key==='i'||e.key==='I') togglePanel();
 });
 
@@ -4002,6 +4785,7 @@ function saveGame() {
   try {
     const data = {
       player, inventory, equipped, dungeonLevel, buffs, pact,
+      inTown, dungeonReturn,
       ts: Date.now(),
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
@@ -4025,6 +4809,10 @@ function loadGame() {
     if (!player.attributes) player.attributes = { might:0, vitality:0, agility:0, spirit:0 };
     for (const k of ['might','vitality','agility','spirit']) if (player.attributes[k] == null) player.attributes[k] = 0;
     if (player.attrPoints == null) player.attrPoints = 0;
+    // Migrate saves that predate the deepest-floor tracker / town hub.
+    if (player.maxFloor == null) player.maxFloor = data.dungeonLevel || 1;
+    inTown = !!data.inTown;
+    dungeonReturn = data.dungeonReturn || data.dungeonLevel || 1;
     inventory = (data.inventory || []).filter(it => it && it.slot); // drop legacy typeKey-only items
     // Rebuild equipped into the new 7-slot shape; salvage any still-valid pieces into the bag.
     const freshEquipped = { head:null, chest:null, hands:null, legs:null, weapon:null, ring:null, amulet:null };
@@ -4092,24 +4880,29 @@ function confirmNewGame() {
 // ══════════════════════════════════════════
 
 const hadSave = loadGame();
-generateMap();
+// Resume in town if that's where the save left off; otherwise build the floor.
+if (inTown) buildTown(); else generateMap();
 draw();
 updateBars();
 renderPanel();
 
 if (hadSave) {
   log(`Welcome back, level ${player.level} adventurer.`, 'important');
-  log(`Resuming on dungeon level ${dungeonLevel}. Your gear is intact.`);
+  if (inTown) log('You are in town. Walk up to an NPC, or take the 🌀 gate back into the dungeon.');
+  else log(`Resuming on dungeon level ${dungeonLevel}. Your gear is intact.`);
 } else {
   log('Welcome to the dungeon. Move to explore. USE to open chests.', 'important');
-  log('Reach the ▼ stairs to descend deeper.');
+  log('Reach the ▼ stairs to descend deeper. Tap 🏰 TOWN to warp to the safe hub.');
 }
 log('Progress auto-saves automatically as you play.');
 log('Tap 🎒 BAG (bottom-right) to open your loot.');
 log(`Tap the ❤️ flask to drink a ${logPotion('Health Potion')} when you're hurt. Enemies hit hard!`);
-log('⌨️ Keys: Q drink potion · B open bag · Space/F use.');
+log('⌨️ Keys: Q drink potion · E mana · T town · B open bag · Space/F use.');
 log('⚡ Each item has a Power value; your total Power blends level, gear, and attributes.');
 log('💠 Level up to earn points, then raise attributes in the bag\'s HERO tab.');
+log('🗡️ Every weapon fights differently — axes cleave, daggers flurry, bows & staves strike at range, maces stun, scythes drain. Try them all!');
+log('🏰 Tap TOWN (or press T) to warp to the safe hub: smith, healer, trainer, and a gate to re-enter any floor you\'ve reached.');
+log('⚔️ Each move OR attack passes a turn — get surrounded and every foe piles on, so don\'t let them encircle you.');
 
 // Reflect any saved mute preference on the SOUND button, then arm the audio:
 // browsers won't let sound start until the player interacts, so the first
@@ -4130,7 +4923,7 @@ let lastPulse = 0;
 function pulseLoop(ts) {
   const hasElite = enemies.some(e => !e.dead && e.isElite);
   const hasShrine = Object.keys(shrineData).length > 0;
-  if ((merchant || mystic || hasFountain || hasShrine || quest || floatingTexts.length || statusEffects.length || hasElite) && ts - lastPulse > 60) { lastPulse = ts; draw(); }
+  if ((inTown || merchant || mystic || hasFountain || hasShrine || quest || floatingTexts.length || statusEffects.length || hasElite) && ts - lastPulse > 60) { lastPulse = ts; draw(); }
   requestAnimationFrame(pulseLoop);
 }
 requestAnimationFrame(pulseLoop);
