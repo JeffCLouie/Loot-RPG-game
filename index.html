@@ -455,6 +455,29 @@
   #tooltip .tt-card-equipped { border-left: 1px solid var(--border); padding-left: 10px; opacity: 0.9; }
   #tooltip .tt-cardlabel { font-size: 9px; letter-spacing: 1px; text-transform: uppercase; color: #888; margin-bottom: 3px; }
 
+  /* Styled hover popup for enchanter buttons — mirrors the gear tooltip look so
+     hovering a reroll button reads like hovering a piece of gear (no native
+     browser title boxes). */
+  #hovertip {
+    position: fixed;
+    display: none;
+    background: #0e0e1a;
+    border: 1px solid var(--border);
+    padding: 8px 10px;
+    font-size: 11px;
+    min-width: 160px;
+    max-width: 240px;
+    z-index: 420; /* above every town/shop modal */
+    pointer-events: none;
+    line-height: 1.6;
+  }
+  #hovertip .ht-name { font-weight: bold; font-size: 12px; margin-bottom: 4px; color: #cdd6f4; }
+  #hovertip .ht-line { color: #8899bb; }
+  #hovertip .ht-sub  { color: #7a8499; font-size: 10px; margin-top: 3px; }
+  /* Wraps a (possibly disabled) reroll button so the hover popup still fires —
+     disabled buttons swallow mouse events on their own. */
+  .ench-tipwrap { display: inline-flex; flex-shrink: 0; }
+
   /* ── EQUIPMENT ── */
   .equip-slot {
     display: flex;
@@ -1067,6 +1090,7 @@
 </div>
 
 <div id="tooltip"></div>
+<div id="hovertip"></div>
 
 <div id="screen-flash"></div>
 
@@ -3390,6 +3414,7 @@ function closeTown() {
   if (ov) ov.classList.remove('open');
 }
 function setTownContent(html) {
+  hideHoverTip(); // any hovered element is replaced; drop a lingering popup
   document.getElementById('town-gold-count').textContent = player.gold;
   const mt = document.getElementById('town-mats');
   if (mt) mt.innerHTML = matStripHTML();
@@ -3792,6 +3817,7 @@ function openEnchanter() { enchantSel = null; openTownModal('🪄 Enchanter'); r
 function afterEnchant(item) {
   if (Object.values(equipped).includes(item)) { recomputeMaxStats(); if (player.hp > player.maxHp) player.hp = player.maxHp; if (player.mp > player.maxMp) player.mp = player.maxMp; }
   sfx('shrine');
+  hideHoverTip(); // the hovered button is about to be re-rendered out from under it
   updateBars(); renderPanel(); saveGame(); renderEnchanter();
 }
 
@@ -3939,17 +3965,20 @@ function renderEnchantItem(item) {
     const fixed = rangeStr.indexOf('–') < 0;             // single fixed value → value reroll is a no-op
     const canVal  = canAfford(valCost) && !fixed;
     const canType = canAfford(typeCost) && swaps.length > 0;
-    const valTitle  = fixed
-      ? `${label} has a fixed value (${rangeStr}) at this item level — nothing to reroll.`
-      : `Reroll the value only, keeping ${label}. Lands ${rangeStr} at this item level (now +${curVal}).`;
-    const typeTitle = swaps.length
-      ? `Swap ${label} for a random other modifier this slot can hold: ${swaps.join(', ')}.`
-      : `No other modifier is available for this slot — every type it can roll is already present.`;
+    const labelTag = `<b style="${color || 'color:#cdd6f4'}">${label}</b>`;
+    // Gear-style hover cards (title line + description), escaped for the attr.
+    const esc = s => s.replace(/"/g, '&quot;');
+    const valTip = esc(fixed
+      ? `<div class="ht-name">🎲 Reroll Value</div><div class="ht-line">${labelTag} has a fixed value (${rangeStr}) at this item level — nothing to reroll.</div>`
+      : `<div class="ht-name">🎲 Reroll Value</div><div class="ht-line">Keeps ${labelTag}, rolls a new number.</div><div class="ht-sub">Lands ${rangeStr} at ilvl ${item.ilvl} (now ${curVal < 0 ? '' : '+'}${curVal}).</div>`);
+    const typeTip = esc(swaps.length
+      ? `<div class="ht-name">🔄 Reroll Modifier</div><div class="ht-line">Swaps ${labelTag} for a random other modifier this slot can hold:</div><div class="ht-sub">${swaps.join(', ')}</div>`
+      : `<div class="ht-name">🔄 Reroll Modifier</div><div class="ht-line">No other modifier is available — every type this slot can roll is already present.</div>`);
     return `<div class="shop-row"><div class="shop-row-info">
         <div class="shop-row-name" style="${color}">${curVal < 0 ? '' : '+'}${curVal} ${label}</div>
         <div class="shop-row-sub">rolls ${rangeStr} at ilvl ${item.ilvl}</div></div>
-      <button class="shop-buy-btn ench-btn" ${canVal?'':'disabled'} title="${valTitle}" onclick="enchantRerollValue(${item.id},'${kind}','${key}')">🎲 ${costLabel(valCost)}</button>
-      <button class="shop-buy-btn ench-btn" ${canType?'':'disabled'} title="${typeTitle}" onclick="enchantRerollType(${item.id},'${kind}','${key}')">🔄 ${costLabel(typeCost)}</button></div>`;
+      <span class="ench-tipwrap" data-tip="${valTip}" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()"><button class="shop-buy-btn ench-btn" ${canVal?'':'disabled'} onclick="enchantRerollValue(${item.id},'${kind}','${key}')">🎲 ${costLabel(valCost)}</button></span>
+      <span class="ench-tipwrap" data-tip="${typeTip}" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()"><button class="shop-buy-btn ench-btn" ${canType?'':'disabled'} onclick="enchantRerollType(${item.id},'${kind}','${key}')">🔄 ${costLabel(typeCost)}</button></span></div>`;
   };
 
   const statRows = Object.keys(item.stats).filter(k => !head.includes(k)).sort(orderBy(poolStats)).map(k =>
@@ -7313,6 +7342,29 @@ function showTooltipForItem(item, anchor) {
 }
 
 function hideTooltip() { ttEl.style.display = 'none'; tooltipShowing = null; }
+
+// ── HOVER POPUP ── styled tooltip for enchanter reroll buttons, shaped like the
+// gear hover card. The content lives in the element's data-tip attribute; the
+// wrapper carries the handlers so it fires even when the button is disabled.
+const hoverTipEl = document.getElementById('hovertip');
+function showHoverTip(e, el) {
+  const html = el && el.dataset ? el.dataset.tip : '';
+  if (!html) return;
+  hoverTipEl.innerHTML = html;
+  hoverTipEl.style.display = 'block';
+  // Sit above the hovered button, centred; drop below if there's no room above.
+  const r = el.getBoundingClientRect();
+  const tip = hoverTipEl.getBoundingClientRect();
+  const gap = 8;
+  let left = r.left + r.width / 2 - tip.width / 2;
+  let top = r.top - tip.height - gap;
+  if (top < gap) top = r.bottom + gap;
+  left = Math.max(gap, Math.min(left, window.innerWidth - tip.width - gap));
+  top = Math.max(gap, Math.min(top, window.innerHeight - tip.height - gap));
+  hoverTipEl.style.left = left + 'px';
+  hoverTipEl.style.top = top + 'px';
+}
+function hideHoverTip() { hoverTipEl.style.display = 'none'; }
 
 // Dismiss the tooltip when tapping anywhere (the tooltip, the map, the log, etc.),
 // except when tapping a loot item or gear slot (those manage it themselves).
