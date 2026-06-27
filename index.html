@@ -499,6 +499,8 @@
     padding: 6px; margin-bottom: 4px;
     border: 1px solid var(--border); border-radius: 5px;
   }
+  /* Upgrade highlight: this wares is better than what fills its slot. */
+  .shop-row.upgrade { border-color: #2e7d32; background: rgba(46,125,50,0.12); box-shadow: 0 0 6px rgba(68,187,68,0.25); }
   .shop-row-info { flex: 1; min-width: 0; }
   .shop-row-name { font-weight: bold; font-size: 12px; }
   .shop-row-sub { font-size: 10px; opacity: 0.7; }
@@ -1622,7 +1624,7 @@ function renderShop() {
     el.innerHTML = merchant.stock.map((s, i) => {
       const price = stockPrice(s);
       const afford = player.gold >= price;
-      let name, sub, cls = '', stats = '';
+      let name, sub, cls = '', stats = '', isUpgrade = false;
       if (s.kind === 'potion') {
         name = s.name;
         sub = s.heal ? `Restores ${s.heal} HP` : `Restores ${s.mana} MP`;
@@ -1631,9 +1633,23 @@ function renderShop() {
         sub = SLOTS[s.item.slot].label.replace(/^\S+\s/, '');
         cls = 'item-' + s.item.tier;
         stats = itemStatLine(s.item);
+        // Compare against the currently-equipped piece in the same slot so the
+        // buyer can spot upgrades at a glance, just like loot in the bag.
+        const ip = itemPower(s.item);
+        const equippedHere = equipped[s.item.slot];
+        const delta = ip - (equippedHere ? itemPower(equippedHere) : 0);
+        isUpgrade = delta > 0;
+        let deltaTag = '';
+        if (equippedHere) {
+          const c = delta > 0 ? '#5ee08a' : (delta < 0 ? '#e0556b' : '#888');
+          const arrow = delta > 0 ? '▲' : (delta < 0 ? '▼' : '=');
+          deltaTag = ` <span style="color:${c}">${arrow}${delta>0?'+':''}${delta}</span>`;
+        }
+        sub += ` <span class="item-power">⚡${ip}${deltaTag}</span>`;
+        if (isUpgrade) name = '<span class="up-arrow">▲</span> ' + name;
       }
       const sicon = s.kind === 'potion' ? (s.heal ? '🧪' : '🔷') : itemIcon(s.item);
-      return `<div class="shop-row">
+      return `<div class="shop-row ${isUpgrade?'upgrade':''}">
         <span class="loot-icon">${sicon}</span>
         <div class="shop-row-info ${cls}">
           <div class="shop-row-name">${name}</div>
