@@ -441,7 +441,7 @@
         <button class="dpad-btn" data-dir="up">▲</button>
         <div></div>
         <button class="dpad-btn" data-dir="left">◀</button>
-        <button class="dpad-btn dpad-center" data-dir="pickup">PICK</button>
+        <button class="dpad-btn dpad-center" data-dir="pickup">USE</button>
         <button class="dpad-btn" data-dir="right">▶</button>
         <div></div>
         <button class="dpad-btn" data-dir="down">▼</button>
@@ -553,11 +553,21 @@ const HERO = '🧙';
 
 const FOODS = [
   { emoji: '🍖', name: 'Drumstick',   heal: 15 },
-  { emoji: '🍎', name: 'Apple',       heal: 10 },
-  { emoji: '🧀', name: 'Cheese',      heal: 12 },
-  { emoji: '🍞', name: 'Bread',       heal: 8  },
   { emoji: '🍗', name: 'Roast Leg',   heal: 20 },
+  { emoji: '🥩', name: 'Steak',       heal: 28 },
+  { emoji: '🍎', name: 'Apple',       heal: 10 },
+  { emoji: '🍞', name: 'Bread',       heal: 8  },
+  { emoji: '🧀', name: 'Cheese',      heal: 12 },
   { emoji: '🥧', name: 'Meat Pie',    heal: 25 },
+  { emoji: '🍕', name: 'Pizza Slice', heal: 18 },
+  { emoji: '🍔', name: 'Burger',      heal: 22 },
+  { emoji: '🍲', name: 'Hot Stew',    heal: 24 },
+  { emoji: '🍇', name: 'Grapes',      heal: 9  },
+  { emoji: '🍓', name: 'Strawberry',  heal: 7  },
+  { emoji: '🍒', name: 'Cherries',    heal: 8  },
+  { emoji: '🍠', name: 'Roast Yam',   heal: 14 },
+  { emoji: '🥓', name: 'Bacon',       heal: 16 },
+  { emoji: '🍤', name: 'Fried Shrimp',heal: 13 },
 ];
 
 const BOSSES = [
@@ -575,7 +585,7 @@ const BOSSES = [
 let player = { x: 5, y: 5, hp: 100, maxHp: 100, mp: 60, maxMp: 60, gold: 0, level: 1, xp: 0, healPotions: 2, manaPotions: 0 };
 let inventory = [];
 let equipped = { head: null, chest: null, hands: null, legs: null, weapon: null, ring: null, amulet: null };
-let groundItems = []; // { x, y, item }
+let groundItems = []; // chests on the floor: { x, y } — loot is rolled when opened
 let merchant = null;  // { x, y, stock: [...] } when present
 let hasFountain = false;
 let floatingTexts = [];
@@ -842,7 +852,7 @@ function spawnGroundLoot() {
     do {
       gx = rnd(1, MAP_W-1); gy = rnd(1, MAP_H-1); tries++;
     } while (mapData[gy][gx] !== 0 && tries < 100);
-    if (tries < 100) groundItems.push({ x: gx, y: gy, item: generateItem() });
+    if (tries < 100) groundItems.push({ x: gx, y: gy });
   }
   // Spawn food
   groundFood = [];
@@ -1068,24 +1078,21 @@ function draw() {
     }
   }
 
-  // Ground loot glows
-  groundItems.forEach(({ x, y, item }) => {
+  // Ground chests
+  groundItems.forEach(({ x, y }) => {
     const px = offX + x * tw, py = offY + y * th;
-    const c = TIERS[item.tier].color;
     // dark backing disc for separation
-    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
     ctx.beginPath();
-    ctx.arc(px + tw/2, py + th/2, tw*0.34, 0, Math.PI*2);
+    ctx.arc(px + tw/2, py + th/2, tw*0.36, 0, Math.PI*2);
     ctx.fill();
-    // glowing gem
-    ctx.shadowColor = c;
-    ctx.shadowBlur = 12 * scale;
-    ctx.fillStyle = c;
-    const s = Math.max(4, tw * 0.34);
-    ctx.fillRect(px + (tw-s)/2, py + (th-s)/2, s, s);
-    // bright center highlight
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(px + tw/2 - s*0.12, py + th/2 - s*0.12, s*0.24, s*0.24);
+    // warm glow + chest sprite
+    ctx.shadowColor = '#ffcc44';
+    ctx.shadowBlur = 10 * scale;
+    ctx.font = `${Math.round(tw * 0.62)}px serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🧰', px + tw/2, py + th/2 + th*0.02);
     ctx.shadowBlur = 0;
   });
 
@@ -1409,11 +1416,10 @@ function attackEnemy(e) {
     const label = e.isBoss ? `${e.name} ${e.type}` : e.type;
     log(`${label} defeated! +${xp} XP, +${gold}g`, 'important');
     updateBars();
-    // Drop loot — bosses always drop
+    // Drop a chest — bosses always drop
     if (e.isBoss || Math.random() < 0.18) {
-      const item = generateItem();
-      groundItems.push({ x: e.x, y: e.y, item });
-      log(`💎 ${label} dropped: ${item.name}`, 'loot');
+      groundItems.push({ x: e.x, y: e.y });
+      log(`🧰 ${label} dropped a chest!`, 'loot');
     }
     if (Math.random() < 0.20) {
       player.healPotions++;
@@ -1504,10 +1510,30 @@ function checkPickupProximity() {
 
 function pickup() {
   const idx = groundItems.findIndex(g => g.x===player.x && g.y===player.y);
-  if (idx === -1) { log('Nothing here to pick up.'); return; }
-  const { item } = groundItems.splice(idx, 1)[0];
+  if (idx === -1) { log('Nothing here to use.'); return; }
+  groundItems.splice(idx, 1);
+
+  // Very small chance the chest is trapped.
+  if (Math.random() < 0.07) {
+    if (Math.random() < 0.5) {
+      const dmg = 4 + dungeonLevel * 2;
+      player.hp = Math.max(1, player.hp - dmg);
+      spawnFloatingText(player.x, player.y, `${dmg}`, '#ff3344');
+      log(`💥 It was a trapped chest! It explodes for ${dmg} damage!`, 'important');
+    } else {
+      applyStatusEffect('player', 'poison', 3, null);
+      log('☠️ A trapped chest bursts with poison gas!', 'important');
+    }
+    updateBars();
+    saveGame();
+    draw();
+    return;
+  }
+
+  // Otherwise it rolls fresh loot when opened.
+  const item = generateItem();
   inventory.push(item);
-  log(`Picked up: ${item.name}`, 'loot');
+  log(`🧰 Opened a chest: ${item.name}`, 'loot');
   renderPanel();
   saveGame();
   draw();
@@ -1825,7 +1851,7 @@ if (hadSave) {
   log(`Welcome back, level ${player.level} adventurer.`, 'important');
   log(`Resuming on dungeon level ${dungeonLevel}. Your gear is intact.`);
 } else {
-  log('Welcome to the dungeon. Move to explore. PICK to grab loot.', 'important');
+  log('Welcome to the dungeon. Move to explore. USE to open chests.', 'important');
   log('Reach the ▼ stairs to descend deeper.');
 }
 log('Progress auto-saves automatically as you play.');
