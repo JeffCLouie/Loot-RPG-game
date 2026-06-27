@@ -1120,9 +1120,12 @@ const ATTR_POINTS_PER_LEVEL = 3;
 // floors you simply cannot clear yet, retreat, and come back stronger. Because
 // the curve is tied to DEPTH (not your level), grinding shallow floors stays
 // safe and lucrative while the deep stays deadly.
-//   floor 1 → 1.00x   floor 10 → ~2.1x   floor 20 → ~4.8x   floor 30 → ~11x
+//
+// The curve starts gentle (the first few floors are an easy on-ramp) but
+// compounds steeply, so the deep end ramps up fast:
+//   floor 1 → 1.00x   floor 10 → ~2.6x   floor 20 → ~7.3x   floor 30 → ~21x
 function depthThreat(level) {
-  return Math.pow(1.085, Math.max(0, (level || 1) - 1));
+  return Math.pow(1.11, Math.max(0, (level || 1) - 1));
 }
 
 // Total power of a single item: weighted sum of its stats + a rarity bonus.
@@ -2049,8 +2052,8 @@ function generateMap() {
 function makeQuestFoe(x, y) {
   const bandIdx = Math.min(Math.floor((dungeonLevel - 1) / 3), ENEMY_POOL.length - 1);
   const threat = depthThreat(dungeonLevel);
-  const hp = Math.round((16 + dungeonLevel * 9) * threat * (floorMod.hpMult || 1));
-  const dmg = Math.round((5 + dungeonLevel * 2.1 + bandIdx) * threat * (floorMod.dmgMult || 1));
+  const hp = Math.round((10 + dungeonLevel * 8) * threat * (floorMod.hpMult || 1));
+  const dmg = Math.round((3.5 + dungeonLevel * 1.9 + bandIdx) * threat * (floorMod.dmgMult || 1));
   return { x, y, hp, maxHp: hp, type: pick(ENEMY_POOL[bandIdx]), level: dungeonLevel, dmg, dead: false };
 }
 
@@ -3065,8 +3068,8 @@ function spawnEnemies() {
         // pace as your power climbs). Its level also sets the loot it drops.
         const bossLevel = dungeonLevel + 2;
         const bossThreat = depthThreat(bossLevel) * threatScale;
-        const bossHp = Math.round((55 + bossLevel * 28) * bossThreat);
-        const bossDmg = Math.round((10 + bossLevel * 2.3) * bossThreat);
+        const bossHp = Math.round((50 + bossLevel * 23) * bossThreat);
+        const bossDmg = Math.round((9 + bossLevel * 2.1) * bossThreat);
         enemies.push({
           x: ex, y: ey,
           hp: bossHp, maxHp: bossHp,
@@ -3090,8 +3093,8 @@ function spawnEnemies() {
         // depthThreat compounds with depth (deep is deadly); threatScale layers
         // main's anti-grind nudge on top (out-leveling a floor toughens its foes).
         const threat = depthThreat(mobLevel);
-        const baseHp = Math.max(1, Math.round((16 + mobLevel * 9) * threat * (floorMod.hpMult || 1) * pfx('hp', 1) * threatScale));
-        const baseDmg = Math.max(1, Math.round((5 + mobLevel * 2.1 + bandIdx) * threat * (floorMod.dmgMult || 1) * pfx('dmg', 1) * threatScale));
+        const baseHp = Math.max(1, Math.round((10 + mobLevel * 8) * threat * (floorMod.hpMult || 1) * pfx('hp', 1) * threatScale));
+        const baseDmg = Math.max(1, Math.round((3.5 + mobLevel * 1.9 + bandIdx) * threat * (floorMod.dmgMult || 1) * pfx('dmg', 1) * threatScale));
         if (i === eliteIndex) {
           const eHp = Math.round(baseHp * 2.2);
           const eName = pick(ELITE_NAMES);
