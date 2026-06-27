@@ -1287,14 +1287,16 @@ const SLOT_WEIGHTS = { weapon:22, chest:15, head:13, hands:13, legs:13, ring:12,
 // MAXIMUMS — the real count is rolled up to them, so a legendary *can* land 4
 // stats + 2 attributes but usually rolls fewer. No stat or attribute is ever
 // duplicated on one item, and an affix can't repeat the slot's headline.
+// An item carries at most ONE attribute modifier and up to FIVE stat modifiers,
+// reached at legendary/unique. Lower rarities ramp up to that ceiling.
 const TIER_AFFIX_CAPS = {
   junk:      { stat: 0, attr: 0 },
   normal:    { stat: 1, attr: 0 },
-  uncommon:  { stat: 1, attr: 1 },
-  rare:      { stat: 2, attr: 1 },
-  epic:      { stat: 3, attr: 1 },
-  legendary: { stat: 4, attr: 2 },
-  unique:    { stat: 4, attr: 2 },
+  uncommon:  { stat: 2, attr: 0 },
+  rare:      { stat: 3, attr: 1 },
+  epic:      { stat: 4, attr: 1 },
+  legendary: { stat: 5, attr: 1 },
+  unique:    { stat: 5, attr: 1 },
 };
 // Which stats / attributes each slot is allowed to roll. A slot can never roll
 // anything outside its pool (no Attack on boots, no Defense on a ring), which is
@@ -1302,19 +1304,19 @@ const TIER_AFFIX_CAPS = {
 // Note: Luck is now an *attribute*, not a gear stat — the old LCK stat is kept
 // only so legacy items keep working, and never appears in these pools, so "Luck"
 // in the UI always refers to the attribute.
-// Each pool is intentionally LARGER than the rarity cap (4 stats / 2 attrs at the
+// Each pool is intentionally LARGER than the rarity cap (5 stats / 1 attr at the
 // top), so even a fully-rolled item always has spare types to transmute into —
 // that keeps the Enchanter's modifier (🔄) reroll alive on every property. A
 // slot's own headline (weapon DMG, armor DEF/ATK) is never listed here, since the
 // headline already occupies that stat and would only waste a pool slot.
 const SLOT_AFFIX_POOLS = {
-  head:   { stats: ['HP','MP','REGEN','CRIT','CRITDMG','SPD'], attrs: ['vitality','spirit','luck'] },
-  chest:  { stats: ['HP','REGEN','MP','SPD','CRIT','CRITDMG'], attrs: ['vitality','spirit','luck'] },
-  hands:  { stats: ['CRIT','CRITDMG','SPD','MP','HP','REGEN'], attrs: ['might','agility','spirit'] },
-  legs:   { stats: ['SPD','HP','REGEN','MP','CRIT','CRITDMG'], attrs: ['agility','vitality','luck'] },
-  weapon: { stats: ['ATK','CRIT','CRITDMG','SPD','MP','HP'],   attrs: ['might','agility','spirit'] },
-  ring:   { stats: ['CRIT','CRITDMG','ATK','MP','HP','SPD'],   attrs: ['might','agility','luck','spirit','vitality'] },
-  amulet: { stats: ['MP','HP','REGEN','CRIT','CRITDMG','DEF'], attrs: ['spirit','luck','vitality','might','agility'] },
+  weapon: { stats: ['ATK','CRIT','CRITDMG','IDMG','DBLSTRIKE','CLEAVE','BOSSDMG','EXEC','PEN','LEECH','MPLEECH','SPELLPWR'], attrs: ['might','agility','spirit'] },
+  head:   { stats: ['HP','MP','REGEN','CRIT','CRITDMG','SPD','MAGICFIND','XPGAIN','SPELLPWR','CDR','MCR','DODGE','MPKILL','MATFIND'], attrs: ['vitality','spirit','luck'] },
+  chest:  { stats: ['HP','REGEN','MP','DR','BLOCK','THORNS','HPKILL','DODGE','MAGICFIND'], attrs: ['vitality','spirit','luck'] },
+  hands:  { stats: ['CRIT','CRITDMG','IDMG','DBLSTRIKE','SPD','PEN','LEECH','EXEC','CDR','CLEAVE','BLOCK','THORNS'], attrs: ['might','agility','spirit'] },
+  legs:   { stats: ['SPD','HP','REGEN','DODGE','DR','BLOCK','MP','GOLDFIND','XPGAIN','HPKILL'], attrs: ['agility','vitality','luck'] },
+  ring:   { stats: ['CRIT','CRITDMG','ATK','IDMG','LEECH','MPLEECH','GOLDFIND','MAGICFIND','MATFIND','HP','MP','DEF','DBLSTRIKE','BOSSDMG','EXEC','PEN','MCR','MPKILL','CLEAVE'], attrs: ['might','agility','luck','spirit','vitality'] },
+  amulet: { stats: ['MP','HP','REGEN','SPELLPWR','CDR','MCR','MPLEECH','MPKILL','HPKILL','THORNS','MAGICFIND','DR','ATK','DEF','BOSSDMG','GOLDFIND','XPGAIN','MATFIND'], attrs: ['spirit','luck','vitality','might','agility'] },
 };
 
 // ── ITEM ICONS ──
@@ -1635,14 +1637,40 @@ const STAT_NAMES = ['ATK','DEF','SPD','LCK','HP','MP','CRIT','CRITDMG','REGEN'];
 // "Fortune" so it never reads as the new Luck *attribute*; it no longer rolls on
 // new gear and survives only on older items.
 const STAT_LABELS = { ATK:'Attack', DEF:'Defense', SPD:'Speed', LCK:'Fortune', HP:'Max HP',
-  MP:'Max MP', CRIT:'Crit %', CRITDMG:'Crit Dmg %', REGEN:'Regen', DMG:'Damage' };
+  MP:'Max MP', CRIT:'Crit %', CRITDMG:'Crit Dmg %', REGEN:'Regen', DMG:'Damage',
+  // ── new stats ── leech & on-kill sustain, defensive layers, offensive %s,
+  // utility/economy %s, and caster %s. Percent stats carry a "%" in their label
+  // so every display (tooltip, enchanter, hero pane) reads correctly for free.
+  LEECH:'Life Leech %', MPLEECH:'Mana Leech %', HPKILL:'Life on Kill', MPKILL:'Mana on Kill',
+  THORNS:'Thorns', DR:'Damage Reduction %', BLOCK:'Block %', DODGE:'Dodge %',
+  IDMG:'Increased Dmg %', DBLSTRIKE:'Double Strike %', CLEAVE:'Cleave %', BOSSDMG:'Dmg vs Bosses %',
+  EXEC:'Execute %', PEN:'Armor Pen %', GOLDFIND:'Gold Find %', XPGAIN:'XP Gain %',
+  MAGICFIND:'Magic Find %', MATFIND:'Material Find %', SPELLPWR:'Spell Power %',
+  CDR:'Cooldown Reduc %', MCR:'Mana Cost Reduc %' };
+// Short codes for the compact one-line item summary (the tooltip/enchanter use the
+// full STAT_LABELS above). Anything missing falls back to its raw key.
+const STAT_SHORT = { ATK:'ATK', DEF:'DEF', SPD:'SPD', LCK:'FOR', HP:'HP', MP:'MP', CRIT:'CRIT',
+  CRITDMG:'CDMG', REGEN:'REG', LEECH:'LCH', MPLEECH:'MLC', HPKILL:'HoK', MPKILL:'MoK',
+  THORNS:'THN', DR:'DR', BLOCK:'BLK', DODGE:'DGE', IDMG:'IDMG', DBLSTRIKE:'2X', CLEAVE:'CLV',
+  BOSSDMG:'vsB', EXEC:'EXE', PEN:'PEN', GOLDFIND:'GF', XPGAIN:'XP', MAGICFIND:'MF', MATFIND:'MTF',
+  SPELLPWR:'SP', CDR:'CDR', MCR:'MCR' };
+// Stats whose value is a percentage — shown with a trailing % and consumed as /100
+// throughout combat. (CRIT/CRITDMG were always percentages; they're listed too so
+// the compact line shows their unit.)
+const PCT_STATS = new Set(['CRIT','CRITDMG','LEECH','MPLEECH','DR','BLOCK','DODGE','IDMG',
+  'DBLSTRIKE','CLEAVE','BOSSDMG','EXEC','PEN','GOLDFIND','XPGAIN','MAGICFIND','MATFIND',
+  'SPELLPWR','CDR','MCR']);
 const HERO = '🧙';
 
 // ── POWER & ATTRIBUTES ──
 // Every equippable item has a single "power" number summarising how strong it is:
 // each stat is worth a weighted amount, plus a flat bonus for its rarity tier.
 // The player's overall power is built from their level, attributes, and gear.
-const STAT_POWER_WEIGHTS = { ATK:3, DEF:2, SPD:2, LCK:2, HP:1, MP:1, CRIT:4, CRITDMG:1, REGEN:5, DMG:3 };
+const STAT_POWER_WEIGHTS = { ATK:3, DEF:2, SPD:2, LCK:2, HP:1, MP:1, CRIT:4, CRITDMG:1, REGEN:5, DMG:3,
+  // New stats weighted by rough combat value per point so item Power stays sane.
+  LEECH:5, MPLEECH:3, HPKILL:1, MPKILL:1, THORNS:1, DR:6, BLOCK:4, DODGE:5, IDMG:4, DBLSTRIKE:5,
+  CLEAVE:2, BOSSDMG:2, EXEC:2, PEN:2, GOLDFIND:1, XPGAIN:1, MAGICFIND:2, MATFIND:1, SPELLPWR:3,
+  CDR:4, MCR:3 };
 // Per-point power weight of a raised attribute carried on an item (e.g. +13 Might).
 const ATTR_POWER_WEIGHT = 6;
 // A small flat nudge per rarity — kept low on purpose so an item's power is
@@ -1827,7 +1855,8 @@ function playerCritChance() {
 // Chance to completely avoid an incoming hit, driven by Agility and gear SPD.
 // Capped so you can never become untouchable — depth threat still outpaces it.
 function playerDodge() {
-  const base = totalAttr('agility') * ATTR_FX.dodgePerAgi + totalStat('SPD') * 0.006 + skillBonus('dodge');
+  const base = totalAttr('agility') * ATTR_FX.dodgePerAgi + totalStat('SPD') * 0.006
+    + totalStat('DODGE') / 100 + skillBonus('dodge');
   // Rogues are slipperier: a flat dodge bump and a slightly higher ceiling.
   if (player.class === 'rogue') return Math.min(0.45, base + 0.08);
   return Math.min(0.35, base);
@@ -2137,7 +2166,7 @@ function skillBonus(key) {
   return sum;
 }
 // Spell-damage multiplier from Spell Power / Pyromancy / Archmage (Mage tree).
-function spellPowerMult() { return 1 + skillBonus('spell'); }
+function spellPowerMult() { return 1 + skillBonus('spell') + totalStat('SPELLPWR') / 100; }
 // Prereqs satisfied? (high enough level AND every required node at its rank).
 function skillReqMet(node) {
   if (!node) return false;
@@ -3343,9 +3372,11 @@ function stockPrice(s) {
 // Compact one-line summary of an item's stats & attributes, e.g.
 // "⚡14 · 8-12 DMG · +3 ATK · +5 MIG".
 function itemStatLine(item) {
-  const parts = Object.entries(item.stats).map(([k, v]) =>
-    (typeof v === 'string') ? `${v} ${k}` : `${v < 0 ? '' : '+'}${v} ${k}`
-  );
+  const parts = Object.entries(item.stats).map(([k, v]) => {
+    if (typeof v === 'string') return `${v} ${STAT_SHORT[k] || k}`; // DMG range
+    const unit = PCT_STATS.has(k) ? '%' : '';
+    return `${v < 0 ? '' : '+'}${v}${unit} ${STAT_SHORT[k] || k}`;
+  });
   if (item.attrs) for (const [k, v] of Object.entries(item.attrs)) parts.push(`+${v} ${ATTRIBUTES[k].short}`);
   const body = parts.join(' · ');
   return item.slot ? `⚡${itemPower(item)}${body ? ' · ' + body : ''}` : body;
@@ -4918,6 +4949,19 @@ function affixStatValue(stat, lvl, mult) {
 // is the `rnd(0,2)` term, so min uses 0 and max uses 2. Crit chance, crit damage
 // and luck are deterministic (fixed at this ilvl), so their min === max. The
 // enchanter UI uses this to show players the value band before they reroll.
+// Per-stat roll shapes. Flat stats ride the general (1 + 0.6·lvl)·mult curve times
+// `flat` (HP/MP are big pools, regen tiny, etc.). Percent stats grow gently with
+// level & rarity but cap out, so stacking five rolls can't trivialise the game —
+// `per` is the growth and `cap` the per-roll ceiling.
+const AFFIX_CURVES = {
+  ATK:{flat:1}, DEF:{flat:1}, SPD:{flat:1}, HP:{flat:6}, MP:{flat:4}, REGEN:{flat:0.4},
+  THORNS:{flat:0.7}, HPKILL:{flat:0.7}, MPKILL:{flat:0.5},
+  LEECH:{pct:0.18,cap:8}, MPLEECH:{pct:0.18,cap:8}, DR:{pct:0.12,cap:6}, BLOCK:{pct:0.16,cap:8},
+  DODGE:{pct:0.12,cap:6}, IDMG:{pct:0.25,cap:12}, DBLSTRIKE:{pct:0.14,cap:7}, CLEAVE:{pct:0.5,cap:25},
+  BOSSDMG:{pct:0.4,cap:18}, EXEC:{pct:0.3,cap:15}, PEN:{pct:0.5,cap:25}, GOLDFIND:{pct:0.7,cap:35},
+  XPGAIN:{pct:0.5,cap:25}, MAGICFIND:{pct:0.4,cap:20}, MATFIND:{pct:0.6,cap:30}, SPELLPWR:{pct:0.3,cap:15},
+  CDR:{pct:0.12,cap:6}, MCR:{pct:0.16,cap:8},
+};
 function affixStatRange(stat, lvl, mult) {
   // Crit chance / Fortune: small numbers, kept on a tight band (and capped) so a
   // single piece can never swing crit by a wild amount, but value-rerolls still
@@ -4931,12 +4975,15 @@ function affixStatRange(stat, lvl, mult) {
     const base = (5 + lvl * 0.8) * mult;
     return { min: Math.max(2, Math.round(base * 0.75)), max: Math.max(3, Math.round(base * 1.25)) };
   }
-  // General curve: lo = rnd term 0, hi = rnd term 2, with per-stat scaling.
-  let lo = (1 + lvl * 0.6 + 0) * mult;
-  let hi = (1 + lvl * 0.6 + 2) * mult;
-  if      (stat === 'REGEN') { lo *= 0.4; hi *= 0.4; }
-  else if (stat === 'HP')    { lo *= 6;   hi *= 6;   }
-  else if (stat === 'MP')    { lo *= 4;   hi *= 4;   }
+  const c = AFFIX_CURVES[stat] || { flat: 1 };
+  // Percent stats: mild level/rarity scaling, capped, with a ±band for rerolls.
+  if (c.pct) {
+    const hi = Math.max(2, Math.round(Math.min(c.cap, (1 + lvl * c.pct) * mult * 0.5)));
+    return { min: Math.max(1, Math.round(hi * 0.6)), max: hi };
+  }
+  // Flat curve: lo = rnd term 0, hi = rnd term 2, scaled by the stat's `flat` mult.
+  const lo = (1 + lvl * 0.6 + 0) * mult * c.flat;
+  const hi = (1 + lvl * 0.6 + 2) * mult * c.flat;
   return { min: Math.max(1, Math.round(lo)), max: Math.max(1, Math.round(hi)) };
 }
 // Value of one rolled attribute affix (+Might, +Luck, …), now rolled within a
@@ -6410,13 +6457,44 @@ function mitigateDamage(raw, lvl) {
   return Math.max(1, Math.round(raw * (1 - mitigation) * classDmgTakenMult() * sanct));
 }
 
+// Post-mitigation gear layers applied to any incoming hit: a Block % chance to
+// halve it, then a flat Damage Reduction %. Both are capped so they can't make the
+// hero untouchable. Returns the final HP damage (≥1).
+function applyIncomingMods(dmg) {
+  if (Math.random() < Math.min(0.6, totalStat('BLOCK') / 100)) {
+    dmg = Math.max(1, Math.round(dmg * 0.5));
+    spawnFloatingText(player.x, player.y - 0.3, 'BLOCK', '#cfe0ff');
+  }
+  const dr = Math.min(0.6, totalStat('DR') / 100);
+  if (dr > 0) dmg = Math.max(1, Math.round(dmg * (1 - dr)));
+  return dmg;
+}
+
+// Thorns (gear): reflect a flat amount back at a melee attacker after it hits you.
+function thornsReflect(e) {
+  const thorns = totalStat('THORNS');
+  if (thorns > 0 && e && !e.dead) {
+    spawnFloatingText(e.x, e.y, `${thorns}`, '#ffcc66');
+    dealDamage(e, thorns, false);
+  }
+}
+
 // Bloodthirst (Warrior passive): heal a slice of melee damage dealt. Called from
 // basic attacks and every weapon-based active so a Cleave/Whirlwind build sustains.
 function lifestealHeal(amount) {
-  const ls = skillBonus('lifesteal');
-  if (ls <= 0 || amount <= 0 || player.hp >= player.maxHp) return;
-  const got = Math.min(Math.max(1, Math.round(amount * ls)), player.maxHp - player.hp);
-  if (got > 0) { player.hp += got; spawnFloatingText(player.x, player.y, `+${got}`, '#ff6688'); }
+  if (amount <= 0) return;
+  // Life leech: Bloodthirst (skill) + gear Life Leech %.
+  const ls = skillBonus('lifesteal') + totalStat('LEECH') / 100;
+  if (ls > 0 && player.hp < player.maxHp) {
+    const got = Math.min(Math.max(1, Math.round(amount * ls)), player.maxHp - player.hp);
+    if (got > 0) { player.hp += got; spawnFloatingText(player.x, player.y, `+${got}`, '#ff6688'); }
+  }
+  // Mana leech: gear Mana Leech % restores MP from damage dealt.
+  const ml = totalStat('MPLEECH') / 100;
+  if (ml > 0 && player.mp < player.maxMp) {
+    const got = Math.min(Math.max(1, Math.round(amount * ml)), player.maxMp - player.mp);
+    if (got > 0) { player.mp += got; spawnFloatingText(player.x, player.y - 0.3, `+${got}`, '#7fb0ff'); }
+  }
 }
 
 // Mana Shield (Mage passive): divert part of an incoming hit onto your MP pool
@@ -6463,14 +6541,38 @@ function rollPlayerHit(e) {
   if (buffs.power) dmg = Math.round(dmg * 1.5);
   dmg = Math.round(dmg * classDmgDealtMult()); // Warrior + damage passives
   if (hasBuff('warcry')) dmg = Math.round(dmg * 1.5); // War Cry self-buff
+  // Increased Damage % (gear): a flat multiplier on every hit.
+  const idmg = totalStat('IDMG');
+  if (idmg > 0) dmg = Math.round(dmg * (1 + idmg / 100));
+  // Dmg vs Bosses % (gear): extra punch against bosses and elites.
+  const bossDmg = totalStat('BOSSDMG');
+  if (bossDmg > 0 && e && (e.isBoss || e.isElite)) dmg = Math.round(dmg * (1 + bossDmg / 100));
   // Zeal/Fervor (Templar): more damage the lower your health.
   const zeal = skillBonus('zeal');
   if (zeal > 0) dmg = Math.round(dmg * (1 + zeal * (1 - player.hp / player.maxHp)));
-  // Opportunist/Executioner: bonus damage to badly-wounded foes.
-  const lowHp = skillBonus('lowHpDmg');
+  // Opportunist/Executioner (skill) + Execute % (gear): bonus to badly-wounded foes.
+  const lowHp = skillBonus('lowHpDmg') + totalStat('EXEC') / 100;
   if (lowHp > 0 && e && e.hp < e.maxHp * 0.35) dmg = Math.round(dmg * (1 + lowHp));
   if (isCrit) dmg = Math.round(dmg * critDamageMult());
+  // Enemy armor mitigates a slice of the blow; Armor Pen % (gear) ignores part of
+  // it. Armor is light on rank-and-file foes and heavier on elites/bosses, so Pen
+  // shines against the toughest enemies (and pairs naturally with Dmg vs Bosses).
+  const armor = enemyArmorPct(e);
+  if (armor > 0) {
+    const pen = Math.min(0.9, totalStat('PEN') / 100);
+    dmg = Math.round(dmg * (1 - armor * (1 - pen)));
+  }
   return { dmg: Math.max(1, dmg), isCrit };
+}
+
+// Fraction of a player's blow an enemy shrugs off via armor. Modest by default so
+// it barely taxes normal fights, but real on elites/bosses where Armor Pen earns
+// its slot. Scales gently with the foe's level/depth.
+function enemyArmorPct(e) {
+  let pct = 0.03 + Math.min(0.10, ((e && e.level) || dungeonLevel) * 0.0035);
+  if (e && e.isElite) pct += 0.06;
+  if (e && e.isBoss)  pct += 0.12;
+  return Math.min(0.45, pct);
 }
 
 // Apply already-rolled damage to a foe and show the number. Returns true if it
@@ -6489,19 +6591,31 @@ function onEnemyDefeated(e) {
   const label = enemyLabel(e);
   const xpMult = e.isBoss ? 5 : (e.isElite ? 2 : 1);
   const goldMult = e.isBoss ? 3 : (e.isElite ? 2 : 1);
-  const xp = Math.round(12 * dungeonLevel * xpMult * pfx('xp', 1));
+  const xp = Math.round(12 * dungeonLevel * xpMult * pfx('xp', 1) * (1 + totalStat('XPGAIN') / 100));
   player.xp += xp;
-  const gold = Math.round((rnd(2, 8) + dungeonLevel * 3) * goldMult * (floorMod.goldMult || 1) * pfx('gold', 1));
+  const gold = Math.round((rnd(2, 8) + dungeonLevel * 3) * goldMult * (floorMod.goldMult || 1) * pfx('gold', 1) * (1 + totalStat('GOLDFIND') / 100));
   player.gold += gold;
   spawnFloatingText(e.x + 0.35, e.y, `+${gold}g`, '#ffd24b');
   log(`${label} defeated! +${xp} XP, +${gold}g`, 'important');
   sfx(e.isBoss ? 'boss' : 'kill');
   if (e.isBoss) screenFlash('#ff3344');
+  // Life/Mana on Kill (gear): a flat top-up every time a foe falls.
+  const hpKill = totalStat('HPKILL');
+  if (hpKill > 0 && player.hp < player.maxHp) {
+    const got = Math.min(hpKill, player.maxHp - player.hp);
+    if (got > 0) { player.hp += got; spawnFloatingText(player.x, player.y, `+${got}`, '#ff6688'); }
+  }
+  const mpKill = totalStat('MPKILL');
+  if (mpKill > 0 && player.mp < player.maxMp) {
+    const got = Math.min(mpKill, player.maxMp - player.mp);
+    if (got > 0) { player.mp += got; spawnFloatingText(player.x, player.y - 0.3, `+${got}`, '#7fb0ff'); }
+  }
   updateBars();
   // Minions summoned by a boss never drop loot — only XP/gold above.
   if (e.minion) { checkLevelUp(); updateFloorClear(); return; }
-  // The floor modifier, an active Fortune buff, and any pact sweeten every drop roll.
-  const lootMult = (floorMod.lootMult || 1) * (buffs.fortune ? 1.5 : 1) * pfx('loot', 1);
+  // The floor modifier, an active Fortune buff, gear Magic Find, and any pact all
+  // sweeten every drop roll.
+  const lootMult = (floorMod.lootMult || 1) * (buffs.fortune ? 1.5 : 1) * pfx('loot', 1) * (1 + totalStat('MAGICFIND') / 100);
   // Drop a chest — bosses and elites always drop, with richer loot. The luck
   // value is how many rarity rolls the chest makes (more rolls = better odds).
   // Enemy drops land straight in your pack — no need to walk over and open them.
@@ -6529,10 +6643,12 @@ function onEnemyDefeated(e) {
     const gained = {};
     const add = (k, n) => { if (n > 0) gained[k] = (gained[k] || 0) + n; };
     const big = e.isBoss ? 3 : (e.isElite ? 2 : 1);
-    if (Math.random() < 0.5 * lootMult || e.isElite || e.isBoss) add('scrap', rnd(1, 2) * big + Math.floor(dungeonLevel / 4));
-    if (Math.random() < 0.16 * lootMult || e.isBoss)             add('glimmer', e.isBoss ? rnd(2, 3) : 1);
-    if (Math.random() < (0.04 + dungeonLevel * 0.004) * lootMult || e.isBoss) add('core', e.isBoss ? rnd(1, 2) : 1);
-    if (e.isBoss ? Math.random() < 0.35 : Math.random() < 0.01 * lootMult)    add('chaos', 1);
+    // Material Find % (gear) boosts the odds of every crafting-material drop.
+    const matMult = lootMult * (1 + totalStat('MATFIND') / 100);
+    if (Math.random() < 0.5 * matMult || e.isElite || e.isBoss) add('scrap', rnd(1, 2) * big + Math.floor(dungeonLevel / 4));
+    if (Math.random() < 0.16 * matMult || e.isBoss)             add('glimmer', e.isBoss ? rnd(2, 3) : 1);
+    if (Math.random() < (0.04 + dungeonLevel * 0.004) * matMult || e.isBoss) add('core', e.isBoss ? rnd(1, 2) : 1);
+    if (e.isBoss ? Math.random() < 0.35 : Math.random() < 0.01 * matMult)    add('chaos', 1);
     const keys = Object.keys(gained);
     if (keys.length) {
       for (const k of keys) gainMaterial(k, gained[k]);
@@ -6608,6 +6724,29 @@ function attackEnemy(e, opts = {}) {
       const before = dealtTotal;
       swing(o, 0.7);
       if (dealtTotal > before) spawnFloatingText(o.x, o.y, `${dealtTotal - before}`, '#ffbb66');
+    });
+  }
+
+  // Double Strike % (gear): a chance for a free extra swing at the main target.
+  const dbl = totalStat('DBLSTRIKE') / 100;
+  if (dbl > 0 && !ranged && !e.dead && Math.random() < dbl) {
+    const before = dealtTotal;
+    swing(e);
+    if (dealtTotal > before) {
+      spawnFloatingText(e.x, e.y - 0.3, `2×${dealtTotal - before}`, '#ffd24b');
+      log(`⚡ ${HERO} strikes again for ${dealtTotal - before}!`, 'important');
+    }
+  }
+
+  // Cleave % (gear): splash a slice of the damage dealt onto adjacent foes (on top
+  // of any weapon cleave above), so even a single-target weapon can hit a crowd.
+  const clv = totalStat('CLEAVE') / 100;
+  if (clv > 0 && dealtTotal > 0) {
+    adjacentEnemies(e).forEach(o => {
+      if (o.dead) return;
+      const sd = Math.max(1, Math.round(dealtTotal * clv));
+      spawnFloatingText(o.x, o.y, `${sd}`, '#ffbb66');
+      dealDamage(o, sd, false);
     });
   }
 
@@ -6693,17 +6832,20 @@ function castSkillById(id) {
   if (isPlayerStunned()) { log('You are stunned and can\'t cast!'); return; }
   const cd = skillCd(id);
   if (cd > 0) { log(`⏳ ${sk.name} is recharging (${cd} more turn${cd === 1 ? '' : 's'}).`); return; }
-  if (player.mp < sk.mp) { log(`💧 Not enough mana for ${sk.name} — need ${sk.mp} MP.`); return; }
+  // Mana Cost Reduction % (gear) lowers the price of every cast.
+  const mpCost = Math.max(1, Math.round(sk.mp * (1 - Math.min(0.6, totalStat('MCR') / 100))));
+  if (player.mp < mpCost) { log(`💧 Not enough mana for ${sk.name} — need ${mpCost} MP.`); return; }
 
   if (!runActiveSkill(id)) return; // no valid target / nothing to do
 
-  player.mp -= sk.mp;
+  player.mp -= mpCost;
   updateBars();
   // The cast costs a turn: foes act and escorts trail along. Set the cooldown
   // AFTER runEnemyTurn so this very turn doesn't immediately tick it down.
   runEnemyTurn();
   moveQuestEntities();
-  setSkillCd(id, sk.cd);
+  // Cooldown Reduction % (gear) shortens the recharge (never below 1 turn).
+  setSkillCd(id, Math.max(1, Math.round(sk.cd * (1 - Math.min(0.6, totalStat('CDR') / 100)))));
   updateBars();
   renderSkillBar();
   draw();
@@ -7204,7 +7346,7 @@ function enemyAttackPlayer(e) {
   let raw = Math.round(e.dmg * rnd(80, 120) / 100);
   if (beh.hitMult) raw = Math.round(raw * beh.hitMult);
   if (buffs.guard) raw = Math.round(raw * 0.6);
-  const dmg = absorbWithMana(mitigateDamage(raw, e.level));
+  const dmg = applyIncomingMods(absorbWithMana(mitigateDamage(raw, e.level)));
   player.hp = Math.max(0, player.hp - dmg);
   sfx('hurt');
   spawnFloatingText(player.x, player.y, `${dmg}`, '#ff3344');
@@ -7218,6 +7360,7 @@ function enemyAttackPlayer(e) {
     spawnFloatingText(e.x, e.y, `${rd}`, '#ffcc66');
     dealDamage(e, rd, false);
   }
+  thornsReflect(e); // gear Thorns: flat reflected damage on melee
   tryBossStatusProc(e);
   updateBars();
   if (player.hp === 0) handleDeath();
@@ -7232,7 +7375,7 @@ function enemyRangedAttack(e) {
   }
   let raw = Math.round(e.dmg * rnd(75, 110) / 100);
   if (buffs.guard) raw = Math.round(raw * 0.6);
-  const dmg = absorbWithMana(mitigateDamage(raw, e.level));
+  const dmg = applyIncomingMods(absorbWithMana(mitigateDamage(raw, e.level)));
   player.hp = Math.max(0, player.hp - dmg);
   sfx(e.isBoss ? 'boss' : 'hurt');
   spawnFloatingText(player.x, player.y, `${dmg}`, '#c77dff');
@@ -7721,6 +7864,23 @@ function renderHero(el) {
   }).join('');
   // Derived combat stats so the player can see what their attributes/gear produce.
   const stat = (label, val) => `<div class="hc-line" style="display:flex;justify-content:space-between"><span style="opacity:0.8">${label}</span><b>${val}</b></div>`;
+  // Extended gear stats (leech, thorns, find, caster %s, …): every one the hero
+  // currently carries from gear is listed so nothing stays hidden. Zero-value
+  // stats are skipped to keep the panel readable.
+  const EXT = [
+    ['IDMG','💢 Increased dmg'], ['BOSSDMG','👑 Dmg vs bosses'], ['EXEC','🗡 Execute'],
+    ['PEN','🩹 Armor pen'], ['CLEAVE','🪓 Cleave'], ['DBLSTRIKE','⚡ Double strike'],
+    ['LEECH','🩸 Life leech'], ['MPLEECH','🔹 Mana leech'], ['HPKILL','❤️ Life on kill'],
+    ['MPKILL','🔷 Mana on kill'], ['THORNS','🌵 Thorns'], ['DR','🛡 Dmg reduction'],
+    ['BLOCK','🟦 Block'], ['SPELLPWR','🔮 Spell power'], ['CDR','⏳ Cooldown reduc'],
+    ['MCR','💧 Mana cost reduc'], ['GOLDFIND','💰 Gold find'], ['XPGAIN','📘 XP gain'],
+    ['MAGICFIND','🍀 Magic find'], ['MATFIND','🧰 Material find'],
+  ];
+  const extRows = EXT.map(([k, lbl]) => {
+    const t = totalStat(k);
+    if (!t) return '';
+    return stat(lbl, '+' + t + (PCT_STATS.has(k) ? '%' : ''));
+  }).join('');
   const derived = `<div class="hero-class" style="border-color:#445">
       <div class="hc-head"><span class="hc-name">📊 Stats</span></div>
       ${stat('⚔️ Attack power', Math.round(totalStat('ATK') + attrDamage()))}
@@ -7732,6 +7892,7 @@ function renderHero(el) {
       ${stat('🎯 Crit chance', Math.round(playerCritChance()*100) + '%')}
       ${stat('💥 Crit damage', Math.round(critDamageMult()*100) + '%')}
       ${stat('💨 Dodge', Math.round(playerDodge()*100) + '%')}
+      ${extRows ? `<div class="hc-line" style="opacity:0.5;margin-top:4px">— from gear —</div>${extRows}` : ''}
     </div>`;
   const cls = playerClass();
   const classBlock = cls ? `
@@ -7751,9 +7912,9 @@ function renderHero(el) {
     </div>
     <div class="hero-sub">Level ${player.level} · ${gearPower} from gear</div>
     ${classBlock}
-    ${derived}
     <div class="hero-points">${pts > 0 ? `${pts} point${pts>1?'s':''} to spend!` : 'No points to spend — level up for more.'}</div>
-    ${rows}`;
+    ${rows}
+    ${derived}`;
 }
 
 // SKILLS tab: the class skill tree, drawn as a branching node graph. Two trunks
