@@ -2292,6 +2292,11 @@ let teleporters = {}; // "y,x" -> { x, y } partner pad for warp tiles
 let groundKey = null; // { x, y } of the vault key on this floor, if any
 let hasKey = false;   // whether the player is currently carrying a vault key
 let startPos = { x: 5, y: 5 }; // this floor's safe entry tile (where death sends you)
+// How the player arrived on the floor about to be built: 'down' (descended, via
+// the gate, or a fresh load) or 'up' (climbed the stairs up from below). It
+// decides which stair sits on the entry tile — you always spawn on the stair
+// that leads back the way you came. Reset to 'down' at the end of generateMap.
+let arrivalDir = 'down';
 // Optional mini-quest on this floor: { type, npc:{x,y,emoji,name,following?}, done }
 let quest = null;
 const QUEST_NPCS  = ['🧑‍🌾','🧓','🧝','🧙‍♀️','👨‍🔧','🧕','👩‍🌾','🤴','👸','🧑‍🎓'];
@@ -2834,20 +2839,28 @@ function generateMap() {
   // player can reach from the start tile is then valid for placement.
   const reach = ensureConnected();
 
-  // ── STAIRS ── on a reachable floor tile, as far from the start as possible.
+  // ── STAIRS ── two staircases: the entry stair you spawn on leads back the way
+  // you came, and a far stair (placed as far from the start as possible) leads
+  // onward. Which is which depends on how you arrived:
+  //   • descended / gated / loaded in → onward is DOWN (deeper), entry is UP.
+  //   • climbed up from below → onward is UP (higher), entry is DOWN (back down).
+  // Floor 1 has nothing above it, so its far stair is always down regardless.
+  const climbing = arrivalDir === 'up' && dungeonLevel > 1;
+  const farStair = climbing ? 12 : 2;   // the way onward
+  const entryStair = climbing ? 2 : 12; // the way back, under your feet
   let best = null, bestD = -1;
   for (let t = 0; t < 80; t++) {
     const c = randomFloorTile(reach); if (!c) break;
     const d = Math.abs(c.x - player.x) + Math.abs(c.y - player.y);
     if (d > bestD) { bestD = d; best = c; }
   }
-  if (best) mapData[best.y][best.x] = 2;
-  else mapData[player.y][Math.min(MAP_W-2, player.x+1)] = 2; // safety fallback
+  if (best) mapData[best.y][best.x] = farStair;
+  else mapData[player.y][Math.min(MAP_W-2, player.x+1)] = farStair; // safety fallback
 
-  // ── STAIRS UP ── back the way you came. They sit on the entry tile (where you
-  // arrive), so walking back onto them returns you to the previous floor. Floor 1
+  // ── ENTRY STAIR ── back the way you came. It sits on the entry tile (where you
+  // arrive), so walking back onto it returns you to the previous floor. Floor 1
   // has no floor above, so it gets none — use TOWN to leave the first floor.
-  if (dungeonLevel > 1) mapData[startPos.y][startPos.x] = 12;
+  if (dungeonLevel > 1) mapData[startPos.y][startPos.x] = entryStair;
 
   // ── LAVA (passable, burns) ──
   if (dungeonLevel >= 2 && Math.random() < 0.5) {
@@ -2925,6 +2938,10 @@ function generateMap() {
   } else {
     log(`🔒 The stairs down are sealed. ${clearConditionLabel()}`, 'important');
   }
+
+  // Consume the arrival direction — the next floor defaults to a downward entry
+  // unless its caller (the stairs-up handler) sets it again right before building.
+  arrivalDir = 'down';
 }
 
 // Build a standard floor-level foe at a tile (used for quest hordes).
@@ -6152,6 +6169,7 @@ function move(dx, dy) {
     sfx('stairs');
     log(`Ascended to dungeon level ${dungeonLevel}. You return to ${currentTheme().name}.`, 'important');
     player.x = 5; player.y = 5;
+    arrivalDir = 'up';   // spawn on the stairs DOWN that lead back the way you came
     generateMap();
     maybeFloorEvent();
     updateBars();
