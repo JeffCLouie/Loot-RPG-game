@@ -477,34 +477,74 @@
   #screen-flash.active { opacity: 0.5; }
 
   /* ── WEB / DESKTOP LAYOUT ──
-     On keyboard + mouse devices with room to spare, rearrange the play area
-     into a grid so the log sits in a full-height column on the LEFT, with the
-     canvas and action buttons stacked on the right. The on-screen d-pad is
-     dropped here because movement is handled by the arrow keys / WASD.
+     On keyboard + mouse devices with room to spare, rearrange the play area:
+     the log sits in a full-height column on the LEFT, a big SQUARE map fills
+     the middle, and the loot drawer becomes a permanent right-hand column so
+     the inventory list can scroll the full height and is never covered. The
+     d-pad and bag toggle are dropped (keyboard moves; the drawer stays open),
+     and heal / new-game float over the map's top-left corner.
      This block is intentionally gated to pointer:fine + hover so the stacked
      mobile/touch layout above is left completely untouched. */
   @media (min-width: 760px) and (hover: hover) and (pointer: fine) {
-    #game-wrap {
-      display: grid;
-      grid-template-columns: 260px 1fr;
-      grid-template-rows: 1fr auto;
+    /* Loot drawer: a real column in the flow (not an overlay), always open and
+       a little wider so the LOOT/GEAR/HERO tabs have room to breathe. */
+    #side-panel {
+      position: static;
+      flex: 0 0 210px;
+      width: 210px;
+      transform: none;
+      opacity: 1;
+      pointer-events: auto;
+      box-shadow: none;
     }
-    /* Canvas: top-right cell. */
-    canvas { grid-column: 2; grid-row: 1; }
+    #side-panel.collapsed { transform: none; opacity: 1; pointer-events: auto; }
+
+    #game-wrap {
+      position: relative;
+      display: grid;
+      grid-template-columns: 250px 1fr;
+      grid-template-rows: 1fr;
+    }
     /* Log: full-height left column. */
     #bottom-row {
       grid-column: 1;
-      grid-row: 1 / 3;
+      grid-row: 1;
       flex: none;
       max-height: none;
       min-height: 0;
       border-top: none;
       border-right: 1px solid var(--border);
     }
-    /* Action buttons: bottom-right cell. */
-    #control-bar { grid-column: 2; grid-row: 2; }
-    /* Keyboard replaces the d-pad on the web. */
+    /* Map: the largest square that fits its cell, centered. */
+    canvas {
+      grid-column: 2;
+      grid-row: 1;
+      width: auto;
+      height: 100%;
+      max-width: 100%;
+      max-height: 100%;
+      aspect-ratio: 1 / 1;
+      justify-self: center;
+      align-self: center;
+      flex: none;
+    }
+    /* No bottom bar on web — heal + new float over the map's top-left so they
+       never cover the loot list. */
+    #control-bar {
+      position: absolute;
+      top: 8px;
+      left: 258px;
+      padding: 0;
+      background: none;
+      border-top: none;
+      width: auto;
+      z-index: 215;
+    }
+    #action-buttons { flex-direction: row; gap: 6px; }
+    .action-btn { width: 52px; flex: none; }
+    /* Keyboard replaces the d-pad; the drawer stays open so no bag toggle. */
     #dpad { display: none; }
+    .bag-btn { display: none; }
   }
 </style>
 </head>
@@ -826,8 +866,15 @@ function resizeCanvas() {
 resizeCanvas();
 window.addEventListener('resize', () => { resizeCanvas(); draw(); });
 
+// On the web/desktop layout the loot drawer is a permanent column, so it's
+// always open and tapping the map should not close it.
+const WEB_MQ = window.matchMedia('(min-width: 760px) and (hover: hover) and (pointer: fine)');
+function isWebLayout() { return WEB_MQ.matches; }
+
 let panelOpen = false;
 function togglePanel() {
+  // The drawer is pinned open on the web layout — just (re)render it.
+  if (isWebLayout()) { panelOpen = true; renderPanel(); return; }
   panelOpen = !panelOpen;
   const panel = document.getElementById('side-panel');
   const btn = document.querySelector('.bag-btn');
@@ -837,8 +884,16 @@ function togglePanel() {
   if (panelOpen) renderPanel();
 }
 
-// Tapping the map closes the bag overlay if it's open.
-canvas.addEventListener('click', () => { if (panelOpen) togglePanel(); });
+// Tapping the map closes the bag overlay if it's open (mobile only — on the
+// web layout the drawer is a fixed column and stays put).
+canvas.addEventListener('click', () => { if (panelOpen && !isWebLayout()) togglePanel(); });
+
+// Keep the drawer populated and open whenever we're in (or switch into) the
+// web layout.
+function syncWebPanel() {
+  if (isWebLayout()) { panelOpen = true; renderPanel(); }
+}
+WEB_MQ.addEventListener('change', () => { syncWebPanel(); resizeCanvas(); draw(); });
 
 // ══════════════════════════════════════════
 // MAP GENERATION
@@ -2598,8 +2653,10 @@ log('⚡ Each item has a Power value; your total Power blends level, gear, and a
 log('💠 Level up to earn points, then raise attributes in the bag\'s HERO tab.');
 
 // Redraw once layout has settled so the camera fits the real canvas size.
+// On the web layout, also open + populate the permanent loot drawer.
+syncWebPanel();
 requestAnimationFrame(() => { resizeCanvas(); draw(); });
-window.addEventListener('load', () => { resizeCanvas(); draw(); });
+window.addEventListener('load', () => { syncWebPanel(); resizeCanvas(); draw(); });
 
 // Gentle animation loop: only repaints while a merchant is on the floor,
 // so their robe glow pulses. Idle otherwise to save battery.
