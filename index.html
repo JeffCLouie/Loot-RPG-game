@@ -733,6 +733,19 @@
   .class-card .cc-blurb { font-size: 10px; color: #b9a98a; line-height: 1.4; margin-bottom: 3px; }
   .class-card .cc-detail { font-size: 9px; color: #8a7d63; line-height: 1.5; }
   .town-blurb { font-size: 11px; color: #b9a98a; margin-bottom: 8px; line-height: 1.4; }
+  /* Stash vault — gold deposit/withdraw bar and section headings. */
+  .stash-gold-bar { display: flex; gap: 6px; margin: 6px 0; align-items: stretch; }
+  .stash-gold-bar input {
+    flex: 1 1 auto; min-width: 0; background: #221a10; border: 1px solid var(--border);
+    border-radius: 5px; color: #ffe9b0; font-family: 'Courier New', monospace;
+    font-size: 12px; padding: 6px 8px;
+  }
+  .stash-gold-bar .shop-buy-btn, .stash-gold-bar .shop-sell-all-btn { flex: 0 0 auto; }
+  .stash-gold-bar .shop-sell-all-btn { flex: 1 1 0; }
+  .stash-section-title {
+    color: #ffe9b0; font-size: 12px; font-weight: bold; letter-spacing: 1px;
+    margin: 12px 0 4px; padding-bottom: 3px; border-bottom: 1px solid var(--border);
+  }
   .gate-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
   .gate-floor {
     padding: 10px 0; border: 1px solid var(--border); border-radius: 5px;
@@ -1885,6 +1898,10 @@ let player = { x: 5, y: 5, hp: 100, maxHp: 100, mp: 60, maxMp: 60, gold: 0, leve
   cosmetics: { head: null, chest: null, weapon: null },
   wardrobe: { head: [], chest: [], weapon: [] } };
 let inventory = [];
+// The town STASH — a safe vault, completely separate from your character. Gold
+// and gear kept here are never spent at merchants and never lost on death; the
+// stash is only accessible from the Vault in town.
+let stash = { gold: 0, items: [] };
 let equipped = { head: null, chest: null, hands: null, legs: null, weapon: null, ring: null, amulet: null };
 let groundItems = []; // chests on the floor: { x, y } — loot is rolled when opened
 let merchant = null;  // { x, y, stock: [...] } when present
@@ -3138,6 +3155,7 @@ function buildTown() {
     { x: 14, y: 10, w: 3, h: 2, kind: 'gate',     roof: '#5a4a7a', sign: '🌀' },
     { x: 8,  y: 6,  w: 3, h: 2, kind: 'gambler',  roof: '#b88a2a', sign: '🎲' },
     { x: 2,  y: 6,  w: 3, h: 2, kind: 'enchanter',roof: '#6a3a8a', sign: '🪄' },
+    { x: 14, y: 6,  w: 3, h: 2, kind: 'stash',    roof: '#3a6a7a', sign: '🏦' },
   ];
 
   // Stamp each building footprint into the map as solid tiles.
@@ -3157,6 +3175,7 @@ function buildTown() {
     gate:     { emoji: '🌀',   name: 'Dungeon Gate', tag: '⬇️' },
     gambler:  { emoji: '🎲',   name: 'Gambler',      tag: '💰' },
     enchanter:{ emoji: '🪄',   name: 'Enchanter',    tag: '✨' },
+    stash:    { emoji: '🧑‍💼', name: 'Vault Keeper', tag: '🏦' },
   };
   townNpcs = townBuildings.map(b => ({
     x: b.x + Math.floor(b.w / 2),
@@ -3206,6 +3225,7 @@ function openTownService(kind) {
   if (kind === 'trainer') { openTrainer(); return; }
   if (kind === 'gambler') { openGambler(); return; }
   if (kind === 'enchanter') { openEnchanter(); return; }
+  if (kind === 'stash')   { openStash();   return; }
   if (kind === 'gate')    { openGate();    return; }
 }
 
@@ -3322,6 +3342,100 @@ function buyTownPotion(which, cost) {
   else { player.manaPotions++; log(`Bought a ${logPotion('Mana Potion')}. (${player.manaPotions} held)`, 'loot'); }
   sfx('buy');
   updateBars(); renderHealer(); saveGame();
+}
+
+// ── STASH (Vault Keeper) — a safe place for gold & gear ──
+// Everything stored here lives entirely off your character: stashed gold is
+// never spent at merchants and never lost on death, and stashed items don't
+// appear in your bag or the sell list. Deposit when you visit town, withdraw
+// when you need it.
+function openStash() { openTownModal('🏦 Stash Vault'); renderStash(); }
+function stashItemRow(item, action, btnLabel, btnClass) {
+  const upg = item.upgrades ? ` <span style="color:#ffd24b">+${item.upgrades}</span>` : '';
+  const stats = item.stats ? itemStatLine(item) : '';
+  const sub = item.slot ? SLOTS[item.slot].label.replace(/^\S+\s/, '') : 'potion';
+  return `<div class="shop-row">
+    <span class="loot-icon">${iconMarkup(itemIcon(item), tierColor(item))}</span>
+    <div class="shop-row-info item-${item.tier}">
+      <div class="shop-row-name">${item.name}${upg}</div>
+      <div class="shop-row-sub">${sub}</div>
+      ${stats ? `<div class="shop-row-stats">${stats}</div>` : ''}
+    </div>
+    <button class="${btnClass}" onclick="${action}">${btnLabel}</button>
+  </div>`;
+}
+function renderStash() {
+  const g = stash.gold || 0;
+  const stored = stash.items.length
+    ? stash.items.map((it, i) => stashItemRow(it, `stashWithdrawItem(${i})`, 'TAKE', 'shop-buy-btn')).join('')
+    : '<div class="shop-empty">The vault is empty.</div>';
+  const bag = inventory.length
+    ? inventory.map((it, i) => stashItemRow(it, `stashDepositItem(${i})`, 'STORE', 'shop-sell-btn')).join('')
+    : '<div class="shop-empty">Your bag is empty.</div>';
+  setTownContent(`
+    <div class="town-blurb">The Vault Keeper guards your fortune. Gold and gear stored here are kept completely safe — never spent at the shops and never lost when you fall in the dungeon.</div>
+    <div class="shop-row">
+      <span class="loot-icon">🏦</span>
+      <div class="shop-row-info">
+        <div class="shop-row-name">Stashed gold: <span style="color:var(--gold)">${g}g</span></div>
+        <div class="shop-row-sub">Carried: ${player.gold}g</div>
+      </div>
+    </div>
+    <div class="stash-gold-bar">
+      <input id="stash-gold-amt" type="number" min="1" placeholder="amount" />
+      <button class="shop-buy-btn" onclick="stashDepositGold()">DEPOSIT</button>
+      <button class="shop-buy-btn" onclick="stashWithdrawGold()">WITHDRAW</button>
+    </div>
+    <div class="stash-gold-bar">
+      <button class="shop-sell-all-btn" onclick="stashDepositGold(player.gold)">DEPOSIT ALL</button>
+      <button class="shop-sell-all-btn" onclick="stashWithdrawGold(stash.gold)">WITHDRAW ALL</button>
+    </div>
+    <div class="stash-section-title">📦 In the Vault (${stash.items.length})</div>
+    ${stored}
+    <div class="stash-section-title">🎒 Your Bag (${inventory.length})</div>
+    ${bag}`);
+}
+function stashGoldAmount(amt) {
+  if (amt != null) return Math.floor(amt);
+  const el = document.getElementById('stash-gold-amt');
+  return Math.floor(parseInt(el && el.value, 10));
+}
+function stashDepositGold(amt) {
+  amt = Math.min(stashGoldAmount(amt), player.gold);
+  if (!amt || amt <= 0) return;
+  player.gold -= amt;
+  stash.gold = (stash.gold || 0) + amt;
+  sfx('buy');
+  log(`🏦 Deposited ${amt}g into the vault. (${stash.gold}g stored)`, 'loot');
+  updateBars(); renderStash(); saveGame();
+}
+function stashWithdrawGold(amt) {
+  amt = Math.min(stashGoldAmount(amt), stash.gold || 0);
+  if (!amt || amt <= 0) return;
+  stash.gold -= amt;
+  player.gold += amt;
+  sfx('buy');
+  log(`🏦 Withdrew ${amt}g from the vault. (${stash.gold}g stored)`, 'loot');
+  updateBars(); renderStash(); saveGame();
+}
+function stashDepositItem(i) {
+  const item = inventory[i];
+  if (!item) return;
+  inventory.splice(i, 1);
+  stash.items.push(item);
+  sfx('equip');
+  log(`🏦 Stored ${logItem(item)} in the vault.`);
+  renderStash(); renderPanel(); saveGame();
+}
+function stashWithdrawItem(i) {
+  const item = stash.items[i];
+  if (!item) return;
+  stash.items.splice(i, 1);
+  inventory.push(item);
+  recordWardrobe(item);
+  sfx('equip');
+  log(`🏦 Took ${logItem(item)} from the vault.`);
+  renderStash(); renderPanel(); saveGame();
 }
 
 // ── TRAINER — respec spent attribute points ──
@@ -6992,7 +7106,7 @@ function saveGame() {
   try {
     const data = {
       player, inventory, equipped, dungeonLevel, buffs, pact,
-      inTown, dungeonReturn,
+      inTown, dungeonReturn, stash,
       ts: Date.now(),
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
@@ -7040,6 +7154,12 @@ function loadGame() {
     inTown = !!data.inTown;
     dungeonReturn = data.dungeonReturn || data.dungeonLevel || 1;
     inventory = (data.inventory || []).filter(it => it && it.slot); // drop legacy typeKey-only items
+    // Restore the town stash, tolerating saves that predate it.
+    stash = { gold: 0, items: [] };
+    if (data.stash && typeof data.stash === 'object') {
+      stash.gold = Math.max(0, Math.floor(data.stash.gold) || 0);
+      stash.items = (data.stash.items || []).filter(it => it && it.slot);
+    }
     // Rebuild equipped into the new 7-slot shape; salvage any still-valid pieces into the bag.
     const freshEquipped = { head:null, chest:null, hands:null, legs:null, weapon:null, ring:null, amulet:null };
     const old = data.equipped || {};
@@ -7061,10 +7181,12 @@ function loadGame() {
     // any chosen cosmetic. Gear without a recognised key heals on next access.
     inventory.forEach(it => { if (it.slot) it.icon = itemIcon(it); });
     Object.values(equipped).forEach(it => { if (it && it.slot) it.icon = itemIcon(it); });
+    stash.items.forEach(it => { if (it.slot) it.icon = itemIcon(it); });
     // Older items predate attribute affixes — give them an empty attrs block so
     // the affix/enchant code can treat every item uniformly.
     inventory.forEach(it => { if (it && !it.attrs) it.attrs = {}; });
     Object.values(equipped).forEach(it => { if (it && !it.attrs) it.attrs = {}; });
+    stash.items.forEach(it => { if (it && !it.attrs) it.attrs = {}; });
     for (const slot of VISUAL_SLOTS) {
       const seen = new Set();
       player.wardrobe[slot] = (player.wardrobe[slot] || [])
