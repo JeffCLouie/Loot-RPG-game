@@ -880,12 +880,12 @@ function buyItem(i) {
   if (player.gold < price) return;
   player.gold -= price;
   if (s.kind === 'potion') {
-    if (s.heal) { player.healPotions++; player.healthPotionsBought++; log(`Bought a Health Potion. (${player.healPotions} held)`, 'loot'); }
-    if (s.mana) { player.manaPotions++; log(`Bought a Mana Potion. (${player.manaPotions} held)`, 'loot'); }
+    if (s.heal) { player.healPotions++; player.healthPotionsBought++; log(`Bought a ${logPotion('Health Potion')}. (${player.healPotions} held)`, 'loot'); }
+    if (s.mana) { player.manaPotions++; log(`Bought a ${logPotion('Mana Potion')}. (${player.manaPotions} held)`, 'loot'); }
     // potions restock infinitely; gear is one-off
   } else {
     inventory.push(s.item);
-    log(`Bought ${s.item.name}!`, 'loot');
+    log(`Bought ${logItem(s.item)}!`, 'loot');
     merchant.stock.splice(i, 1);
   }
   updateBars();
@@ -900,7 +900,7 @@ function sellItem(i) {
   const sellPrice = Math.max(1, Math.round(item.value * 0.5));
   player.gold += sellPrice;
   inventory.splice(i, 1);
-  log(`Sold ${item.name} for ${sellPrice}g.`);
+  log(`Sold ${logItem(item)} for ${sellPrice}g.`);
   updateBars();
   renderShop();
   renderPanel();
@@ -952,8 +952,9 @@ function spawnEnemies() {
         log(`⚠️ ${boss.name} ${boss.type} guards this floor!`, 'important');
       } else {
         // Floor modifiers scale base health and damage up or down.
-        const baseHp = Math.round((10 + dungeonLevel * 6) * (floorMod.hpMult || 1));
-        const baseDmg = Math.round((3 + dungeonLevel + bandIdx) * (floorMod.dmgMult || 1));
+        // A small global bump (×1.15) makes every foe a touch tougher.
+        const baseHp = Math.round((10 + dungeonLevel * 6) * (floorMod.hpMult || 1) * 1.15);
+        const baseDmg = Math.round((3 + dungeonLevel + bandIdx) * (floorMod.dmgMult || 1) * 1.15);
         if (i === eliteIndex) {
           const eHp = Math.round(baseHp * 2.2);
           const eName = pick(ELITE_NAMES);
@@ -1381,7 +1382,6 @@ function draw() {
   // Enemies
   enemies.filter(e => !e.dead).forEach(e => {
     const px = offX + e.x * tw, py = offY + e.y * th;
-    const radius = e.isBoss ? tw * 0.54 : (e.isElite ? tw * 0.48 : tw * 0.42);
     // boss aura
     if (e.isBoss) {
       ctx.fillStyle = 'rgba(255,50,50,0.2)';
@@ -1400,11 +1400,6 @@ function draw() {
       ctx.fill();
       ctx.restore();
     }
-    // dark backing disc
-    ctx.fillStyle = 'rgba(0,0,0,0.4)';
-    ctx.beginPath();
-    ctx.arc(px + tw/2, py + th/2, radius, 0, Math.PI*2);
-    ctx.fill();
     ctx.font = `${Math.round(tw * (e.isBoss ? 0.95 : (e.isElite ? 0.86 : 0.78)))}px serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -1686,7 +1681,7 @@ function move(dx, dy) {
     mapData[ny][nx] = 0; // fountain is spent
     hasFountain = false;
     player.x = nx; player.y = ny;
-    log('⛲ The Fountain of Healing restores you fully! +2 Health Potions.', 'important');
+    log(`⛲ The Fountain of Healing restores you fully! +2 ${logPotion('Health Potions')}.`, 'important');
     updateBars();
     saveGame();
     draw();
@@ -1774,7 +1769,7 @@ function attackEnemy(e) {
     }
     if (Math.random() < 0.20 * lootMult) {
       player.healPotions++;
-      log(`❤️ ${label} dropped a Health Potion! (${player.healPotions} held)`, 'loot');
+      log(`❤️ ${label} dropped a ${logPotion('Health Potion')}! (${player.healPotions} held)`, 'loot');
       updateBars();
     }
     if (Math.random() < 0.06) {
@@ -1931,7 +1926,7 @@ function pickup() {
   const fancy = luck > 1;
   const item = generateItem(luck);
   inventory.push(item);
-  log(`${fancy ? '🎁' : '🧰'} Opened a ${fancy ? 'glittering ' : ''}chest: ${item.name}`, 'loot');
+  log(`${fancy ? '🎁' : '🧰'} Opened a ${fancy ? 'glittering ' : ''}chest: ${logItem(item)}`, 'loot');
   renderPanel();
   saveGame();
   draw();
@@ -1971,7 +1966,7 @@ function useHealthPotion() {
   if (player.hp >= player.maxHp) { log('Already at full health.'); return; }
   player.healPotions--;
   player.hp = Math.min(player.maxHp, player.hp + HEAL_AMOUNT);
-  log(`❤️ Drank a Health Potion. +${HEAL_AMOUNT} HP (${player.healPotions} left)`, 'loot');
+  log(`❤️ Drank a ${logPotion('Health Potion')}. +${HEAL_AMOUNT} HP (${player.healPotions} left)`, 'loot');
   updateBars();
   saveGame();
 }
@@ -2040,13 +2035,13 @@ function quickEquip(i) {
   const item = inventory[i];
   if (!item) return;
   const slot = item.slot;
-  if (!slot) { log(`${item.name} can't be equipped.`); return; }
+  if (!slot) { log(`${logItem(item)} can't be equipped.`); return; }
   if (equipped[slot]) inventory.push(equipped[slot]); // swap old back into bag
   equipped[slot] = item;
   inventory.splice(i, 1);
   selectedItem = null;
   hideTooltip();
-  log(`Equipped: ${item.name}`, 'loot');
+  log(`Equipped: ${logItem(item)}`, 'loot');
   renderPanel();
   saveGame();
 }
@@ -2057,7 +2052,7 @@ function unequip(slot) {
   inventory.push(item);
   equipped[slot] = null;
   hideTooltip();
-  log(`Unequipped: ${item.name}`);
+  log(`Unequipped: ${logItem(item)}`);
   renderPanel();
   saveGame();
 }
@@ -2142,6 +2137,18 @@ function log(msg, cls='') {
   const el = document.getElementById('log');
   el.innerHTML += `<div class="log-line ${cls}">${msg}</div>`;
   el.scrollTop = el.scrollHeight;
+}
+
+// Potions get their own signature colour wherever they're named in the log.
+const POTION_COLOR = '#ff5ec4';
+// Wrap an item's name in its rarity tier colour for chat-log mentions.
+function logItem(item) {
+  const c = (TIERS[item.tier] || TIERS.normal).color;
+  return `<span style="color:${c}">${item.name}</span>`;
+}
+// Wrap a potion label in the shared potion colour for chat-log mentions.
+function logPotion(label) {
+  return `<span style="color:${POTION_COLOR}">${label}</span>`;
 }
 
 // ══════════════════════════════════════════
@@ -2270,7 +2277,7 @@ if (hadSave) {
 }
 log('Progress auto-saves automatically as you play.');
 log('Tap 🎒 BAG (bottom-right) to open your loot.');
-log('Tap the ❤️ flask to drink a Health Potion when you\'re hurt. Enemies hit hard!');
+log(`Tap the ❤️ flask to drink a ${logPotion('Health Potion')} when you're hurt. Enemies hit hard!`);
 
 // Redraw once layout has settled so the camera fits the real canvas size.
 requestAnimationFrame(() => { resizeCanvas(); draw(); });
