@@ -3010,15 +3010,41 @@ canvas.addEventListener('pointerup', e => {
 // ResizeObserver re-runs it whenever the canvas changes size (rotation, the
 // skill bar appearing, the address bar collapsing, etc.).
 const touchDpad = document.getElementById('touch-dpad');
+// Movement-pad preferences: corner to dock it in, and its opacity (0 = hidden).
+const DPAD_KEY = 'dpadCfg';
+let dpadCfg = { pos: 'left', opacity: 1 };
+try { const s = JSON.parse(localStorage.getItem(DPAD_KEY)); if (s) dpadCfg = Object.assign(dpadCfg, s); } catch (e) {}
+
+function saveDpadCfg() { try { localStorage.setItem(DPAD_KEY, JSON.stringify(dpadCfg)); } catch (e) {} }
+
 function positionTouchDpad() {
   if (!touchDpad) return;
   const r = canvas.getBoundingClientRect();
   if (!r.width) return;
-  touchDpad.style.left = (r.left + r.width / 2) + 'px';
+  const halfW = (touchDpad.offsetWidth || 148) / 2;
+  const margin = 14;
+  let cx;
+  if (dpadCfg.pos === 'left')       cx = r.left + margin + halfW;
+  else if (dpadCfg.pos === 'right') cx = r.right - margin - halfW;
+  else                              cx = r.left + r.width / 2;  // centre
+  touchDpad.style.left = cx + 'px';
+  // Height is unchanged — same vertical anchor as before.
   touchDpad.style.bottom = Math.max(10, window.innerHeight - r.bottom + 12) + 'px';
 }
+
+// Apply opacity / hidden state, then re-place the pad.
+function applyDpadSettings() {
+  if (touchDpad) {
+    const hidden = dpadCfg.opacity <= 0;
+    touchDpad.style.opacity = hidden ? '0' : String(dpadCfg.opacity);
+    touchDpad.style.pointerEvents = hidden ? 'none' : 'auto';
+  }
+  positionTouchDpad();
+}
+
 if (window.ResizeObserver) new ResizeObserver(positionTouchDpad).observe(canvas);
 window.addEventListener('resize', positionTouchDpad);
+applyDpadSettings();
 
 // Keep the drawer populated and open whenever we're in (or switch into) the
 // web layout.
@@ -4167,7 +4193,30 @@ function openTownService(kind) {
   if (kind === 'gambler') { openGambler(); return; }
   if (kind === 'enchanter') { openEnchanter(); return; }
   if (kind === 'stash')   { openStash();   return; }
+  if (kind === 'settings'){ openSettings();return; }
   if (kind === 'gate')    { openGate();    return; }
+}
+
+// ── SETTINGS — movement-pad position & opacity ──
+function openSettings() { openTownModal('⚙️ Settings'); renderSettings(); }
+function setDpadPos(p) { dpadCfg.pos = p; saveDpadCfg(); applyDpadSettings(); renderSettings(); }
+function setDpadOpacity(v) { dpadCfg.opacity = v; saveDpadCfg(); applyDpadSettings(); renderSettings(); }
+function renderSettings() {
+  const pos = dpadCfg.pos, op = dpadCfg.opacity;
+  const posBtn = (val, label) =>
+    `<button class="shop-buy-btn" ${pos === val ? 'disabled' : ''} onclick="setDpadPos('${val}')">${pos === val ? '✓ ' : ''}${label}</button>`;
+  const opBtn = (val, label) =>
+    `<button class="shop-buy-btn" ${Math.abs(op - val) < 0.001 ? 'disabled' : ''} onclick="setDpadOpacity(${val})">${Math.abs(op - val) < 0.001 ? '✓ ' : ''}${label}</button>`;
+  setTownContent(`
+    <div class="town-blurb">Customise the on-screen movement pad (touch devices). Changes save automatically and apply the next time you're in the dungeon.</div>
+    <div class="hc-line" style="margin-top:8px;font-weight:bold">Position</div>
+    <div class="shop-row" style="gap:6px;flex-wrap:wrap">
+      ${posBtn('left', 'Left')}${posBtn('center', 'Centre')}${posBtn('right', 'Right')}
+    </div>
+    <div class="hc-line" style="margin-top:10px;font-weight:bold">Opacity</div>
+    <div class="shop-row" style="gap:6px;flex-wrap:wrap">
+      ${opBtn(1, 'Full')}${opBtn(0.66, '66%')}${opBtn(0.33, '33%')}${opBtn(0, 'Hidden')}
+    </div>`);
 }
 
 // ── TOWN HUB MENU — the town itself is a menu of services ──
@@ -4183,6 +4232,7 @@ const TOWN_MENU = [
   { kind: 'enchanter', icon: '🪄', name: 'Enchanter',   desc: 'Add & reroll affixes' },
   { kind: 'stash',     icon: '🏦', name: 'Stash Vault', desc: 'Store gold & gear safe' },
   { kind: 'gambler',   icon: '🎲', name: 'Gambler',     desc: 'Wager gold for loot' },
+  { kind: 'settings',  icon: '⚙️', name: 'Settings',    desc: 'Move-pad position & opacity' },
 ];
 function openTownHub() {
   townView = 'hub';
