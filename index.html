@@ -5578,6 +5578,46 @@ const THEMES = [
     floor:'#2f6b3a', floorAlt:'#285e33', wall:'#1f5e2e', wallTop:'#55bb64',
     brickA:'#2f8a44', brickB:'#184a24', mortar:'#143a1c', crack:'#0e2814',
     seam:'#1e4a26', speckle:'#5fc070', accent:'rgba(150,255,150,0.30)', stairsGlow:'#bdff9a' },
+
+  // ── Seasonal themes ──
+  { name: 'the Winter Frostwood', wallStyle: 'pine',
+    floor:'#cdd9e4', floorAlt:'#bccadb', wall:'#2e4a3e', wallTop:'#ffffff',
+    brickA:'#3d5e4c', brickB:'#243a30', mortar:'#a6bccb', crack:'#8aa0b4',
+    seam:'#b4c5d4', speckle:'#eef4fa', accent:'rgba(255,255,255,0.32)', stairsGlow:'#e4f4ff' },
+  { name: 'the Wildflower Meadow', wallStyle: 'forest',
+    floor:'#5fa048', floorAlt:'#6cad53', wall:'#4e9440', wallTop:'#a6e878',
+    brickA:'#6cc04e', brickB:'#3f7a32', mortar:'#2c5422', crack:'#1c2c18',
+    seam:'#347029', speckle:'#ffe066', accent:'rgba(255,180,220,0.30)', stairsGlow:'#fbff9a' },
+  { name: 'the Golden Savanna', wallStyle: 'forest',
+    floor:'#b89a52', floorAlt:'#a88a48', wall:'#7a8a3a', wallTop:'#cdd66e',
+    brickA:'#9aa84a', brickB:'#5e6a2c', mortar:'#5a4a28', crack:'#3a2e18',
+    seam:'#6a5a30', speckle:'#d8c878', accent:'rgba(255,230,150,0.28)', stairsGlow:'#ffe89a' },
+  { name: 'the Harvest Vineyard', wallStyle: 'forest',
+    floor:'#7a6a3a', floorAlt:'#6e5f33', wall:'#6a3a6e', wallTop:'#b06ac0',
+    brickA:'#8a4a90', brickB:'#4a2850', mortar:'#3a2a1e', crack:'#2a1c12',
+    seam:'#5a4a2a', speckle:'#c890d0', accent:'rgba(210,150,230,0.28)', stairsGlow:'#e8b0f0' },
+
+  // ── Exotic themes ──
+  { name: 'the Lavender Fields', wallStyle: 'forest',
+    floor:'#6a8a4a', floorAlt:'#5f7e42', wall:'#9a78c8', wallTop:'#e0caf8',
+    brickA:'#b59ae0', brickB:'#7a5aa8', mortar:'#4a3a64', crack:'#3a2c50',
+    seam:'#3a5a30', speckle:'#c8aef0', accent:'rgba(210,180,255,0.30)', stairsGlow:'#ecd9ff' },
+  { name: 'the Mushroom Hollow', wallStyle: 'mushroom',
+    floor:'#3a2e44', floorAlt:'#322840', wall:'#c83a4a', wallTop:'#ffe0e0',
+    brickA:'#e05a6a', brickB:'#e8dcc8', mortar:'#241c2e', crack:'#1c1626',
+    seam:'#2a2238', speckle:'#6a5a82', accent:'rgba(255,120,180,0.30)', stairsGlow:'#ff9ad0' },
+  { name: 'the Crystal Cavern', wallStyle: 'crystal',
+    floor:'#2a2a44', floorAlt:'#23233a', wall:'#5a7ad0', wallTop:'#cfe6ff',
+    brickA:'#8aa8ff', brickB:'#3a4a8a', mortar:'#181828', crack:'#aaccff',
+    seam:'#20203a', speckle:'#6a8ad0', accent:'rgba(150,200,255,0.30)', stairsGlow:'#d6ecff' },
+  { name: 'the Coral Lagoon', wallStyle: 'forest',
+    floor:'#2a6a7a', floorAlt:'#236070', wall:'#e8806a', wallTop:'#ffc8a8',
+    brickA:'#f09a7a', brickB:'#c85a4a', mortar:'#1a4a56', crack:'#0e3038',
+    seam:'#205662', speckle:'#7ad0d8', accent:'rgba(255,180,150,0.30)', stairsGlow:'#ffd6b8' },
+  { name: 'the Obsidian Wastes', wallStyle: 'crystal',
+    floor:'#2a2228', floorAlt:'#231c22', wall:'#3a2a3e', wallTop:'#c86a3a',
+    brickA:'#6a3a4a', brickB:'#241820', mortar:'#161016', crack:'#ff7a3a',
+    seam:'#1e161e', speckle:'#5a3a44', accent:'rgba(255,120,50,0.28)', stairsGlow:'#ff9a4b' },
 ];
 function currentTheme() { return THEMES[(dungeonLevel - 1) % THEMES.length]; }
 
@@ -5698,6 +5738,8 @@ function isWallTile(x, y) {
 function drawWall(px, py, tw, th, x, y, seed, C, cracked) {
   if (C.wallStyle === 'forest') { drawForestWall(px, py, tw, th, x, y, seed, C, cracked); return; }
   if (C.wallStyle === 'pine') { drawPineWall(px, py, tw, th, x, y, seed, C, cracked); return; }
+  if (C.wallStyle === 'mushroom') { drawMushroomWall(px, py, tw, th, x, y, seed, C, cracked); return; }
+  if (C.wallStyle === 'crystal') { drawCrystalWall(px, py, tw, th, x, y, seed, C, cracked); return; }
   const h = Math.abs(seed);
   const W = Math.max(1, Math.floor(tw)), H = Math.max(1, Math.floor(th));
   const topLit = !isWallTile(x, y - 1);
@@ -5818,6 +5860,65 @@ function drawPineWall(px, py, tw, th, x, y, seed, C, cracked) {
   ctx.lineTo(cx + tw * 0.06, py + th * 0.16);
   ctx.closePath();
   ctx.fill();
+  if (cracked) { ctx.strokeStyle = 'rgba(255,220,120,0.3)'; ctx.lineWidth = 1; ctx.strokeRect(px + 1, py + 1, tw - 2, th - 2); }
+}
+
+// Giant toadstool wall — a pale stalk under a spotted dome cap, for the exotic
+// mushroom theme. Cap colour and spots come from the palette; offset per tile.
+function drawMushroomWall(px, py, tw, th, x, y, seed, C, cracked) {
+  const h = Math.abs(seed);
+  ctx.fillStyle = C.mortar;
+  ctx.fillRect(px, py, tw, th);
+  const sx = px + tw / 2 + ((h % 3) - 1) * tw * 0.06;
+  // Stalk.
+  ctx.fillStyle = C.brickB;
+  ctx.fillRect(sx - tw * 0.09, py + th * 0.42, tw * 0.18, th * 0.58);
+  // Cap dome.
+  const capCol = (h % 2) ? C.wall : C.brickA;
+  const capY = py + th * 0.4, rx = tw * 0.34, ry = th * 0.28;
+  ctx.fillStyle = capCol;
+  ctx.beginPath(); ctx.ellipse(sx, capY, rx, ry, 0, 0, Math.PI * 2); ctx.fill();
+  // Underside shadow line.
+  ctx.fillStyle = 'rgba(0,0,0,0.22)';
+  ctx.fillRect(sx - rx * 0.9, capY + ry * 0.55, rx * 1.8, Math.max(1, th * 0.04));
+  // Spots.
+  ctx.fillStyle = C.wallTop;
+  for (let i = 0; i < 3; i++) {
+    const s = (h >> (i * 3 + 1));
+    const dx = ((s % 100) / 100 - 0.5) * rx * 1.2;
+    const dy = ((s >> 4) % 100) / 100 * ry * 0.6 - ry * 0.2;
+    ctx.beginPath(); ctx.arc(sx + dx, capY + dy, tw * 0.05, 0, Math.PI * 2); ctx.fill();
+  }
+  if (cracked) { ctx.strokeStyle = 'rgba(255,220,120,0.3)'; ctx.lineWidth = 1; ctx.strokeRect(px + 1, py + 1, tw - 2, th - 2); }
+}
+
+// Glowing crystal cluster wall — angular shards rising from the floor, lit with
+// a soft glow, for the exotic crystal-cavern theme.
+function drawCrystalWall(px, py, tw, th, x, y, seed, C, cracked) {
+  const h = Math.abs(seed);
+  ctx.fillStyle = C.mortar;
+  ctx.fillRect(px, py, tw, th);
+  ctx.save();
+  ctx.shadowColor = C.wallTop;
+  ctx.shadowBlur = 8 * (tw / 16);
+  const shards = 3 + (h % 3);
+  const cols = [C.wall, C.brickA, C.wallTop];
+  for (let i = 0; i < shards; i++) {
+    const s = (h >> (i * 2 + 1));
+    const bx = px + tw * (0.18 + (s % 7) * 0.1);
+    const by = py + th * 0.98;
+    const wHalf = tw * (0.06 + ((s >> 4) % 3) * 0.03);
+    const ht = th * (0.42 + ((s >> 8) % 5) * 0.1);
+    ctx.fillStyle = cols[i % cols.length];
+    ctx.beginPath();
+    ctx.moveTo(bx, by);
+    ctx.lineTo(bx - wHalf, by - ht * 0.62);
+    ctx.lineTo(bx, by - ht);
+    ctx.lineTo(bx + wHalf, by - ht * 0.62);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
   if (cracked) { ctx.strokeStyle = 'rgba(255,220,120,0.3)'; ctx.lineWidth = 1; ctx.strokeRect(px + 1, py + 1, tw - 2, th - 2); }
 }
 
