@@ -1506,8 +1506,9 @@ function attrDamage() {
   return d;
 }
 // Crit damage multiplier — equipment-only beyond the base, so gear (CRITDMG)
-// drives how hard your crits land.
-function critDamageMult() { return 2.0 + totalStat('CRITDMG') / 100; }
+// drives how hard your crits land. Crit damage can swing freely up or down, but
+// the multiplier never drops below 0 (no stat should ever read negative).
+function critDamageMult() { return Math.max(0, 2.0 + totalStat('CRITDMG') / 100); }
 
 // The player's overall power: a blend of level, spent attributes, and equipped gear.
 function playerPower() {
@@ -1537,13 +1538,15 @@ function playerDefense() {
   return totalStat('DEF') + totalAttr('vitality') * ATTR_FX.defPerVit;
 }
 
-// Crit chance — driven by Luck (and gear CRIT/LCK). Capped so you can't become a
-// guaranteed-crit machine.
+// Crit chance — driven by Luck (and gear CRIT/LCK). Crit chance only ever ranges
+// 0–100% in play, so it's clamped to [0%, 60%]: capped so you can't become a
+// guaranteed-crit machine, and floored at 0 so a cursed item can never push it
+// negative (no stat should ever read below 0).
 function playerCritChance() {
   const rogueCrit = player.class === 'rogue' ? 0.08 : 0;
-  return Math.min(0.6, 0.04 + rogueCrit
+  return Math.max(0, Math.min(0.6, 0.04 + rogueCrit
     + (totalStat('CRIT') + totalStat('LCK')) * 0.01
-    + totalAttr('luck') * ATTR_FX.critPerLuck);
+    + totalAttr('luck') * ATTR_FX.critPerLuck));
 }
 
 // Chance to completely avoid an incoming hit, driven by Agility and gear SPD.
@@ -4010,8 +4013,10 @@ function tierMult(tier) { return TIER_MULT[tier] || 1; }
 function affixStatValue(stat, lvl, mult) {
   let v = (1 + lvl * 0.6 + rnd(0,2)) * mult;
   if (stat === 'REGEN')        v *= 0.4;
-  else if (stat === 'CRIT')    v *= 0.5;
-  else if (stat === 'LCK')     v *= 0.6;
+  // Crit chance is a 0–100% stat, so its rolls stay small and incremental and are
+  // capped low — a single affix can't dump a huge chunk of crit chance on you.
+  else if (stat === 'CRIT')    v = Math.min(6, (1 + lvl * 0.12) * mult);
+  else if (stat === 'LCK')     v = Math.min(6, (1 + lvl * 0.12) * mult);
   else if (stat === 'HP')      v *= 6;
   else if (stat === 'MP')      v *= 4;
   else if (stat === 'CRITDMG') v = (5 + lvl * 0.8) * mult; // % crit damage
@@ -4020,6 +4025,16 @@ function affixStatValue(stat, lvl, mult) {
 // Value of one rolled attribute affix (+Might, +Luck, …).
 function affixAttrValue(lvl, mult) {
   return Math.max(1, Math.round((2 + lvl * 0.5) * mult * 0.5));
+}
+// Size of a cursed item's boost (or penalty) for one stat. Crit chance (CRIT/LCK)
+// only ranges 0–100% in play, so its swings stay tiny and capped — a single item
+// must never shift crit chance by tens of percent. Every other stat — crit damage
+// included — gets the big "great power at a price" numbers in either direction.
+function curseSwing(stat, lvl, mult, boost) {
+  if (stat === 'CRIT' || stat === 'LCK') {
+    return Math.max(1, Math.min(5, Math.round((1 + lvl * 0.1) * mult)));
+  }
+  return Math.max(1, Math.round((boost ? 10 + lvl * 2 : 6 + lvl) * mult));
 }
 // Roll how many of a pool's affix slots actually fill — up to `max`, biased high
 // so rarer gear tends to be fuller, but a sparse roll is always possible.
@@ -4115,13 +4130,15 @@ function generateItem(rolls = 1, ilvl = null, forceTier = null) {
 
   // Cursed items (~12% of uncommon+): a big stat boost paired with a penalty.
   // The negative stat flows straight through totalStat(), so the drawback is real.
+  // Swing sizes come from curseSwing(), which keeps crit chance incremental while
+  // letting crit damage and flat stats take the large hits.
   const tierRank = Object.keys(TIERS).indexOf(tier);
   if (tierRank >= 2 && Math.random() < 0.12) {
     const pool = (SLOT_AFFIX_POOLS[slot]?.stats || STAT_NAMES.filter(s => s !== 'DMG'));
     const boostStat = pick(pool);
     const curseStat = pick(pool.filter(s => s !== boostStat));
-    stats[boostStat] = (stats[boostStat] || 0) + Math.round((10 + lvl*2) * mult);
-    if (curseStat) stats[curseStat] = -(Math.round((6 + lvl) * mult)); // negative = penalty
+    stats[boostStat] = (stats[boostStat] || 0) + curseSwing(boostStat, lvl, mult, true);
+    if (curseStat) stats[curseStat] = (stats[curseStat] || 0) - curseSwing(curseStat, lvl, mult, false); // negative = penalty
     item.cursed = true;
     item.name = '☠ ' + item.name;
     item.flavor = 'Cursed: great power at a price.';
