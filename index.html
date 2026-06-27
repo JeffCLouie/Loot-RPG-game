@@ -2056,6 +2056,9 @@ function attackEnemy(e) {
   let dmg = getWeaponDamage() + player.level * 2 + totalStat('ATK') + (player.attributes?.might||0) * 2;
   if (buffs.power) dmg = Math.round(dmg * 1.5);   // Shrine of Power
   if (isCrit) dmg = Math.round(dmg * 2.2);
+  // Difficulty floor: no single hit may exceed a quarter of the enemy's max HP,
+  // so every enemy always takes at least 4 hits to bring down.
+  dmg = Math.min(dmg, Math.max(1, Math.floor(e.maxHp / 4)));
   e.hp -= dmg;
   spawnFloatingText(e.x, e.y, isCrit ? `${dmg}!` : `${dmg}`, isCrit ? '#ffdd55' : '#fff');
   log(isCrit ? `💥 CRITICAL! ${HERO} hits ${label} for ${dmg}!` : `${HERO} hits ${label} for ${dmg} damage!`, isCrit ? 'important' : '');
