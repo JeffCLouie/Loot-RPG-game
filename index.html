@@ -1288,25 +1288,25 @@
 <!-- HEADER -->
 <div id="header">
   <div id="stats">
-    <div class="stat-bar">
+    <div class="stat-bar" data-tip="<div class='ht-name' style='color:var(--hp)'>❤️ Health (HP)</div><div class='ht-line'>Your life. When it hits 0 you die. Restore it with potions, resting in town, and levelling up.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
       <span style="color:var(--hp);font-size:11px;font-weight:bold;text-shadow:0 0 5px var(--hp)">HP</span>
       <div class="bar-track"><div class="bar-fill hp-fill" id="hp-bar" style="width:100%"></div></div>
       <span id="hp-text" style="font-size:10px">100</span>
     </div>
-    <div class="stat-bar">
+    <div class="stat-bar" data-tip="<div class='ht-name' style='color:var(--mp)'>🔷 Mana (MP)</div><div class='ht-line'>Spent to cast class skills and spells. Regenerates over time and refills when you level up.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
       <span style="color:var(--mp);font-size:11px;font-weight:bold;text-shadow:0 0 5px var(--mp)">MP</span>
       <div class="bar-track"><div class="bar-fill mp-fill" id="mp-bar" style="width:100%"></div></div>
       <span id="mp-text" style="font-size:10px">60/60</span>
     </div>
   </div>
-  <div class="hud-item" id="floor-hud">🗺️ <span class="hud-val" id="floor-num">1</span></div>
-  <div class="hud-item" id="level-hud">Lv <span class="hud-val" id="level-num">1</span>
+  <div class="hud-item" id="floor-hud" data-tip="<div class='ht-name'>🗺️ Dungeon Depth</div><div class='ht-line'>The floor you're on. Each floor down is tougher — but the loot gets richer too.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">🗺️ <span class="hud-val" id="floor-num">1</span></div>
+  <div class="hud-item" id="level-hud" data-tip="<div class='ht-name'>⭐ Hero Level</div><div class='ht-line'>Fill the XP bar by slaying foes to level up. Each level boosts your stats and grants an attribute point.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">Lv <span class="hud-val" id="level-num">1</span>
     <div class="xp-track"><div class="xp-fill" id="xp-bar" style="width:0%"></div></div>
   </div>
-  <div class="hud-item" id="enemies-hud" title="Foes remaining — the stairs down stay sealed until the floor is clear">⚔️ <span class="hud-val" id="enemies-num">0</span> <span id="clear-status">🔒</span></div>
-  <div class="hud-item" id="power-hud">⚡ <span class="hud-val" id="power-num">0</span></div>
-  <div class="hud-item" id="pact-hud" style="display:none">🔮 <span class="hud-val" id="pact-num"></span></div>
-  <div id="gold-display">💰 <span id="gold-count">0</span>g</div>
+  <div class="hud-item" id="enemies-hud" data-tip="<div class='ht-name'>⚔️ Foes Remaining</div><div class='ht-line'>How many enemies are still alive on this floor. The stairs down stay sealed (🔒) until every foe is cleared (🔓).</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">⚔️ <span class="hud-val" id="enemies-num">0</span> <span id="clear-status">🔒</span></div>
+  <div class="hud-item" id="power-hud" data-tip="<div class='ht-name'>⚡ Power</div><div class='ht-line'>A rough measure of your overall strength, combining your level, equipped gear, spent attributes and skills.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">⚡ <span class="hud-val" id="power-num">0</span></div>
+  <div class="hud-item" id="pact-hud" style="display:none" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">🔮 <span class="hud-val" id="pact-num"></span></div>
+  <div id="gold-display" data-tip="<div class='ht-name' style='color:var(--gold)'>💰 Gold</div><div class='ht-line'>The dungeon's main currency. Spend it at the town shops, the Forge, the Enchanter, and the Stash.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">💰 <span id="gold-count">0</span>g</div>
 </div>
 
 <!-- MAIN -->
@@ -1821,9 +1821,12 @@ function gainMaterial(k, n) {
 // Compact inline display of all four material counts, used in the bag and town.
 function matStripHTML() {
   const m = player.materials || {};
-  const chips = CRAFT_MAT_KEYS.map(k =>
-    `<span class="mat-chip" title="${CRAFT_MATERIALS[k].name} — ${CRAFT_MATERIALS[k].desc}" style="color:${CRAFT_MATERIALS[k].color}">${CRAFT_MATERIALS[k].emoji} ${m[k] || 0}</span>`
-  ).join('');
+  const chips = CRAFT_MAT_KEYS.map(k => {
+    const mat = CRAFT_MATERIALS[k];
+    // Gear-style hover card instead of a native title box, escaped for the attr.
+    const tip = `<div class='ht-name' style='color:${mat.color}'>${mat.emoji} ${mat.name}</div><div class='ht-line'>${mat.desc}</div>`.replace(/"/g, '&quot;');
+    return `<span class="mat-chip" data-tip="${tip}" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()" style="color:${mat.color}">${mat.emoji} ${m[k] || 0}</span>`;
+  }).join('');
   return `<div class="mat-strip">${chips}</div>`;
 }
 // Small badge marking player-forged gear so it always reads as crafted, on top
@@ -8275,7 +8278,7 @@ function updateBars() {
       pactHud.style.display = '';
       pactHud.firstChild.textContent = pact.icon + ' ';
       setText('pact-num', pact.floors);
-      pactHud.title = `${pact.name} — ${pact.floors} floor${pact.floors === 1 ? '' : 's'} left`;
+      pactHud.dataset.tip = `<div class='ht-name'>${pact.icon} ${pact.name}</div><div class='ht-line'>A mystic pact is in effect — ${pact.floors} floor${pact.floors === 1 ? '' : 's'} left before it lifts.</div>`;
     } else {
       pactHud.style.display = 'none';
     }
