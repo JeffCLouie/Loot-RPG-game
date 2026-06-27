@@ -1697,6 +1697,103 @@ function ensureConnected() {
   return reachableFrom(player.x, player.y);
 }
 
+// ── FOOT REACHABILITY (terminal tiles) ──
+// isFloorPassable above treats stairs and teleporter pads as ordinary floor,
+// which is right for the early water/pillar connectivity pass (they don't exist
+// yet) but wrong once they're placed: stepping onto stairs descends, and
+// stepping onto a teleporter whisks you to its partner pad — so you can reach
+// either tile but can never walk straight through it. A floor pocket whose only
+// link to the rest of the level runs through one is visible but unwalkable,
+// which is exactly the "blocked by stairs / a warp" case.
+//
+// isEnterable: tiles the player can step onto at all.
+function isEnterable(t) {
+  return t === 0 || t === 2 || t === 3 || t === 5 || t === 7 || t === 8 || t === 9;
+}
+// isWalkThrough: tiles you can step onto *and* freely walk back off of next
+// turn. Stairs (2) and teleporter pads (9) are excluded — they're terminal.
+function isWalkThrough(t) {
+  return t === 0 || t === 3 || t === 5 || t === 7 || t === 8;
+}
+
+// Flood-fill the tiles reachable on foot, with stairs and teleporters acting as
+// dead-ends: you can walk up to one but not past it.
+function reachableOnFoot(sx, sy) {
+  const seen = new Set([sy + ',' + sx]);
+  const stack = [[sx, sy]];
+  while (stack.length) {
+    const [x, y] = stack.pop();
+    if (!isWalkThrough(mapData[y][x])) continue;     // terminal tile: don't pass through
+    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+      const nx = x + dx, ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= MAP_W || ny >= MAP_H) continue;
+      const k = ny + ',' + nx;
+      if (seen.has(k) || !isEnterable(mapData[ny][nx])) continue;
+      seen.add(k); stack.push([nx, ny]);
+    }
+  }
+  return seen;
+}
+
+// Run after stairs and teleporters are placed: if a terminal tile sits on the
+// sole link to part of the floor, tunnel a fresh walkable path to any open
+// pocket it strands, so every area is genuinely reachable on foot — never
+// gated behind having to use a particular warp or the exit stairs.
+function ensureFootConnected() {
+  for (let pass = 0; pass < 60; pass++) {
+    const reach = reachableOnFoot(player.x, player.y);
+    // Any tile the player could stand on but can't currently walk to.
+    let target = null;
+    for (let y = 1; y < MAP_H - 1 && !target; y++) {
+      for (let x = 1; x < MAP_W - 1; x++) {
+        if (isEnterable(mapData[y][x]) && !reach.has(y + ',' + x)) { target = { x, y }; break; }
+      }
+    }
+    if (!target) return;                             // every area is walkable
+    // Tunnel to the nearest tile we can actually stand and walk on (not another
+    // terminal tile), so the new corridor lands on solid footing.
+    let near = null, nd = Infinity;
+    for (const key of reach) {
+      const c = key.indexOf(',');
+      const ry = +key.slice(0, c), rx = +key.slice(c + 1);
+      if (!isWalkThrough(mapData[ry][rx])) continue;
+      const d = Math.abs(rx - target.x) + Math.abs(ry - target.y);
+      if (d < nd) { nd = d; near = { x: rx, y: ry }; }
+    }
+    if (!near) return;
+    tunnel(target.x, target.y, near.x, near.y);
+  }
+}
+
+// Would parking an immovable blocker (a shop NPC) on this tile wall the player
+// out of part of the floor? True only when the tile is the lone pinch point
+// linking two open stretches — dead-ends and open rooms return false.
+function isChokePoint(x, y) {
+  const opens = [];
+  for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+    const nx = x + dx, ny = y + dy;
+    if (nx < 0 || ny < 0 || nx >= MAP_W || ny >= MAP_H) continue;
+    if (isWalkThrough(mapData[ny][nx])) opens.push([nx, ny]);
+  }
+  if (opens.length < 2) return false;                // dead-end / corner: safe
+  // Flood from one open neighbour treating (x,y) as solid; if another open
+  // neighbour isn't reached, this tile is the only thing connecting them.
+  const seen = new Set([opens[0][1] + ',' + opens[0][0], y + ',' + x]);
+  const stack = [opens[0]];
+  while (stack.length) {
+    const [cx, cy] = stack.pop();
+    if (!isWalkThrough(mapData[cy][cx])) continue;
+    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+      const nx = cx + dx, ny = cy + dy;
+      if (nx < 0 || ny < 0 || nx >= MAP_W || ny >= MAP_H) continue;
+      const k = ny + ',' + nx;
+      if (seen.has(k) || !isEnterable(mapData[ny][nx])) continue;
+      seen.add(k); stack.push([nx, ny]);
+    }
+  }
+  return opens.some(([ox, oy]) => !seen.has(oy + ',' + ox));
+}
+
 // Pick a random plain-floor tile, optionally limited to a reachable set.
 function randomFloorTile(reach) {
   for (let i = 0; i < 200; i++) {
@@ -1841,6 +1938,12 @@ function generateMap() {
       teleporters[b.y+','+b.x] = { x: a.x, y: a.y };
     }
   }
+
+  // Now that the stairs and any teleporter pads are down, make sure none of them
+  // sealed off a stretch of floor by sitting on its only entrance. This carves a
+  // walkable detour around any such terminal-tile pinch point so every reachable
+  // -looking area can actually be walked to.
+  ensureFootConnected();
   // ── CRACKED WALLS ── breakable walls with open floor on opposite sides.
   let cracks = rnd(2, 4);
   for (let tries = 0; tries < 150 && cracks > 0; tries++) {
@@ -2160,7 +2263,8 @@ function spawnMerchant() {
   let mx, my, tries = 0;
   do {
     mx = rnd(1, MAP_W-1); my = rnd(1, MAP_H-1); tries++;
-  } while ((mapData[my][mx] !== 0 || (mx === player.x && my === player.y) || getEnemyAt(mx,my)) && tries < 100);
+  } while ((mapData[my][mx] !== 0 || (mx === player.x && my === player.y) || getEnemyAt(mx,my)
+            || isChokePoint(mx,my)) && tries < 100);
   if (tries >= 100) return;
   // Build a small randomized stock: potions + a couple of gamble-priced gear pieces.
   const stock = [
@@ -2191,7 +2295,8 @@ function spawnMystic() {
   do {
     mx = rnd(1, MAP_W-1); my = rnd(1, MAP_H-1); tries++;
   } while ((mapData[my][mx] !== 0 || (mx === player.x && my === player.y) || getEnemyAt(mx,my)
-            || (merchant && merchant.x === mx && merchant.y === my)) && tries < 100);
+            || (merchant && merchant.x === mx && merchant.y === my)
+            || isChokePoint(mx,my)) && tries < 100);
   if (tries >= 100) return;
   mystic = { x: mx, y: my };
   log('🔮 A hooded mystic beckons from the shadows...', 'important');
