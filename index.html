@@ -1726,6 +1726,110 @@ function drawEmoji(emoji, x, y, fontPx) {
   }
 }
 
+
+// ── DawnLike sprite atlas ───────────────────────────────────────────────────
+// Pixel-art world sprites from the DawnLike set (CC-BY 4.0 — DragonDePlatino &
+// DawnBringer). Only the tiles we use are packed into one base64 atlas so the
+// game stays a single shareable file. Sprites draw the WORLD (tiles, hero,
+// enemies, pickups, NPCs); the inventory/equip panels keep the vector icons so
+// equipped weapon TYPE (sword/bow/axe…) still reads clearly. If the atlas ever
+// fails to load, every call falls back to the old vector/procedural drawing, so
+// the game is never broken by a missing sprite.
+const ATLAS_COLS = 16, ATLAS_TS = 16;
+const SPRITE_IDX = {"wall_TL":0,"wall_H":1,"wall_TR":2,"wall_V":3,"wall_iso":4,"wall_BL":5,"wall_BR":6,"floor_0":7,"floor_1":8,"floor_2":9,"floor_3":10,"water":11,"lava":12,"spikes":13,"hero":14,"npc_shop":15,"npc_mage":16,"npc_gambler":17,"npc_quest":18,"e_rat":19,"e_mouse":20,"e_bat":21,"e_snake":22,"e_worm":23,"e_ant":24,"e_cricket":25,"e_lizard":26,"e_frog":27,"e_snail":28,"e_beetle":29,"e_roach":30,"e_hedgehog":31,"e_bee":32,"e_ogre":33,"e_goblin":34,"e_zombie":35,"e_ghost":36,"e_vampire":37,"e_wolf":38,"e_boar":39,"e_bear":40,"e_scorpion":41,"e_mosquito":42,"e_eagle":43,"e_croc":44,"e_skunk":45,"e_tiger":46,"e_dragon":47,"e_imp":48,"e_devil":49,"e_troll":50,"e_trex":51,"e_sauropod":52,"e_octopus":53,"e_squid":54,"e_alien":55,"e_genie":56,"e_rhino":57,"e_bison":58,"e_seadragon":59,"e_lobster":60,"b_ratking":61,"b_inferno":62,"b_dragon":63,"b_deathknight":64,"b_allseer":65,"mimic":66,"w_sword":67,"w_axe":68,"w_dagger":69,"w_staff":70,"w_bow":71,"w_mace":72,"w_spear":73,"w_scythe":74,"a_head":75,"a_chest":76,"a_hands":77,"a_legs":78,"a_ring":79,"a_amulet":80,"a_shield":81,"potion_r":82,"potion_g":83,"potion_b":84,"coins":85,"key":86,"chest":87,"food":88,"scroll":89,"mat_scrap":90,"mat_core":91,"mat_glimmer":92,"mat_chaos":93};
+const spriteSheet = new Image();
+let spriteReady = false;
+spriteSheet.onload = () => { spriteReady = true; try { draw(); } catch (e) {} };
+spriteSheet.src = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQAAAABgCAYAAADy8ayIAAA/XElEQVR42u19T0gbW/v/J5csssjCQoQEDFSooNCAAQM3CxezSMHFLHzBCylYsKBwhQoOvC4Crwu/kIU/GMELXrBQoUIDLVwXWQg3i1lkkYJChBQSsKCgYMBAXWQxi8D8FmeekzOTmckk2t7ee3sgRJOc+XPmPP+f5/MEpmdeGZnZNuyj0WhBP7/B9zyqzSaWljPQ/7OK0B97lvfL/BYq5SoAIBmNIjQRg35+g9uRNEbvKvz/aTnhOD/0xx4OXpcebP6w99fv/GpW/+seQGINqO3+pXsgj8N7zc99zFn+D+1GoK+1+DsfP1+x758nob9j+wof40iUjgP0k0h4zACAVvs64HSuft//FSOYmW07bmDktyyb8K8aRDy08cX3JCr4O4xvtYZv2ym8CJ8M/N3QxP9A1/Y1j5GI1Vy/q90kHInfdXyMA8/Nd5Mh0JieeWUclVZRKJxA3cgZdiLv9/1Dj8yTGUP8v/T51PF8QQBo/RnEmPBh68/gd0H8dA39JKjb9Yvj6vYxRnHj+L/T/DGb5LZrQ37n33cN6Rq8zk/DizjE7962U31/70aA/ea5EelDMB86xiDXbydytxHajZiSPd4j9a3/R9j7xzi+BwJ2mytNdSBPd1A8C6LSiSPSHHNkOkEAGGtb1bix9i4atk14O5L+poQ/elexEM/oXaXne/F6va5/kPmNRgtXt29QRxjwuGe/88dG7rcOtz7O/7W1h2GI9JtcR2INqN3/3jnxC0TNzIAk+9v8jn4Xep6E/rFlke6zOy/4/+nZJCplcILr970TAYcmYkgHGQPyIuB+xA+AHcflnEEAuA6vWTbxdXgNwGbPhotkXzNb5lnHUdKOtXdRKocxNffS8Tf9vgeA9ukmJicjaDRigMAASPWPj15Cv+v+7/f6/c6/un3seH107cPOv+/6eJ1/UMk+jIT2Q5huv+k3V/zeD/F3f5N+EOLntv1Hq/qvr7W6tj/XEBhDCO2avgDm5oHyNNwlcHmB+59o9Pvejfj7EbDTeH8zi/eCcvhLrOzuA+AE/YfgrHjWQfu098dEnPTbMQfHIcBuNPTHXs9v+n0PoEdy+xl+r9/vfKfrE699mPn3XR+v838LX4IjYdocgG7Ea//cfnw3pvFQpoPX4Db/z1ddohbVe1PyW57t82T3/f8+Pfg1pYNXkKc7XUfl6TjSwSvfHq/rxhG0daZ6Sjt3eI95xEcv3RmAmy3dI0HPK74IdKy9a27Ywb+fnIw4SnAv29fP9fud3+/6vCIjfubf93uv8/cjtAdX412iAP3OO8w1PbgT08HBp3801f7ntjUXvP4AoKPKGcD0zCvjl5epXiI2JfbY5Dy8vneS6KrWgrzI9r/0cgva+gVyp+MAWv41G5NJYUfD4UYC0suj/gzAbku7EVC/USqHPaWV1/eTk21PCe5l+/q5frf5ZLv3uz43X4jf+ff9fhBfzNcgGD+E+DV8Ce4ayKGnp39QZyBpBFa/gIdjEMBNYsrzmP2+dyTgRNnCaCs7W33DhxRm1NZHoNdmAQDam1kLk46Erb4ECwOw29LiINuTfAGRZx20/gyifvzmXjZ/j3nhMuy2L/0/6PW7zXey3e3XL342zHyn+x9k/bzO79cWvy+BDjv3Ic5tOQaFIWv+iXsYrcBC9A6e/7PT3wJns7/hNzjH+Vunv8HreyfPvxsB24nXTvyPsyFUC00ohSiksz1Bo7hD5UQCAOzWqii87GoewX62rBuxjrUjGAOYt/seNv99bH8/tvjAnFe4Tvv1j/mwxb3mO93/IOvn5/zfwm7+Wmr6V1fz/Q4K94mMQJT8QkRAjATcJw8g82TGUPMrkF5uORKwtj4CpRBC6fO162VfFlhS2GRex0Ii2dVAalXs7wfRaLRQKd/1mgCDxNF7fQHhe9u8ou3vJsEHjeMPOt/rOp0+F23xYebjnus3TJamV5LQwIyjttuTDHRfu/9bmBZeRM/tZkQ8GIMDg3ioYUp6Nb/CTQC9Ngutvo/Q8ymoiVlIL5uuWkDlREI6pSFUSWEX3bUKVVLQ/7OKyT/2oJ9HLTkFvvIAnGxn0RdwX5tXtP3xR1caep3/ofIA/NjuTp+TLd5oXA41/77fd30B2oN6zftlE35tQnQ6x9fUDCzhPVvqL+UBODEFnifwf58eJA+g9Pk0oBTM5J/aLj4cMqEiT1cBhJhJ0CftWq/NYmmZSfqbdjdFXAoDjaVfsVecgp5esTAR33kAdttZzAsY1qYVbWW7LT9sHH/Q+aLtHvpjz1ecfnbnBfd/DDP/vj4B8fwPoVL3C8ndV3UXv7cT+NBORQcNZJhBhNyTAmxGBew1ALwW4GdAF07/EHkApc+ngcyTGaN41oGqtTjjCU3EIL1kqflu0r/Vvg5IL7cMyhy9LDMGQLUyKP7qyEQGygPw47gb1CfQbrQA2zHuG8cfdD5dj984PTGtuiCVB5l/X5+A0/m/RvqtnVgHifP7mefb2+/EaPoQv1NkwM1ZyBN7XOoAQs/N737+uq6HzJMZY684Bf1dFarGiFrVYCgSoEejfdOBk9EoJg9+x2V+C2g20WpfBw5el4xkka2FExPxnQfQ3xcwnE0r2v4PEccfZr79ev1ff/ie8+/rEwgPrCL/1Y42x3OLxGyX7ILE6iF+MwzoaE4PEhn4GIeOXibAEoAiXOI7jYfMA6g2m0inmj1EvbA9BfldFdJO/3TgxtKvPfOnZbYW1ddNOKYCu9nSTsPLFzCMTSva/veJ4w97/aN3FZTKacv1+r1+Otaw8+/7PZ1/EIJ+qN++bafwwomAAQjW7uCquv23TnNNpvC2nXq45EiBCYiaAc8DoAIgqgYUxkPlATgRtxNTcN0XLhoClaU7jYCXOiJexPdUw/xj/LuGnzr6SHjMsFeNDlJB93cfmSczRunzaYDWCgAUKYJc8cxzDYJuByOgieJZEKEJ/4UI3yMDsV9Lv8300PPve+3f+pzfy4a22OETMVTKcGQEkfCYMTY5j9DoJcIzW9yZmnkC45/OBGrv941iKwQ5okPJwVDHR4HleUgvtyDrMUCG4cUEgk4LL011SwmBwauRMk9mjP0TZpvtbW1jGgkcvC4ZXqqO18O/DwMRyyMpd714FoSq+b+XaTmBRxMSbhJTkGp1fDnXcPC65JjM4XQMsazZ733QsUQ8hGoTxj+ZCYjrp46PIvxeBQAUXmShalWkZ5PQz28c1yE+eglVHcFuqwPlaRid53dYlR9eeHxv60/EX2yFmNS/uIVKfpOfryB/jFuYgF2bctQAOLGY9pbIDPwSTKHA7MdHExK+nGtYWs7g4HUJ2eMjFObmPWuhpamO5TNpKtKXYO03JqpCvcTf6nHCeM0n4o91ib9nPmVyhTOz/Jo6zTwPvUg7d/DLcOwEkIpnkIxGTYCRfyYTELVOfIzze2//okBGDKpZCBOaiCHpwAzDM1vQ3y2ihSByf+rIgcXPnZ4trbFdOyAzgj6na6LQX+50cE34a4/c6osA9t4ackSHnF/he1yRIpB2WtDWAZwFexgZpRX/5HTQxWPJ8rdYmuhnPPpcBY7V7st0RJxclXxLa3lxlb3McytSxEKUTkN7s4lIeMyIhMcM7c0mtwP9MrDs8RGfnz0+4vO/nGu+5ksvt9Bp5vkrndIgvdyCtHPnnwjGR6GOj/LN3/5FsajB/+jxMc4dbO1fFBReZFEM3aAY6kZt9PMb13XI4xCtwjLySghKIWRd2/WiZf845bC02tcBsqMj4TEjNBHj2YHFs6ClRv97Gpq6y4V1WPlgpVdzPaWpDtSsDmmqwzXKSHjM+MntoKFEuVuRlFhDpVz1VY2k5lfMckZGwKrWwqPPVRBBFebm+0vCxFr3/Ik1XwwoGY2ieLiHk6sS434vt5CeZQ8vVzwLFA/3+LGY9K72zA/9weYvLWdQmJvn8//fzkEg9McebhJTeDQh9cwnk0dbH0E6pSEYzSGd0nByVeJ12cloFJknMwa9XJnZ8jwLPy3PO1aeJaPRvozwoSSy53V+hRHajSD8XmXSf3meP3fS2LzWoX26iVZhGZMHvyMVz2Dy4HfL7+vHbyxMIPKsw6ViJDxmeS72/UmZgpVO/JuvoTwnG+LL3RnAmMDCRq/do9WDkBdX+f4XmYAjAzic06DXZqHXZnG4kfCF/EpSl5iGyEDkxVUU5uaRimd8qcHSyy1+fkpe6Cs58yt8w9CDSgevuiWS9SC/HuLkoko4efA7Hk0wzUfMUaD5Z8Uaz+ai5CfxXtqlssVUqpxI6DTzXPpLUx3snxzyd6dR+nwaUHL7UJQ7FA/3EFY+QKrULKjAg2gBfTeNlyamrGFaTiA9mxya4chzsjE988rX3NLn08CqXEfhRRaFF1lmSiXWBHOt6jn/6vYxQhMxnjkpZlC22teB68YR2qebXBDZvy99Pg2UPp8GWu3rAJkC+vkNVuW6WYsPX0LQbtKo+RWumQ6zfvklGbvvtqGqI971H4k1ILGG/zTDnGlq6QTzCeRXLEzC0wlYbTZdq5GknV77h26MlRsyAnMrZ+y3eMz2YlzZXg+t7ngzguLhHoAgKs83UClXoUgRyNMdVDpJ6OdRQyQcxiCsiTahP/bwBcDa8w+olKtYWs6Y0r7VM9+epFNtNoHaLl+nTjPPGE1Kg/Zmk3lkpzvoNPP83WvsvttmTEVdgCJFoNV7tQCvqjDaPKrKnsPV7WPj7PQ33xs3NBEDmT2M2Q1u+9LmDSXKWFh85ev89Pz3Tw4ZQz3cQ3o2ydFwmAOwifREjDFCMTrSODKAeeD4DcYm51E/foP4RAwZzPBIwNXtYzw21f/68RuMOtj/5HQVbX9pp8rReNz8B46OQ8GP5kY/bmtH+4CZk2WTnuqO59orTgFgv5EXV01agCPxE0gozGS4oFPIiW4eYAUG8vQuQs+T0FB1vAntzSZ0M/NSye0DCPUwEEWK+Pa8ewEauG2c/ZO6kYpnALRQOZHwYaOG4lkQ+ZkLSOU7KFMd6DUZxbNaDycvfT4N7G8emvOZLwB/7OHLuYa0vAB1I4clOQH1Uxuhc61nfqt9HZB2YGjrIwg9T+LDRo1xYFMjYg//DspZDfJ0/+hJu1QGXh8hFxxHvtOBPA4Ug1dQmy0kTV+AF0jk9Mwr4+oW0N9pQGIWh3MaFuGPCKvNpklYSRObsTWU5CcmzrRIYHG7//nF6FHxcA+yHoOMDjDTgawnUAzdoNrs9QNQGJBqJAg7AQAe5zq4XX9rjN5VgLsKgBeIPOtgtFDhRExqf+nzdY/jr3gW5BoI/Uac4+jANZ1xDM2HmYAsPbrkm3GGM7Pcicxoqu7KdBiTuoP2ZhbFwz2oWguKFAHQ4U5BeRrmewc4u4Jmkv5PvZwEnPCJCItnQb4Y9mQLswgB9CJ1V57uvtKzScjTnb6OvEh4zIhkX0MphFA83OMvaecOmfWi58KtpBZROZFwclVCMJrDwnaCX7siRZgNVNt1teNWUovIHh8xH8LTMCugAHgEQ//PKmK1uitBMCZwh3SKSc6TqxKU3D4vICEHqJtDkMwYAMDro66p8jN7yXoMihTxDTN+OKcxZ25t1+LU9TNow9O9+lV9yeTIL8nIz1xgYXHEVfX0uv92qQytHuTOv9zpOJNmmvPaj01aMe+Up2FEnnVQP36D1p9BzO684D4BsSjHHpolAlYKIaRTWk/0q58azwm0tsvrId62U3jbTuHgdcnXGurnN5z4V+U6lNw+yDxxNRsLISSjUSi5fU783HluOkOVQsga3XMyARjBmzcuSPBKJw6tcIO94hTkWm9NMtlN2ptNKLl9Cx45AORnLqAUQsL8LUdTgqnLMrLHR6iZnBwAMtNBnDcXMDY5DzSOnMEUsjpW5Tr2zezVVbkONdthnHF9hHNCp81MNq+29CtgSqDG0q+QlDWoGzko23nADAH2IwbtzSYPBe4Vp9h1oIrQ8zwWthNQUxpfZ/ugecrFLev4cxZE7nTctP1uoY7HUJmN98UCODv9LbAIZnsvHks4O/0t4NcWb7WvA5Rw08/u7jHDjoukahsAYzqL2zUA7Br6zaf7zx0UEZqIQZ6+QO40iHynA2R14GMCuSB7hmlTA4iEx4z46CUe5zbR+jOI0o6MyLMjRug7L1CYk5EsRC2efye8CNI+Ci+y5v6NWPwPIpMgX4EbQUo7YwZJe680XC9hRsdyyy2xDwqhKoUotDrzu8nYhaq1IE1FuDCUsWsh+596HFAm9xAdauQ086pJJk1Azepc1cjPXCA/c8GdKH1rmslX8GcQW89VxGp1xGp1tArLKChp5pB0UVulnTtIUx2spBa5jS3t3CE9m0TxLMjj/2751upGDtNyAiupRaifWKs0dSOH9GwSX841Hv/vy8Vru/z8+rsq1PwKlEIIq3KdawfSS2d8t3bJCt9c6cSRn7mAOj7KJb/fUNTZ6W8Bkej8+gDoWdL1DRvzFs/f79wkWen+9fObLiZ+uco0gY9xFEM3jkypUq6iMDeP0o6MzHoRrT+D/Blmj4+wf3KI/ZND5JUQ1E9ttE83HfcQzSmeBZF9W7BoP3SNfoly2DW0S/tBMhmLZ0HwHBqhBoM0p0onzrUaSmoKODkUyIYldZAeBn3mJ4lHVNdEiGKv+YRrBgAT0Q/dxSwsd+0ql4SaSHjM0NZHUDwLQqsHOcEoUgSVTryv5I6ExwxlO48v5xrOijU+f2k5Y0Ip+VODxWhIOqWxezeTkNzu/+JL3Si8yEKrdx8OeXDpOrT1EU4E/Z7D32nQvVc6TLNR8ytMlR0f5fcqRgEUKcLMIXNtxDUgX8DU3Mvu83hmDSG3/gyiVVh2JKxIeMyg/X6z8doSsibJ72b//9UjEh4zmJ+thWQ0ys1wkV7s9GlhALwW2Za5JhZZ9EuFFOuZxROLHlYv5vFFusNE9AOv5a7dJHDeXADQxTtz2/h2+4yYgV9isc8nZkAq3CBZfCxvvdpjU7sd5+ILc2CeXJXQ/kVB+L2KtecbDB9ej/FKNCIIei7/BAZQe79v2EO9zIFlFSJE+AA8mSAxgbhQF2DRsk43oZ/fuEpWcR+IxxYZwPc66NqJAYiETj6a3XfbWHu+wc21QE/oQlCJWu3rgBtj8Ax/2JgFd/B4zM88mTFuR9IIJo/xn2RXRaO67vPmAjrVOVw3jgYm5kEJZZj5ZEOuPd/A7rttnr5r/8zrWCIjoIiEm8PqnzouvtQNRyZoEr6ozbkxQXp+dufg1e1jVv49BCH/nRiuSOii5koajviZr41t9zwPuhD2Y/Rrnzw2OY9g8ph/ToT/byCAf/sgjYDyJ+7DBEVGTlrsv6FE2InQ3Ubga17EsExD7I/mx37/XjauWAjULpWR+GXlB7P6m4y8PG30q53/J47A1yL+scl5/j91+vWrStubIw7DBAa12V6VTwyKEauf2vhtNhUYlvjFMf5o6gcT+BuPvwMeQ7+GIV7X/ZMfm+ziS90Y5GLEZCGCrRqkiCU/c2GpBhy0Cov8FnS+fmGbWmbOEBNElKdhvCqf+L5nN+If9mH2S5b6QZYPL/1pH9i/K30+DVAp9ve69lo64XhtkfCYoaUTln1l/91P/Yhf/dRGTtUxCBNQszo+HN7hw+EdT1DwO75Id1hq6gglylgqbWOpqQ9cheXFDJyGVOkiyFL5rfI0zJmf+LIzhtr7fUN02Nmdd7X3+wMxTypjdntoYky6331n/1c1xPd+vxePK1Yu/tMZAKn+idJxwOneSZP82kxAfN4DnefnK2jpRE+1qZZO8IrSVvs6kIxGe5hF0O1CTq5KUD+1LVlTxARok7upFkohBDVhZrUV6hZUG7sUswNwPNJGoGZ16LVZHGTMyEOhapnnRxXb3w8i+2YEoUoCgHc5sYhTIFVqOBlAhQ9nZlmmIN37dr7n+9r7fcOPP4DSOQn4Q3uzySMnfu9dJNjSDsuqVJ6GoD77HVj61dEsoigNyzmPciSik6sS2qUylBz4Z37VYDHzcJAkJDdBJGbH+dFAB1Hbyf53AWPhKrRYgPQ1fGXsWYU5fbkxAad7Ui5uWeyfIiZTHUhaDdrPI5bfFUM30NIJSBVWlxN0shXsxE/JFPSZV5gqGY0ikn2NUIItYCT7GlrihHt05TnZEJ17dG6ev5wwN2Jh35oEI1RW+amqevGpidBKEvrrJvb3o30fBBG6XdMhLcjLJ5DNpvh6uIGe5PfeGoCJ4OJCuLwIhTImTeKnIiOWXwFPNCU1qyOssCSqtroAaW4eDTMcqR44M4Fqs8mSb7I6x2LQ3+n8nsgjbz73vmvP6gESZhrw8MyACL/TzEPN6iy/vuiO80e+J+llChKA929OHFPH3TQAdXyUSczEvAWIxb6/HxqVSXuzif1Y0kL8RGO096WXW8geHyFWq/f0FpR27rp5EqbE18z6AGmnyYUCJQcVz256TQBSLWnRG0u/sqqqwjKUp+EebcBrAXJY5MVEucQJT/EVEzzsTj15uoPQ8ySU3D5HL9HWR3hCjwgQoq2P+FLFdmuMwWjtck8Rk8VkMVNA3YZoDjh972UCUHqrHGGm0H/Xl4z/ri85HiesfOhiICTWeOZg6HkSwWiOVWR63Ls01eHETxuDchFS8QwrknFAwqG5SKwhnJllSEbmuZPRKGfeK6nFvrXt8pxsXN0+xuJ2DYdzrDf9UWkV8dFLHG4k4LcmIfNkxiDC398PAok1PPpc7VsMdVRa5anbR6VV32p7LTNniP0BSQMQHdOD4jH4Ga32dYBpXs57Utq548xXeRpGNpuCsp233FPlRGJZpCbxK4UQ9k8OMZlne04dHxWIP8i1BM4A6GAnVyWWC5/VMS0n0Fj6lUkOB23AbVBevr2aT1sfsRC+SPzJaBTFsyBW5TosAJ5C5dKqXMeHjVrfyjLy2i49PkeoksLS43NcFnTPjfPbbCrgx9npZA7Y8/fdHITFVghfzjUOOuLEBFZSi93Yt3mfVBrdLpV5daarzW/mrxMjohRsiyaihHqcoqz5RIJfq4hkxP9/swk1q3MTxV3yM0SawzmNM5R2qQxiCn4lv5rVGRKPSfhU5tpP8qbiGZ69ube1jWqzibHJeU8mUMvMGYnScQAf4wz776CItecbkCo1LrTs6/XQY+XPJbTVBb7uhbluFC17fIScqmPt+QaA3j4Du7Uq9opTvOZlrzgFtbSAmNlfsBi6gazHOPHngkIxEKn+kfCYQcS//+wA1+E1C/FHnnUY1trTsKddTB7Tm8UOtHoQN4sdLC1neAagWzGOvLiKveIUKwM9C3IVmHL794pTvMTXiwiI610WdBy8LuGyYGoSLp5Sv7b++KOpgBODINs+PZvsga1ql8oM2MJEbiWAVKfrlqY67P5NJyCvYjRVcsDEWvBoskHnK7zIcgwCsciFJIuTFkBMpvAii3apbNaXb3L0Io7Q08epmzsoIj56idzpOHIHRQv4iVsxl0j4mSczRltdQOh5Em/bKU74foifxtIy08JYAxUgM9v2ZALk/FMubhFWPrAito5Zxq7HoI6PIh28QrXZ5FrAgzsDE2tM+0isWZgO7an26SZPbbaXNBde3kFfa/F10tdaiB0Gu6XBegxSpcaJX4yqBSndV3TgRRDklVOtP9nffohETBuWXm6ZKEFgrYpf99PBdqFjDUDdvBErU+liE9Q8N0Mjx671cTYEKWyWl562kP/5Aqj4iGB8avcsMBG/+G634QiWOS0voFA4gRzREc7M8r9FDeDLuYb/t3NgaQmlZkcs1ZLECIqHe6wyrVbuq3l1wR9YEQj5I8iBllN1jLX3ULKVqFrmLq5yldPCXNQFhJUPaANAYd/d7DJRbABWDbmwKAGoIT56iVDiDsCIuxRMLYJqSfb3g3iRTkPyWUcvmrEHr0tIRqO4NqX/o4kUMtBw0PDeuxyP4WMXUg6dWBdeWwJUrclLkR9yiNmPxAAIvkx5GgbebXNGTpqAk3OP/iZIMEmrARJMx1+NF8cRIlaActjVT22U199iducFCnPzlg3Qz+svel/FnP+l5Qz09AlClRTOijVfMErVZrNH7aJKMTE228+zurScwcpKB7u1KkIVf4AMYjKQE7E7Eb893CfitIt47SLxA7AwALvHV6zAJO2HkGG8vNt2j7J9hP7YAxGHEyS2U1QEAAen2D855H87PYNaZs7YX77CCta41rD2fAOqOgJFuUN+Scbids3VEUiQ8i/Sad8qv5sjMDPb5ut9VqxhWk547gERjYg0YcK0oL2njo9yjMaH7BHg1NVo/+QQhcIJstkUF0xEl/S3vRLSnhsgMgJ7ZSXN/Ykkgx1MMRXP8Bep7v3UHjWrcxjsZDSKs2INjVzIUl7rJcHUrM5sTa2FSifO3/n3+RWoWb0vqlB6NolGo8WdgH7Hb7OpAHFZUeL3I34yBYjY7e/9iN9O0JVyFbniWYC806QZODHHHoel+X3ojz3LMyXi95pPtv9KapH7NlLxjMX34OWHAIDLg/Hufigt8DnkA+gXBRjE3nfTAq4bRyiVw3zdb0fSvoA5/OAx9Fv/Ycf+ySEkZQ3VZpObXepGrqvZCk0/7Rpq5skMZyBOWgD5AGhviesacOIeYmxerLrql1bItQCTe6pay4zF95fAFArkm0coexVDgSxEVfWsKpzM6/ycS8sZaO0yYtdTQ9cUiMTfjxHk994adoIXhxPxi/dvL3MdpKbiv+tLBmEXuNnGjUaLl4K6zSWzUM3qFgwD+o3TfLszEADynQ5yQYbLSMhEfuPiw0pX6ulQmJuHsp3nDV3UjZzrMb8HPAbKvbFHkpTtPLLZFJf6Yq4APaf9k0PMZ/ZwVFq1fC7ei1SpDX69HEPdp8Mj82TGqP3vqZGXpw15TjbseOte5zmvLxq1/z01au/3jdr/nlp+T5lReXmav9yOZ8+GyjyZMV69f2r8d33pm2LcU7jPK+znZ/3pXv1cO625+L943/bvB5nbb75raE1gCN9i2LPp/GTWXXypGxQCr2XmjIsvdYZtKE8btcwc25eZOcu+e+i9ROttX+PMkxmehRoJj/HvxesgeqF3mjM984rPczuv77LKQQAx7GYB2VJuEthPxhNPFjLBPUPPk0intIEy4/5tXY7JHOonsR967t9p8BAg/lo8BrGEVzyPPCcbhM48ECqVGQWid7d5X/XhPgSWwCBM4sf4Mf6pTNwLUeo+w9mj/b+nhph6CwCJ//v0zQjNq8vuv5ngvVCbnNbG7fNBzuMWdRj22N9CklPBlugsI+fub7OpgPjbf/sI2hev9r+nBmvSSGGkuMkUYBAT8FrAQR2HTptPUtYs2U7Ulbf6uvmvJnw1q7NCq6wOfIxDajZ5ElFoordbsaSsYdqllXm/QS3RQ8UPPU5FSo196MKY+xC+hfhvlgAAC291PNJGOBPLvhnBq/KJkfgGTMAJjehrCbJ74wFw4n+/b5CnU7m45S+CZaZYt9fCURNMehcdM/02+X/XlwxJWeNEH6vVWcuuPt15qZ5b/H+Qpoz2+d/jkKY6wMc49opTUAoh1kDUHBSrpjWnzrZu69avzFcdH4X+n1XIRwXeB9HOoL+XkSgdB/LydLdU+2YJlZKOSollLE7mdSSjUYxNzqPw8g64WWJMYEDiH6Q0mvJQlO08ktEopuUEJGUNkwe/w8/avSqfWMrPs/+renfFvgceAE8Krr3fN/D6iGUU1YO8RTUPe0iA/PrIs7SVEjn0dLeg9ksphMuC3pfjVZtNU8KXePUbAOg3Vd5XwG2IUE6ZJzOGvLiCrJnX7qd6zT5f/E5MePEbohITOx4Cg670+TRQbY4ZcjpmdqoN8Y61pc+ngQy6cM+MWUQAXAGfr3jIyo4YW+nEPduLxWr1oSSeU/jSrwPZDiTr9AycNIDwWxVqaQGVEpP4j9BtDV7BHdJ5ALkKMDmPwssjZN8s9Q3nOmk8fhql0HWfFWsAWP6LNLEGHKtYiawinJ2FuuFN/HZwGhVtZFE1Cv+XdL7en6+gIQHlImox3TgeQAnd0O74KC8FBoCgXRXS6kEz35tlorHSDhafltMxV7vLifjL2xJmNzRcFvS+qoi4cXrxBKo9efZOUlyrB6HmV3hRS1td8L2BaX4k+xqRZx2sbJk5+c2uKfM4G7LAk9vHeX3RSKc03lj0y7kGFGEMwghEQrJDshdDN9BME4A8u+f1RWN/PwhMWNt/LUisRZoaz3QbbJqRmGoTUKTezGjeGuviFlB3We+ii1teAku/u0lMAUWbpDHTWO0Zhe1SGdLLLU9mcB88gkTpOPDq05YROwziUX0Ek3kdsdYGz6BLxTNIZxhDCCaPgQaYdpDx57we1HydlhO8rVysVsf0uQZ1I2cBOXU75qvyiVFefwvsvIATE5g+du+vODQegJMqFFY+8Hro8HsV8i8KVOqmK1Tj2eeWymF8WGGESn3hQhXWFNHvQnrhCbgdgwAdapk5A6+P0DZ76+Fn/8TP52MR2GJ+j/3NLUCoykpnvBnAxNRh4Ly+aOjvTiBtlKBs5zFN7do96tjtEpMloURtNdzdfm/2/oKrmxvY22IdhR99riL7toBOs4TCiyy77uAVvjxJYhJAOhjB+5tZqJoVXp3CTY8mpJ5qs1itDvVmG2/bLKU7Vqvj0m6ivNxCMhrF7Uga8dFL6Oc3PXgCzJvdW0tPeAShiRjoGkLFDz3zle18Ty08AMS2l3Gz2IH6OgbUrgBso/1LHMV5dv+Vks61grHJeVwWjqBmFjy1ANaVOcgZEnWc1upRV1AV8pvA1J54WzmUPPevSOhKaRU5VYcKVodTP36DqbmXqB+/xVFpFTn1ZY8m8CB4AD1ltmZTykHG6F0Fq3Idq3IdsxsaMrNtno3nxx6n37jhCXip8BzPzbxmsZ673+DzqR785yvsb25xNVjsWOR17aQBACxz7CYxxct/p+WEa3SD4rZkr1FvQM7RP8axsJ1A7nQcWj1oKdVdleuc+AHgy5MkCi+yvLtTejaJL0+S/Dq+PEnil1jZUh1H10W/WflzCbFanb8DQDG2wb8npmInGCL+fKfDTUhiDkREblV5IvEvSCVQWbGIR6Cpu4576WbjNVZex+FWz/9IG8EX6Q6d6pwFbt7TrjY1YUo/pyxN0dSyD5L8N4kpzkTJD9OPBl6VT4ycqiOn6ry7ceRZB0elVUSedTA19xI5lQkfO6bCffAAgqLnn3VjDbIGiTqTgu1fFN6llYn9NQArjjfxRbrj6laokoLWNnu9pXurAe0mQTcVtgmlEO1pL+7VX51MkVpmzsDHOKt3fr6BSvnOEUPPfgw+H3OGjirrpnv8lvciIOlPjiW3kU5pyB4foVir8xTUm8QUYrDmddvXoXIiQV9roRi66XZ1+RjHwm6EFdF0OqbNb/pCPsYBdLWAs2KNg34QMRLxp4NX+IIINHW3K22lCOKjl7huCKE+ofdgrjOOdFDl76KzMTQR4/diqV/oxHkTjlwwaCneSs8meVOOauPIUetLy11z7YOWQaXYBTahLk2NRgtnxZpZzHTNv1/Z2sT+8hVWXsehw/QZmU0xlpYzpj3eHWOT86iUjqHG2q42vDTVMVGYWI+9L+0KoJVcOxRXm01M2j5bWmbYBJSSrExIUDdyHG5PRJkqrzMJD4AzATIDlKdh4Ckwn9mztD2jwfAAWFt6AB54ADc9eABBTtQfj4SeelFg6kYgwJZJgDVopsPQyRH4SBtBhW/MMi4LOpaWM1hJdIA3VRReMgK2JwiJWX6qtgUxDBir1bH0RINS6H3wdlNEubhlTSBLZVaRWO5KV8prYIUmVkZimf/+A44UmNWRwHXjCNnjI1TeZvuaAIoUgby1Cfx8hSI2LEzAy/bT11rM7jYfh1YPQh5n5bTpYBDKeRC4CEHNXkAq30ERjkXNKqnkV5GYig8cWRhEaCKGtLyA6XMN78thS8ccItJKuQoIlYjkN6C/xf/t95JfknlJ8fubWVw3q5bOPPHRS1whjSQqjoVh8s02rx9ZWs5w4iWt49GEhEloaAA93ZH3N7dQeZtFw3x+j0sLiLU2+DxJYf6Yg8YRxsCazlwWdKRfOBMyIyIJ+rsq3rZTeFHbRaMx7vkMW+3rQGFuviefP3t8hBvBd6Js50HZhiifGCIToM/rx29wpHSZAcCAeK4bR44MoPDyDivpFtQKY07yWguxUC8egJZOcDwA8v8EyftPToRqs2srcGkjAfgYQzIaYuqpLRpAOADplIZsZgRriSR2a1VI4VmmBezPIoQUktEagKgxmddRfekuSb+ca4iZjixIwKpaB9Vq21uT2x1JojnTxRnsJjXJ0+TUtDKBzJMZg3rIU9KInfi9NIBW+zqgajDk9U53Q5tMIPTHnkW62G3IHgdO6IY5cJCARq3CP8ahFG4hAl6KXnIKvWp14Lp5xKVmpQFUm1UoUx2ujv4SK7siLVfKVZtz0OwsK/zvSAQi8TeOTKdtl8no5zeITwBXSAPNox6io3bcotS0XFfxA9LyAiah4cyhPfojbQT0/Ij4KYR5E9lGDBtYWgYOXh/hcTLknoNiqvjkzH0RPkHudHzgQjLC76MrpWq+gvDsxEgLETZJeTsWR07VkVkvon78xvF8w+IBOMKCk91JwAjUjVXN6rwm2kkNIYdLVq2gUtJxVqyhoKShp09w8LqEybyOveJUDyEx4mmheMgIpdFoAccqPmzUGEyYsoa3lf5oHuT9VwohK3KOiS6kFLzteFK5Gku/Mvw1G/GTRuOVlizt3DFEo49xyEcFTvzKdh6TB79j8uB3iy+ANlX2bYH7XWQ9BkWKQKrUusQv+AVcw6jNJkITMSuiDLXZ7sTx6HMVjz5XHW14UsWzx0fcx0BQ0vSZWySG7lvVWgLxO0tWu+YhPn8AjsQPQeo/skU7xMQfen6auoubyDZnHI1cCJq6y+d2qnOOxK9mdcjTHa7mvwifQNq58xX+o/VLxTMoFE7QWPqVa36NpV/5sye0okLhxAIQW/i/ZGBq7iVmd15wH0D9+A3XJNwIX1w/qVJje0YoAyb6pb/tNTk/JX5ZCWB5Hur4KL/xYugGuWAQuWAQxdBN1wfA/QRWp2Hp82mgkQthaZmFXNKZLhrPbq3KCZ6Yg1NeAN0E2YNfniQ5GEY2m0Kj0errSbXXc3MtBqx3ej9Mgh5w0JslpF8UOPFnj4+4o8fvwzh4XbJ41gtz8z3XIU11WO28yXTD71XIesz04t5BubjFXnGKMRWTOTgxIVLjK504l/aVTpzZvOUqh4xiJoLziNXqjnkXxdhGXwJIzyaRjEZRKVdxdfuYaxT0NwDL3z0MeDuP9GwSmrrLr1/dyFkSmpySm2h/2Z9fo9HC46ULXmdPdrkbA82djqN4FuQMjNbBDcrOTfKTjyT0xx6X8vRO+8cJHdoJb3Nsch7zmT3LZ/ZQ4H3wAIJdYo5b2gpzrmfahJIZV+yexDlCQMQCmAAMuSgum3cQY+hedhQQNeSbbRQ/B1FtthCMMhQaLxXs4kvdaKsLLI5MqDmmxBeJjXD2nearn9poLP2KFXMzqJ/aaORCqDbneUxb/dTmEr0fExD9GyLxO92DPN2BkgtxH59aWsAK4pY10dcYU9HWRyB/jHfDsoJpQc9MP79Bw5TyV7ddlZzCgY8+ly1qYKt9HaiUYSSjUcg320AwaDEDaPOKtiMcHF6NRqsbq28cGaN3UW5KtdrXgcnJjAFc4uy0dw2Wlpnjjz/nIozQRFcraLWvA9PnmtFotCwmFAG67m1t40x4flIrj8b5Lsv+Qw7ZNyN0uxbnrvjMKmUYFcHsSQevAJfQpZMGMXnwO1+r0ufTAIowJg9WmXbm4gR23D9/BlHakZFZL1q0gdKO7FiTQXgAJyddPACtHjWS0Si3/d3wAIKiHUrqJgCopq1XKcPQhVxmyi4Si4M4rFhpAWlYM/+qTbaxoAGX8M6BJjWMyoeBFsez6zcIA49h15UYquvUFdTsSDd6YdqpTmgzItzS/tMw5jN7+EVZw2RiisOiE6rOMHncbsTf9erfAj9fMTMlF4KCW8tGVy5uIUYLxDXbK07hw0YN0lSEpwXr5zfQEMS1aW+r6gjSqSoq2x2kUy1UThJIp3qZb1f6t3pt8KD7/dnLVdOzSUxORlB93X3mXmAl9vkUFqyU4Wv+wesSTq5KKBROsJ9NYe35BkvBnVhjPoDWBnMEvi7BLaHL/nxUDYZ9Hfo9YzeGQD4BeESEyCE4PfPKIOIn9d8tAajabKKtLuC6cYe2CaTpxhSc5gcoBMi80NYDi8gwIhqKtj7SwwD2ilNYleuwZ2yJzEHJfPC8mGHxBERJ3q+e20sD+Vr14F4pxLXMnKFcMGIX/3bKExCfgZg5WTmRQPkHyWi0G1P/XB2osaoTdsKwnZrviyfgd/6g9fzZN0JmXOxgoCawgwynUvj77qNB1s4vHoCvG7EjqxBKit/55/VFgxJlBkFScTo3/qGjlpkzvBKF/K6BuM70fp91+zc9gx/jx/gxvtGQ52TDb5cgOyMS//+xkl9p+MHy+zG+n2d13+c0PfPK+BbYffKcbMhzsvGqfGIMgjUp/j7zZMbI770d+p7tmpYdR9KttJZefkuD/7YaU+bJjEEPalAgSBqvyifGeX3ROK8v9rTU/hqDNvCwm1i834fY5F/jHgk0sh+BOElMP5uVwDC/JvGLAJd+96L4e6d7HXRvi6CzZKLSZwQGajd7RKBb+r0TE7DPsQPcfm/jJ6cFkqY6LJ5svtzizl6ErzwNIxjteju/NiO4bhwhPLOF3XfbQxFgpVxFfuZi6Plu0uUhiV//zyrCM1s9xSClz6eBxtKvPEmJHK9OCTX9xuPc5ldhYPKcbOy+Y8k5/Zqx2gf9nsBIKKIy6FpTtmjxrBvOCE2YGAsf41CkCPTzG1Q67G/xRQ5QLZ3gv7c3CqWUdkqkqnTilnMNOwZBOB50BHsWyKw1t3oRW57FOCLxs5DZGtaQRzCaw25rDWuRXQSjOShR9OQ/OzEfwmcHwPMS7J9p9WCvt/xZBzlVx+67beA5jEE90KHnSbTVBey++4Dio+JQC1ptNpE9+B0yBj+/F/Gvbm4gp+quISGKO1NBVaFw4omFbx9jkyyEpTwNQ81tPuj1A91MPqeuNv1GrFbnyDp0T/287I7En9Wdm458jEOq1JCeTUId70AxQ6jiM6VwoFSpYezLPH6JlQGHdGrWzCYJRbqCqlWRtjUSGbTvAXU6EjMor24fe7Y994Pp6KoBcI5l5gPQux9OthbZ5ZuIpL9dE7B3NbE/oEonzpKOpjpQ8yuQpzs9nznlsZvFGBYmMIgka7WvA+mUxplAv07BXkN5Gn4wSUrEr35qOxK/qOpPHvzOy4UHIX6AZZdR4clDXj9dY2gixtJkByR+gGX/hSZivK2ZFyyZk7QU80ucckAotT3f6aAYumHVdOOjPPW6ciJBSyd4OvR146inKlCU/mKuAmkTdC30m0Gk+HXjyKKROyUy2YUoXTtlNbqdr4cB0AXTolgLCLxVf+Lw4osaRXaaef6Z3RSgB5Q7Hec56gvbCaC2a/lMnu4gd1CEfn7jmNb7NZjAMESQU/UHISKR+Mvrb12TQbLHR7x//P7JIZRCaOBNBgClHZmr207XP4yPRDQph22r1Wi0MDkZsdRTODE4wuJLzyaxtJwB/U1pvk7EL+Y15IJBLGwnoK+1WEWn2WhVX2shtBtB8SyIfKfD94o9KUnVWlxQEh1RajZpWIOYBRwn4s0mtPURbo7QsdzWWl5cZdp7nVX+eTGBgJ1LU/tjsViE7B+qM3fi4Of1RWO3tcbTFgFW4UR1zeqnNjcFOs08JqYOA8PazbcjaZ5e6rZw2eMjXOaZT2Dt+QaKx8WAWzWe0/zKiYQPGzVk3xaGmp9ZL/IOy5f5ra6G5VOt9kv8YlNLYsCxWh2auss0pgF77NHakaYmXv/j3CYu81u+78FuUpIm6feavLD4nIifsg+JYRDzuLp97LlfRGIrnvUyAfF/p8pAXs5udmUW8RhIZY+PXvLr8KIj+/2IdEiAHm4JWeJ6W9ChTZPZCVLNogFQzr9+zoBBtTp7WJVylUMbp2eTnpKlfvwG140jXDeOLBVMdlPAbjeTykJVbfQideZ2JM2r3fxI8sLcPB7nNrH2fINrAl5oLk6awMJ2AoUXWT6fYSX6m1/akS2agH5+45tw5DnZF/ETM6J0aSJ+dSOH0ufTAJkDg2gCtHaio+5xbhO777aHJv5W+zqgFEKsmGm641tzmJYTfKPbX1/D0Zo7HecSvxi6gVIIQdZj+LBRQ2g3gtzpONcAnDRnu/S/un2MdPCK+QtMVb4ftiWZCtr6CPJLck9BW79RPAtaYMirzabnmlsYANnbIuGR6kE3lp+5cDzQbssfVHSnmXf+rVC+WzmRLLBXSKw5lpEOzAR8bj6aPzF1GBCZAMFNDcoEhvGW+yF+OxOg/gni50ohNFAUR1w70SeQU3XfZbEkdewpqAQv75f4B6270B1wAojw/NxzpczQhHLBIK9EVS5uGUErd9wkdqpkJVVfVPsJd4EktgjO6nbfyWgUyWgUSiGE4uEeN0NERuNWUVltNrm/jHxD2ptNT8YRFFUt4IKr+pVOHJXTbt04UyNuUAwGHcEdf5tNBV6VTwwRsYT93eHSiZyE/fKvKa/9voNQWrLHR1h7voF0cPCQTDqloXIiMZi06Q6A0EDzSzsysMMwApXCjCcw6DDEb4kCqLuG4+eYMaMD8N0gpNW+DtSP3xhHCgOpLO3I8HMMNzWUNi9CV77U/mGKrqblBIf/ItCQarPJQUb8MQEYWjqBUHEK+lrLLJDruBK/fS5mk1Ak4P3NY2C0Sz9pKYJKB57ELwLakKmkSBGLZkFmRL9roEK44uGeq/pvCQOmg1cWTkGSXrQ5uBngURYaedbB7DPCWuqYRJ/DWmRXkPyHvRNNtB55cZO1AKc+9CaYx9WtBKDqy56z21GX+S2kg1d4fzOLw6zWlxDttt2HjRq3v1jREwy/MN90ndIOzPbnzueW52TjcW7TDPUNRvxWYnf7fDAmMD3zypjdeYH5zB6uG0dIRqOQp3U4oSn1k/wAA6YsBq9cbV9iEmTzD6vmTx78zn1OytMwCoWTvo1lxJGMRoGfr6CvAaHdCD5s3EA2fQFukHROBBgfvbSAsXC64RK82sM0qVSd6FB0vjPtqwXAe23ECl6x3blnc1B7b3KyU0TvO9BFG6XfOR1UbGxA6j5J/t3WmqP0p1gn4IwYQyoPcb5BYqgWaW6qYH6dUPb5oqPnoasC5TnZCM9seZZ+PlQ4zg+BUbKReC1enZZ5+Mllbb3unUcKBqg27OfAFBnAICFReU428p0OQrsRazTABNP04wMRHXh2ie8kwJwcfqLzfZA9P+gIiBfgRPR2B4Tfh/SqfGL0I3w3QvMjUYfdIPc5zn3n+5G6X4v4h2EC3+KYIvEPwpwH2UuDHo+YwDDEbxdqJNBE1d2LQT7kfvfNANyYgMiJumrIj5bcf/fx0Exg0Ow2p2t5COJ/yGHPdxgmK7IfHP2P8WP8pUzgeyhS+YEz8GP8GD/Gj/EXjYHs8h8qTH+pSn8/RFfgv+PwkuT3gQj7Mb4hA6BMJNYaqcrf74UtNiRBeYUwvuZ8Ima/XWJ5KMcEH1UKIc4EBmEMZHv+HQlFjCbZx5rZquvfIkwGcYL/leMnp4dYOZEg7dwhndIs737SSt3QUga18yjHPXt8hGHsQwIq1d5sYlj7cq84Zc1I7DcE5GE7Y6Amk151D5QLcF9MgodivuLLz5x+aa7/BuL/q/Awhh1BJ8mfTmmOxRah50lgp39ShZrVoRSsEnRsct5XSiaNarOJldQiBqn5tkv+VRmoNjV+/X43nnX+na/51OKaMgUt1+3AGNyIvzA3j/LkPI5K27jKPB4oLHhfPAX7ceTpjtAMpn/yVPG4GMBzOG5ySoX1m05M5dhUk/BXSNBIeMxgyT/+zLn74mH8pQxAhJd2In4AZodaf4OnNQJmWW+3G61f6S/2bh+EgAHWyMM+f5CFGWa+2IK52vTBGGxDeRpG2Qb+MAjxU0m1NGXmciyu8pJq8bPcQRHAjefx5MVVlpGJKuSPcVQmgsj4ZAJepoAXXLtISPZ+EBdf6ob4PLzMJ/vQz28G9snw5Bx5AZRi3e8YlPXKEuG6eBj0N/3/2/eqATgRuOgPcGIObqow9flzOE3fYRa3GPTQByX+v2o+VU86OQUJkKLa9JaeRyUGmzVIEZEbnoL+bjA8BVH6o7YLHWuglNV08MqCkuPHFEjFM1CkCLJvC92OuD4k/0pqEQT4sSCVsL8fxEpqEa98SE877BgvkCr6T9+OhMcMZTsPTd1lZdXUrXrpV9djMPV+twfuTCyBp1T4V9+RFhAU7TJpB6QFGK32dcDSdGJHGzyjypRAw+KitdUF1DJzhlMzUl9aSGkBM8tPDK+W3p7zP7WR/V/VKO3Ivn7PKihZTblWD8LuFOxnzhSPi4GrzGMDAGZ3XuBIWcXa80tf0Fys8WkXykqT66bWIXxWDwK4we1Ib4dei7reiUP+2AGwy6v3WJVodaD1Ewl+UOLPZqltUQorK3nsI4GDuXlfmgBJWvVTm7VoByApEqobub6MnCS/pu5yiV/dyBkAA15xYwJU62LHw9h9tgYlCosp0Gnmvxst4Ce7cyad0izOPtIKBiJ+6r9nqp/DqrO0+QYpZyWn1WRe500jCcNgkGNMHvyO1p+McLw6Ats1AOqS62T7U6mn1zg7/S1wdvpboLz+Fuqnti+H4EPiKZQ+nwb0c9Ycluz/XDA4VNYgqfuFF9m+qj+p/dMya25ZKJzw9w9aBisrHSwtZ5CKZ+DmTNPPb/i8rvrdHX6eIzWnFZk1dUkW23m7jWHwML6rKAC1eq6csFbK0s7d4Ec1a/tzp+Oe3WC9VFCx9l7WY32BSMQRmohhLdGdfzNWd4VRcmIe03LCsnmuw2sYm5zvy0SkqQ7HTyDbXymEeDmmn0iAyAgGYQIPiadQ+nwaqJSrvNX0sCnDJPWzbwt9NQDladhCdNlsihMzmQGNRsuRsEVGKKr/ww5q5tqjGRU/uGpx98bD+B58ADZNYPiQRW0XgIlHFmP2p70Est9gmke3ksqrBNnxgdSs54qP9ndClj6fctgvtomEcN5sGwcN787GWj1q2L3tFqfggObQ2elvAazDwM6LgZCOHwJPgfeFzK9Aernl3+wzGdXa8w3HKIDbGH80FaDefkvLQKHQ/Y6Iv1Ku9jhn7desbuQMZTsPFVYipsag/RhZ6fNpAEu/GtnjIxTm5g3SCiRlzbOq8CHxMP5yBiCqQ/08104LqBRmjNuRdE8llF8pUunEIeOi57NBOrUOMzjmXzmM2f/Y7qsc9oxG2BOBpJ1epyCz0/1nCVJJbnn9LYgJuIYGvwKeAgCEEuWBiJ+ccD02si0RyI0JvCqfGAdz8+Dt5W0aRT/7n5iA23d+9zAxgVitjkrxg++S4qHxMP6i4ZkKLDKAQVXA+1RCUYVYfuYC+BgfyAaluVe3jzG7oaFS0hG7nhpo42eeMAY2u/OCO3X6zeWILjY0F9IA7lPpRuAcbihBXwtPwYvhuf32ITIB7TkApPb7cf59DYEwyP4fBg/ju2QAIhH/FZlbIkrxoAyoC3EGS8hrmGMMcn57yq/YvOI+a+gEzuHFbPtJyK/53H7UAnQZwd8hFfjH+DF+jB/jx/gxfox/4/j/91SVVHLrRYkAAAAASUVORK5CYII=";
+// Blit a named sprite into a dst rect (nearest-neighbour for crisp pixels).
+// Returns false if the atlas isn't ready or the name is unknown, so callers can
+// fall back to their legacy drawing.
+function drawSprite(name, dx, dy, dsize) {
+  if (!spriteReady) return false;
+  const i = SPRITE_IDX[name];
+  if (i === undefined) return false;
+  const sx = (i % ATLAS_COLS) * ATLAS_TS, sy = ((i / ATLAS_COLS) | 0) * ATLAS_TS;
+  const sm = ctx.imageSmoothingEnabled;
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(spriteSheet, sx, sy, ATLAS_TS, ATLAS_TS, Math.round(dx), Math.round(dy), Math.round(dsize), Math.round(dsize));
+  ctx.imageSmoothingEnabled = sm;
+  return true;
+}
+// Draw a sprite centred on (cx,cy) at the given pixel size.
+function drawSpriteC(name, cx, cy, size) {
+  return drawSprite(name, cx - size / 2, cy - size / 2, size);
+}
+// Each game enemy glyph maps to a DawnLike creature sprite. Bosses & the mimic
+// resolve here too. The emoji stays the saved `type`, so old saves keep working
+// and only the on-screen picture changes.
+const ENEMY_SPRITE = {
+  '\u{1F400}':'e_rat','\u{1F401}':'e_mouse','\u{1F987}':'e_bat','\u{1F40D}':'e_snake',
+  '\u{1F41B}':'e_worm','\u{1F41C}':'e_ant','\u{1F997}':'e_cricket','\u{1F98E}':'e_lizard',
+  '\u{1F438}':'e_frog','\u{1F40C}':'e_snail','\u{1FAB2}':'e_beetle','\u{1FAB3}':'e_roach',
+  '\u{1F994}':'e_hedgehog','\u{1F41D}':'e_bee',
+  '\u{1F479}':'e_ogre','\u{1F47A}':'e_goblin','\u{1F9DF}':'e_zombie','\u{1F47B}':'e_ghost',
+  '\u{1F9DB}':'e_vampire','\u{1F43A}':'e_wolf','\u{1F417}':'e_boar','\u{1F43B}':'e_bear',
+  '\u{1F982}':'e_scorpion','\u{1F99F}':'e_mosquito','\u{1F985}':'e_eagle','\u{1F40A}':'e_croc',
+  '\u{1F9A8}':'e_skunk','\u{1F405}':'e_tiger',
+  '\u{1F409}':'e_dragon','\u{1F47F}':'e_imp','\u{1F608}':'e_devil','\u{1F9CC}':'e_troll',
+  '\u{1F996}':'e_trex','\u{1F995}':'e_sauropod','\u{1F419}':'e_octopus','\u{1F991}':'e_squid',
+  '\u{1F47E}':'e_alien','\u{1F9DE}':'e_genie','\u{1F98F}':'e_rhino','\u{1F9AC}':'e_bison',
+  '\u{1F432}':'b_dragon','\u{1F99E}':'e_lobster',
+  '\u{1F451}':'b_ratking','\u{1F525}':'b_inferno','\u{1F480}':'b_deathknight',
+  '\u{1F441}':'b_allseer','\u{1F9F0}':'mimic',
+};
+function enemySprite(e) {
+  return ENEMY_SPRITE[e.type] || ENEMY_SPRITE[(e.type || '').replace(/\uFE0F/g, '')] || null;
+}
+// A floor tile's variant (8 dirt variants) — deterministic per cell so the
+// ground has texture without flickering between frames.
+function floorSpriteName(seed) { return 'floor_' + (Math.abs(seed) % 4); }
+// Lay the biome floor under a feature tile (fountain, shrine, spikes, …) so the
+// feature sits on real ground, not a flat colour square. Falls back to C.floor.
+function drawFloorBase(px, py, tw, th, seed, C) {
+  if (spriteReady && drawSprite(floorSpriteName(seed), px, py, tw)) {
+    if (C.spriteTint) { ctx.save(); ctx.globalCompositeOperation = 'overlay'; ctx.globalAlpha = C.spriteTintA || 0.35; ctx.fillStyle = C.spriteTint; ctx.fillRect(px, py, tw, th); ctx.restore(); }
+    return;
+  }
+  ctx.fillStyle = C.floor; ctx.fillRect(px, py, tw, th);
+}
+// Autotiled wall piece: pick the corner/edge/face that matches which of this
+// cell's 4 neighbours are open floor (vs. more wall). Map edges & cracked walls
+// (tile 10) count as wall; out-of-bounds counts as wall so borders stay solid.
+function wallSpriteName(x, y) {
+  const isWall = (xx, yy) => (yy < 0 || yy >= MAP_H || xx < 0 || xx >= MAP_W) ? true
+    : (mapData[yy][xx] === 1 || mapData[yy][xx] === 10);
+  const oN = !isWall(x, y - 1), oE = !isWall(x + 1, y), oS = !isWall(x, y + 1), oW = !isWall(x - 1, y);
+  const open = oN + oE + oS + oW;
+  // DawnLike directional walls for a carved (thick-rock) dungeon. Mapping
+  // derived directly from the official Dungeon.tmx example. INNER corners (floor
+  // on two adjacent orthogonal sides) and OUTER corners (floor only on a
+  // diagonal) use DIFFERENT tiles — they're point-opposites of each other.
+  if (open === 4) return 'wall_iso';           // isolated single block
+  if (open === 3) {
+    // End of a standalone wall: BOTTOM (floor below, wall above) uses the iso
+    // base piece; TOP (floor above, wall below) is a plain vertical wall; a side
+    // opening is the end of a horizontal run.
+    if (!oN) return 'wall_iso';
+    if (!oS) return 'wall_V';
+    return 'wall_H';
+  }
+  // Inner corners: brick fills the two SOLID sides.
+  if (oN && oE) return 'wall_TR';
+  if (oN && oW) return 'wall_TL';
+  if (oS && oE) return 'wall_BR';
+  if (oS && oW) return 'wall_BL';
+  // Straight edges.
+  if (oN || oS) return 'wall_H';               // floor above/below → horizontal
+  if (oE || oW) return 'wall_V';               // floor left/right → vertical
+  // Outer corners: floor only on a diagonal (rock wrapping a room's corner).
+  if (!isWall(x + 1, y + 1)) return 'wall_TL'; // floor SE
+  if (!isWall(x - 1, y + 1)) return 'wall_TR'; // floor SW
+  if (!isWall(x + 1, y - 1)) return 'wall_BL'; // floor NE
+  if (!isWall(x - 1, y - 1)) return 'wall_BR'; // floor NW
+  return null;                                 // fully buried rock → background
+}
+
 // Slots that actually change how the hero sprite looks.
 const VISUAL_SLOTS = ['head','chest','weapon'];
 
@@ -5648,19 +5752,23 @@ const THEMES = [
   { name: 'the Lava Depths',
     floor:'#5e3225', floorAlt:'#4f291b', wall:'#3a1d13', wallTop:'#c2552c',
     brickA:'#6f3420', brickB:'#5e2d1b', mortar:'#2e160e', crack:'#ff7a2a',
-    seam:'#3a1c11', speckle:'#b05a30', accent:'rgba(255,145,55,0.30)', stairsGlow:'#ffb24b' },
+    seam:'#3a1c11', speckle:'#b05a30', accent:'rgba(255,145,55,0.30)', stairsGlow:'#ffb24b',
+    spriteTint:'#ff5a1e', spriteTintA:0.42 },
   { name: 'the Frozen Halls',
     floor:'#5e7e98', floorAlt:'#52708a', wall:'#39566e', wallTop:'#cdeeff',
     brickA:'#4c6c86', brickB:'#405e78', mortar:'#2a4254', crack:'#d6f0ff',
-    seam:'#3a5a70', speckle:'#aadcf2', accent:'rgba(200,240,255,0.32)', stairsGlow:'#ecf9ff' },
+    seam:'#3a5a70', speckle:'#aadcf2', accent:'rgba(200,240,255,0.32)', stairsGlow:'#ecf9ff',
+    spriteTint:'#7fd4ff', spriteTintA:0.40 },
   { name: 'the Sunken Tombs',
     floor:'#8e7848', floorAlt:'#7e6a40', wall:'#5d4d2c', wallTop:'#e8c873',
     brickA:'#6f5d35', brickB:'#5f4f2d', mortar:'#3e331e', crack:'#c4a456',
-    seam:'#4a3e22', speckle:'#c8ae62', accent:'rgba(255,228,135,0.30)', stairsGlow:'#ffec9c' },
+    seam:'#4a3e22', speckle:'#c8ae62', accent:'rgba(255,228,135,0.30)', stairsGlow:'#ffec9c',
+    spriteTint:'#e8c24a', spriteTintA:0.34 },
   { name: 'the Void Sanctum',
     floor:'#4d3c72', floorAlt:'#433463', wall:'#312452', wallTop:'#a684e0',
     brickA:'#463674', brickB:'#3b2d62', mortar:'#271d45', crack:'#cca4ff',
-    seam:'#2f2452', speckle:'#9070d6', accent:'rgba(205,160,255,0.32)', stairsGlow:'#e6c0ff' },
+    seam:'#2f2452', speckle:'#9070d6', accent:'rgba(205,160,255,0.32)', stairsGlow:'#e6c0ff',
+    spriteTint:'#9a5cff', spriteTintA:0.42 },
 
   // ── Outdoor nature themes ── grassy floors with leafy/conifer tree walls.
   { name: 'the Sunlit Forest', wallStyle: 'forest',
@@ -5743,6 +5851,9 @@ function roundRectPath(x, y, w, h, r) {
 // gear piece sits in its own clear zone: a helm on the head, armor on the torso,
 // a weapon held to the side. Empty slots fall back to plain hair / tunic / hand.
 function drawHeroSprite(px, py, tw, th, scale) {
+  // Static pixel-art hero. Gear no longer morphs the sprite; equipped weapon
+  // TYPE is shown by the vector icon in the inventory/equip panels instead.
+  if (spriteReady && drawSpriteC('hero', px + tw/2, py + th/2, Math.round(tw * 0.9))) return;
   const cx = px + tw/2;
   const headCY  = py + th*0.30, headR = tw*0.155;
   const torsoTop = py + th*0.44, torsoW = tw*0.42, torsoH = th*0.30;
@@ -5845,6 +5956,19 @@ function drawWall(px, py, tw, th, x, y, seed, C, cracked) {
   if (C.wallStyle === 'pine') { drawPineWall(px, py, tw, th, x, y, seed, C, cracked); return; }
   if (C.wallStyle === 'mushroom') { drawMushroomWall(px, py, tw, th, x, y, seed, C, cracked); return; }
   if (C.wallStyle === 'crystal') { drawCrystalWall(px, py, tw, th, x, y, seed, C, cracked); return; }
+  // Pixel-art wall: only walls that touch open floor get a tile, using DawnLike's
+  // directional pieces (H/V edges + the four corners). Rock buried inside the
+  // mass (no floor neighbour) is left as the dark background — like the official
+  // DawnLike maps — so we don't tile a solid square of bricks.
+  if (spriteReady) {
+    const wn = wallSpriteName(x, y);
+    if (wn === null) return;            // buried rock — leave background void
+    if (drawSprite(wn, px, py, tw)) {
+      if (C.spriteTint) { ctx.save(); ctx.globalCompositeOperation = 'overlay'; ctx.globalAlpha = C.spriteTintA || 0.35; ctx.fillStyle = C.spriteTint; ctx.fillRect(px, py, tw, th); ctx.restore(); }
+      if (cracked) { ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(px + tw*0.42, py + th*0.2, Math.max(1, tw*0.06), th*0.6); ctx.fillRect(px + tw*0.3, py + th*0.5, tw*0.3, Math.max(1, th*0.06)); }
+      return;
+    }
+  }
   const h = Math.abs(seed);
   const W = Math.max(1, Math.floor(tw)), H = Math.max(1, Math.floor(th));
   const topLit = !isWallTile(x, y - 1);
@@ -6162,8 +6286,7 @@ function draw() {
         ctx.restore();
       } else if (t === 3) {
         // Fountain of Healing — stone basin with glowing blue water
-        ctx.fillStyle = C.floor;
-        ctx.fillRect(px, py, tw, th);
+        drawFloorBase(px, py, tw, th, seed, C);
         // stone rim
         ctx.fillStyle = '#5a5a72';
         ctx.beginPath();
@@ -6186,8 +6309,7 @@ function draw() {
         ctx.restore();
       } else if (t === 5) {
         // Shrine — a glowing pillar that pulses to draw the eye.
-        ctx.fillStyle = C.floor;
-        ctx.fillRect(px, py, tw, th);
+        drawFloorBase(px, py, tw, th, seed, C);
         const sp = 0.5 + 0.5*Math.sin(Date.now()/350);
         ctx.save();
         ctx.shadowColor = '#d8a8ff';
@@ -6200,6 +6322,14 @@ function draw() {
         ctx.fill();
         ctx.restore();
       } else if (t === 6) {
+        // Water — real DawnLike water tile, with a faint moving highlight so it
+        // still shimmers. Falls back to the painted ripple below.
+        if (spriteReady && drawSprite('water', px, py, tw)) {
+          const wp2 = 0.5 + 0.5*Math.sin(Date.now()/600 + seed);
+          ctx.fillStyle = `rgba(190,230,255,${0.08 + 0.10*wp2})`;
+          ctx.fillRect(px+tw*0.18, py+th*(0.3+0.1*wp2), tw*0.4, Math.max(1, th*0.06));
+          continue;
+        }
         // Water — deep, impassable, gently rippling.
         ctx.fillStyle = '#0e2a40';
         ctx.fillRect(px, py, tw, th);
@@ -6210,6 +6340,13 @@ function draw() {
         ctx.fillRect(px+tw*0.2, py+th*(0.3+0.1*wp), tw*0.35, Math.max(1, th*0.07));
         ctx.fillRect(px+tw*0.5, py+th*(0.6-0.1*wp), tw*0.28, Math.max(1, th*0.07));
       } else if (t === 7) {
+        // Lava — real DawnLike molten tile with a pulsing heat glow on top.
+        if (spriteReady && drawSprite('lava', px, py, tw)) {
+          const lp2 = 0.5 + 0.5*Math.sin(Date.now()/280 + seed);
+          ctx.save(); ctx.globalAlpha = 0.18 + 0.22*lp2; ctx.fillStyle = '#ff8a1e';
+          ctx.fillRect(px, py, tw, th); ctx.restore();
+          continue;
+        }
         // Lava — passable but it burns; molten glow pulses.
         const lp = 0.5 + 0.5*Math.sin(Date.now()/280 + seed);
         ctx.fillStyle = '#3a0f06';
@@ -6220,9 +6357,15 @@ function draw() {
         ctx.fillRect(px+tw*0.25, py+th*0.3, tw*0.18, th*0.4);
         ctx.fillRect(px+tw*0.6, py+th*0.55, tw*0.15, th*0.25);
       } else if (t === 8) {
+        // Spike trap — DawnLike spikes drawn OVER a real floor tile (not a blank
+        // cell), so it reads as spikes embedded in the ground.
+        if (spriteReady && drawSprite(floorSpriteName(seed), px, py, tw)) {
+          if (C.spriteTint) { ctx.save(); ctx.globalCompositeOperation = 'overlay'; ctx.globalAlpha = C.spriteTintA || 0.35; ctx.fillStyle = C.spriteTint; ctx.fillRect(px, py, tw, th); ctx.restore(); }
+          drawSprite('spikes', px, py, tw);
+          continue;
+        }
         // Spike trap — floor studded with metal spikes.
-        ctx.fillStyle = C.floor;
-        ctx.fillRect(px, py, tw, th);
+        drawFloorBase(px, py, tw, th, seed, C);
         ctx.fillStyle = '#c4c4d2';
         for (let s = 0; s < 3; s++) {
           const sx = px + tw*(0.2 + s*0.3);
@@ -6237,8 +6380,7 @@ function draw() {
         ctx.fillRect(px+tw*0.1, py+th*0.78, tw*0.8, Math.max(1, th*0.1));
       } else if (t === 9) {
         // Teleporter pad — a swirling purple portal.
-        ctx.fillStyle = C.floor;
-        ctx.fillRect(px, py, tw, th);
+        drawFloorBase(px, py, tw, th, seed, C);
         const tp = 0.5 + 0.5*Math.sin(Date.now()/300 + seed);
         ctx.save();
         ctx.shadowColor = '#bb66ff';
@@ -6258,8 +6400,7 @@ function draw() {
         drawWall(px, py, tw, th, x, y, seed, C, true);
       } else if (t === 11) {
         // Locked vault door — heavy timber with a brass lock.
-        ctx.fillStyle = C.floor;
-        ctx.fillRect(px, py, tw, th);
+        drawFloorBase(px, py, tw, th, seed, C);
         ctx.fillStyle = '#5a3a1c';
         ctx.fillRect(px+tw*0.18, py+th*0.1, tw*0.64, th*0.8);
         ctx.fillStyle = '#3f2813';
@@ -6269,6 +6410,15 @@ function draw() {
         ctx.arc(px+tw*0.66, py+th*0.5, tw*0.08, 0, Math.PI*2);
         ctx.fill();
       } else {
+        // Pixel-art floor: a random dirt variant per cell (varied, never flat),
+        // biome-tinted, with ambient-occlusion shade under adjacent walls. Falls
+        // back to the procedural floor below if the atlas hasn't loaded.
+        if (spriteReady && !C.wallStyle && drawSprite(floorSpriteName(seed), px, py, tw)) {
+          if (C.spriteTint) { ctx.save(); ctx.globalCompositeOperation = 'overlay'; ctx.globalAlpha = C.spriteTintA || 0.35; ctx.fillStyle = C.spriteTint; ctx.fillRect(px, py, tw, th); ctx.restore(); }
+          if (y > 0 && (mapData[y-1][x] === 1 || mapData[y-1][x] === 10)) { ctx.fillStyle = 'rgba(0,0,0,0.30)'; ctx.fillRect(px, py, tw, Math.max(1, th*0.16)); ctx.fillStyle = 'rgba(0,0,0,0.13)'; ctx.fillRect(px, py + th*0.16, tw, Math.max(1, th*0.12)); }
+          if (x > 0 && (mapData[y][x-1] === 1 || mapData[y][x-1] === 10)) { ctx.fillStyle = 'rgba(0,0,0,0.18)'; ctx.fillRect(px, py, Math.max(1, tw*0.14), th); }
+          continue;
+        }
         // Floor base — organic per-tile variation instead of a checkerboard:
         // most tiles use the base colour, a few the alt, and every tile gets a
         // faint lightness jitter so the ground reads as natural, worn stone.
@@ -6316,6 +6466,16 @@ function draw() {
     const lucky = (luck || 1) > 1;
     const px = offX + x * tw, py = offY + y * th;
     const cx = px + tw/2, cy = py + th/2;
+    // Pixel-art chest sprite (lucky chests get a brighter glow), with the
+    // hand-drawn chest below as fallback.
+    if (spriteReady && SPRITE_IDX['chest'] !== undefined) {
+      ctx.save();
+      ctx.shadowColor = lucky ? '#ffe066' : '#caa24a';
+      ctx.shadowBlur = (lucky ? 14 : 7) * scale;
+      drawSpriteC('chest', cx, cy, Math.round(tw * 0.72));
+      ctx.restore();
+      return;
+    }
     const w = tw * 0.58, h = th * 0.46;
     const bx = cx - w/2, by = cy - h/2;
     const gold = lucky ? '#ffd24b' : '#d9a441';
@@ -6354,7 +6514,8 @@ function draw() {
     ctx.font = `${Math.round(tw * 0.6)}px serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    drawEmoji(f.emoji, px + tw/2, py + th/2, Math.round(tw * 0.6));
+    if (!(spriteReady && drawSpriteC('food', px + tw/2, py + th/2, Math.round(tw * 0.6))))
+      drawEmoji(f.emoji, px + tw/2, py + th/2, Math.round(tw * 0.6));
   });
 
   // Coin piles — a soft golden glow so loose gold catches the eye.
@@ -6366,7 +6527,8 @@ function draw() {
     ctx.font = `${Math.round(tw * 0.52)}px serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    drawEmoji('🪙', px + tw/2, py + th/2, Math.round(tw * 0.52));
+    if (!(spriteReady && drawSpriteC('coins', px + tw/2, py + th/2, Math.round(tw * 0.6))))
+      drawEmoji('🪙', px + tw/2, py + th/2, Math.round(tw * 0.52));
     ctx.restore();
   });
 
@@ -6379,7 +6541,8 @@ function draw() {
     ctx.font = `${Math.round(tw * 0.5)}px serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    drawEmoji('🗝️', px + tw/2, py + th/2, Math.round(tw * 0.5));
+    if (!(spriteReady && drawSpriteC('key', px + tw/2, py + th/2, Math.round(tw * 0.6))))
+      drawEmoji('🗝️', px + tw/2, py + th/2, Math.round(tw * 0.5));
     ctx.restore();
   }
 
@@ -6476,7 +6639,12 @@ function draw() {
     } else if (stunned) {
       ctx.filter = 'grayscale(1) sepia(1) saturate(7) hue-rotate(-15deg) brightness(1.25)';
     }
-    drawEmoji(e.type, px + tw/2, py + th/2 + th*0.04, Math.round(tw * (e.isBoss ? 0.95 : (e.isElite ? 0.86 : 0.78))));
+    // Pixel-art creature sprite (bosses bigger), falling back to the glyph.
+    const _esz = Math.round(tw * (e.isBoss ? 1.0 : (e.isElite ? 0.9 : 0.82)));
+    const _espr = enemySprite(e);
+    if (!(spriteReady && _espr && drawSpriteC(_espr, px + tw/2, py + th/2 + th*0.02, _esz))) {
+      drawEmoji(e.type, px + tw/2, py + th/2 + th*0.04, Math.round(tw * (e.isBoss ? 0.95 : (e.isElite ? 0.86 : 0.78))));
+    }
     ctx.filter = 'none';
 
     // Affix badge, goblin loot tag, or bounty marker, floated above.
@@ -9275,6 +9443,7 @@ log('🗡️ Every weapon fights differently — axes cleave, daggers flurry, bo
 log('🏰 Tap TOWN (or press T) to warp to the safe hub: craftsman, healer, trainer, enchanter, and a gate to re-enter any floor you\'ve reached.');
 log('🧰 Foes drop crafting materials — 🔩 Scrap, 🔆 Core, ✨ Glimmer, 🌀 Chaos Orb. The 🔨 Craftsman forges blank gear; the 🪄 Enchanter fills in its modifiers.');
 log('⚔️ Each move OR attack passes a turn — get surrounded and every foe piles on, so don\'t let them encircle you.');
+log('🎨 Pixel art from the DawnLike tileset by DragonDePlatino & DawnBringer (CC-BY 4.0).');
 
 // Reflect any saved mute preference on the SOUND button, then arm the audio:
 // browsers won't let sound start until the player interacts, so the first
