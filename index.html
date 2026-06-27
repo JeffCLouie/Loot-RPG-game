@@ -1302,14 +1302,19 @@ const TIER_AFFIX_CAPS = {
 // Note: Luck is now an *attribute*, not a gear stat — the old LCK stat is kept
 // only so legacy items keep working, and never appears in these pools, so "Luck"
 // in the UI always refers to the attribute.
+// Each pool is intentionally LARGER than the rarity cap (4 stats / 2 attrs at the
+// top), so even a fully-rolled item always has spare types to transmute into —
+// that keeps the Enchanter's modifier (🔄) reroll alive on every property. A
+// slot's own headline (weapon DMG, armor DEF/ATK) is never listed here, since the
+// headline already occupies that stat and would only waste a pool slot.
 const SLOT_AFFIX_POOLS = {
-  head:   { stats: ['DEF','HP','MP','REGEN','CRIT'],      attrs: ['vitality','spirit','luck'] },
-  chest:  { stats: ['DEF','HP','REGEN','MP'],             attrs: ['vitality','spirit'] },
-  hands:  { stats: ['ATK','CRIT','CRITDMG','SPD'],        attrs: ['might','agility'] },
-  legs:   { stats: ['DEF','SPD','HP','REGEN'],            attrs: ['agility','vitality'] },
-  weapon: { stats: ['ATK','CRIT','CRITDMG','SPD'],       attrs: ['might','agility','spirit'] },
-  ring:   { stats: ['CRIT','CRITDMG','ATK','MP'],         attrs: ['might','agility','luck','spirit','vitality'] },
-  amulet: { stats: ['MP','HP','REGEN','CRIT'],            attrs: ['spirit','luck','vitality','might'] },
+  head:   { stats: ['HP','MP','REGEN','CRIT','CRITDMG','SPD'], attrs: ['vitality','spirit','luck'] },
+  chest:  { stats: ['HP','REGEN','MP','SPD','CRIT','CRITDMG'], attrs: ['vitality','spirit','luck'] },
+  hands:  { stats: ['CRIT','CRITDMG','SPD','MP','HP','REGEN'], attrs: ['might','agility','spirit'] },
+  legs:   { stats: ['SPD','HP','REGEN','MP','CRIT','CRITDMG'], attrs: ['agility','vitality','luck'] },
+  weapon: { stats: ['ATK','CRIT','CRITDMG','SPD','MP','HP'],   attrs: ['might','agility','spirit'] },
+  ring:   { stats: ['CRIT','CRITDMG','ATK','MP','HP','SPD'],   attrs: ['might','agility','luck','spirit','vitality'] },
+  amulet: { stats: ['MP','HP','REGEN','CRIT','CRITDMG','DEF'], attrs: ['spirit','luck','vitality','might','agility'] },
 };
 
 // ── ITEM ICONS ──
@@ -4914,14 +4919,17 @@ function affixStatValue(stat, lvl, mult) {
 // and luck are deterministic (fixed at this ilvl), so their min === max. The
 // enchanter UI uses this to show players the value band before they reroll.
 function affixStatRange(stat, lvl, mult) {
-  // Deterministic curves: a single fixed outcome at this item level.
+  // Crit chance / Fortune: small numbers, kept on a tight band (and capped) so a
+  // single piece can never swing crit by a wild amount, but value-rerolls still
+  // do something. The cap mirrors the old fixed ceiling.
   if (stat === 'CRIT' || stat === 'LCK') {
-    const v = Math.max(1, Math.round(Math.min(6, (1 + lvl * 0.12) * mult)));
-    return { min: v, max: v };
+    const hi = Math.max(2, Math.round(Math.min(6, (1 + lvl * 0.12) * mult)));
+    return { min: Math.max(1, hi - 2), max: hi };
   }
+  // Crit damage %: roomy ±25% band centred on its old fixed value.
   if (stat === 'CRITDMG') {
-    const v = Math.max(1, Math.round((5 + lvl * 0.8) * mult));
-    return { min: v, max: v };
+    const base = (5 + lvl * 0.8) * mult;
+    return { min: Math.max(2, Math.round(base * 0.75)), max: Math.max(3, Math.round(base * 1.25)) };
   }
   // General curve: lo = rnd term 0, hi = rnd term 2, with per-stat scaling.
   let lo = (1 + lvl * 0.6 + 0) * mult;
