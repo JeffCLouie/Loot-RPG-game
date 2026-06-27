@@ -967,6 +967,10 @@ let statusEffects = [];
 let groundFood = [];
 let groundGold = []; // scattered coin piles: { x, y, amount } — grabbed by walking over
 let floorTint = null; // optional atmospheric colour overlay for the current floor
+let teleporters = {}; // "y,x" -> { x, y } partner pad for warp tiles
+let groundKey = null; // { x, y } of the vault key on this floor, if any
+let hasKey = false;   // whether the player is currently carrying a vault key
+let startPos = { x: 5, y: 5 }; // this floor's safe entry tile (where death sends you)
 let enemies = [];
 let currentTab = 'inv';
 let selectedItem = null;
@@ -1195,59 +1199,205 @@ const FLOOR_TINTS = [
   'rgba(40,180,120,0.10)',   // sickly green
   'rgba(200,40,60,0.10)',    // bloody red
 ];
+// Tile legend: 0 floor · 1 wall · 2 stairs · 3 fountain · 5 shrine ·
+// 6 water (impassable) · 7 lava (passable, burns) · 8 spikes (passable, stabs) ·
+// 9 teleporter · 10 cracked wall (breakable) · 11 locked door.
+
+// Carve an L-shaped corridor of floor between two interior points.
+function carveCorridor(x1, y1, x2, y2) {
+  let x = x1, y = y1;
+  mapData[y][x] = mapData[y][x] === 1 ? 0 : mapData[y][x];
+  const horizFirst = Math.random() < 0.5;
+  const goX = () => { while (x !== x2) { x += Math.sign(x2 - x); if (mapData[y][x] === 1) mapData[y][x] = 0; } };
+  const goY = () => { while (y !== y2) { y += Math.sign(y2 - y); if (mapData[y][x] === 1) mapData[y][x] = 0; } };
+  if (horizFirst) { goX(); goY(); } else { goY(); goX(); }
+}
+
+// Tiles the player can actually stand on / path through (for reachability).
+function isFloorPassable(t) {
+  return t === 0 || t === 2 || t === 3 || t === 5 || t === 7 || t === 8 || t === 9;
+}
+
+// Flood-fill the set of "y,x" tiles reachable from a start point.
+function reachableFrom(sx, sy) {
+  const seen = new Set([sy + ',' + sx]);
+  const stack = [[sx, sy]];
+  while (stack.length) {
+    const [x, y] = stack.pop();
+    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+      const nx = x + dx, ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= MAP_W || ny >= MAP_H) continue;
+      const k = ny + ',' + nx;
+      if (seen.has(k) || !isFloorPassable(mapData[ny][nx])) continue;
+      seen.add(k); stack.push([nx, ny]);
+    }
+  }
+  return seen;
+}
+
+// Pick a random plain-floor tile, optionally limited to a reachable set.
+function randomFloorTile(reach) {
+  for (let i = 0; i < 200; i++) {
+    const x = rnd(1, MAP_W-2), y = rnd(1, MAP_H-2);
+    if (mapData[y][x] !== 0) continue;
+    if (reach && !reach.has(y + ',' + x)) continue;
+    if (x === player.x && y === player.y) continue;
+    return { x, y };
+  }
+  return null;
+}
+
+// Carve a sealed treasure vault out of solid rock, reachable only through a
+// locked door — and scatter its key somewhere on the floor.
+function tryBuildVault(reach) {
+  for (let tries = 0; tries < 150; tries++) {
+    const x = rnd(2, MAP_W-3), y = rnd(2, MAP_H-3);
+    if (mapData[y][x] !== 1) continue;               // vault interior must be rock
+    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+      const wx = x + dx, wy = y + dy;                // the door cell
+      const fx = x + 2*dx, fy = y + 2*dy;            // floor on the far side
+      if (fx < 0 || fy < 0 || fx >= MAP_W || fy >= MAP_H) continue;
+      if (mapData[wy][wx] !== 1 || mapData[fy][fx] !== 0) continue;
+      if (reach && !reach.has(fy + ',' + fx)) continue;
+      mapData[y][x] = 0;                             // hollow out the vault
+      mapData[wy][wx] = 11;                          // locked door
+      groundItems.push({ x, y, luck: 6 });          // guaranteed rich chest inside
+      const k = randomFloorTile(reach);
+      if (k) groundKey = { x: k.x, y: k.y };
+      log('🗝️ A locked vault hides on this floor — find its key!', 'important');
+      return true;
+    }
+  }
+  return false;
+}
+
 function generateMap() {
   rollFloorMod();
   // ~35% of floors get a subtle colour wash for atmosphere.
   floorTint = Math.random() < 0.35 ? pick(FLOOR_TINTS) : null;
+  teleporters = {};
+  groundKey = null;
+  hasKey = false;
+
+  // Start as solid rock; rooms and passages are carved out of it.
   mapData = [];
-  for (let y = 0; y < MAP_H; y++) {
-    mapData[y] = [];
-    for (let x = 0; x < MAP_W; x++) {
-      // Border walls
-      if (x === 0 || y === 0 || x === MAP_W-1 || y === MAP_H-1) {
-        mapData[y][x] = 1;
-      } else {
-        // Random walls ~20%
-        mapData[y][x] = Math.random() < 0.18 ? 1 : 0;
+  for (let y = 0; y < MAP_H; y++) { mapData[y] = []; for (let x = 0; x < MAP_W; x++) mapData[y][x] = 1; }
+
+  // ── ROOMS ── a handful of rectangles, occasionally one big grand hall.
+  const rooms = [];
+  const roomCount = rnd(5, 8);
+  const grandHall = Math.random() < 0.3;
+  for (let i = 0; i < roomCount; i++) {
+    const big = grandHall && i === 0;
+    const rw = big ? rnd(8, 11) : rnd(3, 7);
+    const rh = big ? rnd(7, 9)  : rnd(3, 6);
+    const rx = rnd(1, Math.max(1, MAP_W - rw - 1));
+    const ry = rnd(1, Math.max(1, MAP_H - rh - 1));
+    for (let y = ry; y < ry + rh; y++) for (let x = rx; x < rx + rw; x++) mapData[y][x] = 0;
+    const room = { x: rx, y: ry, w: rw, h: rh, cx: rx + (rw >> 1), cy: ry + (rh >> 1) };
+    rooms.push(room);
+    // Interior pillars in roomier rooms — cover to weave around.
+    if (rw >= 5 && rh >= 5 && Math.random() < 0.6) {
+      const pillars = rnd(1, 3);
+      for (let p = 0; p < pillars; p++) {
+        const ox = rx + rnd(1, rw-2), oy = ry + rnd(1, rh-2);
+        if (!(ox === room.cx && oy === room.cy)) mapData[oy][ox] = 1;
       }
     }
   }
-  // Ensure spawn clear
-  for (let dy = -1; dy <= 1; dy++)
-    for (let dx = -1; dx <= 1; dx++)
-      if (mapData[player.y+dy]) mapData[player.y+dy][player.x+dx] = 0;
 
-  // Add stairs down
-  let sx, sy;
-  do { sx = rnd(2, MAP_W-2); sy = rnd(2, MAP_H-2); }
-  while (mapData[sy][sx] !== 0 || (sx === player.x && sy === player.y));
-  mapData[sy][sx] = 2; // stairs
+  // ── CORRIDORS ── connect rooms in a chain, plus a couple of loops for choice.
+  for (let i = 1; i < rooms.length; i++) carveCorridor(rooms[i-1].cx, rooms[i-1].cy, rooms[i].cx, rooms[i].cy);
+  for (let k = 0; k < 2; k++) { const a = pick(rooms), b = pick(rooms); if (a !== b) carveCorridor(a.cx, a.cy, b.cx, b.cy); }
 
-  // Rare Fountain of Healing (~8% of floors, or forced by a modifier). Tile type 3.
+  // ── PLAYER START ── first room centre, cleared of obstacles.
+  const start = rooms[0];
+  startPos = { x: start.cx, y: start.cy };
+  player.x = start.cx; player.y = start.cy;
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+    const yy = player.y + dy, xx = player.x + dx;
+    if (yy > 0 && xx > 0 && yy < MAP_H-1 && xx < MAP_W-1) mapData[yy][xx] = 0;
+  }
+
+  // ── WATER POOLS (impassable) ── inside rooms, never on a room centre or start.
+  rooms.forEach(r => {
+    if (r.w >= 4 && r.h >= 4 && Math.random() < 0.4) {
+      const wx = r.x + rnd(1, r.w-2), wy = r.y + rnd(1, r.h-2);
+      const pw = rnd(1, 3), ph = rnd(1, 2);
+      for (let dy = 0; dy < ph; dy++) for (let dx = 0; dx < pw; dx++) {
+        const x = wx + dx, y = wy + dy;
+        if (x > 0 && y > 0 && x < MAP_W-1 && y < MAP_H-1 && mapData[y][x] === 0 &&
+            !(x === r.cx && y === r.cy) && !(x === player.x && y === player.y)) mapData[y][x] = 6;
+      }
+    }
+  });
+
+  // Everything the player can reach from the start tile (water excluded).
+  const reach = reachableFrom(player.x, player.y);
+
+  // ── STAIRS ── on a reachable floor tile, as far from the start as possible.
+  let best = null, bestD = -1;
+  for (let t = 0; t < 80; t++) {
+    const c = randomFloorTile(reach); if (!c) break;
+    const d = Math.abs(c.x - player.x) + Math.abs(c.y - player.y);
+    if (d > bestD) { bestD = d; best = c; }
+  }
+  if (best) mapData[best.y][best.x] = 2;
+  else mapData[player.y][Math.min(MAP_W-2, player.x+1)] = 2; // safety fallback
+
+  // ── LAVA (passable, burns) ──
+  if (dungeonLevel >= 2 && Math.random() < 0.5) {
+    const n = rnd(2, 5);
+    for (let i = 0; i < n; i++) { const c = randomFloorTile(reach); if (c) mapData[c.y][c.x] = 7; }
+  }
+  // ── SPIKE TRAPS (passable, stabs) ──
+  if (Math.random() < 0.6) {
+    const n = rnd(2, 5);
+    for (let i = 0; i < n; i++) { const c = randomFloorTile(reach); if (c) mapData[c.y][c.x] = 8; }
+  }
+  // ── TELEPORTER PAIR ──
+  if (rooms.length >= 2 && Math.random() < 0.45) {
+    const a = randomFloorTile(reach), b = randomFloorTile(reach);
+    if (a && b && (a.x !== b.x || a.y !== b.y)) {
+      mapData[a.y][a.x] = 9; mapData[b.y][b.x] = 9;
+      teleporters[a.y+','+a.x] = { x: b.x, y: b.y };
+      teleporters[b.y+','+b.x] = { x: a.x, y: a.y };
+    }
+  }
+  // ── CRACKED WALLS ── breakable walls with open floor on opposite sides.
+  let cracks = rnd(2, 4);
+  for (let tries = 0; tries < 150 && cracks > 0; tries++) {
+    const x = rnd(1, MAP_W-2), y = rnd(1, MAP_H-2);
+    if (mapData[y][x] !== 1) continue;
+    const hor = mapData[y][x-1] === 0 && mapData[y][x+1] === 0;
+    const ver = mapData[y-1][x] === 0 && mapData[y+1][x] === 0;
+    if (hor || ver) { mapData[y][x] = 10; cracks--; }
+  }
+
+  // ── FOUNTAIN ── (~8%, or forced by a floor modifier).
   hasFountain = false;
   if (Math.random() < 0.08 || floorMod.forceFountain) {
-    let fx, fy, tries = 0;
-    do { fx = rnd(2, MAP_W-2); fy = rnd(2, MAP_H-2); tries++; }
-    while ((mapData[fy][fx] !== 0 || (fx === player.x && fy === player.y)) && tries < 100);
-    if (tries < 100) { mapData[fy][fx] = 3; hasFountain = true; }
+    const c = randomFloorTile(reach);
+    if (c) { mapData[c.y][c.x] = 3; hasFountain = true; }
   }
   if (hasFountain) log('⛲ You sense a healing presence somewhere on this floor...', 'important');
 
-  // Shrines (tile type 5): ~25% chance of one per floor. Touch it for a buff.
+  // ── SHRINE ── (~25%), kept a few tiles from the entrance.
   shrineData = {};
   if (Math.random() < 0.25) {
-    let sx2, sy2, tries = 0;
-    do { sx2 = rnd(2, MAP_W-2); sy2 = rnd(2, MAP_H-2); tries++; }
-    while ((mapData[sy2][sx2] !== 0 || (Math.abs(sx2-player.x)+Math.abs(sy2-player.y) < 3)) && tries < 100);
-    if (tries < 100) { mapData[sy2][sx2] = 5; shrineData[sy2+','+sx2] = { kind: pick(SHRINE_KINDS) }; }
+    const c = randomFloorTile(reach);
+    if (c && (Math.abs(c.x - player.x) + Math.abs(c.y - player.y)) >= 3) {
+      mapData[c.y][c.x] = 5; shrineData[c.y+','+c.x] = { kind: pick(SHRINE_KINDS) };
+    }
   }
 
-  // Announce this floor's modifier theme, if any.
   if (floorMod.name) log(`${floorMod.name} — ${floorMod.desc}`, 'important');
 
   spawnEnemies();
   spawnGroundLoot();
   spawnMerchant();
+  // Vault is built last so its chest survives spawnGroundLoot resetting the list.
+  if (Math.random() < 0.5) tryBuildVault(reach);
 }
 
 function spawnMerchant() {
@@ -1969,6 +2119,90 @@ function draw() {
         ctx.arc(px+tw/2, py+th*0.28, tw*0.16, 0, Math.PI*2); // glowing orb
         ctx.fill();
         ctx.restore();
+      } else if (t === 6) {
+        // Water — deep, impassable, gently rippling.
+        ctx.fillStyle = '#0e2a40';
+        ctx.fillRect(px, py, tw, th);
+        const wp = 0.5 + 0.5*Math.sin(Date.now()/600 + seed);
+        ctx.fillStyle = `rgba(40,120,190,${0.6 + 0.2*wp})`;
+        ctx.fillRect(px+1, py+1, tw-2, th-2);
+        ctx.fillStyle = 'rgba(150,210,255,0.5)';
+        ctx.fillRect(px+tw*0.2, py+th*(0.3+0.1*wp), tw*0.35, Math.max(1, th*0.07));
+        ctx.fillRect(px+tw*0.5, py+th*(0.6-0.1*wp), tw*0.28, Math.max(1, th*0.07));
+      } else if (t === 7) {
+        // Lava — passable but it burns; molten glow pulses.
+        const lp = 0.5 + 0.5*Math.sin(Date.now()/280 + seed);
+        ctx.fillStyle = '#3a0f06';
+        ctx.fillRect(px, py, tw, th);
+        ctx.fillStyle = `rgba(255,${70 + Math.floor(70*lp)},20,0.95)`;
+        ctx.fillRect(px+1, py+1, tw-2, th-2);
+        ctx.fillStyle = `rgba(255,220,90,${0.5 + 0.4*lp})`;
+        ctx.fillRect(px+tw*0.25, py+th*0.3, tw*0.18, th*0.4);
+        ctx.fillRect(px+tw*0.6, py+th*0.55, tw*0.15, th*0.25);
+      } else if (t === 8) {
+        // Spike trap — floor studded with metal spikes.
+        ctx.fillStyle = (x+y)%2===0 ? C.floor : C.floorAlt;
+        ctx.fillRect(px, py, tw, th);
+        ctx.fillStyle = '#c4c4d2';
+        for (let s = 0; s < 3; s++) {
+          const sx = px + tw*(0.2 + s*0.3);
+          ctx.beginPath();
+          ctx.moveTo(sx, py + th*0.8);
+          ctx.lineTo(sx + tw*0.1, py + th*0.3);
+          ctx.lineTo(sx + tw*0.2, py + th*0.8);
+          ctx.closePath();
+          ctx.fill();
+        }
+        ctx.fillStyle = '#7a7a8a';
+        ctx.fillRect(px+tw*0.1, py+th*0.78, tw*0.8, Math.max(1, th*0.1));
+      } else if (t === 9) {
+        // Teleporter pad — a swirling purple portal.
+        ctx.fillStyle = (x+y)%2===0 ? C.floor : C.floorAlt;
+        ctx.fillRect(px, py, tw, th);
+        const tp = 0.5 + 0.5*Math.sin(Date.now()/300 + seed);
+        ctx.save();
+        ctx.shadowColor = '#bb66ff';
+        ctx.shadowBlur = (5 + 6*tp) * (tw/TILE);
+        ctx.strokeStyle = `rgba(190,110,255,${0.6 + 0.4*tp})`;
+        ctx.lineWidth = Math.max(1.5, tw*0.08);
+        ctx.beginPath();
+        ctx.arc(px+tw/2, py+th/2, tw*(0.18 + 0.12*tp), 0, Math.PI*2);
+        ctx.stroke();
+        ctx.fillStyle = `rgba(225,190,255,${0.5 + 0.4*tp})`;
+        ctx.beginPath();
+        ctx.arc(px+tw/2, py+th/2, tw*0.1, 0, Math.PI*2);
+        ctx.fill();
+        ctx.restore();
+      } else if (t === 10) {
+        // Cracked wall — a normal wall with an obvious fracture (breakable).
+        ctx.fillStyle = C.wall;
+        ctx.fillRect(px, py, tw, th);
+        ctx.fillStyle = C.brickB;
+        ctx.fillRect(px+1, py+1, tw-2, th-2);
+        ctx.strokeStyle = '#15151c';
+        ctx.lineWidth = Math.max(1.5, tw*0.07);
+        ctx.beginPath();
+        ctx.moveTo(px+tw*0.5, py);
+        ctx.lineTo(px+tw*0.38, py+th*0.4);
+        ctx.lineTo(px+tw*0.6, py+th*0.6);
+        ctx.lineTo(px+tw*0.45, py+th);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(px+tw*0.55, py+th*0.55);
+        ctx.lineTo(px+tw*0.85, py+th*0.7);
+        ctx.stroke();
+      } else if (t === 11) {
+        // Locked vault door — heavy timber with a brass lock.
+        ctx.fillStyle = (x+y)%2===0 ? C.floor : C.floorAlt;
+        ctx.fillRect(px, py, tw, th);
+        ctx.fillStyle = '#5a3a1c';
+        ctx.fillRect(px+tw*0.18, py+th*0.1, tw*0.64, th*0.8);
+        ctx.fillStyle = '#3f2813';
+        ctx.fillRect(px+tw*0.46, py+th*0.1, Math.max(1, tw*0.06), th*0.8);
+        ctx.fillStyle = '#caa15a';
+        ctx.beginPath();
+        ctx.arc(px+tw*0.66, py+th*0.5, tw*0.08, 0, Math.PI*2);
+        ctx.fill();
       } else {
         // Floor base with subtle checker
         ctx.fillStyle = (x+y)%2===0 ? C.floor : C.floorAlt;
@@ -2053,6 +2287,19 @@ function draw() {
     ctx.fillText('🪙', px + tw/2, py + th/2);
     ctx.restore();
   });
+
+  // Vault key — glints on the floor until grabbed.
+  if (groundKey) {
+    const px = offX + groundKey.x * tw, py = offY + groundKey.y * th;
+    ctx.save();
+    ctx.shadowColor = '#ffe066';
+    ctx.shadowBlur = 10 * scale;
+    ctx.font = `${Math.round(tw * 0.5)}px serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🗝️', px + tw/2, py + th/2);
+    ctx.restore();
+  }
 
   // Merchant (roaming trader in bright robes)
   if (merchant) {
@@ -2402,6 +2649,20 @@ function move(dx, dy) {
 
   const tile = mapData[ny][nx];
   if (tile === 1) return; // wall
+  if (tile === 6) return; // deep water — impassable
+
+  // Cracked wall → smash through it (opens a shortcut), then step in.
+  if (tile === 10) {
+    mapData[ny][nx] = 0;
+    log('🧱 You smash through a cracked wall!', 'loot');
+  }
+  // Locked door → needs a key; otherwise it bars the way.
+  if (tile === 11) {
+    if (!hasKey) { log('🔒 A locked door bars the way — find its key.'); return; }
+    hasKey = false;
+    mapData[ny][nx] = 0;
+    log('🔑 You unlock the vault door!', 'important');
+  }
 
   // Enemy collision → attack
   const enemy = getEnemyAt(nx, ny);
@@ -2477,6 +2738,39 @@ function move(dx, dy) {
     spawnFloatingText(player.x, player.y, `+${g.amount}g`, '#ffd24b');
     log(`🪙 Picked up ${g.amount} gold!`, 'loot');
     updateBars();
+  }
+
+  // Auto-pickup the vault key
+  if (groundKey && groundKey.x === nx && groundKey.y === ny) {
+    groundKey = null; hasKey = true;
+    spawnFloatingText(player.x, player.y, '🗝️', '#ffd24b');
+    log('🗝️ You found a vault key! Seek the locked door.', 'important');
+  }
+
+  // Lava → burns you (never lethal on its own).
+  if (tile === 7) {
+    const burn = 4 + dungeonLevel;
+    player.hp = Math.max(1, player.hp - burn);
+    spawnFloatingText(player.x, player.y, `${burn}`, '#ff7733');
+    log(`🔥 The lava scorches you for ${burn}!`, 'important');
+    updateBars();
+  }
+  // Spikes → stab you (never lethal on their own).
+  if (tile === 8) {
+    const stab = 3 + Math.floor(dungeonLevel / 2);
+    player.hp = Math.max(1, player.hp - stab);
+    spawnFloatingText(player.x, player.y, `${stab}`, '#ff3344');
+    log(`🩸 Spikes stab you for ${stab}!`);
+    updateBars();
+  }
+  // Teleporter → warp to its partner pad.
+  if (tile === 9) {
+    const dest = teleporters[ny + ',' + nx];
+    if (dest) {
+      player.x = dest.x; player.y = dest.y;
+      spawnFloatingText(player.x, player.y, '🌀', '#bb88ff');
+      log('🌀 A teleporter whisks you across the floor!', 'important');
+    }
   }
 
   // Enemy AI
@@ -2667,12 +2961,14 @@ function handleDeath() {
   player.gold -= lostGold;
   player.hp = Math.floor(player.maxHp * 0.4);
   statusEffects = statusEffects.filter(s => s.target !== 'player');
-  player.x = 5; player.y = 5;
+  player.x = startPos.x; player.y = startPos.y;
   sfx('death');
   log(`💀 ${HERO} was slain! Lost ${lostGold}g and crawled back to the entrance.`, 'important');
-  // Respawn enemies/loot are kept; just regenerate enemy positions away from spawn.
+  // Shove any enemies crowding the entrance off to a random floor tile.
   enemies.forEach(e => {
-    if (!e.dead && Math.abs(e.x-5) + Math.abs(e.y-5) < 4) { e.x = rnd(8, MAP_W-2); e.y = rnd(8, MAP_H-2); }
+    if (!e.dead && Math.abs(e.x-startPos.x) + Math.abs(e.y-startPos.y) < 4) {
+      const c = randomFloorTile(); if (c) { e.x = c.x; e.y = c.y; }
+    }
   });
   updateBars();
   saveGame();
