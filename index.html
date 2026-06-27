@@ -1237,6 +1237,62 @@ function drawIconPath(key, cx, cy, size, color) {
   }
   ctx.restore();
 }
+
+// ── Emoji sprite cache ───────────────────────────────────────────────────
+// Colour emoji (food, enemies, NPCs, item glyphs…) come from a system font the
+// browser loads lazily. The first `ctx.fillText` of a given emoji can paint
+// nothing — a fully transparent blank — until that glyph is resident, and since
+// the game only repaints on events, the blank sticks around (the "assets render
+// transparent" bug). We rasterise each emoji once into an offscreen canvas and
+// blit that bitmap forever after, so a glyph that has drawn once stays drawn.
+// Until a glyph is ready we skip caching and keep nudging a redraw, so it heals
+// in on its own a frame or two later.
+const _emojiCache = new Map();
+let _emojiRedrawQueued = false;
+function _queueEmojiRedraw() {
+  if (_emojiRedrawQueued) return;
+  _emojiRedrawQueued = true;
+  requestAnimationFrame(() => { _emojiRedrawQueued = false; draw(); });
+}
+// Bake an emoji to its own canvas; returns null if the font glyph isn't ready
+// yet (the render came back fully transparent) so the caller can retry later.
+function _buildEmojiSprite(emoji, fontPx) {
+  const pad = Math.ceil(fontPx * 0.35);
+  const size = Math.ceil(fontPx) + pad * 2;
+  const cv = document.createElement('canvas');
+  cv.width = size; cv.height = size;
+  const c = cv.getContext('2d');
+  c.font = `${Math.round(fontPx)}px serif`;
+  c.textAlign = 'center';
+  c.textBaseline = 'middle';
+  c.fillStyle = '#fff';
+  c.fillText(emoji, size / 2, size / 2);
+  const data = c.getImageData(0, 0, size, size).data;
+  for (let i = 3; i < data.length; i += 4) {
+    if (data[i] !== 0) return cv; // found an opaque pixel → real glyph rendered
+  }
+  return null;
+}
+// Draw an emoji centred at (x,y) at height `fontPx`, honouring the live ctx
+// filter/shadow state (so poison tints and glows still apply to the bitmap).
+// Drop-in for `ctx.fillText(emoji, x, y)` with center/middle alignment.
+function drawEmoji(emoji, x, y, fontPx) {
+  const key = emoji + '@' + Math.round(fontPx);
+  let cv = _emojiCache.get(key);
+  if (!cv) {
+    cv = _buildEmojiSprite(emoji, fontPx);
+    if (cv) _emojiCache.set(key, cv);
+  }
+  if (cv) {
+    ctx.drawImage(cv, x - cv.width / 2, y - cv.height / 2);
+  } else {
+    // Font not resident yet: best-effort live draw, then ask for a repaint so
+    // the sprite can bake in once the glyph finishes loading.
+    ctx.fillText(emoji, x, y);
+    _queueEmojiRedraw();
+  }
+}
+
 // Slots that actually change how the hero sprite looks.
 const VISUAL_SLOTS = ['head','chest','weapon'];
 
@@ -3691,7 +3747,7 @@ function drawTownBuildings(offX, offY, tw, th) {
     ctx.font = `${Math.round(tw * 0.4)}px serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(b.sign, x0 + w / 2, eave + th * 0.04);
+    drawEmoji(b.sign, x0 + w / 2, eave + th * 0.04, Math.round(tw * 0.4));
   });
 }
 
@@ -3710,9 +3766,9 @@ function drawTownNpcs(offX, offY, tw, th, scale) {
     ctx.font = `${Math.round(tw * 0.72)}px serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(n.emoji, px + tw / 2, py + th / 2 + th * 0.02);
+    drawEmoji(n.emoji, px + tw / 2, py + th / 2 + th * 0.02, Math.round(tw * 0.72));
     ctx.font = `bold ${Math.round(tw * 0.32)}px serif`;
-    ctx.fillText(n.tag, px + tw / 2, py - th * 0.04);
+    drawEmoji(n.tag, px + tw / 2, py - th * 0.04, Math.round(tw * 0.32));
     ctx.font = `bold ${Math.round(tw * 0.2)}px monospace`;
     ctx.fillStyle = '#ffe9b0';
     ctx.fillText(n.name, px + tw / 2, py + th * 0.92);
@@ -4415,7 +4471,7 @@ function draw() {
         // Padlock over sealed stairs.
         if (sealed) {
           ctx.font = `${Math.round(tw*0.4)}px serif`;
-          ctx.fillText('🔒', px + tw/2, py + th*0.42);
+          drawEmoji('🔒', px + tw/2, py + th*0.42, Math.round(tw*0.4));
         }
       } else if (t === 12) {
         // Stairs up — the way back to the previous floor. Never sealed, so they
@@ -4643,7 +4699,7 @@ function draw() {
     ctx.font = `${Math.round(tw * 0.6)}px serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(f.emoji, px + tw/2, py + th/2);
+    drawEmoji(f.emoji, px + tw/2, py + th/2, Math.round(tw * 0.6));
   });
 
   // Coin piles — a soft golden glow so loose gold catches the eye.
@@ -4655,7 +4711,7 @@ function draw() {
     ctx.font = `${Math.round(tw * 0.52)}px serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('🪙', px + tw/2, py + th/2);
+    drawEmoji('🪙', px + tw/2, py + th/2, Math.round(tw * 0.52));
     ctx.restore();
   });
 
@@ -4668,7 +4724,7 @@ function draw() {
     ctx.font = `${Math.round(tw * 0.5)}px serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('🗝️', px + tw/2, py + th/2);
+    drawEmoji('🗝️', px + tw/2, py + th/2, Math.round(tw * 0.5));
     ctx.restore();
   }
 
@@ -4693,11 +4749,11 @@ function draw() {
     ctx.font = `${Math.round(tw * 0.74)}px serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('🧙‍♂️', px + tw/2, py + th/2 + th*0.02);
+    drawEmoji('🧙‍♂️', px + tw/2, py + th/2 + th*0.02, Math.round(tw * 0.74));
     // little "$" tag above
     ctx.fillStyle = '#ffd24b';
     ctx.font = `bold ${Math.round(tw*0.34)}px serif`;
-    ctx.fillText('💰', px + tw/2, py - th*0.02);
+    drawEmoji('💰', px + tw/2, py - th*0.02, Math.round(tw*0.34));
   }
 
   // Wandering Mystic (hooded pact-vendor with a teal mystical aura)
@@ -4721,10 +4777,10 @@ function draw() {
     ctx.font = `${Math.round(tw * 0.74)}px serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('🧙', px + tw/2, py + th/2 + th*0.02);
+    drawEmoji('🧙', px + tw/2, py + th/2 + th*0.02, Math.round(tw * 0.74));
     // crystal-ball tag above
     ctx.font = `bold ${Math.round(tw*0.34)}px serif`;
-    ctx.fillText('🔮', px + tw/2, py - th*0.02);
+    drawEmoji('🔮', px + tw/2, py - th*0.02, Math.round(tw*0.34));
   }
 
   // Town buildings + NPCs (only present in the safe hub). Buildings first so the
@@ -4765,14 +4821,14 @@ function draw() {
     } else if (stunned) {
       ctx.filter = 'grayscale(1) sepia(1) saturate(7) hue-rotate(-15deg) brightness(1.25)';
     }
-    ctx.fillText(e.type, px + tw/2, py + th/2 + th*0.04);
+    drawEmoji(e.type, px + tw/2, py + th/2 + th*0.04, Math.round(tw * (e.isBoss ? 0.95 : (e.isElite ? 0.86 : 0.78))));
     ctx.filter = 'none';
 
     // Affix badge, goblin loot tag, or bounty marker, floated above.
     if (e.questTarget || e.affixIcon || e.isGoblin) {
       ctx.font = `${Math.round(tw * 0.34)}px serif`;
       ctx.textAlign = 'center';
-      ctx.fillText(e.questTarget ? '🎯' : (e.isGoblin ? '💰' : e.affixIcon), px + tw/2, py - th*0.02);
+      drawEmoji(e.questTarget ? '🎯' : (e.isGoblin ? '💰' : e.affixIcon), px + tw/2, py - th*0.02, Math.round(tw * 0.34));
     }
 
     // HP bar
@@ -4801,7 +4857,7 @@ function draw() {
       ctx.font = `${Math.round(tw * 0.72)}px serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(emoji, dx0 + tw/2, dy0 + th/2 + th*0.04);
+      drawEmoji(emoji, dx0 + tw/2, dy0 + th/2 + th*0.04, Math.round(tw * 0.72));
     };
     const GREEN = '80,220,120', GOLD = '255,210,80';
     if (quest.npc) {
@@ -4838,7 +4894,7 @@ function draw() {
     ctx.font = `${Math.round(tw * 0.28)}px serif`;
     ctx.textAlign = 'center';
     pEffects.forEach((s, i) => {
-      ctx.fillText(s.effect === 'poison' ? '🧪' : '⚡', px + tw * 0.15 + i * tw * 0.25, py + th * 0.92);
+      drawEmoji(s.effect === 'poison' ? '🧪' : '⚡', px + tw * 0.15 + i * tw * 0.25, py + th * 0.92, Math.round(tw * 0.28));
     });
   }
 
@@ -6883,6 +6939,9 @@ updateSoundButton();
 syncWebPanel();
 requestAnimationFrame(() => { resizeCanvas(); draw(); });
 window.addEventListener('load', () => { syncWebPanel(); resizeCanvas(); draw(); });
+// Once the emoji/icon fonts have finished loading, repaint so any glyphs that
+// weren't yet resident on the first frame bake into the sprite cache and show.
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => draw());
 
 // Gentle animation loop: only repaints while a merchant is on the floor,
 // so their robe glow pulses. Idle otherwise to save battery.
