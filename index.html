@@ -271,38 +271,31 @@
   /* ── COSMETICS / APPEARANCE ── */
   .cos-head { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 8px; }
   .cos-title { font-size: 11px; color: #c9a84a; letter-spacing: 1px; margin-bottom: 2px; }
-  .cos-sub { font-size: 9px; color: #555; margin-bottom: 6px; }
-  .cos-row {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px;
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    margin-bottom: 4px;
-    font-size: 10px;
-  }
-  .cos-preview { width: 26px; text-align: center; font-size: 18px; line-height: 1; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.6)); }
-  .cos-info { flex: 1; min-width: 0; }
-  .cos-slot-label { color: #888; }
-  .cos-source { font-size: 9px; color: #666; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .cos-btn {
+  .cos-sub { font-size: 9px; color: #555; margin-bottom: 8px; line-height: 1.4; }
+  .cos-block { margin-bottom: 8px; }
+  .cos-blk-head { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+  .cos-preview { width: 24px; text-align: center; font-size: 18px; line-height: 1; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.6)); }
+  .cos-slot-label { color: #999; font-size: 10px; }
+  .cos-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+  .cos-chip {
     flex-shrink: 0;
-    border: none;
-    border-radius: 4px;
-    background: #3a3a5a;
-    color: #fff;
-    font-family: 'Courier New', monospace;
-    font-weight: bold;
-    font-size: 10px;
-    padding: 6px 8px;
+    min-width: 30px;
+    height: 30px;
+    padding: 0 4px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    background: #16161f;
+    color: #ddd;
+    font-size: 17px;
+    line-height: 1;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation;
   }
-  .cos-btn:active { background: #55557a; }
-  .cos-btn.reset { background: #4a2e2e; font-size: 12px; width: 28px; padding: 6px 0; }
-  .cos-btn.reset:active { background: var(--hp); }
+  .cos-chip.gear { font-family: 'Courier New', monospace; font-size: 9px; font-weight: bold; letter-spacing: 1px; color: #aaa; }
+  .cos-chip:active { background: #2a2a3c; }
+  .cos-chip.sel { border-color: #c9a84a; background: #2c2616; box-shadow: 0 0 6px rgba(201,168,74,0.5); }
+  .cos-empty { font-size: 9px; color: #555; font-style: italic; padding: 2px 0; }
 
   /* Inline action buttons on loot/gear rows */
   .row-btn {
@@ -1536,32 +1529,105 @@ const THEMES = [
 ];
 function currentTheme() { return THEMES[(dungeonLevel - 1) % THEMES.length]; }
 
-// Layer the hero's worn gear over the base sprite. Chest sits on the torso, head
-// caps the top, and the weapon is held off to the side — each only drawn when the
-// matching slot has gear equipped or a cosmetic look chosen.
-function drawWornGear(px, py, tw, th, scale) {
-  const cx = px + tw/2, cy = py + th/2;
+// Rounded-rect helper (older canvases lack ctx.roundRect).
+function roundRectPath(x, y, w, h, r) {
+  if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); return; }
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+// Draw the hero as a small composed adventurer instead of a single emoji, so the
+// equipped (or cosmetic) head / chest / weapon visibly change the sprite. Each
+// gear piece sits in its own clear zone: a helm on the head, armor on the torso,
+// a weapon held to the side. Empty slots fall back to plain hair / tunic / hand.
+function drawHeroSprite(px, py, tw, th, scale) {
+  const cx = px + tw/2;
+  const headCY  = py + th*0.30, headR = tw*0.155;
+  const torsoTop = py + th*0.44, torsoW = tw*0.42, torsoH = th*0.30;
+  const torsoX = cx - torsoW/2;
+
+  const headIcon  = visualIcon('head');
+  const chestIcon = visualIcon('chest');
+  const weaponIcon = visualIcon('weapon');
+  const chestTier = equipped.chest ? (TIERS[equipped.chest.tier]?.color || '#6d5a44') : null;
+
+  ctx.save();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.shadowColor = 'rgba(0,0,0,0.6)';
-  ctx.shadowBlur = 3 * scale;
+  ctx.lineJoin = 'round';
 
-  const chest = visualIcon('chest');
-  if (chest) {
-    ctx.font = `${Math.round(tw * 0.4)}px serif`;
-    ctx.fillText(chest, cx, cy + th*0.26);
+  // ── legs + boots ──
+  const legW = torsoW*0.30, legY = torsoTop + torsoH - th*0.01, legH = th*0.13;
+  ctx.fillStyle = '#3f3550';
+  ctx.fillRect(cx - torsoW*0.30, legY, legW, legH);
+  ctx.fillRect(cx + torsoW*0.00, legY, legW, legH);
+  ctx.fillStyle = '#241d30';
+  ctx.fillRect(cx - torsoW*0.32, legY + legH, legW*1.1, th*0.04);
+  ctx.fillRect(cx - torsoW*0.02, legY + legH, legW*1.1, th*0.04);
+
+  // ── torso (armor if a chest piece is worn, plain tunic otherwise) ──
+  ctx.fillStyle = chestTier || '#6d5a44';
+  roundRectPath(torsoX, torsoTop, torsoW, torsoH, Math.max(2, 4*scale));
+  ctx.fill();
+  ctx.lineWidth = Math.max(1, 1.4*scale);
+  ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+  ctx.stroke();
+
+  // ── arms ──
+  ctx.fillStyle = '#e8b48c';
+  ctx.fillRect(torsoX - tw*0.06, torsoTop + torsoH*0.10, tw*0.07, torsoH*0.55);
+  ctx.fillRect(torsoX + torsoW - tw*0.01, torsoTop + torsoH*0.10, tw*0.07, torsoH*0.55);
+
+  // ── head (skin) ──
+  ctx.fillStyle = '#e8b48c';
+  ctx.beginPath();
+  ctx.arc(cx, headCY, headR, 0, Math.PI*2);
+  ctx.fill();
+  ctx.lineWidth = Math.max(1, 1.2*scale);
+  ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+  ctx.stroke();
+
+  // Default hair only when no headgear hides it.
+  if (!headIcon) {
+    ctx.fillStyle = '#5a3a22';
+    ctx.beginPath();
+    ctx.arc(cx, headCY - headR*0.25, headR, Math.PI*1.05, Math.PI*1.95);
+    ctx.fill();
   }
-  const head = visualIcon('head');
-  if (head) {
-    ctx.font = `${Math.round(tw * 0.42)}px serif`;
-    ctx.fillText(head, cx, py + th*0.16);
+  // Simple eyes for a bit of character.
+  ctx.fillStyle = '#2a1d14';
+  const eY = headCY + headR*0.08, eDx = headR*0.38, eR = Math.max(1, headR*0.16);
+  ctx.beginPath(); ctx.arc(cx - eDx, eY, eR, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx + eDx, eY, eR, 0, Math.PI*2); ctx.fill();
+
+  // ── worn gear emoji, each in its zone ──
+  ctx.shadowColor = 'rgba(0,0,0,0.55)';
+  ctx.shadowBlur = 2*scale;
+
+  if (chestIcon) {
+    ctx.font = `${Math.round(tw*0.34)}px serif`;
+    ctx.fillText(chestIcon, cx, torsoTop + torsoH*0.46);
   }
-  const weapon = visualIcon('weapon');
-  if (weapon) {
-    ctx.font = `${Math.round(tw * 0.46)}px serif`;
-    ctx.fillText(weapon, px + tw*0.78, cy + th*0.04);
+  if (headIcon) {
+    // Sit the helm on the crown of the head, overlapping the top slightly.
+    ctx.font = `${Math.round(tw*0.42)}px serif`;
+    ctx.fillText(headIcon, cx, headCY - headR*0.62);
   }
-  ctx.shadowBlur = 0;
+  if (weaponIcon) {
+    // Held in the right hand, tilted so it reads as a wielded weapon.
+    ctx.save();
+    ctx.translate(torsoX + torsoW + tw*0.10, torsoTop + torsoH*0.42);
+    ctx.rotate(-0.5);
+    ctx.font = `${Math.round(tw*0.46)}px serif`;
+    ctx.fillText(weaponIcon, 0, 0);
+    ctx.restore();
+  }
+  ctx.restore();
 }
 
 function draw() {
@@ -1879,17 +1945,9 @@ function draw() {
   ctx.beginPath();
   ctx.arc(px + tw/2, py + th/2, tw*0.42, 0, Math.PI*2);
   ctx.fill();
-  ctx.shadowColor = '#ffffaa';
-  ctx.shadowBlur = 12 * scale;
-  ctx.font = `${Math.round(tw * 0.84)}px serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(HERO, px + tw/2, py + th/2 + th*0.04);
-  ctx.shadowBlur = 0;
-
-  // ── WORN GEAR ── draw the hero's equipped (or cosmetic) head/chest/weapon
-  // right on top of the sprite so the character visibly wears its loot.
-  drawWornGear(px, py, tw, th, scale);
+  // Composite the hero as a little adventurer that visibly wears its equipped
+  // (or cosmetic) head / chest / weapon — replacing the old single emoji.
+  drawHeroSprite(px, py, tw, th, scale);
 
   // Player status effect icons
   const pEffects = statusEffects.filter(s => s.target === 'player');
@@ -2701,62 +2759,44 @@ const COS_LABELS = { head: '🪖 Head', chest: '🛡 Chest', weapon: '⚔ Weapon
 function renderCosmetics() {
   if (!player.cosmetics) player.cosmetics = { head:null, chest:null, weapon:null };
   if (!player.wardrobe) player.wardrobe = { head:[], chest:[], weapon:[] };
-  const rows = VISUAL_SLOTS.map(slot => {
+  const blocks = VISUAL_SLOTS.map(slot => {
     const looks = player.wardrobe[slot] || [];
-    const override = player.cosmetics[slot];
+    const override = player.cosmetics[slot] || null;
     const shown = visualIcon(slot);
-    // Describe where the current look comes from.
-    let source;
-    if (override) {
-      const w = looks.find(l => l.icon === override);
-      source = `Cosmetic: ${w ? w.name : 'custom look'}`;
-    } else if (equipped[slot]) {
-      source = `Matches equipped`;
-    } else {
-      source = `Nothing worn`;
-    }
-    const canChange = looks.length > 0;
-    return `<div class="cos-row">
-      <span class="cos-preview">${shown || '—'}</span>
-      <div class="cos-info">
-        <div class="cos-slot-label">${COS_LABELS[slot]}</div>
-        <div class="cos-source">${source}</div>
+    // "Match gear" chip (clears any override) is always offered first.
+    let chips = `<button class="cos-chip gear ${override ? '' : 'sel'}"
+        title="Match your equipped gear" onclick="pickCosmetic('${slot}','')">GEAR</button>`;
+    // One tappable chip per discovered look.
+    chips += looks.map(l =>
+      `<button class="cos-chip ${override === l.icon ? 'sel' : ''}"
+         title="${(l.name || '').replace(/"/g,'')}" onclick="pickCosmetic('${slot}','${l.icon}')">${l.icon}</button>`
+    ).join('');
+    const empty = looks.length ? '' :
+      `<div class="cos-empty">Find ${COS_LABELS[slot].replace(/^\S+\s/, '').toLowerCase()} loot to unlock looks.</div>`;
+    return `<div class="cos-block">
+      <div class="cos-blk-head">
+        <span class="cos-preview">${shown || '—'}</span>
+        <span class="cos-slot-label">${COS_LABELS[slot]}</span>
       </div>
-      <button class="cos-btn" ${canChange ? '' : 'disabled style="opacity:.4"'} onclick="cycleCosmetic('${slot}')">LOOK</button>
-      ${override ? `<button class="cos-btn reset" title="Match equipped" onclick="resetCosmetic('${slot}')">✕</button>` : ''}
+      <div class="cos-chips">${chips}</div>
+      ${empty}
     </div>`;
   }).join('');
   return `<div class="cos-head">
     <div class="cos-title">👁 APPEARANCE</div>
-    <div class="cos-sub">Wear the look of any loot you've found. Tap LOOK to cycle styles.</div>
-    ${rows}
+    <div class="cos-sub">Tap a look to wear it — your sprite changes, but your equipped gear and stats don't.</div>
+    ${blocks}
   </div>`;
 }
 
-// Cycle a slot's look through: match-equipped → each discovered wardrobe look → back.
-function cycleCosmetic(slot) {
-  if (!player.wardrobe) return;
-  const looks = player.wardrobe[slot] || [];
-  if (!looks.length) return;
-  const options = [null, ...looks.map(l => l.icon)];
-  const cur = player.cosmetics[slot] || null;
-  let idx = options.findIndex(o => o === cur);
-  if (idx < 0) idx = 0;
-  const next = options[(idx + 1) % options.length];
-  player.cosmetics[slot] = next;
-  const label = next ? (looks.find(l => l.icon === next)?.name || 'new look') : 'matching your gear';
-  log(`Appearance — ${COS_LABELS[slot].replace(/^\S+\s/, '')} now ${next ? next + ' ' + label : label}.`);
+// Wear a chosen look for a visual slot. An empty icon clears the override so the
+// slot mirrors equipped gear again.
+function pickCosmetic(slot, icon) {
+  if (!VISUAL_SLOTS.includes(slot)) return;
+  if (!player.cosmetics) player.cosmetics = { head:null, chest:null, weapon:null };
+  player.cosmetics[slot] = icon || null;
   renderPanel();
-  draw();
-  saveGame();
-}
-
-// Clear a cosmetic override so the slot mirrors equipped gear again.
-function resetCosmetic(slot) {
-  if (!player.cosmetics) return;
-  player.cosmetics[slot] = null;
-  renderPanel();
-  draw();
+  draw();         // restyle the sprite immediately
   saveGame();
 }
 
