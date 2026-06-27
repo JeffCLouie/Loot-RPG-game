@@ -1018,73 +1018,171 @@
     .bag-btn { display: none; }
   }
 
-  /* ── MOBILE LANDSCAPE LAYOUT ──
-     On a touch device held sideways the vertical stack wastes the width and
-     squashes the map, so mirror the roomy web layout instead: the log becomes
-     a full-height LEFT column, the largest possible SQUARE map fills the
-     middle, and the controls move into a RIGHT-hand column rather than a
-     bottom bar. Unlike the web layout (which leans on a keyboard) the move
-     d-pad is KEPT here so the game stays fully thumb-playable. The loot drawer
-     remains an overlay toggled by BAG — a phone has no room to spare for a
-     permanent panel column. Gated to pointer:coarse so it never touches the
-     desktop/web layout (which requires pointer:fine). */
+  /* ── FORCE PORTRAIT ON MOBILE ──
+     Landscape on a phone squashes the map and scatters the controls, so the
+     game is portrait-only on touch devices. A held-sideways phone gets a
+     full-screen "rotate" prompt that covers everything (including the class
+     picker) until it's turned upright. True orientation locking isn't
+     available to web pages on iOS, so this prompt is the reliable mechanism. */
+  #rotate-overlay { display: none; }
   @media (orientation: landscape) and (pointer: coarse) {
-    #game-wrap {
-      display: grid;
-      /* Log column on the left, map takes the remaining middle, controls
-         size to their content on the right. */
-      grid-template-columns: clamp(110px, 20vw, 240px) 1fr auto;
-      grid-template-rows: 1fr;
-    }
-    /* Log: full-height left column instead of a short bottom strip. */
-    #bottom-row {
-      grid-column: 1;
-      grid-row: 1;
-      flex: none;
-      max-height: none;
-      min-height: 0;
-      border-top: none;
-      border-right: 1px solid var(--border);
-    }
-    /* Map: the largest square that fits its cell, centered. */
-    canvas {
-      grid-column: 2;
-      grid-row: 1;
-      width: auto;
-      height: 100%;
-      max-width: 100%;
-      max-height: 100%;
-      aspect-ratio: 1 / 1;
-      justify-self: center;
-      align-self: center;
-      flex: none;
-    }
-    /* Controls: a vertical right-hand column (d-pad on top, actions below)
-       instead of the full-width bottom bar. */
-    #control-bar {
-      grid-column: 3;
-      grid-row: 1;
+    #rotate-overlay {
+      display: flex;
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 8px;
-      border-top: none;
-      border-left: 2px solid var(--frame);
-      box-shadow: inset 1px 0 0 rgba(232,194,103,0.2), -2px 0 6px rgba(0,0,0,0.5);
-      overflow-y: auto;
+      gap: 14px;
+      padding: 24px;
+      text-align: center;
+      background: radial-gradient(circle at 50% 40%, #221a3a 0%, #140f26 70%, #0b0814 100%);
+      color: var(--text);
     }
-    /* Slightly smaller d-pad so it plus the action buttons fit a short screen. */
-    #dpad {
-      grid-template-columns: repeat(3, 46px);
-      grid-template-rows: repeat(3, 46px);
+    #rotate-overlay .rot-icon { font-size: 54px; animation: rotNudge 2s ease-in-out infinite; }
+    #rotate-overlay .rot-title { font-size: 16px; color: var(--gold); letter-spacing: 1px; }
+    #rotate-overlay .rot-sub { font-size: 12px; color: #9a90b8; max-width: 320px; line-height: 1.5; }
+  }
+  @keyframes rotNudge {
+    0%, 60%, 100% { transform: rotate(0deg); }
+    80% { transform: rotate(-90deg); }
+  }
+
+  /* ── MOBILE PORTRAIT LAYOUT ──
+     A phone held upright. The old design crammed a 3×3 d-pad plus a tall column
+     of action buttons into the bottom, and the loot/stats drawer ran the full
+     height of the play area so its lower rows hid behind that control block.
+     The redesign: movement is a small translucent d-pad floated over the bottom
+     of the map (see #touch-dpad), and the bottom becomes a single fixed-height
+     navigation bar of evenly-spaced buttons — a normal mobile app tab bar.
+     The drawer stops ABOVE that bar so
+     nothing it shows (bag rows, HERO attributes) is ever covered, and it opens
+     full-width over the dungeon, leaving only the bar visible.
+     Gated to portrait + coarse so the web and landscape layouts are untouched. */
+  @media (orientation: portrait) and (pointer: coarse) {
+    /* Reserve room for the iOS home indicator / Android gesture bar. */
+    :root { --bar-h: calc(58px + env(safe-area-inset-bottom)); }
+
+    /* Bottom navigation bar: one full-width row of equal buttons. */
+    #control-bar {
+      height: var(--bar-h);
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      padding: 4px 6px;
+      padding-bottom: calc(4px + env(safe-area-inset-bottom));
     }
-    /* Action buttons pack into a compact 3-wide grid under the d-pad. */
     #action-buttons {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 6px;
+      flex: 1;
+      flex-direction: row;
+      align-items: stretch;
+      justify-content: space-around;
+      gap: 5px;
+      height: 100%;
     }
-    .action-btn { width: 46px; flex: none; }
+    .action-btn {
+      flex: 1 1 0;
+      width: auto;
+      min-width: 0;
+      max-width: 96px;
+      height: 100%;
+      gap: 2px;
+    }
+    .action-icon { font-size: 21px; }
+    .action-label { font-size: 9px; }
+
+    /* Drawer: full-width sheet over the dungeon, stopping above the nav bar so
+       its bottom rows stay readable instead of slipping behind the buttons. */
+    #side-panel {
+      left: 0;
+      right: auto;
+      width: 100%;
+      bottom: var(--bar-h);
+      border-left: none;
+      box-shadow: 0 -4px 16px rgba(0,0,0,0.6);
+    }
+  }
+
+  /* The old control-bar d-pad is dropped on touch; movement is the floating
+     #touch-dpad instead. A narrow desktop window keeps the old one as a mouse
+     fallback (alongside the keyboard). */
+  @media (pointer: coarse) { #dpad { display: none; } }
+
+  /* ── FLOATING MOVEMENT PAD (touch) ──
+     A small, mostly-transparent d-pad pinned over the bottom of the map by JS
+     (positionTouchDpad keeps it on the canvas's bottom-centre). Direction is
+     read from the pad itself — up/down/left/right around a central USE button —
+     so it's obvious which way you're heading, unlike tapping relative to the
+     hero. Reuses the .dpad-btn / data-dir wiring, so no extra movement JS.
+     z-index sits above the map but below the drawer / menus, which simply
+     cover it when open. Shown only on touch; hidden on the keyboard web layout. */
+  #touch-dpad {
+    display: none;
+    position: fixed;
+    left: 50%;
+    bottom: 200px;
+    transform: translateX(-50%);
+    grid-template-columns: repeat(3, 46px);
+    grid-template-rows: repeat(3, 46px);
+    gap: 5px;
+    z-index: 50;
+    touch-action: manipulation;
+  }
+  @media (pointer: coarse) { #touch-dpad { display: grid; } }
+  /* Cross layout: arrows on the edges, USE in the middle, corners empty. */
+  #touch-dpad .dpad-btn[data-dir="up"]     { grid-area: 1 / 2; }
+  #touch-dpad .dpad-btn[data-dir="left"]   { grid-area: 2 / 1; }
+  #touch-dpad .dpad-btn[data-dir="pickup"] { grid-area: 2 / 2; }
+  #touch-dpad .dpad-btn[data-dir="right"]  { grid-area: 2 / 3; }
+  #touch-dpad .dpad-btn[data-dir="down"]   { grid-area: 3 / 2; }
+  #touch-dpad .dpad-btn {
+    background: rgba(20, 16, 32, 0.34);
+    border: 1px solid rgba(232, 194, 103, 0.45);
+    border-radius: 11px;
+    color: rgba(255, 246, 224, 0.78);
+    font-size: 20px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(1px);
+    -webkit-backdrop-filter: blur(1px);
+  }
+  #touch-dpad .dpad-btn:active {
+    background: rgba(232, 194, 103, 0.5);
+    color: #fff;
+  }
+  #touch-dpad .dpad-center {
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: rgba(232, 194, 103, 0.85);
+    border-color: rgba(232, 194, 103, 0.6);
+  }
+
+  /* One-time hint that teaches the movement pad after the d-pad's removal.
+     Floats just above the bottom bar and fades itself out. */
+  #move-hint {
+    position: fixed;
+    left: 50%;
+    bottom: calc(var(--bar-h) + 14px);
+    transform: translateX(-50%);
+    z-index: 215;
+    max-width: 86vw;
+    padding: 7px 13px;
+    border-radius: 16px;
+    background: rgba(20,16,32,0.92);
+    border: 1px solid var(--frame);
+    color: var(--text);
+    font-size: 11px;
+    text-align: center;
+    line-height: 1.4;
+    pointer-events: none;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.6);
+    animation: moveHintFade 5.5s ease-in-out forwards;
+  }
+  @keyframes moveHintFade {
+    0%   { opacity: 0; transform: translateX(-50%) translateY(8px); }
+    10%  { opacity: 1; transform: translateX(-50%) translateY(0); }
+    80%  { opacity: 1; transform: translateX(-50%) translateY(0); }
+    100% { opacity: 0; transform: translateX(-50%) translateY(8px); }
   }
 
   /* ── MOBILE PORTRAIT LAYOUT ──
@@ -1271,6 +1369,16 @@
     </div>
   </div>
 
+  <!-- Floating movement pad (touch only). Pinned over the bottom of the map by
+       positionTouchDpad(); reuses the .dpad-btn / data-dir movement wiring. -->
+  <div id="touch-dpad">
+    <button class="dpad-btn" data-dir="up" aria-label="Move up">▲</button>
+    <button class="dpad-btn" data-dir="left" aria-label="Move left">◀</button>
+    <button class="dpad-btn dpad-center" data-dir="pickup" aria-label="Use / pick up">USE</button>
+    <button class="dpad-btn" data-dir="right" aria-label="Move right">▶</button>
+    <button class="dpad-btn" data-dir="down" aria-label="Move down">▼</button>
+  </div>
+
   <div id="side-panel" class="collapsed">
     <div class="panel-tab">
       <button class="tab-btn active" id="tab-inv" onclick="switchTab('inv')">LOOT</button>
@@ -1330,6 +1438,13 @@
 
 <div id="tooltip"></div>
 <div id="hovertip"></div>
+
+<!-- Shown only on a touch device held in landscape — the game is portrait-only. -->
+<div id="rotate-overlay">
+  <div class="rot-icon">📱</div>
+  <div class="rot-title">Please rotate your device</div>
+  <div class="rot-sub">Dungeon Loot plays best upright — turn your phone back to portrait to keep delving.</div>
+</div>
 
 <div id="screen-flash"></div>
 
@@ -2859,14 +2974,14 @@ function togglePanel() {
   if (panelOpen) renderPanel();
 }
 
-// ── TAP / SWIPE TO MOVE ──
-// The on-screen d-pad is gone on touch devices; the map itself is the control.
-// A short tap steps one tile toward where you tapped (tap your own tile to USE,
-// the way the d-pad's centre button did); a swipe steps in the swiped direction.
-// If the bag drawer is open, the first tap just closes it (uncovering the
-// dungeon) instead of moving — matching the old tap-to-dismiss behaviour.
+// ── MAP GESTURES ──
+// Movement on touch is driven by the floating #touch-dpad (whose direction is
+// unambiguous), not by tapping the map. The map still accepts two gestures: a
+// swipe steps in the swiped direction (a quick alternative to the pad), and any
+// tap/swipe closes the bag drawer if it's open. The web layout is unchanged —
+// mouse-and-keyboard driven, so map clicks do nothing.
 let gestureStart = null;
-const SWIPE_PX = 24; // travel beyond this counts as a swipe, not a tap
+const SWIPE_PX = 24; // travel beyond this counts as a swipe, not a stray tap
 
 canvas.addEventListener('pointerdown', e => {
   gestureStart = { x: e.clientX, y: e.clientY };
@@ -2878,32 +2993,32 @@ canvas.addEventListener('pointerup', e => {
   const dy = e.clientY - gestureStart.y;
   gestureStart = null;
 
-  // Tap / swipe controls are a touch-only replacement for the d-pad. On the
-  // web layout the map is mouse-and-keyboard driven exactly as before, so a
-  // click on it does nothing here.
   if (isWebLayout()) return;
 
   // An open drawer eats the gesture: close it to reveal the dungeon.
   if (panelOpen) { togglePanel(); return; }
 
+  // Swipe → one step along the dominant axis. A plain tap does nothing (use the
+  // pad), so accidental taps never send the hero wandering off.
   const adx = Math.abs(dx), ady = Math.abs(dy);
   if (adx > SWIPE_PX || ady > SWIPE_PX) {
-    // Swipe → one step along the dominant axis.
     if (adx > ady) move(Math.sign(dx), 0); else move(0, Math.sign(dy));
-    return;
   }
-
-  // Tap → figure out which tile was touched and step toward it.
-  if (!lastCam) return;
-  const rect = canvas.getBoundingClientRect();
-  const px = e.clientX - rect.left, py = e.clientY - rect.top;
-  const tileX = Math.floor((px + lastCam.camX) / lastCam.tw);
-  const tileY = Math.floor((py + lastCam.camY) / lastCam.th);
-  const gdx = tileX - player.x, gdy = tileY - player.y;
-  if (gdx === 0 && gdy === 0) { pickup(); return; }   // tapped self → USE
-  if (Math.abs(gdx) >= Math.abs(gdy)) move(Math.sign(gdx), 0);
-  else move(0, Math.sign(gdy));
 });
+
+// Keep the floating movement pad pinned to the bottom-centre of the map. A
+// ResizeObserver re-runs it whenever the canvas changes size (rotation, the
+// skill bar appearing, the address bar collapsing, etc.).
+const touchDpad = document.getElementById('touch-dpad');
+function positionTouchDpad() {
+  if (!touchDpad) return;
+  const r = canvas.getBoundingClientRect();
+  if (!r.width) return;
+  touchDpad.style.left = (r.left + r.width / 2) + 'px';
+  touchDpad.style.bottom = Math.max(10, window.innerHeight - r.bottom + 12) + 'px';
+}
+if (window.ResizeObserver) new ResizeObserver(positionTouchDpad).observe(canvas);
+window.addEventListener('resize', positionTouchDpad);
 
 // Keep the drawer populated and open whenever we're in (or switch into) the
 // web layout.
@@ -8934,12 +9049,12 @@ if (hadSave) {
   if (inTown) log('You are in town. Pick a service from the menu, or take the 🌀 Dungeon Gate back into the dungeon.');
   else log(`Resuming on dungeon level ${dungeonLevel}. Your gear is intact.`);
 } else {
-  log('Welcome to the dungeon. Tap, swipe, or use arrow keys to move and explore.', 'important');
+  log('Welcome to the dungeon. Use the on-screen pad, a swipe, or arrow keys to move.', 'important');
   log('🔒 Clear a floor of its foes to unseal the ▼ stairs, then descend.', 'important');
   log('⚠️ The deep scales faster than you can — grind lower floors from 🏰 TOWN when you hit a wall.');
 }
 log('Progress auto-saves automatically as you play.');
-log('Open 🎒 BAG to view your loot; on mobile, tap your hero to grab items.');
+log('Open 🎒 BAG to view your loot; press the pad\'s USE button to grab items.');
 log(`Tap the ❤️ flask to drink a ${logPotion('Health Potion')} when you're hurt. Enemies hit hard!`);
 log('⌨️ Keys: Q drink potion · E mana · R class skill · T town · B open bag · Space/F use.');
 log('⚡ Your class grants a special skill — tap the ⚡ button (or press R) to spend mana on it.');
@@ -8960,20 +9075,19 @@ updateSoundButton();
 // Redraw once layout has settled so the camera fits the real canvas size.
 // On the web layout, also open + populate the permanent loot drawer.
 syncWebPanel();
-requestAnimationFrame(() => { resizeCanvas(); draw(); });
+requestAnimationFrame(() => { resizeCanvas(); positionTouchDpad(); draw(); });
 
-// Teach the new touch controls once per load (the d-pad that used to advertise
-// them is gone). Skipped on the keyboard-driven web layout.
+// Teach the controls once per load. Skipped on the keyboard-driven web layout.
 function showMoveHint() {
   if (isWebLayout() || document.getElementById('move-hint')) return;
   const hint = document.createElement('div');
   hint.id = 'move-hint';
-  hint.innerHTML = '👆 Tap or swipe the map to move<br>· tap yourself to grab loot ·';
+  hint.innerHTML = '👆 Use the pad to move<br>· USE grabs loot · swipe also moves ·';
   document.body.appendChild(hint);
   setTimeout(() => hint.remove(), 5600);
 }
 requestAnimationFrame(showMoveHint);
-window.addEventListener('load', () => { syncWebPanel(); resizeCanvas(); draw(); });
+window.addEventListener('load', () => { syncWebPanel(); resizeCanvas(); positionTouchDpad(); draw(); });
 // Once the emoji/icon fonts have finished loading, repaint so any glyphs that
 // weren't yet resident on the first frame bake into the sprite cache and show.
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => draw());
