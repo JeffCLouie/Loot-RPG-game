@@ -812,6 +812,75 @@
     #dpad { display: none; }
     .bag-btn { display: none; }
   }
+
+  /* ── MOBILE LANDSCAPE LAYOUT ──
+     On a touch device held sideways the vertical stack wastes the width and
+     squashes the map, so mirror the roomy web layout instead: the log becomes
+     a full-height LEFT column, the largest possible SQUARE map fills the
+     middle, and the controls move into a RIGHT-hand column rather than a
+     bottom bar. Unlike the web layout (which leans on a keyboard) the move
+     d-pad is KEPT here so the game stays fully thumb-playable. The loot drawer
+     remains an overlay toggled by BAG — a phone has no room to spare for a
+     permanent panel column. Gated to pointer:coarse so it never touches the
+     desktop/web layout (which requires pointer:fine). */
+  @media (orientation: landscape) and (pointer: coarse) {
+    #game-wrap {
+      display: grid;
+      /* Log column on the left, map takes the remaining middle, controls
+         size to their content on the right. */
+      grid-template-columns: clamp(110px, 20vw, 240px) 1fr auto;
+      grid-template-rows: 1fr;
+    }
+    /* Log: full-height left column instead of a short bottom strip. */
+    #bottom-row {
+      grid-column: 1;
+      grid-row: 1;
+      flex: none;
+      max-height: none;
+      min-height: 0;
+      border-top: none;
+      border-right: 1px solid var(--border);
+    }
+    /* Map: the largest square that fits its cell, centered. */
+    canvas {
+      grid-column: 2;
+      grid-row: 1;
+      width: auto;
+      height: 100%;
+      max-width: 100%;
+      max-height: 100%;
+      aspect-ratio: 1 / 1;
+      justify-self: center;
+      align-self: center;
+      flex: none;
+    }
+    /* Controls: a vertical right-hand column (d-pad on top, actions below)
+       instead of the full-width bottom bar. */
+    #control-bar {
+      grid-column: 3;
+      grid-row: 1;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      border-top: none;
+      border-left: 2px solid var(--frame);
+      box-shadow: inset 1px 0 0 rgba(232,194,103,0.2), -2px 0 6px rgba(0,0,0,0.5);
+      overflow-y: auto;
+    }
+    /* Slightly smaller d-pad so it plus the action buttons fit a short screen. */
+    #dpad {
+      grid-template-columns: repeat(3, 46px);
+      grid-template-rows: repeat(3, 46px);
+    }
+    /* Action buttons pack into a compact 3-wide grid under the d-pad. */
+    #action-buttons {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+    }
+    .action-btn { width: 46px; flex: none; }
+  }
 </style>
 </head>
 <body>
