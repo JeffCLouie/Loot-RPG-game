@@ -4973,20 +4973,24 @@ function summonMinions(boss, n) {
 
 function getEnemyAt(x,y) { return enemies.find(e=>!e.dead&&e.x===x&&e.y===y)||null; }
 
-// Death now bumps you back to the PREVIOUS floor (freshly regenerated) at low
-// health, minus half your gold — a real setback, but you keep your level, gear,
-// and progress. Dying on floor 1 just rebuilds floor 1.
+// Death now drags you back to the safe TOWN, where the healer revives you at
+// full HP/MP with every ailment cleansed — but it still costs you half your
+// gold as the price of being patched up. You keep your level, gear, and floor
+// progress: the Dungeon Gate drops you back in on the floor where you fell.
 function handleDeath() {
   const lostGold = Math.floor(player.gold / 2);
   player.gold -= lostGold;
   statusEffects = statusEffects.filter(s => s.target !== 'player');
   sfx('death');
-  const prevFloor = Math.max(1, dungeonLevel - 1);
-  log(`💀 ${HERO} was slain! Lost ${lostGold}g and retreated to floor ${prevFloor}.`, 'important');
-  dungeonLevel = prevFloor;
-  generateMap();   // rebuilds the previous floor and places you at its entrance
-  player.hp = Math.max(1, Math.floor(player.maxHp * 0.4));
-  player.mp = Math.max(player.mp, Math.floor(player.maxMp * 0.4));
+  // Remember where you fell so the Dungeon Gate can return you there.
+  dungeonReturn = dungeonLevel;
+  closeShop(); closeMystic(); closeTown();
+  buildTown();     // clears inTown=false → true and rebuilds the safe plaza
+  // The healer's care: revived to full and cleansed of poison & curses.
+  player.hp = player.maxHp;
+  player.mp = player.maxMp;
+  log(`💀 ${HERO} was slain! The healer revived you in town — lost ${lostGold}g for the trouble.`, 'important');
+  log('⛑️ Fully restored. Take the 🌀 Dungeon Gate when you\'re ready to head back down.');
   updateBars();
   saveGame();
   draw();
