@@ -675,7 +675,7 @@
   .pact-buy-btn .pact-floors { display: block; font-size: 11px; }
   .pact-buy-btn .pact-cost { display: block; opacity: 0.85; font-size: 10px; }
 
-  /* ── TOWN MODAL ── (blacksmith / healer / trainer / dungeon gate) */
+  /* ── TOWN MODAL ── (craftsman / healer / trainer / enchanter / dungeon gate) */
   #town-overlay {
     position: fixed; inset: 0; background: rgba(0,0,0,0.7);
     display: none; align-items: center; justify-content: center;
@@ -776,6 +776,33 @@
   }
   .gate-floor:active { background: #5a4520; }
   .gate-floor.current { border-color: var(--gold); color: var(--gold); }
+
+  /* Crafting materials — the compact wallet strip (bag + town) and the
+     Craftsman's slot/base/rarity pickers. */
+  .mat-strip {
+    display: flex; flex-wrap: wrap; gap: 6px 10px; padding: 6px 8px; margin-bottom: 6px;
+    background: #1b160f; border: 1px solid var(--border); border-radius: 6px;
+    font-size: 12px; line-height: 1.2;
+  }
+  .mat-chip { font-weight: bold; white-space: nowrap; }
+  #town-mats { padding: 4px 12px 8px; border-bottom: 1px solid var(--border); }
+  #town-mats .mat-strip { margin-bottom: 0; }
+  .forge-label {
+    color: #ffe9b0; font-size: 11px; font-weight: bold; letter-spacing: 1px; margin: 9px 0 4px;
+  }
+  .forge-grid { display: grid; gap: 5px; }
+  .forge-slots, .forge-bases { grid-template-columns: repeat(2, 1fr); }
+  .forge-tiers { grid-template-columns: repeat(5, 1fr); }
+  .forge-opt {
+    padding: 7px 6px; border: 1px solid var(--border); border-radius: 5px;
+    background: #221a10; color: #e8d5a8; font-family: 'Courier New', monospace;
+    font-size: 11px; cursor: pointer; -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation; text-align: center;
+    display: flex; align-items: center; justify-content: center; gap: 4px;
+  }
+  .forge-opt:active { background: #2a2113; }
+  .forge-opt.on { border-color: var(--gold); color: var(--gold); background: #2a2113; }
+  .forge-tiers .forge-opt { flex-direction: column; gap: 1px; padding: 6px 2px; }
 
   /* Brief full-screen colour flash for crits, low HP, and big events. */
   #screen-flash {
@@ -1085,6 +1112,7 @@
       <button id="town-close" onclick="leaveTown()" title="Leave town for the dungeon">✕</button>
     </div>
     <div id="town-gold">Your gold: <span id="town-gold-count">0</span>g</div>
+    <div id="town-mats"></div>
     <div id="town-content"></div>
   </div>
 </div>
@@ -1394,6 +1422,58 @@ const TIERS = {
   legendary: { color: '#ff8800', weight: 1  },
   unique:    { color: '#ff2222', weight: 0.5},
 };
+
+// ── CRAFTING MATERIALS ──
+// A second class of currency beyond gold. Enemies drop these; each material has
+// its own role rather than being a generic resource: Scrap is the bulk crafting
+// material, Core the high-rarity crafting material, Glimmer the Enchanter's fuel,
+// and Chaos Orbs the premium "top end" material (legendary crafts & big reforges).
+// They live on player.materials and are saved with the player.
+const CRAFT_MATERIALS = {
+  scrap:   { emoji: '🔩', name: 'Scrap',     color: '#c0a06a', desc: 'Common. The bulk material for crafting any item.' },
+  core:    { emoji: '🔆', name: 'Core',      color: '#ffb24b', desc: 'Rare. Needed to craft higher-rarity items.' },
+  glimmer: { emoji: '✨', name: 'Glimmer',   color: '#7fd0ff', desc: 'The Enchanter\'s fuel for adding & rerolling modifiers.' },
+  chaos:   { emoji: '🌀', name: 'Chaos Orb', color: '#c87bff', desc: 'Very rare. Powers legendary crafts & big reforges.' },
+};
+const CRAFT_MAT_KEYS = Object.keys(CRAFT_MATERIALS);
+
+// A "cost" is a plain object like { gold, scrap, core, glimmer, chaos } (any
+// subset). These three helpers let the Forge and Enchanter share one currency
+// model for checking, spending, and labelling mixed gold+material prices.
+function canAfford(cost) {
+  if ((cost.gold || 0) > player.gold) return false;
+  const m = player.materials || {};
+  return CRAFT_MAT_KEYS.every(k => (cost[k] || 0) <= (m[k] || 0));
+}
+function spendCost(cost) {
+  if (cost.gold) player.gold -= cost.gold;
+  if (!player.materials) player.materials = freshMaterials();
+  for (const k of CRAFT_MAT_KEYS) if (cost[k]) player.materials[k] = Math.max(0, (player.materials[k] || 0) - cost[k]);
+}
+function costLabel(cost) {
+  const parts = [];
+  if (cost.gold) parts.push(`${cost.gold}g`);
+  for (const k of CRAFT_MAT_KEYS) if (cost[k]) parts.push(`${cost[k]}${CRAFT_MATERIALS[k].emoji}`);
+  return parts.join('  ');
+}
+function freshMaterials() { return { scrap: 0, core: 0, glimmer: 0, chaos: 0 }; }
+function gainMaterial(k, n) {
+  if (!player.materials) player.materials = freshMaterials();
+  player.materials[k] = (player.materials[k] || 0) + n;
+}
+// Compact inline display of all four material counts, used in the bag and town.
+function matStripHTML() {
+  const m = player.materials || {};
+  const chips = CRAFT_MAT_KEYS.map(k =>
+    `<span class="mat-chip" title="${CRAFT_MATERIALS[k].name} — ${CRAFT_MATERIALS[k].desc}" style="color:${CRAFT_MATERIALS[k].color}">${CRAFT_MATERIALS[k].emoji} ${m[k] || 0}</span>`
+  ).join('');
+  return `<div class="mat-strip">${chips}</div>`;
+}
+// Small badge marking player-forged gear so it always reads as crafted, on top
+// of its normal rarity colour.
+function craftedMark(item) {
+  return item && item.crafted ? ' <span style="color:#7fd0ff;font-size:9px">🔨</span>' : '';
+}
 
 const PREFIXES = ['Ancient','Cursed','Blazing','Frozen','Runic','Shadow','Divine','Storm','Iron','Blood','Soul','Void'];
 const SUFFIXES = ['of Power','of Doom','of the Fallen','of Light','of Ages','of Chaos','of the Ancients','of Fury'];
@@ -1918,7 +1998,10 @@ let player = { x: 5, y: 5, hp: 100, maxHp: 100, mp: 60, maxMp: 60, gold: 0, leve
   // Chosen cosmetic looks per visual slot (null = mirror equipped gear), plus the
   // wardrobe of every look the player has ever found.
   cosmetics: { head: null, chest: null, weapon: null },
-  wardrobe: { head: [], chest: [], weapon: [] } };
+  wardrobe: { head: [], chest: [], weapon: [] },
+  // Crafting materials — a second currency dropped by foes, spent at the
+  // Craftsman (Scrap/Core) and Enchanter (Glimmer), with Chaos Orbs for the top end.
+  materials: { scrap: 0, core: 0, glimmer: 0, chaos: 0 } };
 let inventory = [];
 // The town STASH — a safe vault, completely separate from your character. Gold
 // and gear kept here are never spent at merchants and never lost on death; the
@@ -3179,7 +3262,7 @@ function buildTown() {
   // `roof` the shingle colour. The Dungeon Gate is a stone archway, not a shop.
   townBuildings = [
     { x: 2,  y: 2,  w: 3, h: 2, kind: 'merchant', roof: '#7a4a8a', sign: '💰' },
-    { x: 8,  y: 2,  w: 3, h: 2, kind: 'smith',    roof: '#9a5a2a', sign: '⚒️' },
+    { x: 8,  y: 2,  w: 3, h: 2, kind: 'forge',    roof: '#9a5a2a', sign: '🔨' },
     { x: 14, y: 2,  w: 3, h: 2, kind: 'healer',   roof: '#b04545', sign: '⛑️' },
     { x: 2,  y: 10, w: 3, h: 2, kind: 'mystic',   roof: '#3a5a9a', sign: '🔮' },
     { x: 8,  y: 10, w: 3, h: 2, kind: 'trainer',  roof: '#3a7a4a', sign: '🎓' },
@@ -3199,7 +3282,7 @@ function buildTown() {
   // The townsfolk, each standing at their building's door (centre, one row below).
   const npcMeta = {
     merchant: { emoji: '🧙‍♂️', name: 'Merchant',     tag: '💰' },
-    smith:    { emoji: '⚒️',   name: 'Blacksmith',   tag: '🔧' },
+    forge:    { emoji: '🔨',   name: 'Craftsman',    tag: '🔨' },
     healer:   { emoji: '⛑️',   name: 'Healer',       tag: '❤️' },
     mystic:   { emoji: '🔮',   name: 'Mystic',       tag: '🔮' },
     trainer:  { emoji: '🎓',   name: 'Trainer',      tag: '✨' },
@@ -3240,7 +3323,7 @@ function openTownService(kind) {
     return;
   }
   if (kind === 'mystic')  { mystic = { x: 0, y: 0, town: true }; openMystic(); return; }
-  if (kind === 'smith')   { openSmith();   return; }
+  if (kind === 'forge')   { openForge();   return; }
   if (kind === 'healer')  { openHealer();  return; }
   if (kind === 'trainer') { openTrainer(); return; }
   if (kind === 'gambler') { openGambler(); return; }
@@ -3255,7 +3338,7 @@ function openTownService(kind) {
 // a ← back button to return here.
 const TOWN_MENU = [
   { kind: 'merchant',  icon: '💰', name: 'Merchant',    desc: 'Potions & fresh gear' },
-  { kind: 'smith',     icon: '⚒️', name: 'Blacksmith',  desc: 'Forge & upgrade gear' },
+  { kind: 'forge',     icon: '🔨', name: 'Craftsman',   desc: 'Forge blank gear from mats' },
   { kind: 'healer',    icon: '⛑️', name: 'Healer',      desc: 'Rest, cure & potions' },
   { kind: 'mystic',    icon: '🔮', name: 'Mystic',      desc: 'Forge a risky pact' },
   { kind: 'trainer',   icon: '🎓', name: 'Trainer',     desc: 'Respec & change class' },
@@ -3294,8 +3377,8 @@ function leaveTown() {
   enterDungeonAt(f);
 }
 
-// One reusable overlay backs the smith / healer / trainer / gate panels. Opening
-// any of them marks us as viewing a service so the ← back button appears.
+// One reusable overlay backs the craftsman / healer / trainer / gate panels.
+// Opening any of them marks us as viewing a service so the ← back button appears.
 function openTownModal(title) {
   townView = 'service';
   document.getElementById('town-title').textContent = title;
@@ -3308,61 +3391,131 @@ function closeTown() {
 }
 function setTownContent(html) {
   document.getElementById('town-gold-count').textContent = player.gold;
+  const mt = document.getElementById('town-mats');
+  if (mt) mt.innerHTML = matStripHTML();
   document.getElementById('town-content').innerHTML = html;
 }
 
-// ── BLACKSMITH — permanently upgrade equipped gear ──
-function upgradeCost(item) {
-  const lv = item.upgrades || 0;
-  return Math.round((40 + itemPower(item) * 6) * (1 + lv * 0.6));
+// ── CRAFTSMAN (Forge) — craft blank gear from scratch using materials ──
+// Replaces the old blacksmith upgrade station. You pick an item type, a base
+// look, and a rarity (how many empty modifier slots it carries), then pay
+// materials + gold to forge a *blank* piece geared to your current depth: just
+// its headline (weapon damage / armor defense), with no affixes. Take it to the
+// 🪄 Enchanter to fill in modifiers. Crafted gear is named "Crafted <Type>" and
+// flagged so it always reads as player-made (with a 🔨 badge) on top of its
+// normal rarity colour.
+
+// Rarities you can craft, cheapest first (junk & unique are not craftable).
+const CRAFT_TIERS = ['normal', 'uncommon', 'rare', 'epic', 'legendary'];
+let forgeSlot = 'weapon';
+let forgeBase = null;   // chosen base name within the slot (drives look + name)
+let forgeTier = 'normal';
+
+// Crafted gear is geared to your deepest reached / current return depth, like
+// the town merchant's stock — so the Forge stays relevant as you descend.
+function craftIlvl() { return Math.max(1, Math.max(dungeonReturn || 1, player.maxFloor || 1)); }
+
+// Material + gold cost to craft, scaling with rarity and item level. Higher
+// rarities pull in higher-tier materials: Scrap always, Core at rare+, and a
+// Chaos Orb at legendary.
+function craftCost(tier) {
+  const ilvl = craftIlvl();
+  const rank = CRAFT_TIERS.indexOf(tier);            // 0 (normal) .. 4 (legendary)
+  const f = 1 + ilvl * 0.12;
+  const cost = {
+    gold:  Math.round((25 + rank * 30) * f),
+    scrap: Math.round((4 + rank * 5) * f),
+  };
+  if (rank >= 2) cost.core  = Math.round((1 + (rank - 2) * 2) * (1 + ilvl * 0.05)); // rare+
+  if (rank >= 4) cost.chaos = 1;                                                     // legendary
+  return cost;
 }
-function openSmith() { openTownModal('⚒️ Blacksmith'); renderSmith(); }
-function renderSmith() {
-  const rows = SLOT_KEYS.map(slot => {
-    const it = equipped[slot];
-    if (!it) {
-      return `<div class="shop-row"><div class="shop-row-info"><div class="shop-row-name" style="opacity:.45">${SLOTS[slot].label} — empty</div></div></div>`;
-    }
-    const cost = upgradeCost(it);
-    const afford = player.gold >= cost;
-    return `<div class="shop-row">
-      <span class="loot-icon">${iconMarkup(itemIcon(it), tierColor(it))}</span>
-      <div class="shop-row-info item-${it.tier}">
-        <div class="shop-row-name">${it.name}${it.upgrades ? ` <span style="color:#ffd24b">+${it.upgrades}</span>` : ''}</div>
-        <div class="shop-row-stats">${itemStatLine(it)}</div>
-      </div>
-      <span class="shop-price">${cost}g</span>
-      <button class="shop-buy-btn" ${afford ? '' : 'disabled'} onclick="upgradeEquipped('${slot}')">FORGE</button>
-    </div>`;
+
+function openForge() { forgeBase = null; openTownModal('🔨 Craftsman'); renderForge(); }
+function forgeSelectSlot(slot) { forgeSlot = slot; forgeBase = null; renderForge(); }
+function forgeSelectBase(name) { forgeBase = name; renderForge(); }
+function forgeSelectTier(tier) { forgeTier = tier; renderForge(); }
+
+function renderForge() {
+  if (!CRAFT_TIERS.includes(forgeTier)) forgeTier = 'normal';
+  if (!SLOT_KEYS.includes(forgeSlot)) forgeSlot = 'weapon';
+  const names = SLOTS[forgeSlot].names;
+  if (!forgeBase || !names.includes(forgeBase)) forgeBase = names[0];
+
+  const slotBtns = SLOT_KEYS.map(s =>
+    `<button class="forge-opt ${s === forgeSlot ? 'on' : ''}" onclick="forgeSelectSlot('${s}')">${SLOTS[s].label}</button>`
+  ).join('');
+  const baseBtns = names.map(n =>
+    `<button class="forge-opt ${n === forgeBase ? 'on' : ''}" onclick="forgeSelectBase('${n}')">${n}</button>`
+  ).join('');
+  const tierBtns = CRAFT_TIERS.map(t => {
+    const caps = TIER_AFFIX_CAPS[t] || { stat: 0, attr: 0 };
+    return `<button class="forge-opt ${t === forgeTier ? 'on' : ''}" style="${t === forgeTier ? '' : `color:${TIERS[t].color}`}" onclick="forgeSelectTier('${t}')">
+       <span style="color:${TIERS[t].color};font-size:16px">●</span>
+       <span style="font-size:9px;color:#b9a98a">${caps.stat}+${caps.attr}</span></button>`;
   }).join('');
-  setTownContent(`<div class="town-blurb">The smith reforges your equipped gear — each forging boosts its stats and power. Costs climb the more a piece is upgraded.</div>${rows}`);
+
+  const cost = craftCost(forgeTier);
+  const afford = canAfford(cost);
+  const preview = craftBlankItem(forgeSlot, forgeTier, forgeBase);
+  const caps = TIER_AFFIX_CAPS[forgeTier] || { stat: 0, attr: 0 };
+
+  setTownContent(`
+    <div class="town-blurb">The Craftsman forges a <b>blank</b> piece at your current depth (ilvl ${craftIlvl()}) — just its base damage or defense, with empty modifier slots. Take it to the 🪄 Enchanter to fill them in. Rarity sets how many modifiers it can hold.</div>
+    <div class="forge-label">Item type</div>
+    <div class="forge-grid forge-slots">${slotBtns}</div>
+    <div class="forge-label">Base</div>
+    <div class="forge-grid forge-bases">${baseBtns}</div>
+    <div class="forge-label">Rarity <span style="opacity:.6">(stat + attr slots)</span></div>
+    <div class="forge-grid forge-tiers">${tierBtns}</div>
+    <div class="shop-row" style="margin-top:10px">
+      <span class="loot-icon">${iconMarkup(itemIcon(preview), tierColor(preview))}</span>
+      <div class="shop-row-info item-${preview.tier}">
+        <div class="shop-row-name">${preview.name}${craftedMark(preview)}</div>
+        <div class="shop-row-stats">${itemStatLine(preview)} · ${caps.stat} stat / ${caps.attr} attr slots</div>
+      </div>
+    </div>
+    <div class="shop-row">
+      <div class="shop-row-info"><div class="shop-row-name">Forge cost</div>
+        <div class="shop-row-sub">${costLabel(cost)}</div></div>
+      <button class="shop-buy-btn" ${afford ? '' : 'disabled'} onclick="craftItem()">🔨 FORGE</button>
+    </div>`);
 }
-function upgradeEquipped(slot) {
-  const it = equipped[slot];
-  if (!it) return;
-  const cost = upgradeCost(it);
-  if (player.gold < cost) return;
-  player.gold -= cost;
-  it.upgrades = (it.upgrades || 0) + 1;
-  // Boost positive stats ~15% (min +1) and widen weapon DMG; leave curse penalties be.
-  for (const k of Object.keys(it.stats)) {
-    const v = it.stats[k];
-    if (typeof v === 'number' && v > 0) {
-      it.stats[k] = v + Math.max(1, Math.round(v * 0.15));
-    } else if (typeof v === 'string' && v.includes('-')) {
-      const [lo, hi] = v.split('-').map(Number);
-      it.stats[k] = `${lo + Math.max(1, Math.round(lo * 0.15))}-${hi + Math.max(1, Math.round(hi * 0.15))}`;
-    }
+
+// Build a blank item: headline stat only (weapon DMG / armor DEF, gloves +ATK),
+// no bonus affixes. Deterministic so the Forge preview matches what you'll get.
+function craftBlankItem(slot, tier, baseName) {
+  const lvl = craftIlvl();
+  const stats = {}, attrs = {};
+  const mult = tierMult(tier);
+  const dmgMult = { junk: 0.55, normal: 0.8, uncommon: 1, rare: 1.3, epic: 1.65, legendary: 2.1, unique: 2.6 }[tier];
+  if (slot === 'weapon') {
+    const base = Math.max(1, Math.floor((2 + lvl * 1.2) * dmgMult));
+    const spread = Math.max(1, Math.floor(base * 0.4));
+    stats.DMG = `${base}-${base + spread}`;
+  } else if (slot === 'head' || slot === 'chest' || slot === 'hands' || slot === 'legs') {
+    const slotDef = { chest: 1.3, legs: 1.0, head: 0.8, hands: 0.7 }[slot];
+    stats.DEF = Math.max(1, Math.floor((1 + lvl) * mult * slotDef));
+    if (slot === 'hands') stats.ATK = Math.max(1, Math.floor((1 + lvl * 0.35) * mult * 0.6));
   }
-  // Attribute affixes get the same ~15% (min +1) boost.
-  if (it.attrs) for (const k of Object.keys(it.attrs)) {
-    it.attrs[k] = it.attrs[k] + Math.max(1, Math.round(it.attrs[k] * 0.15));
-  }
-  it.value = Math.round((it.value || 1) * 1.3);
+  const baseValue = { junk: 1, normal: 5, uncommon: 20, rare: 80, epic: 300, legendary: 1200, unique: 5000 }[tier];
+  const value = Math.round(baseValue * (1 + lvl * 0.12));
+  return {
+    id: Math.random(), name: 'Crafted ' + baseName, tier, slot, ilvl: lvl,
+    stats, attrs, value, crafted: true, flavor: 'Forged by your own hand.',
+    icon: ITEM_ICONS[baseName] || SLOT_ICONS[slot],
+  };
+}
+
+function craftItem() {
+  const cost = craftCost(forgeTier);
+  if (!canAfford(cost)) return;
+  const item = craftBlankItem(forgeSlot, forgeTier, forgeBase);
+  spendCost(cost);
+  inventory.push(item);
   sfx('equip');
-  log(`⚒️ The smith reforges your ${it.name} to +${it.upgrades}!`, 'loot');
-  if (equipped[slot]) recomputeMaxStats();
-  updateBars(); renderPanel(); renderSmith(); saveGame();
+  log(`🔨 You forge a ${item.name} (ilvl ${item.ilvl}). Take it to the 🪄 Enchanter to add modifiers.`, 'loot');
+  updateBars(); renderPanel(); renderForge(); saveGame();
 }
 
 // ── HEALER — rest to full, cure ailments, stock potions ──
@@ -3573,15 +3726,22 @@ function allGear() {
 }
 function findGear(id) { return allGear().find(g => g.item.id == id) || null; }
 
-// Cost helpers scale with item level and rarity.
-function enchTierFactor(item) { return 1 + Object.keys(TIERS).indexOf(item.tier) * 0.3; }
-function augmentCost(item)   { return Math.round((60 + (item.ilvl||1) * 9) * enchTierFactor(item)); }
-function rerollAllCost(item) { return Math.round((90 + (item.ilvl||1) * 13) * enchTierFactor(item)); }
+// Cost helpers scale with item level and rarity. Enchanting is now paid in
+// ✨ Glimmer plus some gold (and a 🌀 Chaos Orb for the big epic+ reforge), so
+// each returns a cost object (see canAfford / spendCost / costLabel).
+function enchRank(item) { return Object.keys(TIERS).indexOf(item.tier); }
+function enchTierFactor(item) { return 1 + enchRank(item) * 0.3; }
+function augmentCost(item)   { return { gold: Math.round((30 + (item.ilvl||1) * 5) * enchTierFactor(item)), glimmer: 2 + Math.floor(enchRank(item) / 2) }; }
+function rerollAllCost(item) {
+  const c = { gold: Math.round((45 + (item.ilvl||1) * 7) * enchTierFactor(item)), glimmer: 3 + Math.floor(enchRank(item) / 2) };
+  if (enchRank(item) >= 4) c.chaos = 1; // epic+ reforge demands a Chaos Orb
+  return c;
+}
 // Rerolling a single property comes in two flavours: changing the property TYPE
 // (Might → Agility) is the bigger gamble, while rerolling just its VALUE
 // (+13 Might → +18 Might) is cheaper because it can only land within the band.
-function rerollTypeCost(item)  { return Math.round((35 + (item.ilvl||1) * 6) * enchTierFactor(item)); }
-function rerollValueCost(item) { return Math.round(rerollTypeCost(item) * 0.6); }
+function rerollTypeCost(item)  { return { gold: Math.round((18 + (item.ilvl||1) * 3) * enchTierFactor(item)), glimmer: 1 + Math.floor(enchRank(item) / 3) }; }
+function rerollValueCost(item) { return { gold: Math.round((10 + (item.ilvl||1) * 2) * enchTierFactor(item)), glimmer: 1 }; }
 
 // Pretty "min–max" (or single number) for a stat/attr affix at this item's
 // level & rarity, so the UI can show the value band a reroll would land in.
@@ -3640,13 +3800,13 @@ function enchantAugment(id) {
   const item = g.item;
   const cost = augmentCost(item);
   const stat = canAddStat(item), attr = canAddAttr(item);
-  if ((!stat && !attr) || player.gold < cost) return;
+  if ((!stat && !attr) || !canAfford(cost)) return;
   const mult = tierMult(item.tier);
   // If both kinds have room, lean toward stats (attrs are the rarer, stronger slot).
   const addAttr = attr && (!stat || Math.random() < 0.4);
   if (addAttr) addAttrAffixes(item, item.ilvl, mult, 1);
   else         addStatAffixes(item, item.ilvl, mult, 1);
-  player.gold -= cost;
+  spendCost(cost);
   log(`🪄 The enchanter augments your ${item.name} with a new property.`, 'loot');
   afterEnchant(item);
 }
@@ -3656,14 +3816,14 @@ function enchantRerollAll(id) {
   const item = g.item;
   const cost = rerollAllCost(item);
   const caps = TIER_AFFIX_CAPS[item.tier] || { stat:0, attr:0 };
-  if (player.gold < cost || (caps.stat + caps.attr) === 0) return;
+  if (!canAfford(cost) || (caps.stat + caps.attr) === 0) return;
   const head = headlineStats(item);
   for (const k of Object.keys(item.stats)) if (!head.includes(k)) delete item.stats[k];
   item.attrs = {};
   const mult = tierMult(item.tier);
   addStatAffixes(item, item.ilvl, mult, rollAffixCount(caps.stat));
   addAttrAffixes(item, item.ilvl, mult, rollAffixCount(caps.attr));
-  player.gold -= cost;
+  spendCost(cost);
   log(`🪄 The enchanter reforges every property on your ${item.name}.`, 'loot');
   afterEnchant(item);
 }
@@ -3676,7 +3836,7 @@ function enchantRerollValue(id, kind, key) {
   const g = findGear(id); if (!g) return;
   const item = g.item;
   const cost = rerollValueCost(item);
-  if (player.gold < cost) return;
+  if (!canAfford(cost)) return;
   const mult = tierMult(item.tier);
   if (kind === 'stat') {
     if (headlineStats(item).includes(key) || !(key in item.stats)) return;
@@ -3685,7 +3845,7 @@ function enchantRerollValue(id, kind, key) {
     if (!item.attrs || !(key in item.attrs)) return;
     item.attrs[key] = affixAttrValue(item.ilvl, mult);
   }
-  player.gold -= cost;
+  spendCost(cost);
   log(`🪄 The enchanter reforges the strength of a property on your ${item.name}.`, 'loot');
   afterEnchant(item);
 }
@@ -3697,7 +3857,7 @@ function enchantRerollType(id, kind, key) {
   const g = findGear(id); if (!g) return;
   const item = g.item;
   const cost = rerollTypeCost(item);
-  if (player.gold < cost) return;
+  if (!canAfford(cost)) return;
   const mult = tierMult(item.tier);
   if (kind === 'stat') {
     if (headlineStats(item).includes(key) || !(key in item.stats)) return;
@@ -3712,7 +3872,7 @@ function enchantRerollType(id, kind, key) {
     const na = pick(pool);
     item.attrs = replaceObjKey(item.attrs, key, na, affixAttrValue(item.ilvl, mult));
   }
-  player.gold -= cost;
+  spendCost(cost);
   log(`🪄 The enchanter transmutes a property on your ${item.name} into something new.`, 'loot');
   afterEnchant(item);
 }
@@ -3742,13 +3902,13 @@ function renderEnchanter() {
     return `<div class="shop-row">
       <span class="loot-icon">${iconMarkup(itemIcon(it), tierColor(it))}</span>
       <div class="shop-row-info item-${it.tier}">
-        <div class="shop-row-name">${it.name}${g.where === 'equipped' ? ' <span style="color:#7fb0ff;font-size:9px">[worn]</span>' : ''}</div>
+        <div class="shop-row-name">${it.name}${craftedMark(it)}${g.where === 'equipped' ? ' <span style="color:#7fb0ff;font-size:9px">[worn]</span>' : ''}</div>
         <div class="shop-row-stats">${itemStatLine(it)}</div>
       </div>
       <button class="shop-buy-btn" onclick="enchantPick(${g.item.id})">WORK</button>
     </div>`;
   }).join('');
-  setTownContent(`<div class="town-blurb">The enchanter tinkers with your gear: <b>Augment</b> adds a missing property, <b>Reroll all</b> gambles every bonus property at once, and each property can be rerolled on its own — its <b>value</b> (🎲, same modifier, new number) or its <b>modifier</b> (🔄, swapped for another). Rarity sets how many properties a piece can hold.</div>${rows}`);
+  setTownContent(`<div class="town-blurb">The enchanter tinkers with your gear using ✨ <b>Glimmer</b> (and a little gold): <b>Augment</b> adds a missing property, <b>Reroll all</b> gambles every bonus property at once, and each property can be rerolled on its own — its <b>value</b> (🎲, same modifier, new number) or its <b>modifier</b> (🔄, swapped for another). Rarity sets how many properties a piece can hold. Blank pieces from the 🔨 Craftsman start here.</div>${rows}`);
 }
 
 function enchantPick(id) { enchantSel = id; renderEnchanter(); }
@@ -3777,8 +3937,8 @@ function renderEnchantItem(item) {
   // reroll (swap to a different modifier). Each button shows what it would do.
   const propRow = (kind, key, label, color, curVal, rangeStr, swaps) => {
     const fixed = rangeStr.indexOf('–') < 0;             // single fixed value → value reroll is a no-op
-    const canVal  = player.gold >= valCost && !fixed;
-    const canType = player.gold >= typeCost && swaps.length > 0;
+    const canVal  = canAfford(valCost) && !fixed;
+    const canType = canAfford(typeCost) && swaps.length > 0;
     const valTitle  = fixed
       ? `${label} has a fixed value (${rangeStr}) at this item level — nothing to reroll.`
       : `Reroll the value only, keeping ${label}. Lands ${rangeStr} at this item level (now +${curVal}).`;
@@ -3788,8 +3948,8 @@ function renderEnchantItem(item) {
     return `<div class="shop-row"><div class="shop-row-info">
         <div class="shop-row-name" style="${color}">${curVal < 0 ? '' : '+'}${curVal} ${label}</div>
         <div class="shop-row-sub">rolls ${rangeStr} at ilvl ${item.ilvl}</div></div>
-      <button class="shop-buy-btn ench-btn" ${canVal?'':'disabled'} title="${valTitle}" onclick="enchantRerollValue(${item.id},'${kind}','${key}')">🎲 ${valCost}g</button>
-      <button class="shop-buy-btn ench-btn" ${canType?'':'disabled'} title="${typeTitle}" onclick="enchantRerollType(${item.id},'${kind}','${key}')">🔄 ${typeCost}g</button></div>`;
+      <button class="shop-buy-btn ench-btn" ${canVal?'':'disabled'} title="${valTitle}" onclick="enchantRerollValue(${item.id},'${kind}','${key}')">🎲 ${costLabel(valCost)}</button>
+      <button class="shop-buy-btn ench-btn" ${canType?'':'disabled'} title="${typeTitle}" onclick="enchantRerollType(${item.id},'${kind}','${key}')">🔄 ${costLabel(typeCost)}</button></div>`;
   };
 
   const statRows = Object.keys(item.stats).filter(k => !head.includes(k)).sort(orderBy(poolStats)).map(k =>
@@ -3804,8 +3964,8 @@ function renderEnchantItem(item) {
   const augCost = augmentCost(item);
   const canAug = canAddStat(item) || canAddAttr(item);
   const allCost = rerollAllCost(item);
-  const augBtn = `<button class="shop-buy-btn" ${(canAug && player.gold>=augCost)?'':'disabled'} onclick="enchantAugment(${item.id})">✨ Augment ${augCost}g</button>`;
-  const allBtn = `<button class="shop-buy-btn" ${(player.gold>=allCost && (caps.stat+caps.attr)>0)?'':'disabled'} onclick="enchantRerollAll(${item.id})">🔄 Reroll all ${allCost}g</button>`;
+  const augBtn = `<button class="shop-buy-btn" ${(canAug && canAfford(augCost))?'':'disabled'} onclick="enchantAugment(${item.id})">✨ Augment ${costLabel(augCost)}</button>`;
+  const allBtn = `<button class="shop-buy-btn" ${(canAfford(allCost) && (caps.stat+caps.attr)>0)?'':'disabled'} onclick="enchantRerollAll(${item.id})">🔄 Reroll all ${costLabel(allCost)}</button>`;
 
   // Why is Augment unavailable? Distinguish "rarity slots full" from "this slot
   // has no more modifier types to add" (the common, confusing case — e.g. a
@@ -3832,7 +3992,7 @@ function renderEnchantItem(item) {
 
   setTownContent(`
     <div class="shop-row"><button class="shop-buy-btn" onclick="enchantBack()">← Back</button>
-      <div class="shop-row-info item-${item.tier}" style="margin-left:8px"><div class="shop-row-name">${item.name}</div>
+      <div class="shop-row-info item-${item.tier}" style="margin-left:8px"><div class="shop-row-name">${item.name}${craftedMark(item)}</div>
       <div class="shop-row-sub">${SLOTS[item.slot].label.replace(/^\S+\s/,'')} · ilvl ${item.ilvl} · ${statN}/${caps.stat} stats · ${attrN}/${caps.attr} attrs</div></div></div>
     <div class="ench-legend">🎲 reroll value · 🔄 reroll modifier · hover a button for details</div>
     ${headRows}
@@ -5895,13 +6055,33 @@ function onEnemyDefeated(e) {
     groundFood.push({ x: e.x, y: e.y, ...f });
     log(`${f.emoji} ${label} dropped ${f.name}!`, 'loot');
   }
+  // ── Crafting materials ── a second currency that fuels the Craftsman and
+  // Enchanter. Scrap is common, Glimmer uncommon, Core rare, Chaos Orb very
+  // rare; elites and bosses drop more and unlock the rarer materials.
+  {
+    const gained = {};
+    const add = (k, n) => { if (n > 0) gained[k] = (gained[k] || 0) + n; };
+    const big = e.isBoss ? 3 : (e.isElite ? 2 : 1);
+    if (Math.random() < 0.5 * lootMult || e.isElite || e.isBoss) add('scrap', rnd(1, 2) * big + Math.floor(dungeonLevel / 4));
+    if (Math.random() < 0.16 * lootMult || e.isBoss)             add('glimmer', e.isBoss ? rnd(2, 3) : 1);
+    if (Math.random() < (0.04 + dungeonLevel * 0.004) * lootMult || e.isBoss) add('core', e.isBoss ? rnd(1, 2) : 1);
+    if (e.isBoss ? Math.random() < 0.35 : Math.random() < 0.01 * lootMult)    add('chaos', 1);
+    const keys = Object.keys(gained);
+    if (keys.length) {
+      for (const k of keys) gainMaterial(k, gained[k]);
+      spawnFloatingText(e.x - 0.35, e.y - 0.3, keys.map(k => `+${gained[k]}${CRAFT_MATERIALS[k].emoji}`).join(' '), '#cfe8ff');
+      log(`🧰 ${label} dropped ${keys.map(k => `${gained[k]} ${CRAFT_MATERIALS[k].name}`).join(', ')}.`, 'loot');
+      updateBars();
+    }
+  }
   // Treasure Goblin jackpot — a fat gold burst plus a guaranteed rich chest.
   if (e.isGoblin) {
     const bonus = 30 + dungeonLevel * 8;
     player.gold += bonus;
+    gainMaterial('chaos', 1);
     groundItems.push({ x: e.x, y: e.y, luck: 6, ilvl: e.level || dungeonLevel });
     spawnFloatingText(e.x, e.y, `+${bonus}g`, '#ffd24b');
-    log(`💰 The Treasure Goblin bursts — +${bonus}g and a glittering chest!`, 'loot');
+    log(`💰 The Treasure Goblin bursts — +${bonus}g, a 🌀 Chaos Orb, and a glittering chest!`, 'loot');
     updateBars();
   }
   // Vanishingly rare super-drop: the air shimmers and a fabled chest appears.
@@ -6680,8 +6860,9 @@ function switchTab(tab) {
 function renderPanel() {
   const el = document.getElementById('panel-content');
   if (currentTab === 'inv') {
+    const strip = matStripHTML();
     if (inventory.length === 0) {
-      el.innerHTML = '<div id="empty-panel">No items yet.<br>Explore!</div>';
+      el.innerHTML = strip + '<div id="empty-panel">No items yet.<br>Explore!</div>';
       return;
     }
     // Sort the displayed list by slot (head, chest, hands, …) while keeping each
@@ -6695,7 +6876,7 @@ function renderPanel() {
         const ob = b.item.slot in slotOrder ? slotOrder[b.item.slot] : 99;
         return oa - ob;
       });
-    el.innerHTML = rows.map(({ item, i }) => {
+    el.innerHTML = strip + rows.map(({ item, i }) => {
       const equipable = !!item.slot;
       const slotName = item.slot ? SLOTS[item.slot].label.replace(/^\S+\s/, '') : 'potion';
       // Compare this item's power to whatever currently fills its slot, so we can
@@ -6719,7 +6900,7 @@ function renderPanel() {
         <span class="loot-icon">${iconMarkup(itemIcon(item), tierColor(item))}</span>
         <div class="loot-info" onclick="selectItem(${i}, this)"
              onmouseenter="showTooltip(event,${i})" onmouseleave="hideTooltip()">
-          <div class="item-name">${isUpgrade?'<span class="up-arrow">▲</span> ':''}${item.name}</div>
+          <div class="item-name">${isUpgrade?'<span class="up-arrow">▲</span> ':''}${item.name}${craftedMark(item)}</div>
           <div class="item-type">${slotName}${pwr}</div>
         </div>
         ${equipable
@@ -7204,6 +7385,10 @@ function loadGame() {
     if (player.healPotions == null) player.healPotions = 0;
     if (player.healthPotionsBought == null) player.healthPotionsBought = 0;
     if (player.manaPotions == null) player.manaPotions = 0;
+    // Migrate saves that predate crafting materials: seed an empty wallet and
+    // ensure every material key exists on partial saves.
+    if (!player.materials || typeof player.materials !== 'object') player.materials = freshMaterials();
+    for (const k of CRAFT_MAT_KEYS) if (player.materials[k] == null) player.materials[k] = 0;
     // Migrate saves that predate hero attributes.
     if (!player.attributes) player.attributes = baseAttributes();
     if (player.attrPoints == null) player.attrPoints = 0;
@@ -7349,7 +7534,8 @@ log('⚡ Your class grants a special skill — tap the ⚡ button (or press R) t
 log('⚡ Each item has a Power value; your total Power blends level, gear, and attributes.');
 log('💠 Level up to earn points, then raise attributes in the bag\'s HERO tab.');
 log('🗡️ Every weapon fights differently — axes cleave, daggers flurry, bows & staves strike at range, maces stun, scythes drain. Try them all!');
-log('🏰 Tap TOWN (or press T) to warp to the safe hub: smith, healer, trainer, and a gate to re-enter any floor you\'ve reached.');
+log('🏰 Tap TOWN (or press T) to warp to the safe hub: craftsman, healer, trainer, enchanter, and a gate to re-enter any floor you\'ve reached.');
+log('🧰 Foes drop crafting materials — 🔩 Scrap, 🔆 Core, ✨ Glimmer, 🌀 Chaos Orb. The 🔨 Craftsman forges blank gear; the 🪄 Enchanter fills in its modifiers.');
 log('⚔️ Each move OR attack passes a turn — get surrounded and every foe piles on, so don\'t let them encircle you.');
 
 // Reflect any saved mute preference on the SOUND button, then arm the audio:
