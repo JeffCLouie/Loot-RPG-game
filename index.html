@@ -1102,6 +1102,68 @@
     font-size: 11px; cursor: pointer; text-decoration: underline;
     -webkit-tap-highlight-color: transparent;
   }
+
+  /* ── TITLE SCREEN / LANDING PAGE ──
+     The first thing players see on load: the game's name, a PLAY/CONTINUE
+     action, and the same controls that live behind the ⚙️ settings dropdown
+     (sound, zoom, slots, leaderboards, version, time) surfaced up front. Sits
+     above the game canvas but below the secondary overlays (slots, boards,
+     version, time at z-index 400/410) so they pop on top of it. */
+  #title-overlay {
+    position: fixed; inset: 0; z-index: 395; display: none;
+    align-items: center; justify-content: center; padding: 20px;
+    overflow-y: auto; -webkit-overflow-scrolling: touch;
+    background:
+      radial-gradient(circle at 50% 18%, rgba(255,190,90,0.14), transparent 55%),
+      radial-gradient(circle at 50% 120%, rgba(120,60,200,0.12), transparent 60%),
+      linear-gradient(180deg, #0a0805 0%, #140f08 45%, #0a0805 100%);
+  }
+  #title-overlay.open { display: flex; }
+  #title-inner { width: 100%; max-width: 420px; text-align: center; margin: auto; }
+  .title-crest { font-size: 52px; line-height: 1; margin-bottom: 6px;
+    filter: drop-shadow(0 0 12px rgba(255,180,80,0.55)); }
+  #title-logo {
+    font-family: 'Courier New', monospace; font-weight: bold; letter-spacing: 4px;
+    color: #ffe9b0; font-size: 34px; line-height: 1.05; margin: 0;
+    text-shadow: 0 2px 0 #6b4a1c, 0 0 18px rgba(255,190,90,0.55);
+  }
+  #title-logo .title-sub-word { display: block; color: #d9b87a; font-size: 22px; letter-spacing: 8px; }
+  #title-tag { color: #b9a98a; font-size: 12px; margin: 10px 0 22px; line-height: 1.5; }
+  #title-tag .tier {
+    display: inline-block; width: 9px; height: 9px; border-radius: 2px;
+    margin: 0 1px; vertical-align: middle; transform: rotate(45deg);
+  }
+  .title-play {
+    width: 100%; box-sizing: border-box; padding: 15px; margin-bottom: 10px;
+    border: 2px solid var(--gold); border-radius: 8px;
+    background: linear-gradient(180deg, #3a2e16, #241c0e);
+    color: #ffe9b0; font-family: 'Courier New', monospace; font-size: 17px;
+    font-weight: bold; letter-spacing: 2px; cursor: pointer;
+    box-shadow: 0 0 22px rgba(255,190,90,0.3);
+    -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  }
+  .title-play:active { background: #241c0e; }
+  .title-play.secondary {
+    padding: 11px; font-size: 13px; letter-spacing: 1px; border-width: 1px;
+    background: #221a10; color: #d9b87a; box-shadow: none;
+  }
+  .title-play.secondary:active { background: #2f2415; }
+  /* Settings grid — mirrors the ⚙️ dropdown's actions as tappable tiles. */
+  #title-settings {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+    margin-top: 18px; padding-top: 16px; border-top: 1px solid #2a2113;
+  }
+  .title-set-btn {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 11px 6px; border: 1px solid var(--border); border-radius: 8px;
+    background: #1b160f; color: #d9c39a; cursor: pointer;
+    font-family: 'Courier New', monospace;
+    -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  }
+  .title-set-btn:active { background: #2a2113; }
+  .title-set-btn .tsb-ic { font-size: 21px; line-height: 1; }
+  .title-set-btn .tsb-lbl { font-size: 10px; letter-spacing: .5px; }
+  #title-credit { color: #6b5f47; font-size: 9px; margin-top: 16px; line-height: 1.5; }
   /* Leaderboard tabs + rows */
   .lb-tabs { display: flex; gap: 6px; margin-bottom: 9px; }
   .lb-tab {
@@ -1863,6 +1925,38 @@
 <div id="levelup-banner">
   <div class="lvl-title">⭐ LEVEL UP!</div>
   <div class="lvl-sub">Open the 🎒 BAG → HERO tab to spend your points!</div>
+</div>
+
+<!-- Title screen / landing page — shown on load. Surfaces the PLAY/CONTINUE
+     action plus the same controls that live behind the ⚙️ settings dropdown. -->
+<div id="title-overlay">
+  <div id="title-inner">
+    <div class="title-crest" id="title-crest"></div>
+    <h1 id="title-logo">DUNGEON<span class="title-sub-word">LOOT</span></h1>
+    <div id="title-tag">
+      Delve a pixel dungeon for ever-better loot.<br>
+      Grey
+      <span class="tier" style="background:#9aa0a6"></span>
+      <span class="tier" style="background:#e8e8e8"></span>
+      <span class="tier" style="background:#4caf50"></span>
+      <span class="tier" style="background:#3a7bd5"></span>
+      <span class="tier" style="background:#a45cd6"></span>
+      <span class="tier" style="background:#e08a2e"></span>
+      <span class="tier" style="background:#d6453a"></span>
+      Mythic
+    </div>
+    <button class="title-play" id="title-play" onclick="titlePlay()">⚔️ ENTER THE DUNGEON</button>
+    <button class="title-play secondary" id="title-newrun" style="display:none" onclick="titleNewRun()">↻ Start a New Run</button>
+    <div id="title-settings">
+      <button class="title-set-btn" onclick="titleSound()"><span class="tsb-ic" id="t-sound-ic">🔊</span><span class="tsb-lbl" id="t-sound-lbl">Sound: On</span></button>
+      <button class="title-set-btn" onclick="titleZoom()"><span class="tsb-ic">🔍</span><span class="tsb-lbl" id="t-zoom-lbl">Zoom</span></button>
+      <button class="title-set-btn" onclick="openSlots()"><span class="tsb-ic">💾</span><span class="tsb-lbl">Save Slots</span></button>
+      <button class="title-set-btn" onclick="showLeaderboard()"><span class="tsb-ic">🏆</span><span class="tsb-lbl">Leaderboards</span></button>
+      <button class="title-set-btn" onclick="showVersionHistory()"><span class="tsb-ic">📜</span><span class="tsb-lbl">Version</span></button>
+      <button class="title-set-btn" onclick="showPlayTime()"><span class="tsb-ic">⏱️</span><span class="tsb-lbl">Time Played</span></button>
+    </div>
+    <div id="title-credit">Pixel art from the DawnLike tileset by DragonDePlatino &amp; DawnBringer (CC-BY 4.0).</div>
+  </div>
 </div>
 
 <div id="class-overlay">
@@ -3332,10 +3426,13 @@ function buildTree(rows, kind, ascId) {
 //   block +block% · dr flat DR% · goldFind · magicFind · xpGain (%)
 //
 // Active nodes carry mp/cd and a `cast` descriptor resolved by resolveCast():
-//   shape: self|melee|cleave|nova|bolt|blast|line|chain|teleport|summon
+//   shape: self|melee|cleave|nova|bolt|blast|line|chain|teleport|summon|random
 //   wpn (weapon-dmg mult) · spell (spell-base mult) flat/perLvl · radius · range
-//   status {effect,dur,chance} · heal {flat,perLevel,pctDmg} · lifesteal
-//   buff {id,dur,mag} (or array) · summon {kind,count,ttl}
+//   status {effect,dur,chance} (effect: poison|stun|burn|vuln) · lifesteal
+//   heal {flat,perLevel,pctDmg} · buff {id,dur,mag} (or array) · summon {kind,count,ttl}
+//   repeat (multi-hit) · pull (vortex foes to you) · knockback (shove back tiles)
+//   execute (finish non-boss foes at ≤ this HP fraction) · drainMp (siphon % of dmg as MP)
+//   recall (escape-blink to safety) · random shape uses count (foes struck anywhere)
 
 const SKILL_TREES = {
   warrior: {
@@ -3387,17 +3484,17 @@ const SKILL_TREES = {
         {id:'wa_quake',name:'Earthquake',icon:'🌋',mp:22,cd:6,cast:{shape:'nova',radius:3,wpn:1.3},desc:'Shatter the ground in a wide radius.'},
         {id:'wa_roar',name:'Battle Roar',icon:'🦁',mp:16,cd:7,cast:{shape:'self',buff:{id:'dmgUp',dur:5,mag:0.5},heal:{flat:20,perLevel:2}},desc:'Damage up and a burst of healing.'},
         {id:'wa_hook',name:'Grapple Hook',icon:'⛓️',mp:10,cd:4,cast:{shape:'teleport',range:7,wpn:1.3},desc:'Yank yourself to a far foe and strike.'} ],
-      [ {id:'wa_impale',name:'Impale',icon:'🗡️',mp:14,cd:3,cast:{shape:'line',range:4,wpn:1.6},desc:'Skewer every foe in a line.'},
-        {id:'wa_colossus',name:'Colossus Smash',icon:'🔨',mp:20,cd:4,cast:{shape:'blast',range:4,radius:1,wpn:2.0,status:{effect:'stun',dur:1,chance:1}},desc:'A smash that stuns the impact area.'},
+      [ {id:'wa_impale',name:'Impale',icon:'🗡️',mp:14,cd:3,cast:{shape:'line',range:4,wpn:1.6,knockback:1},desc:'Skewer a line of foes and shove them back.'},
+        {id:'wa_colossus',name:'Colossus Smash',icon:'🔨',mp:20,cd:4,cast:{shape:'blast',range:4,radius:1,wpn:2.0,status:{effect:'stun',dur:1,chance:1},knockback:2},desc:'A smash that stuns and hurls foes back.'},
         {id:'wa_bladestorm',name:'Bladestorm',icon:'🌪️',mp:24,cd:5,cast:{shape:'nova',radius:2,wpn:1.7,status:{effect:'poison',dur:3,chance:0.5}},desc:'A storm of blades shreds all around.'},
         {id:'wa_rally',name:'Rallying Cry',icon:'📢',mp:18,cd:8,cast:{shape:'self',buff:{id:'shield',dur:6,mag:60}},desc:'A shout that absorbs incoming damage.'},
         {id:'wa_thunderclap',name:'Thunderclap',icon:'⚡',mp:16,cd:4,cast:{shape:'nova',radius:2,spell:0.8,status:{effect:'stun',dur:1,chance:0.6}},desc:'A shockwave dazes nearby foes.'} ],
-      [ {id:'wa_execstrike',name:"Executioner's Strike",icon:'☠️',mp:18,cd:4,cast:{shape:'melee',wpn:2.2},desc:'A brutal blow, lethal to the wounded.'},
+      [ {id:'wa_execstrike',name:"Executioner's Strike",icon:'☠️',mp:18,cd:4,cast:{shape:'melee',wpn:2.2,execute:0.25},desc:'A brutal blow that outright slays a wounded foe.'},
         {id:'wa_warstomp',name:'War Stomp',icon:'🦶',mp:24,cd:6,cast:{shape:'nova',radius:3,wpn:1.5,status:{effect:'stun',dur:2,chance:0.7}},desc:'Stomp stuns a wide area.'},
-        {id:'wa_vortex',name:'Blood Vortex',icon:'🌀',mp:22,cd:5,cast:{shape:'nova',radius:2,wpn:1.6,lifesteal:0.35},desc:'Tear all nearby foes, healing greatly.'},
+        {id:'wa_vortex',name:'Blood Vortex',icon:'🌀',mp:22,cd:5,cast:{shape:'nova',radius:4,wpn:1.6,lifesteal:0.35,pull:true},desc:'Wrench every foe to you, then tear them apart and heal.'},
         {id:'wa_titanleap',name:'Titan Leap',icon:'🌑',mp:26,cd:7,cast:{shape:'blast',range:6,radius:2,wpn:2.0,status:{effect:'stun',dur:1,chance:1}},desc:'Crash down over a large area.'},
         {id:'wa_avatar',name:'Avatar',icon:'🌟',mp:24,cd:10,cast:{shape:'self',buff:[{id:'dmgUp',dur:6,mag:0.6},{id:'defUp',dur:6,mag:0.4}]},desc:'Become a war god: damage up, damage down.'} ],
-      [ {id:'wa_cataclysm',name:'Cataclysm',icon:'☄️',mp:34,cd:9,cast:{shape:'nova',radius:4,wpn:2.2},desc:'Devastate everything around you.'},
+      [ {id:'wa_cataclysm',name:'Cataclysm',icon:'☄️',mp:34,cd:9,cast:{shape:'nova',radius:4,wpn:2.2,knockback:2},desc:'Devastate and blast everything around you backward.'},
         {id:'wa_rampage',name:'Rampage',icon:'🔥',mp:30,cd:8,cast:{shape:'nova',radius:3,wpn:2.4,lifesteal:0.3,status:{effect:'poison',dur:4,chance:1}},desc:'An unstoppable, healing massacre.'},
         {id:'wa_warmachine',name:'War Machine',icon:'🤖',mp:34,cd:12,cast:{shape:'summon',summon:{kind:'golem',count:1,ttl:24}},desc:'Summon a hulking iron golem to fight for you.'},
         {id:'wa_apocalypse',name:'Apocalypse',icon:'💀',mp:36,cd:10,cast:{shape:'blast',range:7,radius:3,wpn:2.6,status:{effect:'stun',dur:2,chance:1}},desc:'Annihilate a distant battlefield.'},
@@ -3455,18 +3552,18 @@ const SKILL_TREES = {
         {id:'ra_shadowclone',name:'Shadow Clone',icon:'🥷',mp:20,cd:8,cast:{shape:'summon',summon:{kind:'shadow',count:1,ttl:16}},desc:'Summon a shadow that fights for you.'},
         {id:'ra_blink',name:'Blink Strike',icon:'⚡',mp:14,cd:3,cast:{shape:'teleport',range:7,wpn:1.6},desc:'Flash to a distant foe and strike.'} ],
       [ {id:'ra_pierce',name:'Piercing Shot',icon:'➡️',mp:16,cd:3,cast:{shape:'line',range:6,wpn:1.7},desc:'An arrow pierces foes in a line.'},
-        {id:'ra_deathmark',name:'Death Mark',icon:'🎯',mp:18,cd:5,cast:{shape:'bolt',range:6,wpn:3.0,crit:true},desc:'A huge guaranteed crit on one foe.'},
+        {id:'ra_deathmark',name:'Death Mark',icon:'🎯',mp:18,cd:5,cast:{shape:'bolt',range:6,wpn:3.0,crit:true,status:{effect:'vuln',dur:5,chance:1}},desc:'A huge crit that marks the foe to take +35% from all damage.'},
         {id:'ra_venomnova',name:'Venom Nova',icon:'🟢',mp:20,cd:5,cast:{shape:'nova',radius:2,wpn:1.4,status:{effect:'poison',dur:5,chance:1}},desc:'A toxic burst poisons everything near.'},
         {id:'ra_vanish',name:'Vanish',icon:'🌫️',mp:16,cd:8,cast:{shape:'self',buff:[{id:'dodgeUp',dur:5,mag:0.4},{id:'critUp',dur:5,mag:0.2}]},desc:'Fade away: huge dodge and crit.'},
         {id:'ra_twinclone',name:'Twin Shadows',icon:'👥',mp:24,cd:9,cast:{shape:'summon',summon:{kind:'shadow',count:2,ttl:14}},desc:'Summon two shadow assassins.'} ],
       [ {id:'ra_massacre',name:'Massacre',icon:'💀',mp:22,cd:4,cast:{shape:'nova',radius:2,wpn:2.0,crit:true},desc:'Crit every foe around you.'},
-        {id:'ra_killshot',name:'Kill Shot',icon:'🎯',mp:20,cd:5,cast:{shape:'bolt',range:8,wpn:3.4,crit:true},desc:'A lethal precision shot.'},
+        {id:'ra_killshot',name:'Kill Shot',icon:'🎯',mp:20,cd:5,cast:{shape:'bolt',range:8,wpn:3.4,crit:true,execute:0.3},desc:'A precision shot that finishes any wounded foe.'},
         {id:'ra_plaguebomb',name:'Plague Bomb',icon:'🦠',mp:24,cd:6,cast:{shape:'blast',range:6,radius:2,wpn:1.5,status:{effect:'poison',dur:6,chance:1}},desc:'A bomb that plagues a distant area.'},
         {id:'ra_phantomdash',name:'Phantom Assault',icon:'🌀',mp:22,cd:6,cast:{shape:'teleport',range:8,wpn:2.6,crit:true,lifesteal:0.25},desc:'Blink, crit, and steal life.'},
         {id:'ra_warband',name:'Shadow Pack',icon:'👥',mp:28,cd:10,cast:{shape:'summon',summon:{kind:'shadow',count:3,ttl:14}},desc:'A pack of three shadows joins the fight.'} ],
-      [ {id:'ra_thousandcuts',name:'Thousand Cuts',icon:'🌪️',mp:30,cd:7,cast:{shape:'nova',radius:3,wpn:2.4,status:{effect:'poison',dur:4,chance:1}},desc:'A whirlwind of poisoned blades.'},
-        {id:'ra_executioner',name:'Coup de Grâce',icon:'☠️',mp:26,cd:6,cast:{shape:'melee',wpn:4.0,crit:true},desc:'An execution blow on one foe.'},
-        {id:'ra_deathrain',name:'Death from Above',icon:'☄️',mp:32,cd:8,cast:{shape:'blast',range:8,radius:3,wpn:2.2,crit:true},desc:'A storm of crits over a far battlefield.'},
+      [ {id:'ra_thousandcuts',name:'Thousand Cuts',icon:'🌪️',mp:30,cd:7,cast:{shape:'nova',radius:2,wpn:1.4,repeat:2,status:{effect:'poison',dur:4,chance:1}},desc:'A whirlwind that strikes every nearby foe twice and poisons them.'},
+        {id:'ra_executioner',name:'Coup de Grâce',icon:'☠️',mp:26,cd:6,cast:{shape:'melee',wpn:4.0,crit:true,execute:0.4},desc:'An execution blow that slays any wounded foe.'},
+        {id:'ra_deathrain',name:'Death from Above',icon:'☄️',mp:32,cd:8,cast:{shape:'random',count:5,wpn:2.0,crit:true},desc:'Blades rain as crits on five foes anywhere on the floor.'},
         {id:'ra_perfectvanish',name:'Perfect Shadow',icon:'🌑',mp:26,cd:12,cast:{shape:'self',buff:[{id:'dodgeUp',dur:8,mag:0.45},{id:'critUp',dur:8,mag:0.3},{id:'dmgUp',dur:8,mag:0.4}]},desc:'Ascend to pure shadow: dodge, crit, power.'},
         {id:'ra_legion',name:'Shadow Legion',icon:'👤',mp:36,cd:14,cast:{shape:'summon',summon:{kind:'shadow',count:4,ttl:18}},desc:'Summon a legion of four shadows.'} ],
     ], 'active'),
@@ -3516,25 +3613,25 @@ const SKILL_TREES = {
         {id:'ma_chainlightning',name:'Chain Lightning',icon:'⚡',mp:16,cd:3,cast:{shape:'chain',range:6,chain:3,spell:1.0},desc:'Lightning arcs between foes.'},
         {id:'ma_emberbuff',name:'Kindle',icon:'🕯️',mp:12,cd:6,cast:{shape:'self',buff:{id:'spellUp',dur:5,mag:0.4}},desc:'+40% spell damage for a few turns.'},
         {id:'ma_arcaneorb',name:'Arcane Orb',icon:'🔵',mp:14,cd:3,cast:{shape:'bolt',range:7,spell:1.3},desc:'A heavy orb of raw arcane force.'} ],
-      [ {id:'ma_flamewave',name:'Flame Wave',icon:'🌊',mp:18,cd:4,cast:{shape:'line',range:5,spell:1.2,status:{effect:'poison',dur:3,chance:0.7}},desc:'A wave of fire that scorches a line.'},
+      [ {id:'ma_flamewave',name:'Flame Wave',icon:'🌊',mp:18,cd:4,cast:{shape:'line',range:5,spell:1.2,status:{effect:'burn',dur:3,chance:0.8}},desc:'A wave of fire that scorches and ignites a line of foes.'},
         {id:'ma_blizzard',name:'Blizzard',icon:'❄️',mp:22,cd:5,cast:{shape:'blast',range:6,radius:2,spell:1.0,status:{effect:'stun',dur:1,chance:0.6}},desc:'A storm of ice over an area.'},
         {id:'ma_thunderstorm',name:'Thunderstorm',icon:'🌩️',mp:22,cd:5,cast:{shape:'nova',radius:3,spell:1.0},desc:'Lightning lashes everything around you.'},
         {id:'ma_elemental',name:'Summon Elemental',icon:'🔥',mp:20,cd:8,cast:{shape:'summon',summon:{kind:'elemental',count:1,ttl:18}},desc:'Conjure a fire elemental ally.'},
         {id:'ma_teleport',name:'Arcane Step',icon:'🌀',mp:14,cd:4,cast:{shape:'teleport',range:8,spell:1.0},desc:'Long-range teleport strike.'} ],
-      [ {id:'ma_meteor',name:'Meteor',icon:'☄️',mp:24,cd:5,cast:{shape:'blast',range:7,radius:2,spell:1.6,flat:24,perLvl:3},desc:'A meteor smashes a distant area.'},
+      [ {id:'ma_meteor',name:'Meteor',icon:'☄️',mp:24,cd:5,cast:{shape:'blast',range:7,radius:2,spell:1.6,flat:24,perLvl:3,status:{effect:'burn',dur:3,chance:0.8}},desc:'A meteor smashes a distant area and sets it ablaze.'},
         {id:'ma_iceprison',name:'Ice Prison',icon:'🔒',mp:20,cd:5,cast:{shape:'nova',radius:2,spell:0.9,status:{effect:'stun',dur:3,chance:1}},desc:'Lock nearby foes in ice.'},
         {id:'ma_voltaic',name:'Voltaic Surge',icon:'⚡',mp:22,cd:4,cast:{shape:'chain',range:7,chain:5,spell:1.1},desc:'Lightning that arcs through five foes.'},
         {id:'ma_arcanepower',name:'Arcane Power',icon:'🔷',mp:18,cd:8,cast:{shape:'self',buff:[{id:'spellUp',dur:5,mag:0.5},{id:'critUp',dur:5,mag:0.2}]},desc:'Spell power and crit surge.'},
         {id:'ma_twinelemental',name:'Twin Elementals',icon:'🌪️',mp:26,cd:9,cast:{shape:'summon',summon:{kind:'elemental',count:2,ttl:16}},desc:'Conjure two elemental allies.'} ],
-      [ {id:'ma_firestorm',name:'Firestorm',icon:'🔥',mp:26,cd:5,cast:{shape:'nova',radius:3,spell:1.5,status:{effect:'poison',dur:4,chance:0.8}},desc:'A roaring firestorm engulfs the area.'},
+      [ {id:'ma_firestorm',name:'Firestorm',icon:'🔥',mp:26,cd:5,cast:{shape:'nova',radius:3,spell:1.5,status:{effect:'burn',dur:4,chance:1}},desc:'A roaring firestorm engulfs and ignites the area.'},
         {id:'ma_absolutezero',name:'Absolute Zero',icon:'🧊',mp:28,cd:6,cast:{shape:'nova',radius:3,spell:1.3,status:{effect:'stun',dur:2,chance:1}},desc:'Flash-freeze everything around you.'},
-        {id:'ma_stormcall',name:'Storm Call',icon:'🌩️',mp:28,cd:6,cast:{shape:'blast',range:7,radius:3,spell:1.5},desc:'Call a thunderstorm onto a far area.'},
+        {id:'ma_stormcall',name:'Storm Call',icon:'🌩️',mp:28,cd:6,cast:{shape:'blast',range:7,radius:3,spell:1.5,drainMp:0.25},desc:'Call a thunderstorm onto a far area, siphoning its power back as mana.'},
         {id:'ma_disintegrate',name:'Disintegrate',icon:'☢️',mp:24,cd:4,cast:{shape:'line',range:7,spell:2.0},desc:'A beam that disintegrates a line of foes.'},
         {id:'ma_golem',name:'Arcane Golem',icon:'🗿',mp:30,cd:10,cast:{shape:'summon',summon:{kind:'golem',count:1,ttl:22}},desc:'Animate a powerful arcane golem.'} ],
-      [ {id:'ma_apocalypse',name:'Pyroclasm',icon:'🌋',mp:36,cd:8,cast:{shape:'nova',radius:4,spell:2.0,status:{effect:'poison',dur:4,chance:1}},desc:'An apocalyptic eruption of fire.'},
+      [ {id:'ma_apocalypse',name:'Pyroclasm',icon:'🌋',mp:36,cd:8,cast:{shape:'nova',radius:4,spell:2.0,status:{effect:'burn',dur:5,chance:1}},desc:'An apocalyptic eruption that leaves all around you burning.'},
         {id:'ma_iceage',name:'Ice Age',icon:'❄️',mp:36,cd:9,cast:{shape:'blast',range:8,radius:4,spell:1.8,status:{effect:'stun',dur:3,chance:1}},desc:'Entomb a vast area in ice.'},
         {id:'ma_thundergod',name:"Thunder God's Wrath",icon:'⚡',mp:34,cd:7,cast:{shape:'chain',range:9,chain:8,spell:1.6},desc:'Lightning leaps through eight foes.'},
-        {id:'ma_meteorshower',name:'Meteor Shower',icon:'☄️',mp:40,cd:10,cast:{shape:'blast',range:9,radius:3,spell:2.4,flat:30,perLvl:4},desc:'A shower of meteors devastates a far field.'},
+        {id:'ma_meteorshower',name:'Meteor Shower',icon:'☄️',mp:40,cd:10,cast:{shape:'random',count:6,spell:1.8,flat:24,perLvl:3,status:{effect:'burn',dur:3,chance:0.7}},desc:'Meteors crash down on six foes anywhere on the floor, igniting them.'},
         {id:'ma_elementarmy',name:'Elemental Host',icon:'🌟',mp:38,cd:14,cast:{shape:'summon',summon:{kind:'elemental',count:3,ttl:20}},desc:'Summon a host of three elementals.'} ],
     ], 'active'),
   },
@@ -3584,21 +3681,21 @@ const SKILL_TREES = {
         {id:'ta_blessbuff',name:'Crusader Zeal',icon:'⚔️',mp:14,cd:6,cast:{shape:'self',buff:{id:'dmgUp',dur:5,mag:0.4}},desc:'+40% damage for a few turns.'},
         {id:'ta_guardian',name:'Guardian Spirit',icon:'👼',mp:18,cd:8,cast:{shape:'summon',summon:{kind:'spirit',count:1,ttl:16}},desc:'Call a guardian spirit to fight beside you.'} ],
       [ {id:'ta_judgment',name:'Judgment',icon:'⚖️',mp:22,cd:5,cast:{shape:'nova',radius:2,spell:1.3,heal:{flat:25,perLevel:3}},desc:'Smite all nearby foes and restore health.'},
-        {id:'ta_holyfire',name:'Holy Fire',icon:'🔥',mp:20,cd:4,cast:{shape:'blast',range:6,radius:2,spell:1.3},desc:'Sacred flames erupt over an area.'},
+        {id:'ta_holyfire',name:'Holy Fire',icon:'🔥',mp:20,cd:4,cast:{shape:'blast',range:6,radius:2,spell:1.3,status:{effect:'burn',dur:3,chance:0.9}},desc:'Sacred flames erupt and burn an area.'},
         {id:'ta_aegisfield',name:'Aegis Field',icon:'🔰',mp:18,cd:8,cast:{shape:'self',buff:[{id:'shield',dur:6,mag:80},{id:'defUp',dur:6,mag:0.25}]},desc:'A protective field of holy power.'},
         {id:'ta_smiteline',name:'Lance of Light',icon:'➡️',mp:18,cd:3,cast:{shape:'line',range:6,spell:1.4},desc:'A lance of light pierces a line of foes.'},
         {id:'ta_twinguardian',name:'Twin Guardians',icon:'👼',mp:24,cd:9,cast:{shape:'summon',summon:{kind:'spirit',count:2,ttl:14}},desc:'Summon two guardian spirits.'} ],
       [ {id:'ta_wrath',name:'Wrath of God',icon:'🌩️',mp:24,cd:5,cast:{shape:'nova',radius:3,spell:1.5,status:{effect:'stun',dur:1,chance:0.6}},desc:'Divine wrath strikes everything around.'},
         {id:'ta_holynova',name:'Holy Nova',icon:'💥',mp:22,cd:4,cast:{shape:'nova',radius:2,spell:1.4,heal:{flat:30,perLevel:3}},desc:'A burst that smites foes and heals you greatly.'},
         {id:'ta_redeemer',name:'Redeemer',icon:'😇',mp:20,cd:7,cast:{shape:'self',buff:[{id:'dmgUp',dur:6,mag:0.5},{id:'regen',dur:6,mag:8}]},desc:'Damage up and powerful regeneration.'},
-        {id:'ta_condemn',name:'Condemn',icon:'⛓️',mp:20,cd:5,cast:{shape:'blast',range:5,radius:2,spell:1.2,status:{effect:'stun',dur:2,chance:1}},desc:'Bind foes in chains of light.'},
+        {id:'ta_condemn',name:'Condemn',icon:'⛓️',mp:20,cd:5,cast:{shape:'blast',range:5,radius:2,spell:1.2,status:{effect:'vuln',dur:5,chance:1}},desc:'Condemn foes in chains of light — they take +35% from all damage.'},
         {id:'ta_archon',name:'Archangel',icon:'🪽',mp:28,cd:10,cast:{shape:'summon',summon:{kind:'spirit',count:1,ttl:24,strong:true}},desc:'Summon a mighty archangel guardian.'} ],
       [ {id:'ta_divinestorm',name:'Divine Storm',icon:'🌟',mp:26,cd:5,cast:{shape:'nova',radius:3,spell:1.7,heal:{flat:20,perLevel:2}},desc:'A storm of light scours the area.'},
         {id:'ta_sunbeam',name:'Solar Beam',icon:'☀️',mp:26,cd:5,cast:{shape:'line',range:7,spell:2.0},desc:'A searing beam of sunlight.'},
         {id:'ta_bastion',name:'Bastion of Faith',icon:'🏰',mp:24,cd:9,cast:{shape:'self',buff:[{id:'shield',dur:8,mag:120},{id:'defUp',dur:8,mag:0.35},{id:'regen',dur:8,mag:6}]},desc:'An unbreakable bastion of holy defense.'},
         {id:'ta_meteorlight',name:'Falling Star',icon:'☄️',mp:28,cd:6,cast:{shape:'blast',range:7,radius:3,spell:1.8,heal:{flat:25,perLevel:2}},desc:'A star of light crashes down and heals you.'},
         {id:'ta_seraphhost',name:'Seraph Host',icon:'🪽',mp:30,cd:11,cast:{shape:'summon',summon:{kind:'spirit',count:3,ttl:16}},desc:'Summon three radiant seraphim.'} ],
-      [ {id:'ta_judgmentday',name:'Judgment Day',icon:'⚖️',mp:36,cd:8,cast:{shape:'nova',radius:4,spell:2.2,heal:{flat:40,perLevel:3}},desc:'The final judgment scours all and heals you.'},
+      [ {id:'ta_judgmentday',name:'Judgment Day',icon:'⚖️',mp:36,cd:8,cast:{shape:'nova',radius:4,spell:2.2,heal:{flat:40,perLevel:3},execute:0.25},desc:'The final judgment scours all, slays the wounded, and heals you.'},
         {id:'ta_lightofheaven',name:'Light of Heaven',icon:'🌅',mp:36,cd:9,cast:{shape:'blast',range:8,radius:4,spell:2.0,status:{effect:'stun',dur:2,chance:1}},desc:'Heaven\'s light blinds and burns a vast area.'},
         {id:'ta_avatar',name:'Avatar of Light',icon:'🕊️',mp:30,cd:12,cast:{shape:'self',buff:[{id:'dmgUp',dur:8,mag:0.5},{id:'defUp',dur:8,mag:0.4},{id:'spellUp',dur:8,mag:0.5},{id:'regen',dur:8,mag:10}]},desc:'Ascend as an avatar of light.'},
         {id:'ta_holyground',name:'Hallowed Ground',icon:'⛪',mp:34,cd:8,cast:{shape:'nova',radius:4,spell:1.6,heal:{flat:50,perLevel:4},status:{effect:'stun',dur:1,chance:0.6}},desc:'Consecrate a vast area, healing hugely.'},
@@ -3620,7 +3717,7 @@ const ASCENSIONS = {
         {id:'b_frenzy',name:'Frenzy',icon:'🌀',t:'active',mp:18,cd:5,cast:{shape:'self',buff:[{id:'dmgUp',dur:6,mag:0.7},{id:'critUp',dur:6,mag:0.2}]},desc:'Work into a killing frenzy.'} ],
       [ {id:'b_bloodbath',name:'Bloodbath',icon:'🩸',t:'active',mp:24,cd:5,cast:{shape:'nova',radius:2,wpn:2.2,lifesteal:0.45},desc:'Drench the area in blood, healing massively.'},
         {id:'b_thickskin',name:'Berserker Hide',icon:'🦏',t:'passive',fx:{dmgTaken:0.02,maxHpPct:0.03},desc:'-2% damage taken and +3% HP per rank.'} ],
-      [ {id:'b_warbringer',name:'Warbringer',icon:'💀',t:'active',mp:34,cd:9,cast:{shape:'nova',radius:4,wpn:3.0,lifesteal:0.4,status:{effect:'poison',dur:4,chance:1}},desc:'An apocalyptic, self-healing rampage.'},
+      [ {id:'b_warbringer',name:'Warbringer',icon:'💀',t:'active',mp:34,cd:9,cast:{shape:'nova',radius:4,wpn:3.0,lifesteal:0.4,execute:0.3,status:{effect:'poison',dur:4,chance:1}},desc:'An apocalyptic, self-healing rampage that butchers the wounded.'},
         {id:'b_immortalrage',name:'Immortal Rage',icon:'♾️',t:'passive',fx:{lowHpDmg:0.05,lifesteal:0.02},desc:'+5% damage to wounded foes, heal 2% of damage per rank.'} ],
     ], null, 'berserker') },
   guardian: { base:'warrior', name:'Guardian', icon:'🛡️', color:'#5a8fd0',
@@ -3638,10 +3735,10 @@ const ASCENSIONS = {
     blurb:'A lethal killer — crits, poison, and executions from the shadows.',
     tree: buildTree([
       [ {id:'as_mastery',name:"Killer's Mastery",icon:'🎯',t:'passive',fx:{crit:0.012,critDmg:0.08},desc:'+1.2% crit and +8% crit damage per rank.'},
-        {id:'as_mark',name:'Marked for Death',icon:'☠️',t:'active',mp:20,cd:5,cast:{shape:'bolt',range:7,wpn:4.5,crit:true},desc:'A devastating mark — a colossal crit.'} ],
+        {id:'as_mark',name:'Marked for Death',icon:'☠️',t:'active',mp:20,cd:5,cast:{shape:'bolt',range:7,wpn:4.5,crit:true,status:{effect:'vuln',dur:6,chance:1}},desc:'A colossal crit that marks the foe to take +35% from all damage.'} ],
       [ {id:'as_shroud',name:'Death Shroud',icon:'🌫️',t:'active',mp:18,cd:7,cast:{shape:'self',buff:[{id:'critUp',dur:6,mag:0.35},{id:'dmgUp',dur:6,mag:0.4}]},desc:'Cloak yourself in lethal intent.'},
         {id:'as_venomblade',name:'Venom Mastery',icon:'🐍',t:'passive',fx:{lowHpDmg:0.05,pen:0.03},desc:'+5% damage to wounded foes and +3% pen per rank.'} ],
-      [ {id:'as_deathblossom',name:'Death Blossom',icon:'🌸',t:'active',mp:30,cd:7,cast:{shape:'nova',radius:3,wpn:2.6,crit:true,status:{effect:'poison',dur:5,chance:1}},desc:'A whirlwind of poisoned crits.'},
+      [ {id:'as_deathblossom',name:'Death Blossom',icon:'🌸',t:'active',mp:30,cd:7,cast:{shape:'nova',radius:3,wpn:2.6,crit:true,execute:0.3,status:{effect:'poison',dur:5,chance:1}},desc:'A whirlwind of poisoned crits that finishes the wounded.'},
         {id:'as_perfect',name:'Perfect Strike',icon:'👑',t:'passive',fx:{critDmg:0.1,dmgDealt:0.015},desc:'+10% crit damage and +1.5% damage per rank.'} ],
     ], null, 'assassin') },
   shadowdancer: { base:'rogue', name:'Shadowdancer', icon:'🌑', color:'#9a7bce',
@@ -3659,8 +3756,8 @@ const ASCENSIONS = {
     blurb:'A master of fire who reduces whole rooms to ash.',
     tree: buildTree([
       [ {id:'py_mastery',name:'Fire Mastery',icon:'🔥',t:'passive',fx:{spell:0.04,critDmg:0.05},desc:'+4% spell damage and +5% crit damage per rank.'},
-        {id:'py_immolate',name:'Immolation',icon:'🌋',t:'active',mp:22,cd:4,cast:{shape:'nova',radius:3,spell:1.6,status:{effect:'poison',dur:4,chance:1}},desc:'Erupt in flame, burning everything near.'} ],
-      [ {id:'py_meteor',name:'Cinder Storm',icon:'☄️',t:'active',mp:28,cd:6,cast:{shape:'blast',range:8,radius:3,spell:2.0},desc:'A storm of cinders rains on a far area.'},
+        {id:'py_immolate',name:'Immolation',icon:'🌋',t:'active',mp:22,cd:4,cast:{shape:'nova',radius:3,spell:1.6,status:{effect:'burn',dur:4,chance:1}},desc:'Erupt in flame, leaving everything near you burning.'} ],
+      [ {id:'py_meteor',name:'Cinder Storm',icon:'☄️',t:'active',mp:28,cd:6,cast:{shape:'blast',range:8,radius:3,spell:2.0,status:{effect:'burn',dur:4,chance:0.9}},desc:'A storm of cinders rains on a far area, setting it ablaze.'},
         {id:'py_kindle',name:'Inner Flame',icon:'🕯️',t:'passive',fx:{spell:0.045,maxMpPct:0.03},desc:'+4.5% spell damage and +3% MP per rank.'} ],
       [ {id:'py_phoenix',name:'Phoenix',icon:'🦅',t:'active',mp:34,cd:11,cast:{shape:'summon',summon:{kind:'elemental',count:1,ttl:24,strong:true}},desc:'Summon a blazing phoenix to incinerate foes.'},
         {id:'py_conflagration',name:'Conflagration',icon:'🔥',t:'passive',fx:{spell:0.05,critDmg:0.06},desc:'+5% spell damage and +6% crit damage per rank.'} ],
@@ -3683,7 +3780,7 @@ const ASCENSIONS = {
         {id:'cr_smite',name:'Divine Storm',icon:'⚡',t:'active',mp:24,cd:5,cast:{shape:'nova',radius:3,spell:1.7,heal:{flat:25,perLevel:2}},desc:'A storm of holy power that heals you.'} ],
       [ {id:'cr_lance',name:'Heaven\'s Lance',icon:'➡️',t:'active',mp:22,cd:4,cast:{shape:'line',range:7,spell:2.2},desc:'A lance of light pierces all in a line.'},
         {id:'cr_valor',name:'Valor',icon:'🛡️',t:'passive',fx:{dmgTaken:0.02,maxHpPct:0.025},desc:'-2% damage taken and +2.5% HP per rank.'} ],
-      [ {id:'cr_judgment',name:'Final Judgment',icon:'⚖️',t:'active',mp:36,cd:9,cast:{shape:'nova',radius:4,spell:2.4,heal:{flat:40,perLevel:3},status:{effect:'stun',dur:1,chance:0.6}},desc:'Pass final judgment on all around you.'},
+      [ {id:'cr_judgment',name:'Final Judgment',icon:'⚖️',t:'active',mp:36,cd:9,cast:{shape:'nova',radius:4,spell:2.4,heal:{flat:40,perLevel:3},execute:0.25,status:{effect:'stun',dur:1,chance:0.6}},desc:'Pass final judgment on all around you, slaying the wounded.'},
         {id:'cr_avatar',name:'Avatar of Justice',icon:'👑',t:'passive',fx:{dmgDealt:0.02,spell:0.03},desc:'+2% damage and +3% spell power per rank.'} ],
     ], null, 'crusader') },
   sentinel: { base:'templar', name:'Sentinel', icon:'🪽', color:'#cfe0ff',
@@ -8965,9 +9062,13 @@ function draw() {
     const eStatus = statusEffects.filter(s => s.target === e);
     const poisoned = eStatus.some(s => s.effect === 'poison');
     const stunned = eStatus.some(s => s.effect === 'stun');
+    const burning = eStatus.some(s => s.effect === 'burn');
+    const cursed = eStatus.some(s => s.effect === 'vuln');
     ctx.save();
     if (e.hitAt && Date.now() - e.hitAt < 110) ctx.filter = 'brightness(2.6) saturate(0.4)';   // white hit-flash
+    else if (burning) ctx.filter = 'grayscale(1) sepia(1) saturate(9) hue-rotate(-30deg) brightness(1.2)';
     else if (poisoned) ctx.filter = 'grayscale(1) sepia(1) saturate(6) hue-rotate(60deg) brightness(1.05)';
+    else if (cursed) ctx.filter = 'grayscale(1) sepia(1) saturate(6) hue-rotate(220deg) brightness(0.92)';
     else if (stunned) ctx.filter = 'grayscale(1) sepia(1) saturate(7) hue-rotate(-15deg) brightness(1.25)';
     // Pop: a glowing halo — coloured for elites/bosses, dark for regular foes —
     // so even tiny critters stand out from the environment.
@@ -9080,9 +9181,9 @@ function draw() {
     ctx.textAlign = 'center';
     pEffects.forEach((s, i) => {
       const ix = px + tw * 0.15 + i * tw * 0.25, iy = py + th * 0.92;
-      const ic = s.effect === 'poison' ? 'ic_poison' : 'ic_stun';
+      const ic = s.effect === 'poison' ? 'ic_poison' : s.effect === 'burn' ? 'ic_fire' : s.effect === 'vuln' ? 'ic_orb' : 'ic_stun';
       if (!(spriteReady && drawSpriteC(ic, ix, iy, Math.round(tw * 0.34))))
-        drawEmoji(s.effect === 'poison' ? '🧪' : '⚡', ix, iy, Math.round(tw * 0.28));
+        drawEmoji(s.effect === 'poison' ? '🧪' : s.effect === 'burn' ? '🔥' : s.effect === 'vuln' ? '🟣' : '⚡', ix, iy, Math.round(tw * 0.28));
     });
   }
 
@@ -9212,12 +9313,26 @@ function tickStatusEffects() {
         log(`🧪 Poison deals ${dmg} damage!`);
         updateBars();
       }
+      if (s.effect === 'burn') {
+        const dmg = 4 + Math.round(dungeonLevel * 1.5);
+        player.hp = Math.max(1, player.hp - dmg);
+        spawnFloatingText(player.x, player.y, `${dmg}`, '#ff8a3a');
+        log(`🔥 Burning deals ${dmg} damage!`);
+        updateBars();
+      }
       if (s.effect === 'stun') {
         log('⚡ You are stunned and cannot move!');
       }
     } else {
       const e = s.target;
       if (e.dead) return false;
+      if (s.effect === 'burn') {
+        const dmg = 4 + Math.round(dungeonLevel * 1.5);
+        e.hp -= dmg;
+        spawnFloatingText(e.x, e.y, `${dmg}`, '#ff8a3a');
+        log(`🔥 Burning deals ${dmg} to ${e.isBoss ? e.name : e.type}!`);
+        if (e.hp <= 0) { log(`${e.isBoss ? e.name : e.type} burned to ash!`, 'important'); onEnemyDefeated(e); }
+      }
       if (s.effect === 'poison') {
         const dmg = 2 + dungeonLevel;
         e.hp -= dmg;
@@ -9864,6 +9979,8 @@ function enemyArmorPct(e) {
 // died (rewards handled by onEnemyDefeated).
 function dealDamage(e, dmg, isCrit) {
   if (e.dead) return true;
+  // Vulnerable (cursed/marked) foes take amplified damage from every source.
+  if (statusEffects.some(s => s.target === e && s.effect === 'vuln')) dmg = Math.round(dmg * 1.35);
   e.hp -= dmg;
   e.hitAt = Date.now();   // drives the white hit-flash in draw()
   spawnFloatingText(e.x, e.y, isCrit ? `${dmg}!` : `${dmg}`, isCrit ? '#ffdd55' : '#fff');
@@ -10410,6 +10527,21 @@ function resolveCast(node, rank) {
       if (spot) { player.x = spot.x; player.y = spot.y; }
       targets = [f]; center = f; break;
     }
+    case 'random': {
+      // Strike a handful of foes anywhere on the floor — range and walls ignored.
+      const pool = enemies.filter(o => !o.dead);
+      if (!pool.length) { log(`${node.icon} No foes to strike.`); return false; }
+      for (let k = pool.length - 1; k > 0; k--) { const j = (Math.random() * (k + 1)) | 0; [pool[k], pool[j]] = [pool[j], pool[k]]; }
+      targets = pool.slice(0, c.count || 3);
+      center = targets[0]; break;
+    }
+  }
+
+  // Vortex: yank every (non-boss) target to an open tile beside the hero before
+  // the blow lands — turns a ranged burst into an instant gather-and-gut.
+  if (c.pull && targets.length) {
+    const spots = openTilesNear(player.x, player.y, targets.length + 2);
+    targets.forEach((e, k) => { const s = spots[k]; if (s && !e.isBoss) { e.x = s.x; e.y = s.y; } });
   }
 
   // Feedback.
@@ -10420,20 +10552,29 @@ function resolveCast(node, rank) {
   // Summons short-circuit (no damage pass).
   if (c.summon) { doSummon(c.summon, rank); return true; }
 
-  // Damage pass.
-  let total = 0, i = 0;
-  for (const e of targets) {
-    if (e.dead) { i++; continue; }
-    const falloff = (c.shape === 'chain') ? Math.pow(0.7, i) : 1;
-    let dmg = 0;
-    if (c.wpn) dmg = skillPhysDamage(e, c.wpn * falloff, rank, c.crit);
-    else if (c.spell) dmg = skillSpellDamage(e, c, c.spell * falloff, rank);
-    if (dmg > 0) { total += dmg; dealDamage(e, dmg, !!c.crit); }
-    if (c.status && !e.dead) {
-      const chance = Math.min(1, c.status.chance + 0.03 * (rank - 1));
-      if (Math.random() < chance) applyStatusEffect(e, c.status.effect, c.status.dur + Math.floor((rank - 1) / 3), 'player');
+  // Damage pass. `repeat` re-strikes the same targets for multi-hit flurries.
+  let total = 0;
+  const hits = Math.max(1, c.repeat || 1);
+  for (let h = 0; h < hits; h++) {
+    let i = 0;
+    for (const e of targets) {
+      if (e.dead) { i++; continue; }
+      const falloff = (c.shape === 'chain') ? Math.pow(0.7, i) : 1;
+      let dmg = 0;
+      if (c.wpn) dmg = skillPhysDamage(e, c.wpn * falloff, rank, c.crit);
+      else if (c.spell) dmg = skillSpellDamage(e, c, c.spell * falloff, rank);
+      // Execute: a wounded, non-boss foe is finished outright; bosses just bleed extra.
+      if (c.execute && dmg > 0) {
+        if (!e.isBoss && e.hp <= e.maxHp * c.execute) dmg = Math.max(dmg, e.hp);
+        else if (e.isBoss) dmg = Math.round(dmg * 1.4);
+      }
+      if (dmg > 0) { total += dmg; dealDamage(e, dmg, !!c.crit); }
+      if (c.status && !e.dead) {
+        const chance = Math.min(1, c.status.chance + 0.03 * (rank - 1));
+        if (Math.random() < chance) applyStatusEffect(e, c.status.effect, c.status.dur + Math.floor((rank - 1) / 3), 'player');
+      }
+      i++;
     }
-    i++;
   }
 
   if (c.lifesteal && total > 0) {
@@ -10455,6 +10596,29 @@ function resolveCast(node, rank) {
       applyBuff(b.id, b.dur, mag);
     }
     spawnFloatingText(player.x, player.y, node.icon, '#cfe0ff');
+  }
+  // Knockback: shove surviving (non-boss) targets away from the blast centre.
+  if (c.knockback) {
+    for (const e of targets) {
+      if (e.dead || e.isBoss) continue;
+      for (let step = 0; step < c.knockback; step++) {
+        const dx = Math.sign(e.x - center.x) || (Math.random() < 0.5 ? 1 : -1);
+        const dy = Math.sign(e.y - center.y);
+        if (minionTileFree(e.x + dx, e.y + dy)) { e.x += dx; e.y += dy; } else break;
+      }
+    }
+  }
+  // Mana drain: siphon part of the damage dealt back as MP.
+  if (c.drainMp && total > 0) {
+    const got = Math.min(Math.round(total * c.drainMp), player.maxMp - player.mp);
+    if (got > 0) { player.mp += got; spawnFloatingText(player.x, player.y - 0.3, `+${got} MP`, '#7fb0ff'); }
+  }
+  // Recall: blink the hero to the open tile furthest from any foe (an escape).
+  if (c.recall) {
+    const spots = openTilesNear(player.x, player.y, 40);
+    let best = null, bd = -1;
+    for (const s of spots) { const ne = nearestEnemyTo(s.x, s.y); const d = ne ? Math.abs(ne.x - s.x) + Math.abs(ne.y - s.y) : 99; if (d > bd) { bd = d; best = s; } }
+    if (best) { player.x = best.x; player.y = best.y; spawnFloatingText(player.x, player.y, node.icon, '#cfe0ff'); }
   }
 
   log(`${node.icon} ${HERO} casts ${node.name}${total > 0 ? ` for ${total}` : ''}${targets.length > 1 ? ` across ${targets.length} foes` : ''}!`, 'important');
@@ -10828,28 +10992,291 @@ function bossLifesteal(e, dmg) {
   spawnFloatingText(e.x, e.y, `+${heal}`, '#cc44ff');
 }
 
+// ── BOSS HAZARDS (walls of flame, arcane barriers) ──
+// Look up / place / age the transient tiles a boss conjures. Hazards only sit on
+// open floor (tile 0) so they never overwrite stairs, water, doors and the like.
+function hazardAt(x, y) { for (const h of bossHazards) if (h.x === x && h.y === y) return h; return null; }
+function bossWallAt(x, y) { for (const h of bossHazards) if (h.x === x && h.y === y && h.kind === 'wall') return true; return false; }
+function addHazard(x, y, kind, turns, dmg) {
+  if (x < 1 || y < 1 || x >= MAP_W - 1 || y >= MAP_H - 1) return false;
+  if (mapData[y][x] !== 0) return false;
+  if (x === player.x && y === player.y && kind === 'wall') return false; // never bury the hero in a wall
+  const ex = hazardAt(x, y);
+  if (ex) { ex.kind = kind; ex.turns = Math.max(ex.turns, turns); if (dmg) ex.dmg = dmg; return true; }
+  bossHazards.push({ x, y, kind, turns, dmg: dmg || 0 });
+  return true;
+}
+// Each enemy turn: burn the hero if they're standing in flame, then age every
+// hazard and drop the expired ones. Fire is never lethal on its own (like lava).
+function tickBossHazards() {
+  if (bossHazards.length === 0) return;
+  const fire = bossHazards.find(h => h.kind === 'fire' && h.x === player.x && h.y === player.y);
+  if (fire && fire.dmg > 0) {
+    const burn = Math.max(1, mitigateDamage(fire.dmg, dungeonLevel));
+    player.hp = Math.max(1, player.hp - burn);
+    spawnFloatingText(player.x, player.y, `${burn}`, '#ff7733');
+    spawnParticles(player.x, player.y, '#ff7733', 5, 0.08);
+    log(`🔥 You stand in the flames for ${burn}!`);
+    updateBars();
+  }
+  bossHazards = bossHazards.filter(h => --h.turns > 0);
+}
+
+// Can the player legally occupy (x,y)? Used by pull/knockback/blink so they never
+// shove the hero into rock, a wall of force, or another foe.
+function playerCanStand(x, y) {
+  if (x < 0 || y < 0 || x >= MAP_W || y >= MAP_H) return false;
+  if (!isFloorPassable(mapData[y][x])) return false;
+  if (bossWallAt(x, y)) return false;
+  if (getEnemyAt(x, y)) return false;
+  return true;
+}
+// The boss footprint tile nearest the player — the anchor abilities aim from.
+function bossAnchor(e) {
+  const s = e.size || 1; let best = { x: e.x, y: e.y }, bd = Infinity;
+  for (let dx = 0; dx < s; dx++) for (let dy = 0; dy < s; dy++) {
+    const d = Math.abs(e.x + dx - player.x) + Math.abs(e.y + dy - player.y);
+    if (d < bd) { bd = d; best = { x: e.x + dx, y: e.y + dy }; }
+  }
+  return best;
+}
+// Does an N×N boss footprint rooted at (nx,ny) fit on free tiles (ignoring itself)?
+function bossBlockFits(e, nx, ny) {
+  const s = e.size || 1;
+  for (let dx = 0; dx < s; dx++) for (let dy = 0; dy < s; dy++) {
+    const cx = nx + dx, cy = ny + dy;
+    if (!enemyTileFree(cx, cy) && getEnemyAt(cx, cy) !== e) return false;
+  }
+  return true;
+}
+// Hurt the player by a raw amount (mitigated here), with a floating number; handles
+// death and the low-HP flash. Returns the damage dealt. Shared by the specials.
+function bossHitPlayer(raw, e, color) {
+  const dmg = Math.max(1, mitigateDamage(raw, e.level));
+  player.hp = Math.max(0, player.hp - dmg);
+  spawnFloatingText(player.x, player.y, `${dmg}`, color || '#ff3344');
+  updateBars();
+  if (player.hp <= player.maxHp * 0.25) screenFlash('#cc0000');
+  if (player.hp === 0) handleDeath();
+  return dmg;
+}
+
 // Returns true if the boss spent its whole turn on a special (so it skips moving).
+// Bosses carry a `specials` kit; this rolls the shared cooldown, then tries each
+// trick (shuffled) until one fits the situation. Low-health bosses lean on them.
 function bossSpecial(e, dist, beh) {
-  // Elder Dragon enrages once, the instant it drops below 40% HP.
-  if (e.bossAbility === 'enrage' && !e.enraged && e.hp < e.maxHp * 0.4) {
+  if (e.shieldT > 0) e.shieldT--; // age any active ward
+  // Enrage is a one-time power spike the instant the boss drops below 40% HP.
+  if ((e.specials || []).includes('enrage') && !e.enraged && e.hp < e.maxHp * 0.4) {
     e.enraged = true;
     e.dmg = Math.round(e.dmg * 1.5);
     log(`🐲 ${e.name} ROARS and flies into a rage!`, 'important');
-    screenFlash('#ff3344');
+    sfx('boss'); screenFlash('#ff3344'); addShake(6);
     return true;
   }
   e.cd = (e.cd || 0) - 1;
   if (e.cd > 0) return false;
-  // Rat King summons a knot of vermin around itself.
-  if (e.bossAbility === 'summon' && dist <= 8) {
-    const n = summonMinions(e, rnd(1, 2));
-    if (n > 0) {
-      e.cd = 5;
-      log(`👑 ${e.name} summons ${n} vermin to swarm you!`, 'important');
-      return true;
+  const desperate = e.hp < e.maxHp * 0.35;
+  if (Math.random() > (desperate ? 0.9 : 0.6)) return false;
+  const pool = (e.specials || []).filter(a => a !== 'enrage').sort(() => Math.random() - 0.5);
+  for (const ab of pool) if (tryBossAbility(e, ab, dist)) return true;
+  return false;
+}
+
+// Fire one named special; returns true if it actually went off (each sets its own
+// cooldown on success). Returning false lets bossSpecial fall through to the next.
+function tryBossAbility(e, ab, dist) {
+  switch (ab) {
+    case 'summon':     return bossSummonWave(e, dist);
+    case 'firewall':   return bossFirewall(e, dist);
+    case 'firestorm':  return bossFirestorm(e, dist);
+    case 'chain':      return bossChainPull(e, dist);
+    case 'walls':      return bossConjureWalls(e, dist);
+    case 'shockwave':  return bossShockwave(e, dist);
+    case 'blink':      return bossBlink(e, dist);
+    case 'frost':      return bossFrostNova(e, dist);
+    case 'shield':     return bossShield(e, dist);
+    case 'heal':       return bossHeal(e, dist);
+    case 'curseblast': return bossCurseBlast(e, dist);
+  }
+  return false;
+}
+
+function bossSummonWave(e, dist) {
+  if (dist > 9) return false;
+  const n = summonMinions(e, rnd(1, 2));
+  if (n <= 0) return false;
+  e.cd = 5;
+  log(`👑 ${e.name} summons ${n} vermin to swarm you!`, 'important');
+  sfx('shrine');
+  return true;
+}
+
+// A wall of flame: a line of fire across the player's position, perpendicular to
+// the boss→hero axis, that lingers and burns for a couple of turns.
+function bossFirewall(e, dist) {
+  if (dist > 7) return false;
+  const a = bossAnchor(e);
+  const dx = Math.sign(player.x - a.x), dy = Math.sign(player.y - a.y);
+  const px = dy || 1, py = dx; // axis perpendicular to the approach
+  const burn = Math.max(3, Math.round(e.dmg * 0.5));
+  let placed = 0;
+  for (let i = -2; i <= 2; i++) if (addHazard(player.x + px * i, player.y + py * i, 'fire', rnd(2, 3) + 1, burn)) placed++;
+  if (addHazard(player.x, player.y, 'fire', rnd(2, 3) + 1, burn)) placed++;
+  if (!placed) return false;
+  e.cd = 4;
+  log(`🔥 ${e.name} conjures a wall of flame!`, 'important');
+  sfx('boss'); screenFlash('#ff5522');
+  return true;
+}
+
+// A firestorm: a 3×3 patch of lingering fire dropped on and around the hero.
+function bossFirestorm(e, dist) {
+  if (dist > 7) return false;
+  const burn = Math.max(3, Math.round(e.dmg * 0.45));
+  let placed = 0;
+  for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++)
+    if (addHazard(player.x + dx, player.y + dy, 'fire', rnd(2, 3) + 1, burn)) placed++;
+  if (!placed) return false;
+  e.cd = 6;
+  log(`🔥 ${e.name} rains a firestorm down around you!`, 'important');
+  sfx('boss'); screenFlash('#ff5522'); addShake(5);
+  return true;
+}
+
+// A chain/hook/tail that yanks the hero to a free tile beside the boss, then bites.
+function bossChainPull(e, dist) {
+  if (dist < 2 || dist > 7 || !hasLineToPlayer(e)) return false;
+  const s = e.size || 1; let best = null, bd = Infinity;
+  for (let gx = e.x - 1; gx <= e.x + s; gx++) for (let gy = e.y - 1; gy <= e.y + s; gy++) {
+    if (gx >= e.x && gx < e.x + s && gy >= e.y && gy < e.y + s) continue; // inside footprint
+    if (!playerCanStand(gx, gy)) continue;
+    const d = Math.abs(gx - player.x) + Math.abs(gy - player.y);
+    if (d < bd) { bd = d; best = { x: gx, y: gy }; }
+  }
+  if (!best) return false;
+  player.x = best.x; player.y = best.y;
+  spawnParticles(player.x, player.y, '#cc8844', 8, 0.1);
+  const dmg = bossHitPlayer(Math.max(2, Math.round(e.dmg * 0.5)), e, '#ffaa33');
+  e.cd = 5;
+  log(`⛓️ ${e.name} hooks you and drags you in for ${dmg}!`, 'important');
+  sfx('boss'); addShake(6); screenFlash('#aa5522');
+  return true;
+}
+
+// Throw up barriers on the hero's escape tiles (the side away from the boss),
+// always leaving at least one opening so you're pressured, not hard-trapped.
+function bossConjureWalls(e, dist) {
+  if (dist < 2 || dist > 8) return false;
+  const a = bossAnchor(e);
+  const sx = Math.sign(player.x - a.x), sy = Math.sign(player.y - a.y);
+  const cand = ENEMY_DIRS
+    .map(([mx, my]) => ({ x: player.x + mx, y: player.y + my, away: (Math.sign(mx) === sx ? 1 : 0) + (Math.sign(my) === sy ? 1 : 0) }))
+    .filter(c => mapData[c.y] && mapData[c.y][c.x] === 0 && !getEnemyAt(c.x, c.y) && !hazardAt(c.x, c.y))
+    .sort((p, q) => q.away - p.away);
+  const want = Math.min(3, Math.max(0, cand.length - 1)); // leave one exit open
+  let placed = 0;
+  for (let i = 0; i < cand.length && placed < want; i++)
+    if (addHazard(cand[i].x, cand[i].y, 'wall', rnd(2, 3) + 1)) placed++;
+  if (!placed) return false;
+  e.cd = 6;
+  log(`🧱 ${e.name} raises barriers of force to pen you in!`, 'important');
+  sfx('boss'); screenFlash('#7755bb');
+  return true;
+}
+
+// A shockwave that hurls the hero several tiles away and may leave them reeling.
+function bossShockwave(e, dist) {
+  if (dist > 4) return false;
+  const a = bossAnchor(e);
+  let dx = Math.sign(player.x - a.x), dy = Math.sign(player.y - a.y);
+  if (dx === 0 && dy === 0) dx = 1;
+  for (let i = 0; i < 3; i++) {
+    const nx = player.x + dx, ny = player.y + dy;
+    if (!playerCanStand(nx, ny)) break;
+    player.x = nx; player.y = ny;
+  }
+  spawnParticles(player.x, player.y, '#aaddff', 10, 0.12);
+  const dmg = bossHitPlayer(Math.max(2, Math.round(e.dmg * 0.6)), e, '#88ddff');
+  e.cd = 5;
+  log(`💥 ${e.name} unleashes a shockwave — you're hurled back for ${dmg}!`, 'important');
+  sfx('boss'); addShake(7); screenFlash('#6699cc');
+  if (Math.random() < 0.4 && player.hp > 0) { applyStatusEffect('player', 'stun', 1, e); log('⚡ The blast leaves you reeling!'); }
+  return true;
+}
+
+// Blink: a gap-closer that teleports the boss next to the hero (so kiting a caster
+// only buys you a moment). Needs a free landing block for its whole footprint.
+function bossBlink(e, dist) {
+  if (dist < 3) return false;
+  for (let r = 2; r <= 4; r++) {
+    const spots = [];
+    for (let dx = -r; dx <= r; dx++) for (let dy = -r; dy <= r; dy++)
+      if (Math.abs(dx) + Math.abs(dy) === r) spots.push([player.x + dx, player.y + dy]);
+    spots.sort(() => Math.random() - 0.5);
+    for (const [bx, by] of spots) {
+      if (bossBlockFits(e, bx, by)) {
+        spawnParticles(e.x, e.y, '#cc66ff', 10, 0.1);
+        e.x = bx; e.y = by; e.cd = 6;
+        spawnParticles(bx, by, '#cc66ff', 12, 0.12);
+        log(`🌀 ${e.name} blinks across the room!`, 'important');
+        sfx('boss');
+        return true;
+      }
     }
   }
   return false;
+}
+
+// Frost nova: freezes the hero solid (stun) and chips a little health.
+function bossFrostNova(e, dist) {
+  if (dist > 3) return false;
+  spawnParticles(player.x, player.y, '#bfe9ff', 10, 0.1);
+  const dmg = bossHitPlayer(Math.max(1, Math.round(e.dmg * 0.4)), e, '#aee7ff');
+  if (player.hp > 0) applyStatusEffect('player', 'stun', rnd(1, 2), e);
+  e.cd = 6;
+  spawnFloatingText(player.x, player.y - 0.3, 'FROZEN', '#aee7ff');
+  log(`❄️ ${e.name} freezes you solid for ${dmg}!`, 'important');
+  sfx('boss'); screenFlash('#88ccff');
+  return true;
+}
+
+// A protective ward: halves incoming damage (see dealDamage) for a few turns.
+function bossShield(e, dist) {
+  if (e.shieldT > 0 || e.hp > e.maxHp * 0.7) return false;
+  e.shieldT = rnd(3, 4);
+  e.cd = 8;
+  spawnFloatingText(e.x, e.y, 'WARD', '#9fd8ff');
+  spawnParticles(e.x, e.y, '#9fd8ff', 10, 0.08);
+  log(`🛡️ ${e.name} wreathes itself in a protective ward!`, 'important');
+  sfx('shrine');
+  return true;
+}
+
+// A desperate mend when the boss is badly wounded.
+function bossHeal(e, dist) {
+  if (e.hp > e.maxHp * 0.5) return false;
+  const heal = Math.round(e.maxHp * 0.18);
+  e.hp = Math.min(e.maxHp, e.hp + heal);
+  e.cd = 7;
+  spawnFloatingText(e.x, e.y, `+${heal}`, '#66ff99');
+  spawnParticles(e.x, e.y, '#66ff99', 10, 0.1);
+  log(`✨ ${e.name} channels dark energy and heals ${heal}!`, 'important');
+  sfx('shrine');
+  return true;
+}
+
+// A ranged hex: damage from afar plus a poison or stun proc.
+function bossCurseBlast(e, dist) {
+  if (dist < 2 || dist > 7 || !hasLineToPlayer(e)) return false;
+  spawnParticles(player.x, player.y, '#c77dff', 9, 0.1);
+  const dmg = bossHitPlayer(Math.max(2, Math.round(e.dmg * 0.7)), e, '#c77dff');
+  const eff = Math.random() < 0.5 ? 'poison' : 'stun';
+  if (player.hp > 0) applyStatusEffect('player', eff, eff === 'poison' ? 3 : 1, e);
+  e.cd = 4;
+  log(`👁️ ${e.name} hexes you from afar for ${dmg} (${eff})!`, 'important');
+  sfx('boss'); screenFlash('#9933cc');
+  return true;
 }
 
 // Place up to n weak minions on free tiles adjacent to the boss. Returns count.
@@ -11620,6 +12047,7 @@ function castShapeLabel(c) {
     self: 'self', melee: 'melee', cleave: 'cleave (adjacent)', nova: `burst${r}`,
     bolt: `single${rg}`, blast: `area${rg}${r}`, line: `line${rg}`, chain: `chain×${c.chain || 3}`,
     teleport: `blink${rg}`, summon: `summon ${c.summon ? c.summon.kind : ''}`,
+    random: `random ×${c.count || 3}`,
   })[c.shape] || c.shape;
 }
 
@@ -12291,7 +12719,9 @@ let activeSlot = (function () {
   return 0;
 })();
 
+let _wipingSave = false; // set while wiping so unload autosaves can't restore the deleted slot
 function saveGame() {
+  if (_wipingSave) return; // a new-run wipe is in progress — don't re-write the slot we just cleared
   try {
     const data = {
       player, inventory, equipped, dungeonLevel, buffs, pact,
@@ -12451,6 +12881,9 @@ function loadGame() {
 
 function wipeSave() {
   // Clears the slot you're currently playing, then reloads into a fresh hero.
+  // Latch _wipingSave first so the pagehide/visibilitychange autosaves that fire
+  // during reload can't re-write the slot we're about to clear.
+  _wipingSave = true;
   try { localStorage.removeItem(slotKey(activeSlot)); } catch (e) {}
   location.reload();
 }
@@ -12641,7 +13074,7 @@ function confirmNewGame() {
     setTimeout(() => {
       newGameArmed = false;
       btn.classList.remove('armed');
-      label.textContent = 'NEW';
+      label.textContent = 'NEW RUN';
     }, 3000);
     return;
   }
@@ -12860,6 +13293,47 @@ function submitName() {
 // INIT
 // ══════════════════════════════════════════
 
+// ── TITLE SCREEN / LANDING PAGE ──────────────────────────────────────────────
+// The landing page shown on load. It floats over the already-built game and
+// surfaces the same controls that live behind the ⚙️ settings dropdown. The
+// primary action defers onboarding (name + class pick) until the player chooses
+// to begin, so a fresh hero isn't prompted underneath the title.
+function refreshTitleToggles() {
+  const si = document.getElementById('t-sound-ic');
+  const sl = document.getElementById('t-sound-lbl');
+  if (si) si.textContent = audio.muted ? '\u{1F507}' : '\u{1F50A}';
+  if (sl) sl.textContent = audio.muted ? 'Sound: Off' : 'Sound: On';
+  const zl = document.getElementById('t-zoom-lbl');
+  if (zl) zl.textContent = 'Zoom: ' + (ZOOM_LABELS[zoomLevel] || 'Wide');
+}
+function showTitle() {
+  const ov = document.getElementById('title-overlay');
+  if (!ov) return;
+  // Crest is the DawnLike sword tile (atlas), with the emoji as a pre-load fallback.
+  const crest = document.getElementById('title-crest');
+  if (crest) { const ic = (typeof dlIcon === 'function') ? dlIcon('w_sword', 46) : ''; crest.innerHTML = ic || '⚔️'; }
+  // A returning hero gets CONTINUE + a New Run option; a fresh save gets one
+  // "enter the dungeon" button that flows straight into name/class onboarding.
+  const resuming = !!(player && player.class);
+  const play = document.getElementById('title-play');
+  const newrun = document.getElementById('title-newrun');
+  if (play) play.innerHTML = resuming ? '▶ CONTINUE' : '⚔️ ENTER THE DUNGEON';
+  if (newrun) newrun.style.display = resuming ? '' : 'none';
+  refreshTitleToggles();
+  ov.classList.add('open');
+}
+function closeTitle() { const ov = document.getElementById('title-overlay'); if (ov) ov.classList.remove('open'); }
+function titlePlay() {
+  closeTitle();
+  audioUnlock();
+  // Run onboarding now (deferred from init) for a brand-new or class-less hero.
+  if (!player.name && !player.class) showNameEntry();
+  else if (!player.class) showClassPick();
+}
+function titleNewRun() { closeTitle(); wipeSave(); }   // wipeSave() reloads into a fresh hero
+function titleSound() { toggleSound(); refreshTitleToggles(); }
+function titleZoom() { toggleZoom(); refreshTitleToggles(); }
+
 const hadSave = loadGame();
 // Resume in town if that's where the save left off; otherwise build the floor.
 if (inTown) { buildTown(); openTownHub(); } else generateMap();
@@ -12867,11 +13341,10 @@ draw();
 updateBars();
 renderPanel();
 
-// New game — name your hero first, then pick a class. submitName() chains into
-// the class pick. Older saves with a class but no name keep playing; they can
-// set a name later (it defaults to "Adventurer" on the leaderboard until then).
-if (!player.name && !player.class) showNameEntry();
-else if (!player.class) showClassPick();
+// Show the title screen / landing page first. The game is already built behind
+// it; titlePlay() dismisses the title and runs onboarding (name then class) for
+// a brand-new or class-less hero. Returning heroes just resume on CONTINUE.
+showTitle();
 
 if (hadSave) {
   log(`Welcome back, level ${player.level} adventurer.`, 'important');
