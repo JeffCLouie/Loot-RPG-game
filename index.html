@@ -227,6 +227,17 @@
   .settings-item .action-icon { font-size: 18px; }
   .settings-item .action-label { font-size: 12px; }
 
+  /* ── DEATH SCREEN ── */
+  #death-overlay { position: fixed; inset: 0; background: rgba(40,0,0,0.78); z-index: 500; display: none; align-items: center; justify-content: center; padding: 20px; }
+  #death-overlay.open { display: flex; animation: deathFade 0.35s ease; }
+  @keyframes deathFade { from { opacity: 0; } to { opacity: 1; } }
+  #death-card { background: linear-gradient(180deg, #2a1014, #160809); border: 2px solid #b3303a; border-radius: 12px; max-width: 320px; width: 100%; padding: 22px 18px; text-align: center; box-shadow: 0 0 40px rgba(200,0,30,0.5); }
+  .death-title { color: #ff4452; font-size: 26px; font-weight: bold; letter-spacing: 3px; text-shadow: 0 0 12px rgba(255,60,80,0.7); margin-bottom: 14px; }
+  #death-penalties { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+  .death-pen { font-size: 12px; color: #f0d8da; }
+  .death-btn { background: #b3303a; border: 1px solid #ff6472; color: #fff; font-family: 'Courier New', monospace; font-size: 13px; letter-spacing: 1px; padding: 9px 22px; border-radius: 8px; cursor: pointer; }
+  .death-btn:active { background: #ff4452; }
+
   /* ── VERSION HISTORY POPUP ── */
   #version-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 400; display: none; align-items: center; justify-content: center; padding: 16px; }
   #version-overlay.open { display: flex; }
@@ -538,17 +549,8 @@
   /* Vector item icons: silhouettes tinted to rarity, sized to their container. */
   .svg-icon { width: 18px; height: 18px; display: block; }
   .slot-icon .svg-icon { width: 16px; height: 16px; }
-  .cos-chip .svg-icon { width: 18px; height: 18px; }
-  .cos-preview .svg-icon { width: 20px; height: 20px; margin: 0 auto; }
 
-  /* ── COSMETICS / APPEARANCE ── */
-  .cos-head { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 8px; }
-  .cos-title { font-size: 11px; color: #c9a84a; letter-spacing: 1px; margin-bottom: 2px; }
-  .cos-sub { font-size: 9px; color: #555; margin-bottom: 8px; line-height: 1.4; }
-  .cos-block { margin-bottom: 8px; }
-  .cos-blk-head { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
-  .cos-preview { width: 24px; text-align: center; font-size: 18px; line-height: 1; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.6)); }
-  .cos-slot-label { color: #999; font-size: 10px; }
+  /* Chip row (used by the gamble slot picker) */
   .cos-chips { display: flex; flex-wrap: wrap; gap: 4px; }
   .cos-chip {
     flex-shrink: 0;
@@ -565,10 +567,8 @@
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation;
   }
-  .cos-chip.gear { font-family: 'Courier New', monospace; font-size: 9px; font-weight: bold; letter-spacing: 1px; color: #aaa; }
   .cos-chip:active { background: #2a2a3c; }
   .cos-chip.sel { border-color: #c9a84a; background: #2c2616; box-shadow: 0 0 6px rgba(201,168,74,0.5); }
-  .cos-empty { font-size: 9px; color: #555; font-style: italic; padding: 2px 0; }
 
   /* Inline action buttons on loot/gear rows */
   .row-btn {
@@ -642,7 +642,16 @@
   }
   #tooltip .tt-name { font-weight: bold; font-size: 12px; margin-bottom: 4px; }
   #tooltip .tt-stat { color: #8899bb; }
+  /* Native (headline/innate) stats read brighter than rollable affixes, with a
+     small dim tag, so it's clear they come from the base and can't be rerolled. */
+  #tooltip .tt-stat.tt-native { color: #cdd6f4; }
+  #tooltip .tt-tag { font-size: 9px; font-style: italic; color: #5a6680; margin-left: 2px; }
   #tooltip .tt-flavor { color: #666; font-style: italic; margin-top: 4px; font-size: 10px; }
+  /* Weapon reach grid: a row of small tiles — gold = you, red = squares you can
+     strike. Used in the weapon tooltip and the Forge so reach reads at a glance. */
+  .range-grid { display: inline-flex; gap: 2px; vertical-align: middle; }
+  .range-grid .rg-cell { width: 11px; height: 11px; border-radius: 2px; border: 1px solid transparent; box-sizing: border-box; }
+  .range-cap { font-size: 9px; color: #b9a98a; margin-left: 6px; vertical-align: middle; letter-spacing: .5px; }
   #tooltip .tt-tier { font-size: 10px; opacity: 0.7; }
   /* Side-by-side compare: hovered item next to the currently-equipped piece. */
   #tooltip.comparing { max-width: 440px; }
@@ -1126,6 +1135,10 @@
   }
   .forge-opt:active { background: #2a2113; }
   .forge-opt.on { border-color: var(--gold); color: var(--gold); background: #2a2113; }
+  /* Off-class weapon bases at the Forge: greyed and unclickable so you can't
+     accidentally craft a weapon your class can't wield. */
+  .forge-opt-locked { opacity: 0.38; cursor: not-allowed; background: #1a150d; color: #8a7d63; }
+  .forge-opt-locked:active { background: #1a150d; }
   .forge-tiers .forge-opt { flex-direction: column; gap: 1px; padding: 6px 2px; }
 
   /* Brief full-screen colour flash for crits, low HP, and big events. */
@@ -1576,7 +1589,7 @@
       <div id="action-buttons">
         <!-- The Health Potion now lives at the far left of the skill bar
              (rendered by renderSkillBar), so it's dropped from this nav row. -->
-        <button class="action-btn skill-btn" id="skill-btn" onclick="castSkill()" style="display:none" title="Cast your class skill (R)">
+        <button class="action-btn skill-btn" id="skill-btn" onclick="castSkill()" style="display:none" data-tip="<div class='ht-name'>⚡ Class Skill</div><div class='ht-line'>Cast your class's special skill.</div><div class='ht-sub'>press R</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
           <span class="action-icon" id="skill-icon">⚡</span><span class="action-label" id="skill-label">SKILL</span>
         </button>
         <button class="action-btn town-action" onclick="enterTown()">
@@ -1599,7 +1612,7 @@
         </button>
         <!-- Settings: collapses the Sound + New Game controls into one ⚙️ button
              that pops open the menu below. -->
-        <button class="action-btn settings-action" onclick="toggleSettingsMenu(event)" title="Settings">
+        <button class="action-btn settings-action" onclick="toggleSettingsMenu(event)" data-tip="<div class='ht-name'>⚙️ Settings</div><div class='ht-line'>Sound, save slots, and starting a new game.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
           <span class="action-icon">⚙️</span><span class="action-label">SETTINGS</span>
         </button>
       </div>
@@ -1627,6 +1640,15 @@
           <div class="settings-dpad-row" id="dpad-op-row"></div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- Death screen — a hard, unmistakable stop with the penalties spelled out. -->
+  <div id="death-overlay">
+    <div id="death-card">
+      <div class="death-title">💀 YOU DIED</div>
+      <div id="death-penalties"></div>
+      <button class="death-btn" onclick="closeDeath()">Continue</button>
     </div>
   </div>
 
@@ -1665,9 +1687,9 @@
   <div id="shop-overlay" onclick="if(event.target===this)closeShop()">
     <div id="shop-modal">
       <div id="shop-header">
-        <button id="shop-back" onclick="shopBack()" style="display:none" title="Back to town menu">←</button>
+        <button id="shop-back" onclick="shopBack()" style="display:none" data-tip="<div class='ht-name'>← Back</div><div class='ht-line'>Return to the town menu.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">←</button>
         <span id="shop-title">🧙‍♂️ Wandering Merchant</span>
-        <button id="shop-close" onclick="shopClose()" title="Close">✕</button>
+        <button id="shop-close" onclick="shopClose()" data-tip="<div class='ht-name'>✕ Close</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">✕</button>
       </div>
       <div id="shop-gold">Your gold: <span id="shop-gold-count">0</span>g</div>
       <div id="shop-tabs">
@@ -1681,9 +1703,9 @@
   <div id="mystic-overlay" onclick="if(event.target===this)closeMystic()">
     <div id="mystic-modal">
       <div id="mystic-header">
-        <button id="mystic-back" onclick="mysticBack()" style="display:none" title="Back to town menu">←</button>
+        <button id="mystic-back" onclick="mysticBack()" style="display:none" data-tip="<div class='ht-name'>← Back</div><div class='ht-line'>Return to the town menu.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">←</button>
         <span id="mystic-title">🔮 Wandering Mystic</span>
-        <button id="mystic-close" onclick="mysticClose()" title="Close">✕</button>
+        <button id="mystic-close" onclick="mysticClose()" data-tip="<div class='ht-name'>✕ Close</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">✕</button>
       </div>
       <div id="mystic-gold">Your gold: <span id="mystic-gold-count">0</span>g</div>
       <div id="mystic-active" style="display:none"></div>
@@ -1694,9 +1716,9 @@
   <div id="town-overlay" onclick="if(event.target===this)townBack()">
     <div id="town-modal">
       <div id="town-header">
-        <button id="town-back" onclick="townBack()" style="display:none" title="Back to town menu">←</button>
+        <button id="town-back" onclick="townBack()" style="display:none" data-tip="<div class='ht-name'>← Back</div><div class='ht-line'>Return to the town menu.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">←</button>
         <span id="town-title">Town</span>
-        <button id="town-close" onclick="leaveTown()" title="Leave town for the dungeon">✕</button>
+        <button id="town-close" onclick="leaveTown()" data-tip="<div class='ht-name'>✕ Leave Town</div><div class='ht-line'>Head back down into the dungeon.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">✕</button>
       </div>
       <div id="town-gold">Your gold: <span id="town-gold-count">0</span>g</div>
       <div id="town-mats"></div>
@@ -1832,6 +1854,71 @@ const SLOT_AFFIX_POOLS = {
   ring:   { stats: ['CRIT','CRITDMG','ATK','IDMG','LEECH','MPLEECH','GOLDFIND','MAGICFIND','MATFIND','HP','MP','DEF','DBLSTRIKE','BOSSDMG','EXEC','PEN','MCR','MPKILL','CLEAVE'], attrs: ['might','agility','luck','spirit','vitality'] },
   amulet: { stats: ['MP','HP','REGEN','SPELLPWR','CDR','MCR','MPLEECH','MPKILL','HPKILL','THORNS','MAGICFIND','DR','ATK','DEF','BOSSDMG','GOLDFIND','XPGAIN','MATFIND'], attrs: ['spirit','luck','vitality','might','agility'] },
 };
+
+// ── ITEM BASE PROFILES ──
+// Within a slot, the chosen base (Sword vs Dagger, Helm vs Hood, Amulet vs
+// Pendant) now shapes its stats — so the base you pick at the 🔨 Forge, and the
+// base a drop rolls, actually matters instead of being pure flavour.
+//   • Weapons scale their damage (`dmg`) and how wide the low–high range rolls
+//     (`spread`), so an Axe hits harder but swingier than a steady Dagger.
+//   • Armor scales its defence (`def`); gloves also scale their bonus attack
+//     (`atk`), so heavy plate guards more while light pieces lean offensive.
+//   • Jewelry has no headline stat, so each base instead carries one INNATE
+//     signature stat (`innate`) — a Signet always finds gold, a Necklace always
+//     boosts spell power. Innate stats are protected like a headline: they show
+//     in the preview and survive the Enchanter's rerolls (see headlineStats).
+// Multipliers default to 1 (a neutral base) when a key is omitted.
+const BASE_STATS = {
+  // weapons — dmg scales the hit, spread scales the high–low damage range
+  Sword:  { dmg: 1.00, spread: 0.40 },   // balanced all-rounder
+  Axe:    { dmg: 1.20, spread: 0.75 },   // big, swingy hits
+  Dagger: { dmg: 0.72, spread: 0.18 },   // light but very consistent
+  Staff:  { dmg: 0.85, spread: 0.30 },   // caster reach over raw power
+  Bow:    { dmg: 0.90, spread: 0.55 },   // ranged, variable
+  Mace:   { dmg: 1.15, spread: 0.45 },   // heavy, fairly steady
+  Spear:  { dmg: 1.00, spread: 0.35 },   // reliable reach
+  Scythe: { dmg: 1.10, spread: 0.65 },   // wide, swingy arc
+  // head
+  Helm: { def: 1.25 }, Cap: { def: 0.80 }, Crown: { def: 0.85 }, Hood: { def: 0.90 }, Circlet: { def: 0.80 },
+  // chest
+  Chestplate: { def: 1.30 }, Robe: { def: 0.70 }, Cuirass: { def: 1.10 }, Tunic: { def: 0.85 }, Mail: { def: 1.15 },
+  // hands — def vs atk lean
+  Gauntlets: { def: 1.25, atk: 0.90 }, Gloves: { def: 0.85, atk: 1.15 }, Bracers: { def: 1.05, atk: 1.00 }, Grips: { def: 0.90, atk: 1.10 },
+  // legs
+  Greaves: { def: 1.25 }, Leggings: { def: 0.85 }, Tassets: { def: 1.10 }, Trousers: { def: 0.90 },
+  // jewelry — each base's signature innate stat (drawn from its slot pool)
+  Ring: { innate: 'CRIT' }, Band: { innate: 'HP' }, Signet: { innate: 'GOLDFIND' }, Loop: { innate: 'MP' },
+  Amulet: { innate: 'MP' }, Pendant: { innate: 'HP' }, Necklace: { innate: 'SPELLPWR' }, Talisman: { innate: 'MAGICFIND' }, Charm: { innate: 'REGEN' },
+};
+function baseProfile(name) { return BASE_STATS[name] || {}; }
+// Apply a base's headline (and jewelry innate) stats onto a fresh item's stats
+// object. Shared by the Forge's blank pieces and generateItem's drops so both
+// honour the base. Records any innate jewelry stat on item.baseStats so the
+// Enchanter treats it as protected (see headlineStats).
+function applyBaseStats(item, baseName, lvl, mult, dmgMult, opts = {}) {
+  const bp = baseProfile(baseName);
+  const slot = item.slot;
+  if (slot === 'weapon') {
+    const base = Math.max(1, Math.floor((2 + lvl * 1.2) * dmgMult * (bp.dmg || 1)));
+    const spread = Math.max(1, Math.floor(base * (bp.spread != null ? bp.spread : 0.4)));
+    item.stats.DMG = `${base}-${base + spread}`;
+  } else if (slot === 'head' || slot === 'chest' || slot === 'hands' || slot === 'legs') {
+    const slotDef = { chest: 1.3, legs: 1.0, head: 0.8, hands: 0.7 }[slot];
+    item.stats.DEF = Math.max(1, Math.floor((1 + lvl) * mult * slotDef * (bp.def || 1)));
+    if (slot === 'hands') item.stats.ATK = Math.max(1, Math.floor((1 + lvl * 0.35) * mult * 0.6 * (bp.atk || 1)));
+  } else if (bp.innate) {
+    // ring / amulet: bake in the base's signature stat and mark it protected.
+    // opts.fixed → use the band's midpoint so the Forge preview is deterministic
+    // (matches the piece you'll get); drops roll a random value within the band.
+    if (opts.fixed) {
+      const r = affixStatRange(bp.innate, lvl, mult);
+      item.stats[bp.innate] = Math.round((r.min + r.max) / 2);
+    } else {
+      item.stats[bp.innate] = affixStatValue(bp.innate, lvl, mult);
+    }
+    item.baseStats = [bp.innate];
+  }
+}
 
 // ── ITEM ICONS ──
 // Every base item name maps to a vector-icon *key* (see ICON_PATHS below) so loot
@@ -2703,6 +2790,44 @@ function weaponStyle() {
   return 'slash';
 }
 
+// ── WEAPON REACH ──
+// How many tiles ahead each weapon can strike (1 = melee, must be adjacent). This
+// is the single source of truth shared by combat (tryRangedAttack) and the little
+// range grid shown in the weapon tooltip and the Forge, so what you see matches
+// what you can actually hit.
+const WEAPON_RANGE = { Sword:1, Axe:1, Dagger:1, Staff:4, Bow:4, Mace:1, Spear:2, Scythe:1 };
+// Same reach keyed by attack style, derived so combat code that works off the
+// resolved style stays in lockstep with the table above.
+const STYLE_RANGE = {};
+for (const b in WEAPON_STYLES) STYLE_RANGE[WEAPON_STYLES[b]] = WEAPON_RANGE[b];
+// One-line description of how each style swings — surfaced in the weapon tooltip
+// and the Forge so a base's feel is legible without reading the source comment.
+const WEAPON_STYLE_DESC = {
+  slash:  'Balanced strike, light follow-through to a 2nd foe',
+  cleave: 'Hits every adjacent foe at once',
+  flurry: 'Two rapid strikes with extra crit',
+  bolt:   'Magic blast at range (costs a little MP)',
+  shot:   'Fires across the room — no reprisal from afar',
+  crush:  'Heavy blow that can stun',
+  thrust: 'Reaches an extra tile, striking without reprisal',
+  reap:   'Wide arc that heals you for part of the hit',
+};
+// The reach of a base, or of an item's resolved weapon type.
+function weaponRange(base) { return WEAPON_RANGE[base] || 1; }
+// A tiny horizontal map of a weapon's reach: the gold centre tile is you, each red
+// tile ahead is a square it can strike; faint tiles behind keep you centred so the
+// reach reads at a glance. Shared by the weapon tooltip and the Forge preview.
+function weaponRangeGridHTML(base) {
+  const range = weaponRange(base);
+  let cells = '';
+  for (let i = -range; i <= range; i++) {
+    const bg = i === 0 ? '#e3c344' : i > 0 ? '#c0392b' : '#241c14';
+    const bd = i === 0 ? '#f4e08a' : i > 0 ? '#e0556b' : '#3a3226';
+    cells += `<span class="rg-cell" style="background:${bg};border-color:${bd}"></span>`;
+  }
+  return `<span class="range-grid">${cells}</span><span class="range-cap">reach ${range}</span>`;
+}
+
 // ── CHARACTER CLASSES ──
 // Every class now starts with the SAME attributes (ATTR_BASE in each). A class's
 // identity instead lives in `dmgAttrs` — the primary/secondary attributes its
@@ -2771,6 +2896,14 @@ function canEquipItem(item) {
   if (!cls) return true;
   const t = weaponBaseType(item);
   return !t || cls.weapons.includes(t);
+}
+
+// Can the current class wield this weapon BASE type (Sword, Bow, …)? Used to grey
+// out off-class bases at the Forge so you don't craft something you can't equip.
+function classCanUseWeaponBase(base) {
+  const cls = playerClass();
+  if (!cls) return true;            // a classless hero has no weapon restriction
+  return cls.weapons.includes(base);
 }
 
 // Combat passives keyed off the chosen class — now also folding in any damage
@@ -3404,8 +3537,8 @@ function pfx(field, dflt) { return (pact && pact.fx[field] != null) ? pact.fx[fi
 
 let player = { x: 5, y: 5, hp: 100, maxHp: 100, mp: 60, maxMp: 60, gold: 0, level: 1, xp: 0,
   // Potions are no longer hoarded consumables — they're an always-available
-  // skill gated by a shared one-turn cooldown (see useHealthPotion/useManaPotion),
-  // so you can quaff at most one potion per turn. `potionCd` is that cooldown.
+  // skill gated by a shared 3-turn cooldown (see useHealthPotion/useManaPotion),
+  // so you can't spam potions back-to-back. `potionCd` is that cooldown.
   potionCd: 0,
   // Chosen character name (null until entered on a new game) and the peak gold
   // ever held — both feed the global leaderboards.
@@ -3686,67 +3819,121 @@ function sfx(name) {
 // repeats note-for-note. Everything is scheduled a fraction of a second ahead
 // of the playhead so it never glitches.
 let musicTimer = null, musicStep = 0, musicNext = 0;
-let musicProg = null, musicLeadIdx = 4;
-// The track drifts between distinct instrument palettes ("sections") over time:
-// it holds one timbre for a couple of minutes, then slowly crossfades into the
-// next so the music keeps reinventing itself instead of sounding static.
-let musicSectionIdx = 0;      // index of the palette currently playing
+let musicProg = null, musicLeadIdx = 4, musicArpIdx = 0, musicBarCount = 0;
+// The track drifts between distinct *styles* ("sections") over time. Each style
+// has its own scale/mode, bank of chord progressions, rhythmic groove AND
+// instruments — so it is genuinely different music, not just a different tempo.
+// It holds one style for a couple of minutes, then slowly crossfades into the
+// next: the timbres blend continuously while the harmony and groove pivot at the
+// midpoint of the fade (masked by the equal blend), so the character changes
+// noticeably without ever hard-cutting.
+let musicSectionIdx = 0;      // style whose timbre/feel is currently playing
+let musicStructIdx = 0;       // style whose scale/chords/groove drive the notes
 let musicTrans = null;        // active crossfade: { fromIdx, toIdx, start, end }
 let musicSectionEndTime = 0;  // ctx time at which the current section drifts on
-const SECTION_MIN = 95;       // shortest a section holds before drifting (sec)
-const SECTION_MAX = 150;      // longest a section holds before drifting (sec)
-const SECTION_FADE = 16;      // how long the crossfade between sections lasts (sec)
-const MUSIC_TEMPO = 0.26;     // base eighth-note step; sections nudge it (~115 BPM)
+const SECTION_MIN = 78;       // shortest a style holds before drifting (sec)
+const SECTION_MAX = 135;      // longest a style holds before drifting (sec)
+const SECTION_FADE = 14;      // how long the crossfade between styles lasts (sec)
 const STEPS_PER_BAR = 8;      // eighth-notes per 4/4 bar
 const A2 = 110;               // reference pitch in Hz
 // Semitone offset from A2 → Hz.
 const mhz = (semi) => A2 * Math.pow(2, semi / 12);
-// A natural-minor scale (semitone offsets) the melody wanders within.
-const MUSIC_SCALE = [0, 2, 3, 5, 7, 8, 10, 12, 14, 15, 17, 19, 24];
-// Diatonic chords as semitone offsets from A2 (root, third, fifth).
-const MUSIC_CHORDS = {
-  Am: [0, 3, 7],  Dm: [5, 8, 12], Em: [7, 10, 14],
-  C:  [3, 7, 10], F:  [8, 12, 15], G:  [10, 14, 17],
-};
-// A handful of 4-bar progressions; the engine rotates between them for variety.
-const MUSIC_PROGS = [
-  ['Am', 'F',  'C',  'G'],
-  ['Am', 'Dm', 'G',  'C'],
-  ['Am', 'C',  'Dm', 'Em'],
-  ['Am', 'F',  'G',  'Em'],
-];
 const mpick = (a) => a[Math.floor(Math.random() * a.length)];
 
-// ── Instrument palettes ("sections") ──
-// Each section is a full timbre kit — bass, pad/arp and lead get their own
-// oscillator shape and filter, plus per-section density and percussion mix. The
-// engine plays one for a couple of minutes, then crossfades into another, so the
-// same generative theme is re-voiced again and again with different instruments.
+// ── Musical styles ("sections") ──
+// Each style is a complete kit: a scale/mode the melody wanders, its own bank of
+// chord progressions (each in its own key/mode), a rhythmic groove (bass
+// pattern, arpeggio, percussion, swing, octaves) and a timbre set (bass/pad/lead
+// oscillators + filters). The continuous fields (tempo, densities, percussion
+// volumes) crossfade smoothly between styles; the discrete musical structure
+// (scale, progs, groove) pivots cleanly at the midpoint of the fade. Triads are
+// [root, third, fifth] in semitones from A2; scales are absolute semitone
+// offsets spanning ~2 octaves. groove patterns are per-eighth-note across a bar.
 const MUSIC_SECTIONS = [
+  // Brooding A natural-minor dungeon — the classic theme, steady heartbeat kit.
   { name: 'Cavern',  tempo: 0.26,
+    scale: [0, 2, 3, 5, 7, 8, 10, 12, 14, 15, 17, 19, 24],
+    progs: [
+      [[0,3,7],[8,12,15],[3,7,10],[10,14,17]],   // Am  F   C   G
+      [[0,3,7],[5,8,12],[7,10,14],[0,3,7]],       // Am  Dm  Em  Am
+    ],
     bass: { type: 'sawtooth', cutoff: 620,  q: 3, detune: 4, vol: 0.30 },
     pad:  { type: 'sine',     cutoff: 1500, q: 1, detune: 4, vol: 0.13 },
     lead: { type: 'triangle', cutoff: 3000, q: 1, detune: 5, vol: 0.20 },
-    leadDensity: 0.72, arpDensity: 0.5,
-    kickVol: 1.0, kickMidVol: 1.0, hatVol: 0.05 },
-  { name: 'Crystal', tempo: 0.24,
-    bass: { type: 'triangle', cutoff: 900,  q: 2, detune: 4, vol: 0.26 },
-    pad:  { type: 'triangle', cutoff: 2200, q: 1, detune: 6, vol: 0.12 },
-    lead: { type: 'sine',     cutoff: 4200, q: 1, detune: 3, vol: 0.18 },
-    leadDensity: 0.6, arpDensity: 0.66,
-    kickVol: 0.55, kickMidVol: 0.3, hatVol: 0.035 },
-  { name: 'Forge',   tempo: 0.225,
+    leadDensity: 0.66, arpDensity: 0.45,
+    kickVol: 1.0, kickMidVol: 0.9, hatVol: 0.05,
+    groove: { swing: 0.0, leadOct: 12, arpOct: 0, arpEvery: 2, leadLong: 0.3, leadRest: 0.12,
+      bassPat: [{d:'r',l:3.6}, null, null, null, {d:'5',l:3.0}, null, null, null],
+      kickPat: ['main', null, null, null, 'mid', null, null, null],
+      hatPat:  [0,1,0,1,0,1,0,1] } },
+
+  // Bright, shimmering D Dorian — busy bell arpeggios, light swung kit.
+  { name: 'Crystal', tempo: 0.235,
+    scale: [5, 7, 8, 10, 12, 14, 15, 17, 19, 20, 22, 24, 26],
+    progs: [
+      [[5,8,12],[10,14,17],[5,8,12],[10,14,17]], // Dm  G   Dm  G   (Dorian IV)
+      [[5,8,12],[7,10,14],[10,14,17],[3,7,10]],   // Dm  Em  G   C
+    ],
+    bass: { type: 'triangle', cutoff: 900,  q: 2, detune: 4, vol: 0.24 },
+    pad:  { type: 'triangle', cutoff: 2600, q: 1, detune: 6, vol: 0.12 },
+    lead: { type: 'sine',     cutoff: 4600, q: 1, detune: 3, vol: 0.17 },
+    leadDensity: 0.5, arpDensity: 0.72,
+    kickVol: 0.5, kickMidVol: 0.3, hatVol: 0.04,
+    groove: { swing: 0.12, leadOct: 24, arpOct: 12, arpEvery: 1, leadLong: 0.45, leadRest: 0.18,
+      bassPat: [{d:'r',l:2.0}, null, {d:'5',l:1.4}, null, {d:'r',l:2.0}, null, {d:'3',l:1.4}, null],
+      kickPat: ['mid', null, null, null, 'mid', null, null, null],
+      hatPat:  [0,0,1,0,0,0,1,0] } },
+
+  // Dark, exotic A harmonic-minor forge — square-wave industrial drive.
+  { name: 'Forge',   tempo: 0.205,
+    scale: [0, 2, 3, 5, 7, 8, 11, 12, 14, 15, 17, 19, 20],
+    progs: [
+      [[0,3,7],[5,8,12],[7,11,14],[0,3,7]],       // Am  Dm  E   Am  (harmonic-minor V)
+      [[0,3,7],[8,12,15],[7,11,14],[0,3,7]],       // Am  F   E   Am
+    ],
     bass: { type: 'square',   cutoff: 520,  q: 4, detune: 6, vol: 0.22 },
-    pad:  { type: 'sawtooth', cutoff: 1200, q: 2, detune: 4, vol: 0.11 },
-    lead: { type: 'square',   cutoff: 2500, q: 1, detune: 5, vol: 0.16 },
-    leadDensity: 0.82, arpDensity: 0.45,
-    kickVol: 1.1, kickMidVol: 0.9, hatVol: 0.07 },
+    pad:  { type: 'sawtooth', cutoff: 1200, q: 2, detune: 4, vol: 0.10 },
+    lead: { type: 'square',   cutoff: 2500, q: 1, detune: 5, vol: 0.15 },
+    leadDensity: 0.8, arpDensity: 0.4,
+    kickVol: 1.1, kickMidVol: 0.85, hatVol: 0.07,
+    groove: { swing: 0.0, leadOct: 0, arpOct: 0, arpEvery: 2, leadLong: 0.18, leadRest: 0.08,
+      bassPat: [{d:'r',l:1.0}, null, null, {d:'r',l:1.0}, {d:'5',l:1.0}, null, {d:'r',l:1.0}, null],
+      kickPat: ['main', null, 'mid', null, 'main', null, 'mid', null],
+      hatPat:  [0,1,0,1,0,1,0,1] } },
+
+  // Airy, dreamy C Lydian — ambient drone, no percussion, very sparse.
   { name: 'Mist',    tempo: 0.30,
+    scale: [3, 5, 7, 9, 10, 12, 14, 15, 17, 19, 21, 22, 24],
+    progs: [
+      [[3,7,10],[5,9,12],[3,7,10],[10,14,17]],   // C   D   C   G   (Lydian II)
+      [[3,7,10],[10,14,17],[5,9,12],[3,7,10]],     // C   G   D   C
+    ],
     bass: { type: 'sine',     cutoff: 400,  q: 1, detune: 3, vol: 0.30 },
-    pad:  { type: 'sine',     cutoff: 1000, q: 1, detune: 4, vol: 0.14 },
-    lead: { type: 'triangle', cutoff: 2200, q: 1, detune: 4, vol: 0.17 },
-    leadDensity: 0.5, arpDensity: 0.7,
-    kickVol: 0.35, kickMidVol: 0.0, hatVol: 0.0 },
+    pad:  { type: 'sine',     cutoff: 1100, q: 1, detune: 4, vol: 0.15 },
+    lead: { type: 'triangle', cutoff: 2400, q: 1, detune: 4, vol: 0.17 },
+    leadDensity: 0.35, arpDensity: 0.2,
+    kickVol: 0.0, kickMidVol: 0.0, hatVol: 0.0,
+    groove: { swing: 0.0, leadOct: 24, arpOct: 12, arpEvery: 4, leadLong: 0.6, leadRest: 0.3,
+      bassPat: [{d:'r',l:7.0}, null, null, null, null, null, null, null],
+      kickPat: [null, null, null, null, null, null, null, null],
+      hatPat:  [0,0,0,0,0,0,0,0] } },
+
+  // Loose, bluesy A minor-pentatonic — heavy swing, laid-back groove.
+  { name: 'Hollow',  tempo: 0.25,
+    scale: [0, 3, 5, 7, 10, 12, 15, 17, 19, 22, 24],
+    progs: [
+      [[0,3,7],[3,7,10],[5,8,12],[0,3,7]],         // Am  C   Dm  Am
+      [[0,3,7],[10,14,17],[3,7,10],[5,8,12]],       // Am  G   C   Dm
+    ],
+    bass: { type: 'sawtooth', cutoff: 700,  q: 3, detune: 5, vol: 0.28 },
+    pad:  { type: 'square',   cutoff: 1400, q: 2, detune: 5, vol: 0.10 },
+    lead: { type: 'triangle', cutoff: 2800, q: 1, detune: 6, vol: 0.19 },
+    leadDensity: 0.6, arpDensity: 0.35,
+    kickVol: 0.85, kickMidVol: 0.6, hatVol: 0.05,
+    groove: { swing: 0.3, leadOct: 12, arpOct: 0, arpEvery: 2, leadLong: 0.35, leadRest: 0.16,
+      bassPat: [{d:'r',l:3.0}, null, null, {d:'5',l:1.0}, null, null, {d:'r',l:1.5}, null],
+      kickPat: ['main', null, null, null, 'mid', null, 'mid', null],
+      hatPat:  [0,1,0,1,0,1,0,1] } },
 ];
 
 // The crossfade state at a given playhead time: which two palettes are in play
@@ -3812,38 +3999,38 @@ function musicHat(when, vol) {
   src.connect(f); f.connect(g); g.connect(audio.musicGain);
   src.start(when); src.stop(when + 0.05);
 }
-// Wander the melody: land on chord tones for stability, otherwise step along
-// the scale a degree or two. Returns a semitone offset from A2.
-function musicLeadStep(chord) {
+// Wander the melody within a given style's scale: land on chord tones for
+// stability, otherwise step along the scale a degree or two. Returns a semitone
+// offset from A2. A chord tone may sit an octave above the scale's base, so try
+// both before falling back.
+function musicLeadStep(scale, chord) {
   if (Math.random() < 0.45) {
     const t = chord[Math.floor(Math.random() * chord.length)];
-    const i = MUSIC_SCALE.indexOf(t);
-    musicLeadIdx = i < 0 ? 4 : i;
+    let i = scale.indexOf(t);
+    if (i < 0) i = scale.indexOf(t - 12);
+    musicLeadIdx = i < 0 ? Math.min(4, scale.length - 1) : i;
   } else {
     musicLeadIdx += mpick([-2, -1, 1, 2]);
-    musicLeadIdx = Math.max(0, Math.min(MUSIC_SCALE.length - 1, musicLeadIdx));
   }
-  return MUSIC_SCALE[musicLeadIdx];
+  musicLeadIdx = Math.max(0, Math.min(scale.length - 1, musicLeadIdx));
+  return scale[musicLeadIdx];
 }
 function scheduleMusic() {
   const ctx = audio.ctx;
   if (!ctx || audio.muted || ctx.state === 'suspended') return;
-  if (!musicProg) musicProg = mpick(MUSIC_PROGS);
+  if (!musicProg) musicProg = mpick(MUSIC_SECTIONS[musicStructIdx].progs);
   if (!musicSectionEndTime) {
     musicSectionEndTime = musicNext + SECTION_MIN + Math.random() * (SECTION_MAX - SECTION_MIN);
   }
   // Schedule every step that falls inside the look-ahead window.
   while (musicNext < ctx.currentTime + 0.3) {
     const when = musicNext;
-    const bar = Math.floor(musicStep / STEPS_PER_BAR);
     const beat = musicStep % STEPS_PER_BAR;
-    const chord = MUSIC_CHORDS[musicProg[bar % musicProg.length]];
-    const root = chord[0];
 
     // ── Section lifecycle ──
     // Finish a crossfade once the playhead clears it, then schedule the next
-    // hold. Otherwise, at the top of a phrase, if the hold has elapsed, begin
-    // drifting toward a fresh palette (never the same one twice in a row).
+    // hold. Otherwise, at the top of a bar, if the hold has elapsed, begin
+    // drifting toward a fresh style (never the same one twice in a row).
     if (musicTrans && when >= musicTrans.end) {
       musicSectionIdx = musicTrans.toIdx;
       musicTrans = null;
@@ -3855,6 +4042,27 @@ function scheduleMusic() {
       musicTrans = { fromIdx: musicSectionIdx, toIdx: next, start: when, end: when + SECTION_FADE };
     }
 
+    // Which style's *musical structure* (scale/chords/groove) drives this step.
+    // It pivots to the incoming style at the midpoint of the crossfade — where
+    // the two timbres are balanced, so the harmonic/groove change is masked —
+    // and only on a bar line, so the phrase never lurches mid-bar.
+    let structIdx = musicSectionIdx;
+    if (musicTrans) {
+      const mid = (musicTrans.start + musicTrans.end) / 2;
+      structIdx = when >= mid ? musicTrans.toIdx : musicTrans.fromIdx;
+    }
+    if (beat === 0 && structIdx !== musicStructIdx) {
+      musicStructIdx = structIdx;
+      musicProg = mpick(MUSIC_SECTIONS[structIdx].progs);
+      musicBarCount = 0;
+      musicArpIdx = 0;
+    }
+
+    const S = MUSIC_SECTIONS[musicStructIdx];
+    const g = S.groove;
+    const chord = musicProg[musicBarCount % musicProg.length];
+    const root = chord[0];
+
     // Resolve the timbre/feel for this step (crossfaded mid-transition).
     const blend = musicBlend(when);
     const tempo = musicLerp('tempo', blend);
@@ -3864,36 +4072,43 @@ function scheduleMusic() {
     const kickMidVol = musicLerp('kickMidVol', blend);
     const hatVol = musicLerp('hatVol', blend);
 
-    // At the top of each 4-bar phrase, sometimes swap to a new progression so
-    // the theme keeps evolving instead of looping forever.
-    if (beat === 0 && bar % musicProg.length === 0 && musicStep > 0 && Math.random() < 0.5) {
-      musicProg = mpick(MUSIC_PROGS);
+    // Swing: nudge the offbeat eighths a touch late for a lilt (style-dependent).
+    const swung = when + (beat % 2 === 1 ? tempo * g.swing : 0);
+
+    // At the top of each phrase, sometimes swap to another progression within
+    // the same style so the theme keeps evolving instead of looping forever.
+    if (beat === 0 && musicBarCount > 0 && musicBarCount % musicProg.length === 0 && Math.random() < 0.5) {
+      musicProg = mpick(S.progs);
     }
 
-    // Bass: a warm root on the downbeat, a fifth pulse mid-bar.
-    if (beat === 0) {
-      musicVoice('bass', blend, { freq: mhz(root - 12), dur: tempo * 3.6, when, attack: 0.02 });
-    } else if (beat === 4) {
-      musicVoice('bass', blend, { freq: mhz(chord[2] - 12), dur: tempo * 3.0, when, attack: 0.02 });
+    // Bass: follow the style's per-beat pattern (root/fifth/third, an octave low).
+    const bp = g.bassPat[beat];
+    if (bp) {
+      const semi = (bp.d === '5' ? chord[2] : bp.d === '3' ? chord[1] : root) - 12;
+      musicVoice('bass', blend, { freq: mhz(semi), dur: tempo * bp.l, when: swung, attack: 0.02 });
     }
 
-    // Pad/arp: a soft arpeggio cycling the chord tones underneath.
-    if (beat % 2 === 0 || Math.random() < arpDensity) {
-      musicVoice('pad', blend, { freq: mhz(chord[beat % chord.length]), dur: tempo * 1.6, when, attack: 0.04 });
+    // Pad/arp: cycle the chord tones underneath; busier styles fill more beats.
+    if (beat % g.arpEvery === 0 || Math.random() < arpDensity) {
+      const tone = chord[musicArpIdx % chord.length];
+      musicArpIdx++;
+      musicVoice('pad', blend, { freq: mhz(tone + g.arpOct), dur: tempo * 1.6, when: swung, attack: 0.04 });
     }
 
-    // Lead: an improvised melody that breathes (occasional rests + long notes).
-    if (Math.random() < leadDensity) {
-      const note = musicLeadStep(chord);
-      musicVoice('lead', blend, { freq: mhz(note + 12),
-        dur: tempo * (Math.random() < 0.3 ? 1.7 : 0.85), when, attack: 0.012 });
+    // Lead: an improvised melody that breathes (style-tuned rests + long notes).
+    if (Math.random() > g.leadRest && Math.random() < leadDensity) {
+      const note = musicLeadStep(S.scale, chord);
+      musicVoice('lead', blend, { freq: mhz(note + g.leadOct),
+        dur: tempo * (Math.random() < g.leadLong ? 1.7 : 0.85), when: swung, attack: 0.012 });
     }
 
-    // Percussion: a heartbeat kick with brushed offbeat hats, mixed per section.
-    if (beat === 0 && kickVol > 0.01) musicKick(when, kickVol);
-    if (beat === 4 && kickMidVol > 0.01) musicKick(when, kickMidVol);
-    if (beat % 2 === 1 && hatVol > 0.005) musicHat(when, hatVol);
+    // Percussion: the style's kick/hat pattern, with volumes crossfaded.
+    const kp = g.kickPat[beat];
+    if (kp === 'main' && kickVol > 0.01) musicKick(when, kickVol);
+    else if (kp === 'mid' && kickMidVol > 0.01) musicKick(when, kickMidVol);
+    if (g.hatPat[beat] && hatVol > 0.005) musicHat(swung, hatVol);
 
+    if (beat === STEPS_PER_BAR - 1) musicBarCount++;
     musicStep++;
     musicNext += tempo;
   }
@@ -3902,8 +4117,11 @@ function startMusic() {
   const ctx = audioInit();
   if (!ctx) return;
   musicNext = ctx.currentTime + 0.1;
-  // Start on a random palette so reloads don't always open the same way.
+  musicStep = 0; musicBarCount = 0; musicArpIdx = 0; musicLeadIdx = 4;
+  // Start on a random style so reloads don't always open the same way.
   musicSectionIdx = Math.floor(Math.random() * MUSIC_SECTIONS.length);
+  musicStructIdx = musicSectionIdx;
+  musicProg = null;
   musicTrans = null;
   musicSectionEndTime = 0;
   if (musicTimer) clearInterval(musicTimer);
@@ -3946,6 +4164,7 @@ document.addEventListener('click', (e) => {
 
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
+  { v: 'Shifting Soundtrack', notes: ['Music now drifts between distinct styles — each with its own scale, chord progressions, groove and instruments (brooding Cavern, bright Crystal, dark Forge, airy Mist, bluesy Hollow).', 'Styles slowly crossfade into one another instead of just changing tempo.'] },
   { v: 'Bosses & Beasts', notes: ['Some bosses are now huge 2–3 tile behemoths that cast and have reach.', 'Treasure Goblins fumble their escape far more often, so they\'re catchable.'] },
   { v: 'Living Water & Lava', notes: ['Liquids merge into cohesive pools with organic edges, shores (sand/grass or molten crust) and animation.'] },
   { v: 'World Reskin', notes: ['Golden Sun / FFT-style palettes, natural rock & tree walls, and many seasonal & exotic floor themes.'] },
@@ -5358,21 +5577,32 @@ function craftTabsHTML() {
   </div>`;
 }
 function forgeSelectSlot(slot) { forgeSlot = slot; forgeBase = null; renderForge(); }
-function forgeSelectBase(name) { forgeBase = name; renderForge(); }
+function forgeSelectBase(name) {
+  // Ignore taps on off-class weapon bases — they're greyed out for a reason.
+  if (forgeSlot === 'weapon' && !classCanUseWeaponBase(name)) return;
+  forgeBase = name; renderForge();
+}
 function forgeSelectTier(tier) { forgeTier = tier; renderForge(); }
 
 function renderForge() {
   if (!CRAFT_TIERS.includes(forgeTier)) forgeTier = 'normal';
   if (!SLOT_KEYS.includes(forgeSlot)) forgeSlot = 'weapon';
   const names = SLOTS[forgeSlot].names;
+  const isWeapon = forgeSlot === 'weapon';
   if (!forgeBase || !names.includes(forgeBase)) forgeBase = names[0];
+  // Default to a base this class can actually wield, so the preview never opens
+  // on a weapon you couldn't equip.
+  if (isWeapon && !classCanUseWeaponBase(forgeBase)) forgeBase = names.find(classCanUseWeaponBase) || names[0];
 
   const slotBtns = SLOT_KEYS.map(s =>
     `<button class="forge-opt ${s === forgeSlot ? 'on' : ''}" onclick="forgeSelectSlot('${s}')">${SLOTS[s].label}</button>`
   ).join('');
-  const baseBtns = names.map(n =>
-    `<button class="forge-opt ${n === forgeBase ? 'on' : ''}" onclick="forgeSelectBase('${n}')">${n}</button>`
-  ).join('');
+  const baseBtns = names.map(n => {
+    const locked = isWeapon && !classCanUseWeaponBase(n);
+    const cls = `forge-opt${n === forgeBase ? ' on' : ''}${locked ? ' forge-opt-locked' : ''}`;
+    const reach = isWeapon ? ` <span style="opacity:.6;font-size:9px">⟷${weaponRange(n)}</span>` : '';
+    return `<button class="${cls}" ${locked ? 'disabled' : `onclick="forgeSelectBase('${n}')"`}>${n}${reach}${locked ? ' 🔒' : ''}</button>`;
+  }).join('');
   const tierBtns = CRAFT_TIERS.map(t => {
     const caps = TIER_AFFIX_CAPS[t] || { stat: 0, attr: 0 };
     return `<button class="forge-opt ${t === forgeTier ? 'on' : ''}" style="${t === forgeTier ? '' : `color:${TIERS[t].color}`}" onclick="forgeSelectTier('${t}')">
@@ -5385,13 +5615,27 @@ function renderForge() {
   const preview = craftBlankItem(forgeSlot, forgeTier, forgeBase);
   const caps = TIER_AFFIX_CAPS[forgeTier] || { stat: 0, attr: 0 };
 
+  // For weapons, surface the selected base's reach grid + how it swings, plus a
+  // note that off-class bases are locked. Other slots get a one-line hint that the
+  // base shapes its headline / signature stat.
+  const cls = playerClass();
+  let baseHint = '';
+  if (isWeapon) {
+    const style = WEAPON_STYLES[forgeBase];
+    baseHint = `<div style="padding:1px 2px 3px">${weaponRangeGridHTML(forgeBase)}` +
+      (WEAPON_STYLE_DESC[style] ? `<div style="color:#9a8d70;font-size:9px;margin-top:3px;font-style:italic">${WEAPON_STYLE_DESC[style]}</div>` : '') +
+      (cls ? `<div style="color:#8a7d63;font-size:9px;margin-top:3px">🔒 bases are weapons your ${cls.name} can't wield</div>` : '') +
+      `</div>`;
+  }
+
   setTownContent(`
     ${craftTabsHTML()}
-    <div class="town-blurb">The Craftsman forges a <b>blank</b> piece at your current depth (ilvl ${craftIlvl()}) — just its base damage or defense, with empty modifier slots. Take it to the 🪄 Enchanter to fill them in. Rarity sets how many modifiers it can hold.</div>
+    <div class="town-blurb">The Craftsman forges a <b>blank</b> piece at your current depth (ilvl ${craftIlvl()}) — its base damage or defense set by the base you pick, with empty modifier slots. Take it to the 🪄 Enchanter to fill them in. Rarity sets how many modifiers it can hold.</div>
     <div class="forge-label">Item type</div>
     <div class="forge-grid forge-slots">${slotBtns}</div>
     <div class="forge-label">Base</div>
     <div class="forge-grid forge-bases">${baseBtns}</div>
+    ${baseHint}
     <div class="forge-label">Rarity <span style="opacity:.6">(stat + attr slots)</span></div>
     <div class="forge-grid forge-tiers">${tierBtns}</div>
     <div class="shop-row" style="margin-top:10px">
@@ -5412,25 +5656,20 @@ function renderForge() {
 // no bonus affixes. Deterministic so the Forge preview matches what you'll get.
 function craftBlankItem(slot, tier, baseName) {
   const lvl = craftIlvl();
-  const stats = {}, attrs = {};
   const mult = tierMult(tier);
   const dmgMult = { junk: 0.55, normal: 0.8, uncommon: 1, rare: 1.3, epic: 1.65, legendary: 2.1, unique: 2.6 }[tier];
-  if (slot === 'weapon') {
-    const base = Math.max(1, Math.floor((2 + lvl * 1.2) * dmgMult));
-    const spread = Math.max(1, Math.floor(base * 0.4));
-    stats.DMG = `${base}-${base + spread}`;
-  } else if (slot === 'head' || slot === 'chest' || slot === 'hands' || slot === 'legs') {
-    const slotDef = { chest: 1.3, legs: 1.0, head: 0.8, hands: 0.7 }[slot];
-    stats.DEF = Math.max(1, Math.floor((1 + lvl) * mult * slotDef));
-    if (slot === 'hands') stats.ATK = Math.max(1, Math.floor((1 + lvl * 0.35) * mult * 0.6));
-  }
   const baseValue = { junk: 1, normal: 5, uncommon: 20, rare: 80, epic: 300, legendary: 1200, unique: 5000 }[tier];
   const value = Math.round(baseValue * (1 + lvl * 0.12));
-  return {
+  const item = {
     id: Math.random(), name: 'Crafted ' + baseName, tier, slot, ilvl: lvl,
-    stats, attrs, value, crafted: true, flavor: 'Forged by your own hand.',
+    stats: {}, attrs: {}, value, crafted: true, flavor: 'Forged by your own hand.',
     icon: ITEM_ICONS[baseName] || SLOT_ICONS[slot],
   };
+  // The base shapes the headline (weapon DMG / armor DEF) and gives jewelry its
+  // innate signature stat, so picking a base at the Forge has a real effect.
+  // fixed:true keeps the preview deterministic so it matches the forged piece.
+  applyBaseStats(item, baseName, lvl, mult, dmgMult, { fixed: true });
+  return item;
 }
 
 function craftItem() {
@@ -5543,7 +5782,7 @@ function renderHealer() {
       <span class="shop-price">Free</span>
       <button class="shop-buy-btn" ${full ? 'disabled' : ''} onclick="restHeal()">REST</button>
     </div>
-    <div class="town-blurb" style="opacity:0.8">Need a quick top-up mid-fight? Quaff a Health (Q) or Mana (E) potion — they're a skill now, free to use but only one per turn.</div>`);
+    <div class="town-blurb" style="opacity:0.8">Need a quick top-up mid-fight? Quaff a Health (Q) or Mana (E) potion — they're a skill now, free to use but share a 3-turn cooldown.</div>`);
 }
 function restHeal() {
   if (player.hp >= player.maxHp && player.mp >= player.maxMp) return;
@@ -5839,9 +6078,9 @@ function availAttrAffixes(item) {
 }
 // Count of bonus (non-headline) affixes the item carries.
 function itemAffixCounts(item) {
-  const head = headlineStats(item);
+  const locked = lockedStats(item);
   return {
-    statN: Object.keys(item.stats).filter(s => !head.includes(s)).length,
+    statN: Object.keys(item.stats).filter(s => !locked.includes(s)).length,
     attrN: Object.keys(item.attrs || {}).length,
   };
 }
@@ -5886,8 +6125,8 @@ function enchantRerollAll(id) {
   const cost = rerollAllCost(item);
   const caps = TIER_AFFIX_CAPS[item.tier] || { stat:0, attr:0 };
   if (!canAfford(cost) || (caps.stat + caps.attr) === 0) return;
-  const head = headlineStats(item);
-  for (const k of Object.keys(item.stats)) if (!head.includes(k)) delete item.stats[k];
+  const locked = lockedStats(item);
+  for (const k of Object.keys(item.stats)) if (!locked.includes(k)) delete item.stats[k];
   item.attrs = {};
   const mult = tierMult(item.tier);
   addStatAffixes(item, item.ilvl, mult, rollAffixCount(caps.stat));
@@ -5908,7 +6147,7 @@ function enchantRerollValue(id, kind, key) {
   if (!canAfford(cost)) return;
   const mult = tierMult(item.tier);
   if (kind === 'stat') {
-    if (headlineStats(item).includes(key) || !(key in item.stats)) return;
+    if (lockedStats(item).includes(key) || !(key in item.stats)) return;
     item.stats[key] = affixStatValue(key, item.ilvl, mult);
   } else {
     if (!item.attrs || !(key in item.attrs)) return;
@@ -5929,7 +6168,7 @@ function enchantRerollType(id, kind, key) {
   if (!canAfford(cost)) return;
   const mult = tierMult(item.tier);
   if (kind === 'stat') {
-    if (headlineStats(item).includes(key) || !(key in item.stats)) return;
+    if (lockedStats(item).includes(key) || !(key in item.stats)) return;
     const pool = otherStatTypes(item, key);
     if (!pool.length) return; // no other stat this slot can hold
     const ns = pick(pool);
@@ -5987,6 +6226,7 @@ function renderEnchantItem(item) {
   const caps = TIER_AFFIX_CAPS[item.tier] || { stat:0, attr:0 };
   const { statN, attrN } = itemAffixCounts(item);
   const head = headlineStats(item);
+  const locked = lockedStats(item);
   const poolStats = SLOT_AFFIX_POOLS[item.slot]?.stats || [];
   const poolAttrs = SLOT_AFFIX_POOLS[item.slot]?.attrs || [];
   // Stable display order: follow the slot's pool order, with any legacy
@@ -5996,10 +6236,17 @@ function renderEnchantItem(item) {
     const ia = pool.indexOf(a), ib = pool.indexOf(b);
     return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
   };
-  // Headline (locked) lines.
-  const headRows = head.filter(k => k in item.stats).map(k =>
-    `<div class="hc-line" style="opacity:0.6">🔒 ${(typeof item.stats[k]==='string')?item.stats[k]:'+'+item.stats[k]} ${STAT_LABELS[k]||k} <span style="font-size:9px">(headline)</span></div>`
-  ).join('');
+  // Locked lines: headline/innate stats plus a cursed item's penalty — none of
+  // these can be rerolled, so they're shown separately with a 🔒 and a tag that
+  // says WHY (headline vs the permanent curse).
+  const lockRows = locked.filter(k => k in item.stats).map(k => {
+    const v = item.stats[k];
+    const valStr = (typeof v === 'string') ? v : (v < 0 ? '' : '+') + v;
+    const curse = item.cursed && !head.includes(k);
+    const style = curse ? 'opacity:0.85;color:#e0556b' : 'opacity:0.6';
+    const tag = curse ? '(cursed)' : '(headline)';
+    return `<div class="hc-line" style="${style}">🔒 ${valStr} ${STAT_LABELS[k]||k} <span style="font-size:9px">${tag}</span></div>`;
+  }).join('');
   const valCost = rerollValueCost(item), typeCost = rerollTypeCost(item);
 
   // One property row: a Value reroll (same modifier, new number) and a Type
@@ -6024,7 +6271,7 @@ function renderEnchantItem(item) {
       <span class="ench-tipwrap" data-tip="${typeTip}" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()"><button class="shop-buy-btn ench-btn" ${canType?'':'disabled'} onclick="enchantRerollType(${item.id},'${kind}','${key}')">🔄 ${costLabel(typeCost)}</button></span></div>`;
   };
 
-  const statRows = Object.keys(item.stats).filter(k => !head.includes(k)).sort(orderBy(poolStats)).map(k =>
+  const statRows = Object.keys(item.stats).filter(k => !locked.includes(k)).sort(orderBy(poolStats)).map(k =>
     propRow('stat', k, STAT_LABELS[k]||k, '', item.stats[k], statRangeLabel(item, k), otherStatTypes(item, k).map(s => STAT_LABELS[s]||s))
   ).join('');
   const attrRows = Object.keys(item.attrs || {}).sort(orderBy(poolAttrs)).map(k =>
@@ -6067,7 +6314,7 @@ function renderEnchantItem(item) {
       <div class="shop-row-info item-${item.tier}" style="margin-left:8px"><div class="shop-row-name">${item.name}${craftedMark(item)}</div>
       <div class="shop-row-sub">${SLOTS[item.slot].label.replace(/^\S+\s/,'')} · ilvl ${item.ilvl} · ${statN}/${caps.stat} stats · ${attrN}/${caps.attr} attrs</div></div></div>
     <div class="ench-legend">🎲 reroll value · 🔄 reroll modifier · hover a button for details</div>
-    ${headRows}
+    ${lockRows}
     ${empty}${statRows}${attrRows}
     <div class="shop-row" style="margin-top:6px;gap:6px">${augBtn}${allBtn}</div>
     ${blockMsg ? `<div class="hc-line" style="opacity:0.6;margin-top:4px">${blockMsg}</div>` : ''}
@@ -6412,6 +6659,14 @@ function spawnEnemies() {
             if (ok) { ex = cx; ey = cy; found = true; }
           }
           if (!found) bsize = 1;
+          // Clear a generous arena around the boss so the hulking thing has room
+          // to lumber around (knock out walls in a margin past its footprint).
+          if (found) {
+            const pad = 3;
+            for (let ay = ey - pad; ay < ey + bsize + pad; ay++)
+              for (let ax = ex - pad; ax < ex + bsize + pad; ax++)
+                if (ax > 0 && ay > 0 && ax < MAP_W - 1 && ay < MAP_H - 1 && mapData[ay][ax] === 1) mapData[ay][ax] = 0;
+          }
         }
         // A boss is a couple of levels above its floor, and scales primarily
         // with depth (with a gentle nudge from the hero's level so it keeps
@@ -6500,15 +6755,18 @@ function spawnEnemies() {
   }
 }
 
+// Affixes are shown by a coloured aura around the foe (no floating icon):
+// steel-blue = Tough, red = Fierce, purple = Venomous.
 const AFFIXES = [
-  { key: 'tough',    icon: '🛡️', name: 'Tough',    apply: m => { m.hp = Math.round(m.hp * 1.6); m.maxHp = m.hp; } },
-  { key: 'fierce',   icon: '😡', name: 'Fierce',   apply: m => { m.dmg = Math.round(m.dmg * 1.4); } },
-  { key: 'venomous', icon: '🧪', name: 'Venomous', apply: m => { m.statusChance = 0.4; } },
+  { key: 'tough',    name: 'Tough',    color: '#7fb0ff', apply: m => { m.hp = Math.round(m.hp * 1.6); m.maxHp = m.hp; } },
+  { key: 'fierce',   name: 'Fierce',   color: '#ff5a4a', apply: m => { m.dmg = Math.round(m.dmg * 1.4); } },
+  { key: 'venomous', name: 'Venomous', color: '#a86bff', apply: m => { m.statusChance = 0.4; } },
 ];
-// Give an enemy a random affix: a name, an icon, and a stat/behaviour tweak.
+// Give an enemy a random affix: a name, an aura colour, and a stat/behaviour tweak.
 function applyAffix(mob) {
   const a = pick(AFFIXES);
-  mob.affixIcon = a.icon;
+  mob.affix = a.key;
+  mob.affixColor = a.color;
   mob.name = a.name;
   a.apply(mob);
 }
@@ -6701,10 +6959,29 @@ function addAttrAffixes(item, lvl, mult, count) {
 // The set of stats that count as an item's headline (never rerolled/removed):
 // weapon damage, and the armor DEF/ATK granted by the slot itself.
 function headlineStats(item) {
-  if (item.slot === 'weapon') return ['DMG'];
-  if (item.slot === 'hands')  return ['DEF','ATK'];
-  if (item.slot === 'head' || item.slot === 'chest' || item.slot === 'legs') return ['DEF'];
-  return []; // ring / amulet are pure-affix
+  // A jewelry base's innate signature stat (item.baseStats) counts as a headline:
+  // it's protected from reroll/removal and doesn't eat into the affix budget.
+  const base = item.baseStats || [];
+  if (item.slot === 'weapon') return ['DMG', ...base];
+  if (item.slot === 'hands')  return ['DEF', 'ATK', ...base];
+  if (item.slot === 'head' || item.slot === 'chest' || item.slot === 'legs') return ['DEF', ...base];
+  return [...base]; // ring / amulet: pure-affix apart from the base's innate stat
+}
+
+// The full set of stats that are LOCKED on an item — never rerolled, removed, or
+// counted as a rollable affix. That's every headline/innate stat PLUS a cursed
+// item's penalty stat: a curse is permanent, so the Enchanter can't reroll the
+// drawback away. Newer cursed drops record `item.curseStat`; for older saves we
+// fall back to "any negative stat" (only a curse ever makes a stat negative).
+function lockedStats(item) {
+  const locked = headlineStats(item).slice();
+  if (item.cursed) {
+    for (const [k, v] of Object.entries(item.stats)) {
+      const isPenalty = item.curseStat === k || (typeof v === 'number' && v < 0);
+      if (isPenalty && !locked.includes(k)) locked.push(k);
+    }
+  }
+  return locked;
 }
 
 function generateItem(rolls = 1, ilvl = null, forceTier = null, forceSlot = null) {
@@ -6733,29 +7010,18 @@ function generateItem(rolls = 1, ilvl = null, forceTier = null, forceSlot = null
   // Weapon damage uses a slightly gentler curve so epic+ weapons aren't overpowered.
   const dmgMult = { junk:0.55, normal:0.8, uncommon:1, rare:1.3, epic:1.65, legendary:2.1, unique:2.6 }[tier];
 
-  // Headline stat by slot: weapons deal damage, armor gives defense, jewelry gives
-  // pure affixes. Each headline scales linearly with item level, so depth steadily
-  // lifts raw power. The headline is never an affix, so it's never duplicated below.
-  if (slot === 'weapon') {
-    const base = Math.max(1, Math.floor((2 + lvl * 1.2 + rnd(0,2)) * dmgMult));
-    const spread = Math.max(1, Math.floor(base * 0.4));
-    stats.DMG = `${base}-${base + spread}`;
-  } else if (slot === 'head' || slot === 'chest' || slot === 'hands' || slot === 'legs') {
-    // Bigger armor pieces give more DEF than smaller ones.
-    const slotDef = { chest: 1.3, legs: 1.0, head: 0.8, hands: 0.7 }[slot];
-    stats.DEF = Math.max(1, Math.floor((1 + lvl + rnd(0,2)) * mult * slotDef));
-    // Gloves also grant a little attack power — far less than a weapon.
-    if (slot === 'hands') {
-      stats.ATK = Math.max(1, Math.floor((1 + lvl * 0.35) * mult * 0.6));
-    }
-  }
-
   // Base value by rarity, lifted by item level so deeper gear is worth more.
   const baseValue = { junk:1, normal:5, uncommon:20, rare:80, epic:300, legendary:1200, unique:5000 }[tier];
   let value = Math.round(baseValue * (1 + lvl * 0.12));
 
   const item = { id: Math.random(), name, tier, slot, ilvl: lvl, stats, attrs, value,
     flavor: pick(FLAVOR[tier]), icon: ITEM_ICONS[baseName] || SLOT_ICONS[slot] };
+
+  // Headline stat by slot, shaped by the rolled base (Axe hits harder than a
+  // Dagger, plate guards more than a robe) — and a jewelry base's innate stat.
+  // The headline/innate is never an affix, so it's never duplicated below. A small
+  // random nudge keeps two same-base drops from being identical.
+  applyBaseStats(item, baseName, lvl + rnd(0,2) * 0.6, mult, dmgMult);
 
   // Roll bonus affixes — stats and attributes from the slot's pools, each up to
   // its rarity cap, never duplicating a stat/attribute or the headline.
@@ -6775,6 +7041,9 @@ function generateItem(rolls = 1, ilvl = null, forceTier = null, forceSlot = null
     stats[boostStat] = (stats[boostStat] || 0) + curseSwing(boostStat, lvl, mult, true);
     if (curseStat) stats[curseStat] = (stats[curseStat] || 0) - curseSwing(curseStat, lvl, mult, false); // negative = penalty
     item.cursed = true;
+    // Remember which property carries the curse penalty so the Enchanter can lock
+    // it — a curse is a curse, you can't simply reroll the drawback away.
+    if (curseStat) item.curseStat = curseStat;
     item.name = '☠ ' + item.name;
     item.flavor = 'Cursed: great power at a price.';
     item.value = Math.round(value * 1.5);
@@ -7494,11 +7763,8 @@ function draw() {
     // Pixel-art chest sprite (lucky chests get a brighter glow), with the
     // hand-drawn chest below as fallback.
     if (spriteReady && SPRITE_IDX['chest'] !== undefined) {
-      ctx.save();
-      ctx.shadowColor = lucky ? '#ffe066' : '#caa24a';
-      ctx.shadowBlur = (lucky ? 14 : 7) * scale;
+      glowUnder(cx, cy, tw * (lucky ? 0.6 : 0.46), lucky ? 'rgba(255,224,102,0.45)' : 'rgba(202,162,74,0.3)');
       drawSpriteC('chest', cx, cy, Math.round(tw * 0.72));
-      ctx.restore();
       return;
     }
     const w = tw * 0.58, h = th * 0.46;
@@ -7543,32 +7809,26 @@ function draw() {
       drawEmoji(f.emoji, px + tw/2, py + th/2, Math.round(tw * 0.6));
   });
 
-  // Coin piles — a soft golden glow so loose gold catches the eye.
+  // Coin piles — a soft circular golden glow so loose gold catches the eye.
   groundGold.forEach(g => {
     const px = offX + g.x * tw, py = offY + g.y * th;
-    ctx.save();
-    ctx.shadowColor = '#ffe066';
-    ctx.shadowBlur = 8 * scale;
     ctx.font = `${Math.round(tw * 0.52)}px serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
+    glowUnder(px + tw/2, py + th/2, tw * 0.42, 'rgba(255,224,102,0.4)');
     if (!(spriteReady && drawSpriteC('coins', px + tw/2, py + th/2, Math.round(tw * 0.6))))
       drawEmoji('🪙', px + tw/2, py + th/2, Math.round(tw * 0.52));
-    ctx.restore();
   });
 
   // Vault key — glints on the floor until grabbed.
   if (groundKey) {
     const px = offX + groundKey.x * tw, py = offY + groundKey.y * th;
-    ctx.save();
-    ctx.shadowColor = '#ffe066';
-    ctx.shadowBlur = 10 * scale;
     ctx.font = `${Math.round(tw * 0.5)}px serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
+    glowUnder(px + tw/2, py + th/2, tw * 0.42, 'rgba(255,224,102,0.4)');
     if (!(spriteReady && drawSpriteC('key', px + tw/2, py + th/2, Math.round(tw * 0.6))))
       drawEmoji('🗝️', px + tw/2, py + th/2, Math.round(tw * 0.5));
-    ctx.restore();
   }
 
   // Merchant (roaming trader in bright robes) — never the town stand-in.
@@ -7646,8 +7906,8 @@ function draw() {
     else if (stunned) ctx.filter = 'grayscale(1) sepia(1) saturate(7) hue-rotate(-15deg) brightness(1.25)';
     // Pop: a glowing halo — coloured for elites/bosses, dark for regular foes —
     // so even tiny critters stand out from the environment.
-    ctx.shadowColor = e.isBoss ? 'rgba(255,70,70,0.95)' : (e.isElite ? 'rgba(255,215,90,0.95)' : 'rgba(0,0,0,0.95)');
-    ctx.shadowBlur = Math.max(2, tw * ((e.isBoss || e.isElite) ? 0.26 : 0.18));
+    ctx.shadowColor = e.isBoss ? 'rgba(255,70,70,0.95)' : (e.isElite ? 'rgba(255,215,90,0.95)' : (e.affixColor || 'rgba(0,0,0,0.95)'));
+    ctx.shadowBlur = Math.max(2, tw * ((e.isBoss || e.isElite || e.affixColor) ? 0.26 : 0.18));
     // Pixel-art creature sprite (scaled to the footprint), falling back to glyph.
     const _esz = Math.round(cw * (e.isBoss ? 1.0 : (e.isElite ? 0.96 : 0.9)));
     const _espr = enemySprite(e);
@@ -7656,11 +7916,11 @@ function draw() {
     }
     ctx.restore();
 
-    // Affix badge, goblin loot tag, or bounty marker, floated above — drawn from
-    // DawnLike icons (target / coins / element), falling back to the emoji.
-    if (e.questTarget || e.affixIcon || e.isGoblin) {
-      const tagEmoji = e.questTarget ? '🎯' : (e.isGoblin ? '💰' : e.affixIcon);
-      const tagSprite = e.questTarget ? 'ic_target' : (e.isGoblin ? 'ic_money' : AFFIX_SPRITE[e.affixIcon]);
+    // Goblin loot tag or bounty marker, floated above. (Affixes show as the
+    // coloured aura above — no floating icon.)
+    if (e.questTarget || e.isGoblin) {
+      const tagEmoji = e.questTarget ? '🎯' : '💰';
+      const tagSprite = e.questTarget ? 'ic_target' : 'ic_money';
       ctx.font = `${Math.round(tw * 0.34)}px serif`;
       ctx.textAlign = 'center';
       if (!(tagSprite && spriteReady && drawSpriteC(tagSprite, cx, py - th*0.02, Math.round(tw * 0.4))))
@@ -7841,6 +8101,20 @@ function drawActorShadow(cx, cyFeet, w) {
   ctx.fillStyle = 'rgba(0,0,0,0.32)';
   ctx.beginPath();
   ctx.ellipse(cx, cyFeet, w * 0.34, w * 0.14, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+// A soft CIRCULAR glow behind a pickup. (Canvas shadowBlur on a square sprite
+// renders as an ugly square halo, so we paint a radial gradient instead.)
+function glowUnder(cx, cy, r, color) {
+  const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+  g.addColorStop(0, color);
+  g.addColorStop(1, 'transparent');
+  ctx.save();
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 }
@@ -8466,6 +8740,9 @@ function dealDamage(e, dmg, isCrit) {
 // Everything that happens when a foe falls: XP, gold, and the loot rolls.
 function onEnemyDefeated(e) {
   e.dead = true;
+  // Summoned minions are pure threat — they drop NO XP, gold or loot, so a
+  // summoner boss can't be farmed by killing the fodder it spawns endlessly.
+  if (e.minion) { sfx('kill'); updateFloorClear(); return; }
   const label = enemyLabel(e);
   const xpMult = e.isBoss ? 5 : (e.isElite ? 2 : 1);
   const goldMult = e.isBoss ? 3 : (e.isElite ? 2 : 1);
@@ -8489,8 +8766,6 @@ function onEnemyDefeated(e) {
     if (got > 0) { player.mp += got; spawnFloatingText(player.x, player.y - 0.3, `+${got}`, '#7fb0ff'); }
   }
   updateBars();
-  // Minions summoned by a boss never drop loot — only XP/gold above.
-  if (e.minion) { checkLevelUp(); updateFloorClear(); return; }
   // The floor modifier, an active Fortune buff, gear Magic Find, and any pact all
   // sweeten every drop roll.
   const lootMult = (floorMod.lootMult || 1) * (buffs.fortune ? 1.5 : 1) * pfx('loot', 1) * (1 + (totalStat('MAGICFIND') + skillBonus('magicFind')) / 100);
@@ -8663,11 +8938,9 @@ function tryRangedAttack(dx, dy) {
   if (dx === 0 && dy === 0) return false;
   if (getEnemyAt(player.x + dx, player.y + dy)) return false; // adjacent → normal melee
   const style = weaponStyle();
-  let range, mpCost = 0;
-  if (style === 'shot') range = 4;
-  else if (style === 'bolt') { range = 4; mpCost = 4; }
-  else if (style === 'thrust') range = 2;
-  else return false;
+  const range = STYLE_RANGE[style] || 1;
+  if (range < 2) return false;            // melee-only weapons can't poke at range
+  const mpCost = style === 'bolt' ? 4 : 0; // the Staff's bolt spends a little mana
   if (mpCost && player.mp < mpCost) return false;
   let x = player.x, y = player.y;
   for (let step = 1; step <= range; step++) {
@@ -9203,14 +9476,19 @@ function enemyMove(e) {
   const beh = BEHAVIORS[e.behavior] || BEHAVIORS.chaser;
   const dist = Math.abs(e.x - player.x) + Math.abs(e.y - player.y);
 
-  // A multi-tile boss is a hulking fixture: it doesn't path around, but it casts
-  // / summons from range, crushes anything next to its footprint, and has reach
-  // (a breath/lunge) so it can't be trivially kited from a few tiles away.
+  // A multi-tile boss lumbers after you through its open arena: it casts/summons
+  // from range, crushes anything next to its footprint, lurches one tile toward
+  // you when it can fit, and has reach (a breath/lunge) when it can't close.
   if ((e.size || 1) > 1) {
     const fd = footDist(e);
     if (e.isBoss && bossSpecial(e, fd, beh)) return;
     if (fd <= 1) { enemyAttackPlayer(e); return; }
-    if (fd <= (beh.range || 4) && hasLineToPlayer(e)) enemyRangedAttack(e);
+    const sx = Math.sign(player.x - e.x), sy = Math.sign(player.y - e.y);
+    const horizFirst = Math.abs(player.x - e.x) >= Math.abs(player.y - e.y);
+    const tries = horizFirst ? [[sx, 0], [0, sy]] : [[0, sy], [sx, 0]];
+    let moved = false;
+    for (const [mx, my] of tries) { if ((mx || my) && enemyStep(e, mx, my)) { moved = true; break; } }
+    if (!moved && fd <= (beh.range || 4) && hasLineToPlayer(e)) enemyRangedAttack(e);
     return;
   }
 
@@ -9261,7 +9539,17 @@ function enemyMove(e) {
 
 // Move an enemy one tile if free (with corner-cut guard). Returns true on move.
 function enemyStep(e, mx, my) {
+  const s = e.size || 1;
   const nx = e.x + mx, ny = e.y + my;
+  if (s > 1) {
+    // The whole N×N footprint must fit and be clear (its own cells don't block).
+    for (let dx = 0; dx < s; dx++) for (let dy = 0; dy < s; dy++) {
+      const cx = nx + dx, cy = ny + dy;
+      if (!enemyTileFree(cx, cy) && getEnemyAt(cx, cy) !== e) return false;
+    }
+    e.x = nx; e.y = ny;
+    return true;
+  }
   if (!enemyTileFree(nx, ny)) return false;
   if (mx !== 0 && my !== 0 && mapData[e.y][e.x + mx] !== 0 && mapData[e.y + my][e.x] !== 0) return false;
   e.x = nx; e.y = ny;
@@ -9403,11 +9691,15 @@ function bossSpecial(e, dist, beh) {
 }
 
 // Place up to n weak minions on free tiles adjacent to the boss. Returns count.
+// A boss has a lifetime summon cap so it can't flood the floor with fodder.
 function summonMinions(boss, n) {
+  const CAP = 10;
+  boss.summoned = boss.summoned || 0;
+  if (boss.summoned >= CAP) return 0;
   let placed = 0;
   const spots = ENEMY_DIRS.slice().sort(() => Math.random() - 0.5);
   for (const [dx, dy] of spots) {
-    if (placed >= n) break;
+    if (placed >= n || boss.summoned >= CAP) break;
     const x = boss.x + dx, y = boss.y + dy;
     if (!enemyTileFree(x, y)) continue;
     const hp = Math.max(1, Math.round(10 + dungeonLevel * 4));
@@ -9418,6 +9710,7 @@ function summonMinions(boss, n) {
       dead: false, behavior: 'swift', minion: true,
     });
     placed++;
+    boss.summoned++;
   }
   return placed;
 }
@@ -9440,25 +9733,48 @@ function footDist(e) {
 // gold as the price of being patched up. You keep your level, gear, and floor
 // progress: the Dungeon Gate drops you back in on the floor where you fell.
 function handleDeath() {
+  // Death stings now: lose HALF your gold, all progress toward your next level,
+  // get knocked back a floor, and revive only half-healed.
   const lostGold = Math.floor(player.gold / 2);
   player.gold -= lostGold;
+  const lostXp = Math.min(player.xp, xpForLevel(player.level));
+  player.xp = Math.max(0, player.xp - lostXp);
   statusEffects = statusEffects.filter(s => s.target !== 'player');
   player.skillCds = {}; combatBuffs = {}; minions = []; // revived fresh — skills ready again
   sfx('death');
-  // Remember where you fell so the Dungeon Gate can return you there.
-  dungeonReturn = dungeonLevel;
+  screenFlash('#cc0000');
+  // Knocked back: the Dungeon Gate returns you a floor shallower than you fell.
+  const fellOn = dungeonLevel;
+  dungeonReturn = Math.max(1, dungeonLevel - 1);
   closeShop(); closeMystic(); closeTown();
   buildTown();     // clears inTown=false → true and resets town state
   openTownHub();   // drop the player into the town menu
-  // The healer's care: revived to full and cleansed of poison & curses.
-  player.hp = player.maxHp;
-  player.mp = player.maxMp;
-  log(`💀 ${player.name || HERO} was slain! The healer revived you in town — lost ${lostGold}g for the trouble.`, 'important');
-  log('⛑️ Fully restored. Take the 🌀 Dungeon Gate when you\'re ready to head back down.');
+  // Revived in town but WEAKENED — only half health and mana, not a full heal.
+  player.hp = Math.max(1, Math.round(player.maxHp * 0.5));
+  player.mp = Math.round(player.maxMp * 0.5);
+  showDeathScreen(lostGold, lostXp, dungeonReturn);
+  log(`💀 ${player.name || HERO} was SLAIN on floor ${fellOn}! Lost ${lostGold}g${lostXp ? ` and ${lostXp} XP` : ''}, revived weakened in town.`, 'important');
   updateBars();
   saveGame();
   draw();
 }
+
+// A hard, unmistakable death screen that spells out every penalty.
+function showDeathScreen(lostGold, lostXp, returnFloor) {
+  const el = document.getElementById('death-penalties');
+  if (el) {
+    const lines = [
+      `💰 Lost ${lostGold} gold (half your purse)`,
+      lostXp ? `✦ Lost ${lostXp} XP — back to the start of level ${player.level}` : null,
+      `❤️ Revived at half health & mana`,
+      `⬇️ Knocked back — re-enter at floor ${returnFloor}`,
+    ].filter(Boolean);
+    el.innerHTML = lines.map(t => `<div class="death-pen">${t}</div>`).join('');
+  }
+  const ov = document.getElementById('death-overlay');
+  if (ov) ov.classList.add('open');
+}
+function closeDeath() { const ov = document.getElementById('death-overlay'); if (ov) ov.classList.remove('open'); }
 
 function checkPickupProximity() {
   // Loot underfoot is shown on the map; no need to nag about it.
@@ -9696,7 +10012,7 @@ function updateBars() {
       const cd = skillCd(sk.id);
       const ready = cd === 0 && player.mp >= sk.mp && !inTown;
       if (label) label.textContent = cd > 0 ? `${cd}` : `${sk.mp}MP`;
-      skillBtn.title = `${sk.name} — ${sk.desc} (${sk.mp} MP, ${sk.cd}-turn cooldown) · press R`;
+      skillBtn.dataset.tip = `<div class='ht-name' style='color:#e6c34a'>${sk.icon} ${sk.name}</div><div class='ht-line'>${sk.desc}</div><div class='ht-sub'>${sk.mp} MP · ${sk.cd}-turn cooldown · press R</div>`;
       skillBtn.classList.toggle('disabled', !ready);
       skillBtn.classList.toggle('ready', ready && player.hp > 0);
     } else {
@@ -9710,15 +10026,16 @@ function updateBars() {
 }
 
 // Potions are a SKILL, not a consumable: unlimited uses, but a quaff costs a
-// turn (foes act) and both flasks share a one-turn cooldown, so you can only
-// down a single potion per turn. Health potions restore a percentage of max HP
-// so they scale with you instead of becoming useless at high levels.
+// turn (foes act) and both flasks share a cooldown, so you can't spam them —
+// after a sip both flasks recharge over a few turns. Health potions restore a
+// percentage of max HP so they scale with you instead of becoming useless at
+// high levels.
 const HEAL_PERCENT = 0.30;
-const POTION_CD = 1;            // shared cooldown — one potion per turn
+const POTION_CD = 3;            // shared cooldown — recharges over 3 turns
 function healPotionAmount() { return Math.max(1, Math.round(player.maxHp * HEAL_PERCENT)); }
 function potionReady() { return (player.potionCd || 0) === 0; }
 function useHealthPotion() {
-  if (!potionReady()) { log('⏳ Potions recharge — only one per turn.'); return; }
+  if (!potionReady()) { log(`⏳ Potions recharge — ${player.potionCd} turn${player.potionCd === 1 ? '' : 's'} left.`); return; }
   if (player.hp >= player.maxHp) { log('Already at full health.'); return; }
   const heal = Math.min(player.maxHp - player.hp, healPotionAmount());
   player.hp += heal;
@@ -9729,7 +10046,7 @@ function useHealthPotion() {
 
 const MANA_AMOUNT = 40;
 function useManaPotion() {
-  if (!potionReady()) { log('⏳ Potions recharge — only one per turn.'); return; }
+  if (!potionReady()) { log(`⏳ Potions recharge — ${player.potionCd} turn${player.potionCd === 1 ? '' : 's'} left.`); return; }
   if (player.mp >= player.maxMp) { log('Already at full mana.'); return; }
   player.mp = Math.min(player.maxMp, player.mp + MANA_AMOUNT);
   sfx('potion');
@@ -9806,14 +10123,13 @@ function renderPanel() {
         ${equipable
           ? (canEquipItem(item)
               ? `<button class="row-btn equip-row-btn ${isUpgrade?'upgrade-btn':''}" onclick="quickEquip(${i})">${equippedHere && isUpgrade?'SWAP':'EQUIP'}</button>`
-              : `<button class="row-btn locked-row-btn" title="Your class can't wield this weapon" onclick="quickEquip(${i})">🔒</button>`)
+              : `<button class="row-btn locked-row-btn" ${hoverTip(`<div class='ht-name'>🔒 Can't Wield</div><div class='ht-line'>Your class can't wield this weapon.</div>`)} onclick="quickEquip(${i})">🔒</button>`)
           : ''}
       </div>`;
     }).join('');
   } else if (currentTab === 'equip') {
     el.innerHTML = SLOT_KEYS.map(s => renderSlot(s, SLOTS[s].label)).join('') +
-      `<div style="margin-top:8px;font-size:10px;color:#555">Tap EQUIP on any loot<br>item to gear up.</div>` +
-      renderCosmetics();
+      `<div style="margin-top:8px;font-size:10px;color:#555">Tap EQUIP on any loot<br>item to gear up.</div>`;
   } else if (currentTab === 'skills') {
     renderSkills(el);
   } else {
@@ -10107,10 +10423,12 @@ function renderSkillBar() {
   const hpFull = player.hp >= player.maxHp;
   const mpFull = player.mp >= player.maxMp;
   const urgent = potReady && player.hp < player.maxHp * 0.35;
-  const healBtn = `<button class="skillbar-btn potion ${potReady && !hpFull ? '' : 'empty'} ${urgent ? 'urgent' : ''}" title="Quaff a Health Potion (Q) — one potion per turn" onclick="useHealthPotion()">
+  const healTip = `<div class='ht-name' style='color:var(--hp)'>❤️ Health Potion</div><div class='ht-line'>Quaff to restore a burst of health.</div><div class='ht-sub'>press Q · 3-turn cooldown</div>`;
+  const manaTip = `<div class='ht-name' style='color:var(--mp)'>🔷 Mana Potion</div><div class='ht-line'>Quaff to restore a burst of mana.</div><div class='ht-sub'>press E · 3-turn cooldown</div>`;
+  const healBtn = `<button class="skillbar-btn potion ${potReady && !hpFull ? '' : 'empty'} ${urgent ? 'urgent' : ''}" ${hoverTip(healTip)} onclick="useHealthPotion()">
       <span class="sb-key">Q</span><span class="sb-icon">${HEAL_POTION_SVG}</span><span class="sb-info" id="heal-label">${pcd > 0 ? pcd : ''}</span>
     </button>`;
-  const manaBtn = `<button class="skillbar-btn potion mana ${potReady && !mpFull ? '' : 'empty'}" title="Quaff a Mana Potion (E) — one potion per turn" onclick="useManaPotion()">
+  const manaBtn = `<button class="skillbar-btn potion mana ${potReady && !mpFull ? '' : 'empty'}" ${hoverTip(manaTip)} onclick="useManaPotion()">
       <span class="sb-key">E</span><span class="sb-icon">${MANA_POTION_SVG}</span><span class="sb-info">${pcd > 0 ? pcd : ''}</span>
     </button>`;
   let extraNum = 0;
@@ -10121,7 +10439,8 @@ function renderSkillBar() {
     // click/tap only (a deep build can learn more actives than there are keys).
     const idx = s.baseline ? 0 : ++extraNum;
     const key = s.baseline ? 'R' : (idx <= 9 ? String(idx) : '');
-    return `<button class="skillbar-btn ${s.baseline ? 'baseline ' : ''}${ready ? 'ready' : 'disabled'}" title="${s.name} — ${s.desc} (${s.mp} MP, ${s.cd}-turn cooldown)${key ? ` · press ${key}` : ''}" onclick="castSkillById('${s.id}')">
+    const tip = `<div class='ht-name' style='color:#e6c34a'>${s.icon} ${s.name}</div><div class='ht-line'>${s.desc}</div><div class='ht-sub'>${s.mp} MP · ${s.cd}-turn cooldown${key ? ` · press ${key}` : ''}</div>`;
+    return `<button class="skillbar-btn ${s.baseline ? 'baseline ' : ''}${ready ? 'ready' : 'disabled'}" ${hoverTip(tip)} onclick="castSkillById('${s.id}')">
       <span class="sb-key">${key}</span><span class="sb-icon">${s.icon}</span><span class="sb-info">${cd > 0 ? cd : s.mp + 'MP'}</span>
     </button>`;
   }).join('');
@@ -10231,53 +10550,6 @@ function renderSlot(slot, label) {
     </div>
     ${item ? `<button class="row-btn unequip-row-btn" onclick="unequip('${slot}')">✕</button>` : ''}
   </div>`;
-}
-
-// COSMETICS: change how the hero *looks* without changing what's equipped. Pick
-// from the wardrobe of looks you've found, per visual slot (head / chest / weapon).
-const COS_LABELS = { head: '🪖 Head', chest: '🛡 Chest', weapon: '⚔ Weapon' };
-function renderCosmetics() {
-  if (!player.cosmetics) player.cosmetics = { head:null, chest:null, weapon:null };
-  if (!player.wardrobe) player.wardrobe = { head:[], chest:[], weapon:[] };
-  const blocks = VISUAL_SLOTS.map(slot => {
-    const looks = player.wardrobe[slot] || [];
-    const override = player.cosmetics[slot] || null;
-    const shown = visualIcon(slot);
-    // "Match gear" chip (clears any override) is always offered first.
-    let chips = `<button class="cos-chip gear ${override ? '' : 'sel'}"
-        title="Match your equipped gear" onclick="pickCosmetic('${slot}','')">GEAR</button>`;
-    // One tappable chip per discovered look.
-    chips += looks.map(l =>
-      `<button class="cos-chip ${override === l.icon ? 'sel' : ''}"
-         title="${(l.name || '').replace(/"/g,'')}" onclick="pickCosmetic('${slot}','${l.icon}')">${iconMarkup(l.icon, '#dddde6', false)}</button>`
-    ).join('');
-    const empty = looks.length ? '' :
-      `<div class="cos-empty">Find ${COS_LABELS[slot].replace(/^\S+\s/, '').toLowerCase()} loot to unlock looks.</div>`;
-    return `<div class="cos-block">
-      <div class="cos-blk-head">
-        <span class="cos-preview">${shown ? iconMarkup(shown, '#cfcfe0', false) : '—'}</span>
-        <span class="cos-slot-label">${COS_LABELS[slot]}</span>
-      </div>
-      <div class="cos-chips">${chips}</div>
-      ${empty}
-    </div>`;
-  }).join('');
-  return `<div class="cos-head">
-    <div class="cos-title">👁 APPEARANCE</div>
-    <div class="cos-sub">Tap a look to wear it — your sprite changes, but your equipped gear and stats don't.</div>
-    ${blocks}
-  </div>`;
-}
-
-// Wear a chosen look for a visual slot. An empty icon clears the override so the
-// slot mirrors equipped gear again.
-function pickCosmetic(slot, icon) {
-  if (!VISUAL_SLOTS.includes(slot)) return;
-  if (!player.cosmetics) player.cosmetics = { head:null, chest:null, weapon:null };
-  player.cosmetics[slot] = icon || null;
-  renderPanel();
-  draw();         // restyle the sprite immediately
-  saveGame();
 }
 
 // One-tap equip: route an item straight to its own slot.
@@ -10399,18 +10671,35 @@ function positionTooltip(anchor) {
 // difference vs that item as a percentage change.
 function itemCardHTML(item, opts = {}) {
   const tier = TIERS[item.tier];
+  const head = item.slot ? headlineStats(item) : [];
   const statRows = Object.entries(item.stats).map(([k,v]) => {
     // DMG is a range string like "8-12"; others are flat numbers (negative on a curse).
     const negative = (typeof v === 'number') && v < 0;
     const val = (typeof v === 'string') ? v : (v < 0 ? '' : '+') + v;
+    // Native (headline/innate) stats come from the base and can't be rerolled, so
+    // mark them apart from rollable affixes. A curse penalty (negative) is tagged too.
+    const isNative = head.includes(k);
+    const cls = 'tt-stat' + (isNative ? ' tt-native' : '');
     const style = negative ? ' style="color:#e0556b"' : '';
-    return `<div class="tt-stat"${style}>${val} ${STAT_LABELS[k] || k}</div>`;
+    const tag = negative ? ' <span class="tt-tag">cursed</span>'
+              : isNative ? ' <span class="tt-tag">native</span>' : '';
+    return `<div class="${cls}"${style}>${val} ${STAT_LABELS[k] || k}${tag}</div>`;
   });
   // Attribute affixes (+Might, +Luck, …) get their own coloured rows.
   if (item.attrs) for (const [k, v] of Object.entries(item.attrs)) {
     statRows.push(`<div class="tt-stat" style="color:#e6c34a">+${v} ${ATTRIBUTES[k].label}</div>`);
   }
   const stats = statRows.join('') || '<div class="tt-stat" style="color:#666">No bonuses</div>';
+  // Weapons show their reach (a little tile grid) and how the base swings.
+  let weaponLine = '';
+  if (item.slot === 'weapon') {
+    const base = weaponBaseType(item);
+    const style = base ? WEAPON_STYLES[base] : null;
+    if (base) {
+      weaponLine = `<div style="margin-top:5px">${weaponRangeGridHTML(base)}</div>` +
+        (WEAPON_STYLE_DESC[style] ? `<div style="color:#9a8d70;font-size:9px;margin-top:2px;font-style:italic">${WEAPON_STYLE_DESC[style]}</div>` : '');
+    }
+  }
   const power = item.slot ? itemPower(item) : 0;
   // Power difference vs the comparison item, shown as a percentage so a +1 over a
   // 10-power item reads as a meaningful +10% rather than a flat +1.
@@ -10433,6 +10722,7 @@ function itemCardHTML(item, opts = {}) {
     <div class="tt-tier" style="color:${tier.color}">${item.slot ? SLOTS[item.slot].label : 'potion'}${ilvlLine ? ' · ' + ilvlLine : ''}</div>
     ${item.slot ? `<div style="color:#ffd24b;font-weight:bold;font-size:11px;margin:3px 0">⚡ Power: ${power}${powerDelta}</div>` : ''}
     ${stats}
+    ${weaponLine}
     <div style="color:#c8a84b;font-size:10px;margin-top:3px">Value: ${item.value}g</div>
     <div class="tt-flavor">${item.flavor}</div>`;
 }
@@ -10480,6 +10770,13 @@ function showHoverTip(e, el) {
   hoverTipEl.style.top = top + 'px';
 }
 function hideHoverTip() { hoverTipEl.style.display = 'none'; }
+
+// Build the data-tip + handlers for a styled hover popup (the gear-card look),
+// so JS-rendered buttons share the same hover UI as everything else instead of
+// the native browser title box. Pass inner HTML built from ht-name/ht-line/ht-sub.
+function hoverTip(html) {
+  return `data-tip="${html.replace(/"/g, '&quot;')}" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()"`;
+}
 
 // Dismiss the tooltip when tapping anywhere (the tooltip, the map, the log, etc.),
 // except when tapping a loot item or gear slot (those manage it themselves).
@@ -11116,7 +11413,7 @@ if (hadSave) {
 }
 log('Progress auto-saves automatically as you play.');
 log('Open 🎒 BAG to view your loot; press the pad\'s USE button to grab items.');
-log(`Tap the ❤️ or 🔷 flask to quaff a ${logPotion('Potion')} — they're a skill now, free to use but only one per turn.`);
+log(`Tap the ❤️ or 🔷 flask to quaff a ${logPotion('Potion')} — they're a skill now, free to use but share a 3-turn cooldown.`);
 log('⌨️ Keys: Q health potion · E mana potion · R class skill · T town · B open bag · Space/F use.');
 log('⚡ Your class grants a special skill — tap the ⚡ button (or press R) to spend mana on it.');
 log('⚡ Each item has a Power value; your total Power blends level, gear, and attributes.');
