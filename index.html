@@ -2924,8 +2924,9 @@ const FOODS = [
 ];
 
 // ── COOKING: RAMEN ──
-// Monsters drop ramen toppings. Drop ANY mix of them into the pot and cook a
-// bowl — every topping in the bowl stacks its own little static buff onto the
+// Monsters drop ramen toppings. Drop EXACTLY 3 toppings (RAMEN_INGREDIENT_COUNT)
+// into the pot — any mix of three, three-of-a-kind or three different — and cook
+// a bowl. Every topping in the bowl stacks its own little static buff onto the
 // finished dish (two slices of pork = double the damage bonus). Hit an exact
 // SECRET combo (see RECIPES) and the bowl unlocks a named ramen with an extra
 // bonus stacked on top. A cooked bowl is eaten to grant its buff for a number
@@ -2933,14 +2934,14 @@ const FOODS = [
 // maxMpPct, defFlat, critPct, dodgePct, regen, goldPct, magicPct.
 // Each topping's art is a DawnLike atlas tile (sprite key), not an emoji.
 const INGREDIENTS = {
-  pork:     { sprite: 'ramen_pork',     name: 'Chashu Pork', color: '#e87a8a', weight: 18, fx: { dmgPct: 0.05 } },
-  egg:      { sprite: 'ramen_egg',      name: 'Egg',         color: '#f0e4c0', weight: 16, fx: { maxHpPct: 0.04 } },
-  mushroom: { sprite: 'ramen_mushroom', name: 'Mushroom',    color: '#d98a6a', weight: 18, fx: { defFlat: 6 } },
-  fishcake: { sprite: 'ramen_fishcake', name: 'Fishcake',    color: '#7fc0e0', weight: 12, fx: { maxMpPct: 0.05 } },
-  corn:     { sprite: 'ramen_corn',     name: 'Corn',        color: '#ffd24b', weight: 9,  fx: { goldPct: 0.12, magicPct: 0.12 } },
-  chili:    { sprite: 'ramen_chili',    name: 'Chili Oil',   color: '#ff5a4b', weight: 9,  fx: { critPct: 0.03 } },
-  scallion: { sprite: 'ramen_scallion', name: 'Scallion',    color: '#7fd06a', weight: 20, fx: { regen: 2 } },
-  bokchoy:  { sprite: 'ramen_bokchoy',  name: 'Bok Choy',    color: '#9bd06a', weight: 12, fx: { dodgePct: 0.03 } },
+  pork:     { sprite: 'ramen_pork',     name: 'Monster Meat',  color: '#e87a8a', weight: 18, fx: { dmgPct: 0.05 } },
+  egg:      { sprite: 'ramen_egg',      name: 'Beast Egg',     color: '#f0e4c0', weight: 16, fx: { maxHpPct: 0.04 } },
+  mushroom: { sprite: 'ramen_mushroom', name: 'Cave Shroom',   color: '#d98a6a', weight: 18, fx: { defFlat: 6 } },
+  fishcake: { sprite: 'ramen_fishcake', name: 'Kraken Cake',   color: '#7fc0e0', weight: 12, fx: { maxMpPct: 0.05 } },
+  corn:     { sprite: 'ramen_corn',     name: 'Wild Corn',     color: '#ffd24b', weight: 9,  fx: { goldPct: 0.12, magicPct: 0.12 } },
+  chili:    { sprite: 'ramen_chili',    name: 'Dragon Pepper', color: '#ff5a4b', weight: 9,  fx: { critPct: 0.03 } },
+  scallion: { sprite: 'ramen_scallion', name: 'Wild Scallion', color: '#7fd06a', weight: 20, fx: { regen: 2 } },
+  bokchoy:  { sprite: 'ramen_bokchoy',  name: 'Wild Greens',   color: '#9bd06a', weight: 12, fx: { dodgePct: 0.03 } },
 };
 const INGREDIENT_KEYS = Object.keys(INGREDIENTS);
 // All cooked bowls share the DawnLike ramen-bowl tile (every dish is ramen).
@@ -2961,9 +2962,9 @@ const RAMEN_BASE_FLOORS = 3;
 const RECIPES = [
   // ── headliners: each centred on a special effect ──
   { id: 'phoenix',   name: 'Phoenix Ramen',     ing: { chili: 2, egg: 1 },                          bonus: { revive: 1, regen: 4 },                       bonusFloors: 2 },
-  { id: 'everything',name: 'The Everything Bowl',ing: { pork: 1, egg: 1, mushroom: 1, fishcake: 1, corn: 1, chili: 1, scallion: 1, bokchoy: 1 }, bonus: { revive: 1, dmgPct: 0.1, maxHpPct: 0.1, lifesteal: 0.08 }, bonusFloors: 3 },
+  { id: 'everything',name: 'The Everything Bowl',ing: { pork: 1, egg: 1, corn: 1 },                  bonus: { revive: 1, dmgPct: 0.1, maxHpPct: 0.1, lifesteal: 0.08 }, bonusFloors: 3 },
   { id: 'vampire',   name: 'Vampire Ramen',     ing: { pork: 2, chili: 1 },                         bonus: { lifesteal: 0.18 },                           bonusFloors: 2 },
-  { id: 'bloodmoon', name: 'Blood Moon Ramen',  ing: { pork: 3, chili: 1 },                         bonus: { lifesteal: 0.12, dmgPct: 0.1 },              bonusFloors: 3 },
+  { id: 'bloodmoon', name: 'Blood Moon Ramen',  ing: { pork: 1, chili: 2 },                         bonus: { lifesteal: 0.12, dmgPct: 0.1 },              bonusFloors: 3 },
   { id: 'ironwall',  name: 'Iron Wall Ramen',   ing: { mushroom: 3 },                               bonus: { thorns: 20, defFlat: 10 },                   bonusFloors: 2 },
   { id: 'druid',     name: 'Druid Ramen',       ing: { mushroom: 2, scallion: 1 },                  bonus: { thorns: 14, regen: 5 },                      bonusFloors: 2 },
   { id: 'juggernaut',name: 'Juggernaut Ramen',  ing: { mushroom: 2, egg: 1 },                       bonus: { thorns: 10, defFlat: 16 },                   bonusFloors: 2 },
@@ -2975,32 +2976,32 @@ const RECIPES = [
   // ── power & sustain ──
   { id: 'tonkotsu',  name: 'Tonkotsu Ramen',    ing: { pork: 2, egg: 1 },                           bonus: { lifesteal: 0.1, dmgPct: 0.05 },              bonusFloors: 2 },
   { id: 'berserker', name: 'Berserker Ramen',   ing: { pork: 3 },                                   bonus: { dmgPct: 0.2, lifesteal: 0.05 },              bonusFloors: 2 },
-  { id: 'spicymiso', name: 'Spicy Miso Ramen',  ing: { pork: 1, chili: 2, mushroom: 1 },            bonus: { dmgPct: 0.1, thorns: 12 },                   bonusFloors: 2 },
+  { id: 'spicymiso', name: 'Spicy Miso Ramen',  ing: { chili: 2, mushroom: 1 },                     bonus: { dmgPct: 0.1, thorns: 12 },                   bonusFloors: 2 },
   { id: 'duelist',   name: 'Duelist Ramen',     ing: { pork: 1, chili: 1, scallion: 1 },            bonus: { dmgPct: 0.08, lifesteal: 0.08 },             bonusFloors: 2 },
   { id: 'gladiator', name: 'Gladiator Ramen',   ing: { pork: 2, fishcake: 1 },                      bonus: { dmgPct: 0.08, maxMpPct: 0.06, lifesteal: 0.05 }, bonusFloors: 2 },
-  { id: 'warlord',   name: 'Warlord Ramen',     ing: { pork: 2, mushroom: 2 },                      bonus: { dmgPct: 0.12, defFlat: 12 },                 bonusFloors: 2 },
+  { id: 'warlord',   name: 'Warlord Ramen',     ing: { pork: 2, mushroom: 1 },                      bonus: { dmgPct: 0.12, defFlat: 12 },                 bonusFloors: 2 },
   { id: 'inferno',   name: 'Inferno Ramen',     ing: { chili: 3 },                                  bonus: { critPct: 0.1, dmgPct: 0.08 },                bonusFloors: 2 },
   // ── crit & evasion ──
-  { id: 'assassin',  name: 'Assassin Ramen',    ing: { chili: 1, bokchoy: 1 },                      bonus: { critPct: 0.08, dodgePct: 0.05 },             bonusFloors: 2 },
+  { id: 'assassin',  name: 'Assassin Ramen',    ing: { chili: 2, bokchoy: 1 },                      bonus: { critPct: 0.08, dodgePct: 0.05 },             bonusFloors: 2 },
   { id: 'trickster', name: 'Trickster Ramen',   ing: { bokchoy: 2, chili: 1 },                      bonus: { dodgePct: 0.08, critPct: 0.06 },             bonusFloors: 2 },
   { id: 'monk',      name: "Monk's Ramen",      ing: { bokchoy: 3 },                                bonus: { dodgePct: 0.1, regen: 4 },                   bonusFloors: 2 },
-  { id: 'gambler',   name: 'Gambler Ramen',     ing: { corn: 1, chili: 1 },                         bonus: { goldPct: 0.25, critPct: 0.06 },              bonusFloors: 2 },
+  { id: 'gambler',   name: 'Gambler Ramen',     ing: { corn: 2, chili: 1 },                         bonus: { goldPct: 0.25, critPct: 0.06 },              bonusFloors: 2 },
   { id: 'mystic',    name: 'Mystic Ramen',      ing: { fishcake: 2, chili: 1 },                     bonus: { maxMpPct: 0.1, critPct: 0.05, dropPct: 0.15 },bonusFloors: 2 },
   // ── tanks & turtles ──
   { id: 'titan',     name: 'Titan Ramen',       ing: { egg: 3 },                                    bonus: { maxHpPct: 0.18, regen: 4 },                  bonusFloors: 2 },
   { id: 'survivor',  name: 'Survivor Ramen',    ing: { egg: 2, mushroom: 1 },                       bonus: { maxHpPct: 0.1, regen: 6 },                   bonusFloors: 2 },
   { id: 'guardian',  name: 'Guardian Ramen',    ing: { mushroom: 1, egg: 1, bokchoy: 1 },           bonus: { maxHpPct: 0.08, defFlat: 10, regen: 4 },     bonusFloors: 2 },
   { id: 'spartan',   name: 'Spartan Ramen',     ing: { pork: 1, mushroom: 1, bokchoy: 1 },          bonus: { defFlat: 12, dodgePct: 0.04, thorns: 8 },    bonusFloors: 2 },
-  { id: 'veggie',    name: 'Garden Ramen',      ing: { bokchoy: 1, mushroom: 1, scallion: 1, corn: 1 }, bonus: { dodgePct: 0.05, regen: 5, dropPct: 0.15 }, bonusFloors: 2 },
+  { id: 'veggie',    name: 'Garden Ramen',      ing: { bokchoy: 1, mushroom: 1, scallion: 1 },      bonus: { dodgePct: 0.05, regen: 5, dropPct: 0.15 },   bonusFloors: 2 },
   // ── mana & arcane ──
   { id: 'ocean',     name: 'Abyssal Ramen',     ing: { fishcake: 3 },                               bonus: { maxMpPct: 0.15, lifesteal: 0.06 },           bonusFloors: 2 },
   { id: 'sage',      name: 'Sage Ramen',        ing: { fishcake: 1, egg: 1, scallion: 1 },          bonus: { maxMpPct: 0.1, xpPct: 0.2 },                 bonusFloors: 2 },
-  { id: 'seafood',   name: 'Seafood Ramen',     ing: { fishcake: 2, mushroom: 1, scallion: 1 },     bonus: { maxMpPct: 0.08, dropPct: 0.25 },             bonusFloors: 2 },
+  { id: 'seafood',   name: 'Seafood Ramen',     ing: { fishcake: 2, scallion: 1 },                  bonus: { maxMpPct: 0.08, dropPct: 0.25 },             bonusFloors: 2 },
   // ── fortune & feasts ──
   { id: 'buttercorn',name: 'Butter Corn Ramen', ing: { corn: 2, egg: 1 },                           bonus: { goldPct: 0.3, xpPct: 0.25 },                 bonusFloors: 2 },
   { id: 'harvest',   name: 'Harvest Ramen',     ing: { mushroom: 1, corn: 1, scallion: 1 },         bonus: { goldPct: 0.2, regen: 4, dropPct: 0.15 },     bonusFloors: 2 },
-  { id: 'shogun',    name: 'Shogun Ramen',      ing: { pork: 1, egg: 1, mushroom: 1, chili: 1 },    bonus: { dmgPct: 0.1, thorns: 10, critPct: 0.04 },    bonusFloors: 3 },
-  { id: 'emperor',   name: 'Emperor Ramen',     ing: { pork: 1, egg: 1, mushroom: 1, fishcake: 1, corn: 1 }, bonus: { dmgPct: 0.06, maxHpPct: 0.06, lifesteal: 0.06, xpPct: 0.15 }, bonusFloors: 3 },
+  { id: 'shogun',    name: 'Shogun Ramen',      ing: { pork: 1, mushroom: 1, chili: 1 },            bonus: { dmgPct: 0.1, thorns: 10, critPct: 0.04 },    bonusFloors: 3 },
+  { id: 'emperor',   name: 'Emperor Ramen',     ing: { pork: 1, egg: 1, fishcake: 1 },              bonus: { dmgPct: 0.06, maxHpPct: 0.06, lifesteal: 0.06, xpPct: 0.15 }, bonusFloors: 3 },
 ];
 
 // Friendly labels for every buff effect a topping or bowl can grant.
@@ -6183,9 +6184,15 @@ function refreshCooking() {
   else { const el = document.getElementById('panel-content'); if (el) el.innerHTML = html; }
 }
 
-// Pot building — clamp adds to what you actually own (minus what's already in).
+// Every bowl of ramen takes EXACTLY this many toppings — no more, no less.
+const RAMEN_INGREDIENT_COUNT = 3;
+
+// Pot building — clamp adds to what you actually own (minus what's already in)
+// and never let the pot exceed the fixed ramen ingredient count.
 function potAdd(k) {
   if (ingCount(k) - (cookPot[k] || 0) <= 0) return;
+  const total = Object.values(cookPot).reduce((a, c) => a + c, 0);
+  if (total >= RAMEN_INGREDIENT_COUNT) { log(`🍜 A bowl of ramen takes exactly ${RAMEN_INGREDIENT_COUNT} toppings.`); return; }
   cookPot[k] = (cookPot[k] || 0) + 1;
   sfx('click');
   refreshCooking();
@@ -6201,7 +6208,7 @@ function potClear() { cookPot = {}; refreshCooking(); }
 // bonus, consume the toppings, and stock the finished bowl in the pantry.
 function cookPotNow() {
   const total = Object.values(cookPot).reduce((a, c) => a + c, 0);
-  if (total === 0) { log('🍜 Drop some toppings in the pot first.'); return; }
+  if (total !== RAMEN_INGREDIENT_COUNT) { log(`🍜 A bowl of ramen takes exactly ${RAMEN_INGREDIENT_COUNT} toppings — you have ${total}.`); return; }
   const bowl = bowlFromPot(cookPot);
   if (bowl.match && !isDiscovered(bowl.match.id)) {
     if (!Array.isArray(player.discoveredRecipes)) player.discoveredRecipes = [];
@@ -6238,7 +6245,7 @@ function renderCookingHTML() {
   if (fb && fb.floors > 0) {
     html += `<div class="cook-active"><span class="cook-active-emoji">${bowlIcon(32)}</span><div><div class="cook-active-name">${fb.name}</div><div class="cook-active-fx">${fxDesc(fb.fx)}</div><div class="cook-active-floors">${fb.floors} floor${fb.floors === 1 ? '' : 's'} left</div></div></div>`;
   }
-  html += `<div class="cook-blurb">Monsters drop ramen toppings. Drop any mix into the pot and cook — every topping stacks its own buff into the bowl. Hit a secret combo and the bowl gains an extra bonus. Eat a bowl to gain its buff for a few floors.</div>`;
+  html += `<div class="cook-blurb">Monsters drop ramen toppings. Every bowl takes exactly ${RAMEN_INGREDIENT_COUNT} toppings — any mix of ${RAMEN_INGREDIENT_COUNT} (three of a kind or three different). Each topping stacks its own buff into the bowl. Hit a secret combo and the bowl gains an extra bonus. Eat a bowl to gain its buff for a few floors.</div>`;
 
   // Toppings you own (the static-buff legend doubles as the "add" tray).
   html += `<div class="cook-sec">🧺 Toppings</div>`;
@@ -6259,10 +6266,10 @@ function renderCookingHTML() {
   }
 
   // The pot + live preview of the bowl it would make.
-  html += `<div class="cook-sec">🍲 The Pot</div>`;
+  html += `<div class="cook-sec">🍲 The Pot (${Object.values(cookPot).reduce((a, c) => a + c, 0)}/${RAMEN_INGREDIENT_COUNT})</div>`;
   const potTotal = Object.values(cookPot).reduce((a, c) => a + c, 0);
   if (potTotal === 0) {
-    html += `<div class="cook-empty">Empty. Tap toppings above to add them.</div>`;
+    html += `<div class="cook-empty">Empty. Tap toppings above to add ${RAMEN_INGREDIENT_COUNT}.</div>`;
   } else {
     html += `<div class="pot-list">` + Object.keys(cookPot).map(k =>
       `<button class="pot-chip" onclick="potRemove('${k}')">${ingIcon(k, 14)} ${INGREDIENTS[k].name} ×${cookPot[k]} <span class="pot-x">✕</span></button>`
@@ -6274,7 +6281,11 @@ function renderCookingHTML() {
           : `<div class="pot-secret">✨ This looks like a secret recipe…</div>`)
       : '';
     html += `<div class="pot-preview">Bowl: <b>${fxDesc(preview.fx) || 'no effect'}</b> · ${preview.floors} floors${secret}</div>`;
-    html += `<div class="cook-actions"><button class="cook-btn" onclick="cookPotNow()">🔥 Cook</button><button class="cook-btn ghost" onclick="potClear()">Clear</button></div>`;
+    const ready = potTotal === RAMEN_INGREDIENT_COUNT;
+    const cookBtn = ready
+      ? `<button class="cook-btn" onclick="cookPotNow()">🔥 Cook</button>`
+      : `<button class="cook-btn" disabled>Add ${RAMEN_INGREDIENT_COUNT - potTotal} more</button>`;
+    html += `<div class="cook-actions">${cookBtn}<button class="cook-btn ghost" onclick="potClear()">Clear</button></div>`;
   }
 
   // Pantry — cooked bowls waiting to be eaten.
