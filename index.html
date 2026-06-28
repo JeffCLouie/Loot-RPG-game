@@ -4316,7 +4316,35 @@ window.gameState = function gameState(radius) {
     rows.push(ln);
   }
 
+  // ── Active screen / input context ──
+  // Tells a caller WHAT is on screen and whether walking keys do anything right
+  // now, so an agent won't fire movement while a menu/overlay is up. Blocking
+  // overlays are detected by their `.open` class, in the same priority order
+  // handleEscape() closes them. Note: in the desktop "web layout" the bag is a
+  // permanent sidebar (panelOpen is always true) and does NOT block movement, so
+  // it's only treated as a menu in the compact layout.
+  const ovOpen = id => { const el = document.getElementById(id); return !!(el && el.classList.contains('open')); };
+  const MODALS = [
+    ['title-overlay', 'title'], ['class-overlay', 'classSelect'], ['death-overlay', 'dead'],
+    ['settings-menu', 'settings'], ['version-overlay', 'changelog'], ['playtime-overlay', 'playtime'],
+    ['shop-overlay', 'shop'], ['mystic-overlay', 'mystic'], ['town-overlay', 'town'],
+  ];
+  let mode = 'dungeon', blockingOverlay = null;
+  for (const [id, name] of MODALS) { if (ovOpen(id)) { mode = name; blockingOverlay = id; break; } }
+  if (mode === 'dungeon') {
+    const compactBag = panelOpen && typeof isWebLayout === 'function' && !isWebLayout();
+    if (inTown) mode = 'town';
+    else if (compactBag) mode = 'bag';
+  }
+  // Movement only does something in the live dungeon with no menu/overlay up.
+  const canMove = (mode === 'dungeon');
+
   return {
+    // What's on screen and whether walking keys work right now. If canMove is
+    // false, interact with the menu/overlay instead of pressing movement keys.
+    mode,            // dungeon | town | bag | title | classSelect | dead | shop | mystic | settings | changelog | playtime
+    canMove,         // true only when mode === 'dungeon'
+    blockingOverlay, // DOM id of the open modal, or null
     inTown: !!inTown,
     floor: dungeonLevel,
     player: {
