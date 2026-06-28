@@ -8215,6 +8215,9 @@ function dealDamage(e, dmg, isCrit) {
 // Everything that happens when a foe falls: XP, gold, and the loot rolls.
 function onEnemyDefeated(e) {
   e.dead = true;
+  // Summoned minions are pure threat — they drop NO XP, gold or loot, so a
+  // summoner boss can't be farmed by killing the fodder it spawns endlessly.
+  if (e.minion) { sfx('kill'); updateFloorClear(); return; }
   const label = enemyLabel(e);
   const xpMult = e.isBoss ? 5 : (e.isElite ? 2 : 1);
   const goldMult = e.isBoss ? 3 : (e.isElite ? 2 : 1);
@@ -8238,8 +8241,6 @@ function onEnemyDefeated(e) {
     if (got > 0) { player.mp += got; spawnFloatingText(player.x, player.y - 0.3, `+${got}`, '#7fb0ff'); }
   }
   updateBars();
-  // Minions summoned by a boss never drop loot — only XP/gold above.
-  if (e.minion) { checkLevelUp(); updateFloorClear(); return; }
   // The floor modifier, an active Fortune buff, gear Magic Find, and any pact all
   // sweeten every drop roll.
   const lootMult = (floorMod.lootMult || 1) * (buffs.fortune ? 1.5 : 1) * pfx('loot', 1) * (1 + totalStat('MAGICFIND') / 100);
@@ -9091,11 +9092,15 @@ function bossSpecial(e, dist, beh) {
 }
 
 // Place up to n weak minions on free tiles adjacent to the boss. Returns count.
+// A boss has a lifetime summon cap so it can't flood the floor with fodder.
 function summonMinions(boss, n) {
+  const CAP = 10;
+  boss.summoned = boss.summoned || 0;
+  if (boss.summoned >= CAP) return 0;
   let placed = 0;
   const spots = ENEMY_DIRS.slice().sort(() => Math.random() - 0.5);
   for (const [dx, dy] of spots) {
-    if (placed >= n) break;
+    if (placed >= n || boss.summoned >= CAP) break;
     const x = boss.x + dx, y = boss.y + dy;
     if (!enemyTileFree(x, y)) continue;
     const hp = Math.max(1, Math.round(10 + dungeonLevel * 4));
@@ -9106,6 +9111,7 @@ function summonMinions(boss, n) {
       dead: false, behavior: 'swift', minion: true,
     });
     placed++;
+    boss.summoned++;
   }
   return placed;
 }
