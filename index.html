@@ -430,12 +430,16 @@
   .skillbar-btn.ready { box-shadow: 0 0 7px rgba(140,110,255,0.5); }
   .skillbar-btn.ready:active { background: #4a3a7a; }
   .skillbar-btn.disabled { background: #211c2a; border-color: #33304a; color: #6a647a; }
-  /* Health Potion pinned to the far left of the bar — red flask styling. */
+  /* Potion skills pinned to the far left of the bar — red Health flask, blue Mana flask. */
   .skillbar-btn.potion { border-color: #a03048; background: #6a1a2a; color: #ffd5dd; }
   .skillbar-btn.potion .sb-key { color: #ffb3c0; }
   .skillbar-btn.potion:active { background: #c02040; }
   .skillbar-btn.potion.empty { background: #2a1a1f; border-color: #3a2a2f; color: #6a4a52; }
   .skillbar-btn.potion.urgent { animation: healPulse 0.85s ease-in-out infinite; }
+  .skillbar-btn.potion.mana { border-color: #3050a8; background: #1a2a6a; color: #d5e0ff; }
+  .skillbar-btn.potion.mana .sb-key { color: #b3c8ff; }
+  .skillbar-btn.potion.mana:active { background: #2040c0; }
+  .skillbar-btn.potion.mana.empty { background: #1a1f2a; border-color: #2a2f3a; color: #4a5262; }
 
   #panel-content { flex: 1; overflow-y: auto; padding: 6px; }
   #panel-content::-webkit-scrollbar { width: 4px; }
@@ -2839,7 +2843,11 @@ function pfx(field, dflt) { return (pact && pact.fx[field] != null) ? pact.fx[fi
 // STATE
 // ══════════════════════════════════════════
 
-let player = { x: 5, y: 5, hp: 100, maxHp: 100, mp: 60, maxMp: 60, gold: 0, level: 1, xp: 0, healPotions: 2, manaPotions: 0, healthPotionsBought: 0,
+let player = { x: 5, y: 5, hp: 100, maxHp: 100, mp: 60, maxMp: 60, gold: 0, level: 1, xp: 0,
+  // Potions are no longer hoarded consumables — they're an always-available
+  // skill gated by a shared one-turn cooldown (see useHealthPotion/useManaPotion),
+  // so you can quaff at most one potion per turn. `potionCd` is that cooldown.
+  potionCd: 0,
   // Chosen character name (null until entered on a new game) and the peak gold
   // ever held — both feed the global leaderboards.
   name: null, maxGold: 0,
@@ -4094,7 +4102,7 @@ function maybeSpawnQuest(reach) {
   } else if (kind === 'wounded') {
     npc.emoji = '🤕';
     quest = { type: 'wounded', npc, done: false };
-    log(`🤕 ${who.name} lies wounded — reach them carrying a Health Potion to spare.`, 'important');
+    log(`🤕 ${who.name} lies wounded — reach them and share a potion to spare them.`, 'important');
   } else if (kind === 'courier') {
     quest = { type: 'courier', npc, done: false };
     log(`✉️ You're entrusted with a sealed parcel — deliver it to ${who.name} on this floor.`, 'important');
@@ -4147,10 +4155,7 @@ function handleQuestStep(nx, ny) {
       if (onNpc && !q.npc.following) { q.npc.following = true; log(`🧭 ${q.npc.name} falls in behind you — lead them to the stairs!`, 'important'); }
       break;
     case 'wounded':
-      if (onNpc) {
-        if (player.healPotions > 0) { player.healPotions--; completeQuest(`${q.npc.name} drinks your potion and recovers!`); }
-        else log(`🤕 ${q.npc.name} needs a Health Potion — return with one.`);
-      }
+      if (onNpc) completeQuest(`${q.npc.name} drinks a potion you brew and recovers!`);
       break;
     case 'fetch':
       if (!q.hasItem && q.item.x === nx && q.item.y === ny) { q.hasItem = true; log(`🏺 You recover the relic — bring it to ${q.npc.name}.`, 'loot'); }
@@ -4200,11 +4205,9 @@ function spawnMerchant() {
   } while ((mapData[my][mx] !== 0 || (mx === player.x && my === player.y) || getEnemyAt(mx,my)
             || isChokePoint(mx,my)) && tries < 100);
   if (tries >= 100) return;
-  // Build a small randomized stock: potions + a couple of gamble-priced gear pieces.
-  const stock = [
-    { kind: 'potion', name: 'Health Potion', heal: 40, price: 25 + dungeonLevel*5 },
-    { kind: 'potion', name: 'Mana Potion',   mana: 30, price: 20 + dungeonLevel*5 },
-  ];
+  // Build a small randomized stock of gamble-priced gear pieces. (Potions are no
+  // longer sold — they're a built-in skill now.)
+  const stock = [];
   const gearCount = rnd(2, 3);
   for (let i = 0; i < gearCount; i++) {
     // Merchants deal in better goods: extra rarity rolls on top of progression,
@@ -4242,13 +4245,9 @@ function spawnMystic() {
 
 let shopCurrentTab = 'buy';
 
-// Effective price of a stock entry. Health potions get pricier the more you've
-// bought, so you can't lean on them forever as a cheap heal.
+// Effective price of a stock entry, with any flash-sale discount applied.
 function stockPrice(s) {
   const sale = (merchant && merchant.sale) || 1;
-  if (s.kind === 'potion' && s.heal) {
-    return Math.max(1, Math.round((s.price + (player.healthPotionsBought || 0) * 15) * sale));
-  }
   return Math.max(1, Math.round(s.price * sale));
 }
 
@@ -4339,10 +4338,7 @@ function renderShop() {
       const price = stockPrice(s);
       const afford = player.gold >= price;
       let name, sub, cls = '', stats = '', isUpgrade = false;
-      if (s.kind === 'potion') {
-        name = s.name;
-        sub = s.heal ? `Restores ${s.heal} HP` : `Restores ${s.mana} MP`;
-      } else {
+      {
         name = s.item.name;
         sub = SLOTS[s.item.slot].label.replace(/^\S+\s/, '');
         cls = 'item-' + s.item.tier;
@@ -4356,8 +4352,8 @@ function renderShop() {
         sub += ` <span class="item-power">⚡${ip}</span>`;
         if (equippedHere) sub += `  ${statDiffLine(s.item)}`;
       }
-      const sicon = s.kind === 'potion' ? (s.heal ? '🧪' : '🔷') : itemIcon(s.item);
-      const scolor = s.kind === 'potion' ? null : tierColor(s.item);
+      const sicon = itemIcon(s.item);
+      const scolor = tierColor(s.item);
       return `<div class="shop-row ${isUpgrade?'upgrade':''}">
         <span class="loot-icon">${iconMarkup(sicon, scolor)}</span>
         <div class="shop-row-info ${cls}">
@@ -4403,16 +4399,10 @@ function buyItem(i) {
   if (player.gold < price) return;
   player.gold -= price;
   sfx('buy');
-  if (s.kind === 'potion') {
-    if (s.heal) { player.healPotions++; player.healthPotionsBought++; log(`Bought a ${logPotion('Health Potion')}. (${player.healPotions} held)`, 'loot'); }
-    if (s.mana) { player.manaPotions++; log(`Bought a ${logPotion('Mana Potion')}. (${player.manaPotions} held)`, 'loot'); }
-    // potions restock infinitely; gear is one-off
-  } else {
-    inventory.push(s.item);
-    recordWardrobe(s.item);
-    log(`Bought ${logItem(s.item)}!`, 'loot');
-    merchant.stock.splice(i, 1);
-  }
+  inventory.push(s.item);
+  recordWardrobe(s.item);
+  log(`Bought ${logItem(s.item)}!`, 'loot');
+  merchant.stock.splice(i, 1);
   updateBars();
   renderShop();
   renderPanel();
@@ -4612,13 +4602,11 @@ function buildTown() {
 
 function openTownService(kind) {
   if (kind === 'merchant') {
-    // A well-stocked town merchant: potions plus several gear pieces geared to
-    // the deepest floor you've reached, so shopping stays relevant.
+    // A well-stocked town merchant: several gear pieces geared to the deepest
+    // floor you've reached, so shopping stays relevant. (Potions are a built-in
+    // skill now, so the merchant only deals in gear.)
     const ilvl = Math.max(dungeonReturn, player.maxFloor || 1);
-    const stock = [
-      { kind: 'potion', name: 'Health Potion', heal: 40, price: 25 + ilvl * 5 },
-      { kind: 'potion', name: 'Mana Potion',   mana: 30, price: 20 + ilvl * 5 },
-    ];
+    const stock = [];
     const gearCount = rnd(4, 6);
     for (let i = 0; i < gearCount; i++) {
       const item = generateItem(3, ilvl + 1);
@@ -4849,14 +4837,12 @@ function craftItem() {
   updateBars(); renderPanel(); renderForge(); saveGame();
 }
 
-// ── HEALER — rest to full, cure ailments, stock potions ──
+// ── HEALER — rest to full HP/MP and cure ailments ──
 function openHealer() { openTownModal('⛑️ Healer'); renderHealer(); }
 function renderHealer() {
   const full = player.hp >= player.maxHp && player.mp >= player.maxMp;
-  const potHeal = 25 + (player.maxFloor || 1) * 5;
-  const potMana = 20 + (player.maxFloor || 1) * 5;
   setTownContent(`
-    <div class="town-blurb">The healer mends your wounds and sells restoratives for the road.</div>
+    <div class="town-blurb">The healer mends your wounds and cleanses any lingering curse before you head back down.</div>
     <div class="shop-row">
       <span class="loot-icon">❤️</span>
       <div class="shop-row-info"><div class="shop-row-name">Full Rest &amp; Cure</div>
@@ -4864,20 +4850,7 @@ function renderHealer() {
       <span class="shop-price">Free</span>
       <button class="shop-buy-btn" ${full ? 'disabled' : ''} onclick="restHeal()">REST</button>
     </div>
-    <div class="shop-row">
-      <span class="loot-icon">🧪</span>
-      <div class="shop-row-info"><div class="shop-row-name">Health Potion</div>
-        <div class="shop-row-sub">Restores ${Math.round(HEAL_PERCENT * 100)}% HP (you hold ${player.healPotions || 0})</div></div>
-      <span class="shop-price">${potHeal}g</span>
-      <button class="shop-buy-btn" ${player.gold >= potHeal ? '' : 'disabled'} onclick="buyTownPotion('heal',${potHeal})">BUY</button>
-    </div>
-    <div class="shop-row">
-      <span class="loot-icon">🔷</span>
-      <div class="shop-row-info"><div class="shop-row-name">Mana Potion</div>
-        <div class="shop-row-sub">Drink with E for +${MANA_AMOUNT} MP (you hold ${player.manaPotions || 0})</div></div>
-      <span class="shop-price">${potMana}g</span>
-      <button class="shop-buy-btn" ${player.gold >= potMana ? '' : 'disabled'} onclick="buyTownPotion('mana',${potMana})">BUY</button>
-    </div>`);
+    <div class="town-blurb" style="opacity:0.8">Need a quick top-up mid-fight? Quaff a Health (Q) or Mana (E) potion — they're a skill now, free to use but only one per turn.</div>`);
 }
 function restHeal() {
   if (player.hp >= player.maxHp && player.mp >= player.maxMp) return;
@@ -4885,14 +4858,6 @@ function restHeal() {
   statusEffects = statusEffects.filter(s => s.target !== 'player');
   sfx('potion');
   log('⛑️ The healer restores you to full and cleanses every ailment.', 'loot');
-  updateBars(); renderHealer(); saveGame();
-}
-function buyTownPotion(which, cost) {
-  if (player.gold < cost) return;
-  player.gold -= cost;
-  if (which === 'heal') { player.healPotions++; player.healthPotionsBought++; log(`Bought a ${logPotion('Health Potion')}. (${player.healPotions} held)`, 'loot'); }
-  else { player.manaPotions++; log(`Bought a ${logPotion('Mana Potion')}. (${player.manaPotions} held)`, 'loot'); }
-  sfx('buy');
   updateBars(); renderHealer(); saveGame();
 }
 
@@ -7273,7 +7238,7 @@ const FLOOR_EVENTS = [
   () => { buffs.fortune = Math.max(buffs.fortune, 2); log('🍀 You pocket a lucky coin — better loot for 2 floors!', 'important'); screenFlash('#22cc66'); },
   () => { buffs.power = Math.max(buffs.power, 2); log('🔥 Battle fury surges — +50% damage for 2 floors!', 'important'); screenFlash('#ff6600'); },
   () => { buffs.power = Math.max(buffs.power, 1); log('🗡️ You hone your blade on a left-behind whetstone. +50% damage next floor.', 'loot'); },
-  () => { player.healPotions++; log(`⚗️ A dropped ${logPotion('Health Potion')} rolls to your feet! (${player.healPotions} held)`, 'loot'); },
+  () => { const heal = Math.floor(player.maxHp*0.15); const mana = Math.floor(player.maxMp*0.15); player.hp = Math.min(player.maxHp, player.hp+heal); player.mp = Math.min(player.maxMp, player.mp+mana); spawnFloatingText(player.x, player.y, `+${heal}`, '#44dd44'); log(`⚗️ You find a half-full flask and drain it — +${heal} HP, +${mana} MP.`, 'loot'); },
   // ── Small hazards ──
   () => { const dmg = Math.min(player.hp-1, rnd(5,12) + dungeonLevel); if (dmg>0){ player.hp -= dmg; spawnFloatingText(player.x, player.y, `${dmg}`, '#ff3344'); } log(`🪤 A hidden trap snaps shut — you take ${dmg} damage!`, 'important'); screenFlash('#cc0000'); },
   () => { if (Math.random()<0.5){ const h=Math.floor(player.maxHp*0.12); player.hp=Math.min(player.maxHp,player.hp+h); spawnFloatingText(player.x,player.y,`+${h}`,'#44dd44'); log(`🧪 You sip from a strange puddle — surprisingly refreshing. +${h} HP.`,'loot'); } else { const d=Math.min(player.hp-1, rnd(3,8)); if(d>0){player.hp-=d; spawnFloatingText(player.x,player.y,`${d}`,'#ff3344');} log(`🧪 You sip from a strange puddle — bad idea. -${d} HP.`); } },
@@ -7456,16 +7421,16 @@ function move(dx, dy) {
     return;
   }
 
-  // Fountain of Healing → full heal + bonus potions, then dries up.
+  // Fountain of Healing → full HP & MP restore, then dries up.
   if (tile === 3) {
     player.hp = player.maxHp;
     player.mp = player.maxMp;
-    player.healPotions += 2;
+    player.potionCd = 0; // a sip from the fountain also resets your potion cooldown
     mapData[ny][nx] = 0; // fountain is spent
     hasFountain = false;
     player.x = nx; player.y = ny;
     sfx('potion');
-    log(`⛲ The Fountain of Healing restores you fully! +2 ${logPotion('Health Potions')}.`, 'important');
+    log(`⛲ The Fountain of Healing restores you to full HP and MP!`, 'important');
     updateBars();
     saveGame();
     draw();
@@ -7752,10 +7717,14 @@ function onEnemyDefeated(e) {
     log(`${fancy ? '🎁' : '🧰'} ${label} dropped a ${fancy ? 'glittering ' : ''}chest!`, 'loot');
     collectChestLoot(luck, e.level || dungeonLevel, e.x, e.y);
   }
-  if (Math.random() < 0.20 * lootMult) {
-    player.healPotions++;
-    log(`❤️ ${label} dropped a ${logPotion('Health Potion')}! (${player.healPotions} held)`, 'loot');
-    updateBars();
+  if (Math.random() < 0.20 * lootMult && player.hp < player.maxHp) {
+    const orb = Math.min(player.maxHp - player.hp, Math.floor(player.maxHp * 0.12));
+    if (orb > 0) {
+      player.hp += orb;
+      spawnFloatingText(e.x, e.y, `+${orb}`, '#44dd44');
+      log(`❤️ ${label} dropped a healing essence — +${orb} HP!`, 'loot');
+      updateBars();
+    }
   }
   if (Math.random() < 0.06) {
     const f = pick(FOODS);
@@ -8318,6 +8287,7 @@ function runEnemyTurn() {
   // Every passed turn (move, attack, or skill) ticks down active-skill cooldowns
   // and any transient combat buffs (War Cry, Sanctuary, …).
   if (player.skillCds) for (const k in player.skillCds) if (player.skillCds[k] > 0) player.skillCds[k]--;
+  if (player.potionCd > 0) player.potionCd--;
   for (const k in combatBuffs) if (combatBuffs[k] > 0) combatBuffs[k]--;
   const serial = floorSerial;
   enemies.filter(e => !e.dead).forEach(e => {
@@ -8627,17 +8597,14 @@ function passTurn() {
 function collectChestLoot(luck, ilvl, x, y) {
   const fancy = luck > 1;
 
-  // ~15% of chests surprise you with gold, a potion, or food instead of gear.
+  // ~15% of chests surprise you with gold or food instead of gear.
   if (Math.random() < 0.15) {
     sfx('gold');
-    const surprise = rnd(1, 3);
+    const surprise = rnd(1, 2);
     if (surprise === 1) {
       const g = rnd(15, 40) + dungeonLevel * 4;
       player.gold += g;
       log(`${fancy ? '🎁' : '🧰'} The chest was full of coins — +${g} gold!`, 'loot');
-    } else if (surprise === 2) {
-      player.healPotions++;
-      log(`${fancy ? '🎁' : '🧰'} A ${logPotion('Health Potion')} was inside! (${player.healPotions} held)`, 'loot');
     } else {
       const f = pick(FOODS);
       groundFood.push({ x, y, ...f });
@@ -8827,8 +8794,8 @@ function updateBars() {
     bagBadge.textContent = totalPts;
     bagBadge.classList.toggle('show', totalPts > 0);
   }
-  // Keep the skill bar (its far-left Health Potion + actives) in sync. The
-  // potion count / empty / urgent state is set inside renderSkillBar itself.
+  // Keep the skill bar (its far-left potion skills + class actives) in sync. The
+  // potion cooldown / ready / urgent state is set inside renderSkillBar itself.
   renderSkillBar();
 
   // Class-skill button: shows the skill icon, and its cooldown / mana cost.
@@ -8857,31 +8824,48 @@ function updateBars() {
   if (vig) vig.classList.toggle('active', player.hp > 0 && player.hp < player.maxHp * 0.25);
 }
 
-// Health potions restore a percentage of max HP, so they scale with you
-// instead of becoming useless at high levels.
+// Potions are a SKILL, not a consumable: unlimited uses, but a quaff costs a
+// turn (foes act) and both flasks share a one-turn cooldown, so you can only
+// down a single potion per turn. Health potions restore a percentage of max HP
+// so they scale with you instead of becoming useless at high levels.
 const HEAL_PERCENT = 0.30;
+const POTION_CD = 1;            // shared cooldown — one potion per turn
 function healPotionAmount() { return Math.max(1, Math.round(player.maxHp * HEAL_PERCENT)); }
+function potionReady() { return (player.potionCd || 0) === 0; }
 function useHealthPotion() {
-  if (!player.healPotions) { log('No health potions! Buy some from a merchant.'); return; }
+  if (!potionReady()) { log('⏳ Potions recharge — only one per turn.'); return; }
   if (player.hp >= player.maxHp) { log('Already at full health.'); return; }
-  player.healPotions--;
   const heal = Math.min(player.maxHp - player.hp, healPotionAmount());
   player.hp += heal;
   sfx('potion');
-  log(`❤️ Drank a ${logPotion('Health Potion')}. +${heal} HP (${player.healPotions} left)`, 'loot');
-  updateBars();
-  saveGame();
+  log(`❤️ Quaffed a ${logPotion('Health Potion')}. +${heal} HP`, 'loot');
+  spendPotionTurn();
 }
 
 const MANA_AMOUNT = 40;
 function useManaPotion() {
-  if (!player.manaPotions) { log('No mana potions! Buy some from a merchant or the healer.'); return; }
+  if (!potionReady()) { log('⏳ Potions recharge — only one per turn.'); return; }
   if (player.mp >= player.maxMp) { log('Already at full mana.'); return; }
-  player.manaPotions--;
   player.mp = Math.min(player.maxMp, player.mp + MANA_AMOUNT);
   sfx('potion');
-  log(`🔷 Drank a ${logPotion('Mana Potion')}. +${MANA_AMOUNT} MP (${player.manaPotions} left)`, 'loot');
+  log(`🔷 Quaffed a ${logPotion('Mana Potion')}. +${MANA_AMOUNT} MP`, 'loot');
+  spendPotionTurn();
+}
+
+// A potion now plays out like an active skill: outside town it passes a turn
+// (foes act, escorts trail) and then starts the shared cooldown. Setting the
+// cooldown AFTER runEnemyTurn keeps this very turn from ticking it straight back
+// to ready. In town there are no foes, so we just refresh and skip the turn.
+function spendPotionTurn() {
   updateBars();
+  if (!inTown) {
+    runEnemyTurn();
+    moveQuestEntities();
+    player.potionCd = POTION_CD;
+  }
+  updateBars();
+  renderSkillBar();
+  draw();
   saveGame();
 }
 
@@ -9157,15 +9141,22 @@ function renderSkillBar() {
   const skills = activeSkillList();
   if (!skills.length || inTown) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
   bar.style.display = 'flex';
-  // Health Potion pinned to the far left of the bar. id="heal-label" keeps it in
-  // sync with the rest of updateBars (which still reads that element).
-  const potCount = player.healPotions || 0;
-  const urgent = potCount > 0 && player.hp < player.maxHp * 0.35;
-  const potBtn = `<button class="skillbar-btn potion ${potCount ? '' : 'empty'} ${urgent ? 'urgent' : ''}" title="Drink a Health Potion (Q)" onclick="useHealthPotion()">
-      <span class="sb-key">Q</span><span class="sb-icon">${HEAL_POTION_SVG}</span><span class="sb-info" id="heal-label">${potCount}</span>
+  // Potion skills pinned to the far left of the bar: Health (Q) then Mana (E).
+  // They're unlimited but share a one-turn cooldown, so the info slot shows the
+  // remaining cooldown when recharging (blank when ready).
+  const pcd = player.potionCd || 0;
+  const potReady = pcd === 0;
+  const hpFull = player.hp >= player.maxHp;
+  const mpFull = player.mp >= player.maxMp;
+  const urgent = potReady && player.hp < player.maxHp * 0.35;
+  const healBtn = `<button class="skillbar-btn potion ${potReady && !hpFull ? '' : 'empty'} ${urgent ? 'urgent' : ''}" title="Quaff a Health Potion (Q) — one potion per turn" onclick="useHealthPotion()">
+      <span class="sb-key">Q</span><span class="sb-icon">${HEAL_POTION_SVG}</span><span class="sb-info" id="heal-label">${pcd > 0 ? pcd : ''}</span>
+    </button>`;
+  const manaBtn = `<button class="skillbar-btn potion mana ${potReady && !mpFull ? '' : 'empty'}" title="Quaff a Mana Potion (E) — one potion per turn" onclick="useManaPotion()">
+      <span class="sb-key">E</span><span class="sb-icon">${MANA_POTION_SVG}</span><span class="sb-info">${pcd > 0 ? pcd : ''}</span>
     </button>`;
   let extraNum = 0;
-  bar.innerHTML = potBtn + skills.map((s) => {
+  bar.innerHTML = healBtn + manaBtn + skills.map((s) => {
     const cd = skillCd(s.id);
     const ready = cd === 0 && player.mp >= s.mp && player.hp > 0;
     const key = s.baseline ? 'R' : String(++extraNum);
@@ -9175,13 +9166,20 @@ function renderSkillBar() {
   }).join('');
 }
 
-// The potion flask used by the skill-bar Health Potion button.
+// The potion flasks used by the skill-bar Health (red) and Mana (blue) buttons.
 const HEAL_POTION_SVG = `<svg width="18" height="20" viewBox="0 0 20 22" aria-label="health potion">
   <rect x="7.5" y="0" width="5" height="3.5" rx="1" fill="#caa15a"/>
   <rect x="8" y="3" width="4" height="4" fill="#d8d8e0"/>
   <path d="M6 7 h8 a7 7 0 1 1 -8 0 z" fill="#3a1018" stroke="#d8d8e0" stroke-width="1.2"/>
   <path d="M6.6 10 h6.8 a5.6 5.6 0 1 1 -6.8 0 z" fill="#e01030"/>
   <ellipse cx="8" cy="14" rx="1.1" ry="2" fill="#ff7a90" opacity="0.8"/>
+</svg>`;
+const MANA_POTION_SVG = `<svg width="18" height="20" viewBox="0 0 20 22" aria-label="mana potion">
+  <rect x="7.5" y="0" width="5" height="3.5" rx="1" fill="#caa15a"/>
+  <rect x="8" y="3" width="4" height="4" fill="#d8d8e0"/>
+  <path d="M6 7 h8 a7 7 0 1 1 -8 0 z" fill="#0a1838" stroke="#d8d8e0" stroke-width="1.2"/>
+  <path d="M6.6 10 h6.8 a5.6 5.6 0 1 1 -6.8 0 z" fill="#1e6cff"/>
+  <ellipse cx="8" cy="14" rx="1.1" ry="2" fill="#8fc0ff" opacity="0.8"/>
 </svg>`;
 
 // ── CLASS SELECTION ──
@@ -9628,9 +9626,10 @@ function loadGame() {
     if (!data.player) return false;
     player = data.player;
     if (player.gold == null) player.gold = 0;
-    if (player.healPotions == null) player.healPotions = 0;
-    if (player.healthPotionsBought == null) player.healthPotionsBought = 0;
-    if (player.manaPotions == null) player.manaPotions = 0;
+    // Potions used to be hoarded consumables; they're a cooldown-gated skill now.
+    // Drop the old counters from older saves and seed the shared potion cooldown.
+    delete player.healPotions; delete player.manaPotions; delete player.healthPotionsBought;
+    if (player.potionCd == null) player.potionCd = 0;
     // Migrate saves that predate crafting materials: seed an empty wallet and
     // ensure every material key exists on partial saves.
     if (!player.materials || typeof player.materials !== 'object') player.materials = freshMaterials();
@@ -10006,8 +10005,8 @@ if (hadSave) {
 }
 log('Progress auto-saves automatically as you play.');
 log('Open 🎒 BAG to view your loot; press the pad\'s USE button to grab items.');
-log(`Tap the ❤️ flask to drink a ${logPotion('Health Potion')} when you're hurt. Enemies hit hard!`);
-log('⌨️ Keys: Q drink potion · E mana · R class skill · T town · B open bag · Space/F use.');
+log(`Tap the ❤️ or 🔷 flask to quaff a ${logPotion('Potion')} — they're a skill now, free to use but only one per turn.`);
+log('⌨️ Keys: Q health potion · E mana potion · R class skill · T town · B open bag · Space/F use.');
 log('⚡ Your class grants a special skill — tap the ⚡ button (or press R) to spend mana on it.');
 log('⚡ Each item has a Power value; your total Power blends level, gear, and attributes.');
 log('💠 Level up to earn points, then raise attributes in the bag\'s HERO tab.');
