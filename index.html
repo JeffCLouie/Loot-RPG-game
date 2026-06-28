@@ -246,7 +246,9 @@
   .version-x { background: none; border: none; color: var(--text); font-size: 16px; cursor: pointer; line-height: 1; }
   .version-entry { margin-bottom: 11px; }
   .version-ver { color: var(--gold); font-size: 12px; font-weight: bold; margin-bottom: 2px; }
-  .version-by { color: #9a8fb0; font-size: 9px; font-weight: normal; letter-spacing: 0.5px; }
+  .version-by { font-size: 9px; font-weight: bold; letter-spacing: 0.5px; padding: 1px 4px; border-radius: 4px; vertical-align: middle; }
+  .version-by.jl { color: #d8e9ff; background: rgba(70, 130, 220, 0.32); }
+  .version-by.as { color: #ffe3c4; background: rgba(220, 140, 60, 0.32); }
   .version-note { font-size: 11px; color: var(--text); opacity: 0.85; line-height: 1.45; }
 
   /* Movement-pad controls tucked into the settings popup. The floating d-pad
@@ -4378,7 +4380,7 @@ function showVersionHistory() {
   // Contributor initials: Jeff Louie → JL, everyone else (ASuiter89, Claude) → AS.
   const initials = (by) => by === 'Jeff Louie' ? 'JL' : 'AS';
   if (el) el.innerHTML = CHANGELOG.map(c =>
-    `<div class="version-entry"><div class="version-ver">${c.v}${c.by ? ` <span class="version-by">${initials(c.by)}</span>` : ''}</div>${c.notes.map(n => `<div class="version-note">• ${n}</div>`).join('')}</div>`).join('');
+    `<div class="version-entry"><div class="version-ver">${c.v}${c.by ? ` <span class="version-by ${initials(c.by) === 'JL' ? 'jl' : 'as'}">${initials(c.by)}</span>` : ''}</div>${c.notes.map(n => `<div class="version-note">• ${n}</div>`).join('')}</div>`).join('');
   document.getElementById('version-overlay').classList.add('open');
   const menu = document.getElementById('settings-menu');
   if (menu) menu.classList.remove('open');
