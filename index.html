@@ -1880,11 +1880,14 @@ function floorSpriteName(seed) { return 'floor_' + (Math.abs(seed) % 4); }
 // Lay the biome floor under a feature tile (fountain, shrine, spikes, …) so the
 // feature sits on real ground, not a flat colour square. Falls back to C.floor.
 function drawFloorBase(px, py, tw, th, seed, C) {
-  if (spriteReady && drawSprite(floorSpriteName(seed), px, py, tw)) {
+  // Nature themes (forest/grass/etc.) use a flat coloured floor, not the dirt
+  // atlas — so special tiles must match, or they read as an out-of-place patch.
+  if (spriteReady && !C.wallStyle && drawSprite(floorSpriteName(seed), px, py, tw)) {
     if (C.spriteTint) { ctx.save(); ctx.globalCompositeOperation = 'overlay'; ctx.globalAlpha = C.spriteTintA || 0.35; ctx.fillStyle = C.spriteTint; ctx.fillRect(px, py, tw, th); ctx.restore(); }
     return;
   }
-  ctx.fillStyle = C.floor; ctx.fillRect(px, py, tw, th);
+  ctx.fillStyle = (Math.abs(seed) % 5 === 0) ? C.floorAlt : C.floor;
+  ctx.fillRect(px, py, tw, th);
 }
 // Autotiled wall piece: pick the corner/edge/face that matches which of this
 // cell's 4 neighbours are open floor (vs. more wall). Map edges & cracked walls
@@ -6563,15 +6566,14 @@ function draw() {
         ctx.fillRect(px+tw*0.25, py+th*0.3, tw*0.18, th*0.4);
         ctx.fillRect(px+tw*0.6, py+th*0.55, tw*0.15, th*0.25);
       } else if (t === 8) {
-        // Spike trap — DawnLike spikes drawn OVER a real floor tile (not a blank
-        // cell), so it reads as spikes embedded in the ground.
-        if (spriteReady && drawSprite(floorSpriteName(seed), px, py, tw)) {
-          if (C.spriteTint) { ctx.save(); ctx.globalCompositeOperation = 'overlay'; ctx.globalAlpha = C.spriteTintA || 0.35; ctx.fillStyle = C.spriteTint; ctx.fillRect(px, py, tw, th); ctx.restore(); }
-          drawSprite('spikes', px, py, tw);
+        // Spike trap — spikes embedded in the ground. Draw the same floor as the
+        // surrounding tiles (so it never reads as an out-of-place patch), then
+        // the spikes on top.
+        drawFloorBase(px, py, tw, th, seed, C);
+        if (spriteReady && drawSprite('spikes', px, py, tw)) {
           continue;
         }
-        // Spike trap — floor studded with metal spikes.
-        drawFloorBase(px, py, tw, th, seed, C);
+        // Procedural spikes fallback.
         ctx.fillStyle = '#c4c4d2';
         for (let s = 0; s < 3; s++) {
           const sx = px + tw*(0.2 + s*0.3);
