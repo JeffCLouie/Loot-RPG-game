@@ -2130,6 +2130,43 @@ function drawEmoji(emoji, x, y, fontPx) {
   }
 }
 
+// Draws a bold directional chevron badge on a stair tile so up vs. down read at
+// a glance — the staircase sprites alone look almost identical. dir is 'up' or
+// 'down'; the badge is a dark rounded plaque with a coloured arrow (green = up,
+// amber = down) tucked into the top-centre of the tile.
+function drawStairArrow(px, py, tw, th, dir) {
+  const up = dir === 'up';
+  const cx = px + tw / 2;          // badge centre x
+  const r  = tw * 0.2;             // badge radius
+  const cy = py + r + th * 0.05;   // badge centre y (near the top edge)
+  const arrowCol = up ? '#7dff7a' : '#ffc24b';
+  ctx.save();
+  // Dark rounded plaque so the arrow pops on any biome floor.
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(8,8,14,0.78)';
+  ctx.fill();
+  ctx.lineWidth = Math.max(1.5, tw * 0.04);
+  ctx.strokeStyle = arrowCol;
+  ctx.stroke();
+  // Solid triangle arrow pointing the way the stair leads.
+  const a = r * 0.62;
+  ctx.beginPath();
+  if (up) {
+    ctx.moveTo(cx, cy - a);
+    ctx.lineTo(cx + a, cy + a * 0.7);
+    ctx.lineTo(cx - a, cy + a * 0.7);
+  } else {
+    ctx.moveTo(cx, cy + a);
+    ctx.lineTo(cx + a, cy - a * 0.7);
+    ctx.lineTo(cx - a, cy - a * 0.7);
+  }
+  ctx.closePath();
+  ctx.fillStyle = arrowCol;
+  ctx.fill();
+  ctx.restore();
+}
+
 
 // ── DawnLike sprite atlas ───────────────────────────────────────────────────
 // Pixel-art world sprites from the DawnLike set (CC-BY 4.0 — DragonDePlatino &
@@ -7846,6 +7883,8 @@ function draw() {
         ctx.restore();
         if (sealed && !(spriteReady && drawSpriteC('ic_key', px + tw/2, py + th*0.5, Math.round(tw*0.46))))
           drawEmoji('🔒', px + tw/2, py + th*0.5, Math.round(tw*0.4));
+        // Direction badge so the way DOWN can't be mistaken for the way up.
+        else drawStairArrow(px, py, tw, th, 'down');
       } else if (t === 12) {
         // Stairs up — DawnLike pixel staircase (the ▲ is baked into the tile).
         // Never sealed, so it always wears the biome's inviting glow ring.
@@ -7868,6 +7907,8 @@ function draw() {
         ctx.arc(px + tw/2, py + th/2, tw*(0.42 + 0.08*up), 0, Math.PI*2);
         ctx.stroke();
         ctx.restore();
+        // Direction badge so the way UP can't be mistaken for the way down.
+        drawStairArrow(px, py, tw, th, 'up');
       } else if (t === 3) {
         // Fountain of Healing — a tiered stone fountain with water spraying
         // from a central spout into a glowing basin.
