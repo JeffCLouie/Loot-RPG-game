@@ -8364,7 +8364,6 @@ function enemyAttackPlayer(e) {
   if (dmg > 0) { spawnParticles(player.x, player.y, '#d22a3a', 6, 0.07); addShake(4); }
   log(`${enemyLabel(e)} attacks ${HERO} for ${dmg}!`);
   if (player.hp <= player.maxHp * 0.25) screenFlash('#cc0000');
-  else if (dmg > 0) screenFlash('#7a0000');
   if (e.bossAbility === 'lifesteal') bossLifesteal(e, dmg);
   // Retribution (Templar passive): reflect part of a melee blow back at the foe.
   const reflect = skillBonus('reflect');
