@@ -1623,6 +1623,9 @@
         <button class="settings-item sound-action" onclick="toggleSound()">
           <span class="action-icon" id="sound-icon">🔊</span><span class="action-label" id="sound-label">ON</span>
         </button>
+        <button class="settings-item zoom-action" onclick="toggleZoom()">
+          <span class="action-icon" id="zoom-icon">🔍</span><span class="action-label" id="zoom-label">CLOSE</span>
+        </button>
         <button class="settings-item slots-action" onclick="openSlots()">
           <span class="action-icon">💾</span><span class="action-label">SLOTS</span>
         </button>
@@ -2157,7 +2160,7 @@ const ENEMY_SPRITE = {
   '\u{1F479}':'e_ogre','\u{1F47A}':'e_goblin','\u{1F9DF}':'e_zombie','\u{1F47B}':'e_ghost',
   '\u{1F9DB}':'e_vampire','\u{1F43A}':'e_wolf','\u{1F417}':'e_boar','\u{1F43B}':'e_bear',
   '\u{1F982}':'e_scorpion','\u{1F99F}':'e_mosquito','\u{1F985}':'e_eagle','\u{1F40A}':'e_croc',
-  '\u{1F9A8}':'e_skunk','\u{1F405}':'e_tiger',
+  '\u{1F405}':'e_tiger',  // 🦨 skunk has no atlas sprite (blank cell) — falls back to emoji
   '\u{1F409}':'e_dragon','\u{1F47F}':'e_imp','\u{1F608}':'e_devil','\u{1F9CC}':'e_troll',
   '\u{1F996}':'e_trex','\u{1F995}':'e_sauropod','\u{1F419}':'e_octopus','\u{1F991}':'e_squid',
   '\u{1F47E}':'e_alien','\u{1F9DE}':'e_genie','\u{1F98F}':'e_rhino','\u{1F9AC}':'e_bison',
@@ -3666,6 +3669,13 @@ const audio = {
 };
 try { audio.muted = localStorage.getItem(AUDIO_KEY) === 'off'; } catch (e) {}
 
+// ── ZOOM ── how many tiles span the shorter axis of the play area. Default 9
+// (close, big tiles). The zoom button toggles a one-tile-wider perimeter: +1
+// tile on every side means 2 more tiles across, so 9 → 11. Persisted per device.
+const ZOOM_KEY = 'dungeonLootZoom';
+let zoomedOut = false;
+try { zoomedOut = localStorage.getItem(ZOOM_KEY) === 'out'; } catch (e) {}
+
 // Lazily create the AudioContext and the gain graph (master → sfx / music).
 function audioInit() {
   if (audio.ctx) return audio.ctx;
@@ -4252,6 +4262,22 @@ function updateSoundButton() {
   if (lbl) lbl.textContent = audio.muted ? 'OFF' : 'ON';
   const btn = document.querySelector('.sound-action');
   if (btn) btn.classList.toggle('muted', audio.muted);
+}
+
+// Toggle the play-area zoom: default (9 tiles) ↔ one-tile-wider perimeter
+// (11 tiles). Persist the choice, redraw immediately, and refresh the button.
+function toggleZoom() {
+  zoomedOut = !zoomedOut;
+  try { localStorage.setItem(ZOOM_KEY, zoomedOut ? 'out' : 'in'); } catch (e) {}
+  sfx('click');
+  updateZoomButton();
+  draw();
+}
+function updateZoomButton() {
+  const ic = document.getElementById('zoom-icon');
+  const lbl = document.getElementById('zoom-label');
+  if (ic) ic.textContent = zoomedOut ? '🔎' : '🔍';
+  if (lbl) lbl.textContent = zoomedOut ? 'WIDE' : 'CLOSE';
 }
 
 // Settings popup: holds the Sound toggle + New Game controls behind the ⚙️
@@ -7662,7 +7688,7 @@ function draw() {
   // ── FOLLOW CAMERA ──
   // Aim to show ~VIEW_TILES across the shorter axis, so tiles are large.
   // Fewer tiles = bigger tiles, so the game reads well at default browser zoom.
-  const VIEW_TILES = 9;
+  const VIEW_TILES = zoomedOut ? 11 : 9;
   const tw = Math.ceil(Math.min(W, H) / VIEW_TILES);
   const th = tw;
 
