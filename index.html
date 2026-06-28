@@ -3814,7 +3814,20 @@ function sfx(name) {
     case 'loot':    [523, 659, 784].forEach((f, i) => tone(f, 0.1, t + i * 0.06, 'square', 0.4)); break;
     case 'gold':    tone(880, 0.06, t, 'square', 0.35); tone(1175, 0.07, t + 0.05, 'square', 0.3); break;
     case 'potion':  tone(440, 0.1, t, 'sine', 0.4, 880); tone(660, 0.12, t + 0.08, 'sine', 0.3, 990); break;
-    case 'levelup': [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.16, t + i * 0.09, 'square', 0.45)); break;
+    case 'levelup': // triumphant rising fanfare that lands on a bright major chord
+      [523, 659, 784].forEach((f, i) => tone(f, 0.14, t + i * 0.08, 'square', 0.42));
+      tone(1047, 0.5, t + 0.26, 'square', 0.45); tone(1319, 0.5, t + 0.26, 'triangle', 0.28);
+      break;
+    case 'bosskill': { // grander victory fanfare — brassy two-part flourish + cymbal swell
+      const fan = (f, d, w, v) => { tone(f, d, w, 'sawtooth', v * 0.5); tone(f, d, w, 'square', v * 0.4); };
+      fan(392, 0.16, t,        0.5);  // G
+      fan(523, 0.16, t + 0.15, 0.5);  // C
+      fan(659, 0.16, t + 0.30, 0.5);  // E
+      fan(784, 0.6,  t + 0.45, 0.55); // G (held, top of the run)
+      fan(1047, 0.6, t + 0.45, 0.4);  // C above — victory chord
+      noise(0.5, t + 0.45, 0.28, 6000, 'highpass'); // cymbal swell
+      break;
+    }
     case 'stairs':  [392, 330, 262].forEach((f, i) => tone(f, 0.14, t + i * 0.08, 'triangle', 0.4)); break;
     case 'shrine':  tone(523, 0.4, t, 'sine', 0.35, 784); tone(659, 0.4, t + 0.04, 'sine', 0.25, 988); break;
     case 'equip':   tone(330, 0.05, t, 'square', 0.3); tone(494, 0.07, t + 0.04, 'square', 0.3); break;
@@ -9001,7 +9014,7 @@ function onEnemyDefeated(e) {
   player.gold += gold;
   spawnFloatingText(e.x + 0.35, e.y, `+${gold}g`, '#ffd24b');
   log(`${label} defeated! +${xp} XP, +${gold}g`, 'important');
-  sfx(e.isBoss ? 'boss' : 'kill');
+  sfx(e.isBoss ? 'bosskill' : 'kill');
   if (e.isBoss) screenFlash('#ff3344');
   // Life/Mana on Kill (gear): a flat top-up every time a foe falls.
   const hpKill = totalStat('HPKILL');
