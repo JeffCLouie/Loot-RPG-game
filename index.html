@@ -2044,6 +2044,103 @@ function drawFloorBase(px, py, tw, th, seed, C) {
   ctx.fillStyle = (Math.abs(seed) % 5 === 0) ? C.floorAlt : C.floor;
   ctx.fillRect(px, py, tw, th);
 }
+
+// Trace a rounded-blob path for a liquid cell: corners only round where they
+// face land, so adjacent liquid tiles merge into one smooth body (a lake/pool)
+// instead of a grid of squares.
+function liquidPath(px, py, tw, th, x, y, t) {
+  const same = (xx, yy) => xx >= 0 && yy >= 0 && xx < MAP_W && yy < MAP_H && mapData[yy][xx] === t;
+  const N = same(x, y-1), S = same(x, y+1), E = same(x+1, y), W = same(x-1, y);
+  const r = Math.min(tw, th) * 0.46;
+  const tl = (N || W) ? 0 : r, tr = (N || E) ? 0 : r, br = (S || E) ? 0 : r, bl = (S || W) ? 0 : r;
+  const R = px + tw, B = py + th;
+  ctx.beginPath();
+  ctx.moveTo(px + tl, py);
+  ctx.lineTo(R - tr, py);  if (tr) ctx.arcTo(R, py, R, py + tr, tr);
+  ctx.lineTo(R, B - br);   if (br) ctx.arcTo(R, B, R - br, B, br);
+  ctx.lineTo(px + bl, B);  if (bl) ctx.arcTo(px, B, px, B - bl, bl);
+  ctx.lineTo(px, py + tl); if (tl) ctx.arcTo(px, py, px + tl, py, tl);
+  ctx.closePath();
+  return { N, S, E, W };
+}
+
+// Draw an animated water/lava cell that morphs into a cohesive pool with its
+// neighbours, sits on real ground, and gets a shore rim (sand+grass / molten
+// crust) on the sides facing land.
+function drawLiquid(px, py, tw, th, x, y, seed, C, kind) {
+  const t = kind === 'lava' ? 7 : 6;
+  const now = Date.now();
+  // Ground underneath shows through the rounded corners as a natural shore.
+  drawFloorBase(px, py, tw, th, seed, C);
+
+  ctx.save();
+  const sides = liquidPath(px, py, tw, th, x, y, t);
+  ctx.clip();
+  if (kind === 'water') {
+    const g = ctx.createLinearGradient(px, py, px, py + th);
+    g.addColorStop(0, '#246a99'); g.addColorStop(1, '#0c3354');
+    ctx.fillStyle = g; ctx.fillRect(px, py, tw, th);
+    // Drifting ripple bands + a wandering specular glint.
+    for (let i = 0; i < 2; i++) {
+      const ph = now / (820 + i * 260) + seed + i * 2;
+      const yy = py + th * (0.32 + 0.34 * i) + Math.sin(ph) * th * 0.07;
+      ctx.fillStyle = `rgba(150,210,255,${0.16 + 0.10 * (0.5 + 0.5 * Math.sin(ph * 1.3))})`;
+      ctx.fillRect(px, yy, tw, Math.max(1, th * 0.06));
+    }
+    ctx.fillStyle = 'rgba(225,245,255,0.5)';
+    const gx = px + (0.5 + 0.4 * Math.sin(now / 950 + seed)) * tw;
+    ctx.fillRect(gx, py + th * 0.24, tw * 0.13, Math.max(1, th * 0.05));
+  } else {
+    const g = ctx.createLinearGradient(px, py, px, py + th);
+    g.addColorStop(0, '#7c1d08'); g.addColorStop(1, '#360d05');
+    ctx.fillStyle = g; ctx.fillRect(px, py, tw, th);
+    // Slow-churning molten blobs of varying brightness.
+    for (let i = 0; i < 3; i++) {
+      const ph = now / (560 + i * 200) + seed * 1.3 + i;
+      const bx = px + (0.5 + 0.38 * Math.sin(ph)) * tw;
+      const by = py + (0.5 + 0.38 * Math.cos(ph * 0.8)) * th;
+      const br = tw * (0.13 + 0.05 * i);
+      const bright = 0.5 + 0.5 * Math.sin(ph * 1.5);
+      ctx.fillStyle = `rgba(255,${130 + Math.floor(95 * bright)},${25 + Math.floor(45 * bright)},0.85)`;
+      ctx.beginPath(); ctx.arc(bx, by, br, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  ctx.restore();
+
+  // Shore rim hugging the curvy edge — only the land-facing sides show it.
+  ctx.save();
+  if (kind === 'water') {
+    liquidPath(px, py, tw, th, x, y, t);
+    ctx.lineWidth = Math.max(2, tw * 0.13);
+    ctx.strokeStyle = 'rgba(206,188,134,0.6)';   // wet sand
+    ctx.stroke();
+    // Grass tufts poking up on land-facing edges.
+    ctx.strokeStyle = 'rgba(95,150,70,0.85)';
+    ctx.lineWidth = Math.max(1, tw * 0.05);
+    const tuft = (cxp, cyp) => {
+      for (let k = -1; k <= 1; k++) {
+        ctx.beginPath();
+        ctx.moveTo(cxp + k * tw * 0.07, cyp);
+        ctx.lineTo(cxp + k * tw * 0.07 + tw * 0.02, cyp - th * 0.12);
+        ctx.stroke();
+      }
+    };
+    if (!sides.N && (Math.abs(seed) % 2)) tuft(px + tw * 0.5, py + th * 0.06);
+    if (!sides.S && (Math.abs(seed >> 1) % 2)) tuft(px + tw * 0.5, py + th * 0.94);
+    if (!sides.W && (Math.abs(seed >> 2) % 2)) tuft(px + tw * 0.12, py + th * 0.5);
+    if (!sides.E && (Math.abs(seed >> 3) % 2)) tuft(px + tw * 0.88, py + th * 0.5);
+  } else {
+    liquidPath(px, py, tw, th, x, y, t);
+    const cp = 0.5 + 0.5 * Math.sin(now / 320 + seed);
+    ctx.shadowColor = '#ff8a1e';
+    ctx.shadowBlur = 8 * (tw / TILE);
+    ctx.lineWidth = Math.max(2, tw * 0.1);
+    ctx.strokeStyle = `rgba(255,${150 + Math.floor(80 * cp)},45,0.85)`;  // glowing crust
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 // Autotiled wall piece: pick the corner/edge/face that matches which of this
 // cell's 4 neighbours are open floor (vs. more wall). Map edges & cracked walls
 // (tile 10) count as wall; out-of-bounds counts as wall so borders stay solid.
@@ -6774,40 +6871,9 @@ function draw() {
         ctx.fill();
         ctx.restore();
       } else if (t === 6) {
-        // Water — real DawnLike water tile, with a faint moving highlight so it
-        // still shimmers. Falls back to the painted ripple below.
-        if (spriteReady && drawSprite('water', px, py, tw)) {
-          const wp2 = 0.5 + 0.5*Math.sin(Date.now()/600 + seed);
-          ctx.fillStyle = `rgba(190,230,255,${0.08 + 0.10*wp2})`;
-          ctx.fillRect(px+tw*0.18, py+th*(0.3+0.1*wp2), tw*0.4, Math.max(1, th*0.06));
-          continue;
-        }
-        // Water — deep, impassable, gently rippling.
-        ctx.fillStyle = '#0e2a40';
-        ctx.fillRect(px, py, tw, th);
-        const wp = 0.5 + 0.5*Math.sin(Date.now()/600 + seed);
-        ctx.fillStyle = `rgba(40,120,190,${0.6 + 0.2*wp})`;
-        ctx.fillRect(px+1, py+1, tw-2, th-2);
-        ctx.fillStyle = 'rgba(150,210,255,0.5)';
-        ctx.fillRect(px+tw*0.2, py+th*(0.3+0.1*wp), tw*0.35, Math.max(1, th*0.07));
-        ctx.fillRect(px+tw*0.5, py+th*(0.6-0.1*wp), tw*0.28, Math.max(1, th*0.07));
+        drawLiquid(px, py, tw, th, x, y, seed, C, 'water');
       } else if (t === 7) {
-        // Lava — real DawnLike molten tile with a pulsing heat glow on top.
-        if (spriteReady && drawSprite('lava', px, py, tw)) {
-          const lp2 = 0.5 + 0.5*Math.sin(Date.now()/280 + seed);
-          ctx.save(); ctx.globalAlpha = 0.18 + 0.22*lp2; ctx.fillStyle = '#ff8a1e';
-          ctx.fillRect(px, py, tw, th); ctx.restore();
-          continue;
-        }
-        // Lava — passable but it burns; molten glow pulses.
-        const lp = 0.5 + 0.5*Math.sin(Date.now()/280 + seed);
-        ctx.fillStyle = '#3a0f06';
-        ctx.fillRect(px, py, tw, th);
-        ctx.fillStyle = `rgba(255,${70 + Math.floor(70*lp)},20,0.95)`;
-        ctx.fillRect(px+1, py+1, tw-2, th-2);
-        ctx.fillStyle = `rgba(255,220,90,${0.5 + 0.4*lp})`;
-        ctx.fillRect(px+tw*0.25, py+th*0.3, tw*0.18, th*0.4);
-        ctx.fillRect(px+tw*0.6, py+th*0.55, tw*0.15, th*0.25);
+        drawLiquid(px, py, tw, th, x, y, seed, C, 'lava');
       } else if (t === 8) {
         // Spike trap — spikes embedded in the ground. Draw the same floor as the
         // surrounding tiles (so it never reads as an out-of-place patch), then
@@ -10379,7 +10445,8 @@ function pulseLoop(ts) {
   const hasElite = enemies.some(e => !e.dead && e.isElite);
   const hasShrine = Object.keys(shrineData).length > 0;
   const juicing = particles.length || Date.now() < shakeUntil;
-  if ((inTown || merchant || mystic || hasFountain || hasShrine || quest || floatingTexts.length || statusEffects.length || hasElite || juicing) && ts - lastPulse > 30) { lastPulse = ts; draw(); }
+  const liquid = mapData.some(row => row && row.some(t => t === 6 || t === 7));
+  if ((inTown || merchant || mystic || hasFountain || hasShrine || quest || floatingTexts.length || statusEffects.length || hasElite || juicing || liquid) && ts - lastPulse > 30) { lastPulse = ts; draw(); }
   requestAnimationFrame(pulseLoop);
 }
 requestAnimationFrame(pulseLoop);
