@@ -6283,15 +6283,18 @@ function spawnEnemies() {
   }
 }
 
+// Affixes are shown by a coloured aura around the foe (no floating icon):
+// steel-blue = Tough, red = Fierce, purple = Venomous.
 const AFFIXES = [
-  { key: 'tough',    icon: '🛡️', name: 'Tough',    apply: m => { m.hp = Math.round(m.hp * 1.6); m.maxHp = m.hp; } },
-  { key: 'fierce',   icon: '😡', name: 'Fierce',   apply: m => { m.dmg = Math.round(m.dmg * 1.4); } },
-  { key: 'venomous', icon: '🧪', name: 'Venomous', apply: m => { m.statusChance = 0.4; } },
+  { key: 'tough',    name: 'Tough',    color: '#7fb0ff', apply: m => { m.hp = Math.round(m.hp * 1.6); m.maxHp = m.hp; } },
+  { key: 'fierce',   name: 'Fierce',   color: '#ff5a4a', apply: m => { m.dmg = Math.round(m.dmg * 1.4); } },
+  { key: 'venomous', name: 'Venomous', color: '#a86bff', apply: m => { m.statusChance = 0.4; } },
 ];
-// Give an enemy a random affix: a name, an icon, and a stat/behaviour tweak.
+// Give an enemy a random affix: a name, an aura colour, and a stat/behaviour tweak.
 function applyAffix(mob) {
   const a = pick(AFFIXES);
-  mob.affixIcon = a.icon;
+  mob.affix = a.key;
+  mob.affixColor = a.color;
   mob.name = a.name;
   a.apply(mob);
 }
@@ -7421,8 +7424,8 @@ function draw() {
     else if (stunned) ctx.filter = 'grayscale(1) sepia(1) saturate(7) hue-rotate(-15deg) brightness(1.25)';
     // Pop: a glowing halo — coloured for elites/bosses, dark for regular foes —
     // so even tiny critters stand out from the environment.
-    ctx.shadowColor = e.isBoss ? 'rgba(255,70,70,0.95)' : (e.isElite ? 'rgba(255,215,90,0.95)' : 'rgba(0,0,0,0.95)');
-    ctx.shadowBlur = Math.max(2, tw * ((e.isBoss || e.isElite) ? 0.26 : 0.18));
+    ctx.shadowColor = e.isBoss ? 'rgba(255,70,70,0.95)' : (e.isElite ? 'rgba(255,215,90,0.95)' : (e.affixColor || 'rgba(0,0,0,0.95)'));
+    ctx.shadowBlur = Math.max(2, tw * ((e.isBoss || e.isElite || e.affixColor) ? 0.26 : 0.18));
     // Pixel-art creature sprite (scaled to the footprint), falling back to glyph.
     const _esz = Math.round(cw * (e.isBoss ? 1.0 : (e.isElite ? 0.96 : 0.9)));
     const _espr = enemySprite(e);
@@ -7431,11 +7434,11 @@ function draw() {
     }
     ctx.restore();
 
-    // Affix badge, goblin loot tag, or bounty marker, floated above — drawn from
-    // DawnLike icons (target / coins / element), falling back to the emoji.
-    if (e.questTarget || e.affixIcon || e.isGoblin) {
-      const tagEmoji = e.questTarget ? '🎯' : (e.isGoblin ? '💰' : e.affixIcon);
-      const tagSprite = e.questTarget ? 'ic_target' : (e.isGoblin ? 'ic_money' : AFFIX_SPRITE[e.affixIcon]);
+    // Goblin loot tag or bounty marker, floated above. (Affixes show as the
+    // coloured aura above — no floating icon.)
+    if (e.questTarget || e.isGoblin) {
+      const tagEmoji = e.questTarget ? '🎯' : '💰';
+      const tagSprite = e.questTarget ? 'ic_target' : 'ic_money';
       ctx.font = `${Math.round(tw * 0.34)}px serif`;
       ctx.textAlign = 'center';
       if (!(tagSprite && spriteReady && drawSpriteC(tagSprite, cx, py - th*0.02, Math.round(tw * 0.4))))
