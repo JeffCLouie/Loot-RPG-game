@@ -1877,13 +1877,10 @@ function enemySprite(e) {
 // A floor tile's variant (8 dirt variants) — deterministic per cell so the
 // ground has texture without flickering between frames.
 function floorSpriteName(seed) { return 'floor_' + (Math.abs(seed) % 4); }
-// Lay the biome floor under a feature tile (fountain, shrine, spikes, …) so the
-// feature sits on real ground, not a flat colour square. Falls back to C.floor.
+// Lay the floor under a feature tile (fountain, shrine, spikes, …) so the
+// feature sits on real ground, not a flat colour square. Uses the procedural
+// floor colour (the base terrain is no longer drawn from the DawnLike atlas).
 function drawFloorBase(px, py, tw, th, seed, C) {
-  if (spriteReady && drawSprite(floorSpriteName(seed), px, py, tw)) {
-    if (C.spriteTint) { ctx.save(); ctx.globalCompositeOperation = 'overlay'; ctx.globalAlpha = C.spriteTintA || 0.35; ctx.fillStyle = C.spriteTint; ctx.fillRect(px, py, tw, th); ctx.restore(); }
-    return;
-  }
   ctx.fillStyle = C.floor; ctx.fillRect(px, py, tw, th);
 }
 // Autotiled wall piece: pick the corner/edge/face that matches which of this
@@ -6178,19 +6175,8 @@ function drawWall(px, py, tw, th, x, y, seed, C, cracked) {
   if (C.wallStyle === 'pine') { drawPineWall(px, py, tw, th, x, y, seed, C, cracked); return; }
   if (C.wallStyle === 'mushroom') { drawMushroomWall(px, py, tw, th, x, y, seed, C, cracked); return; }
   if (C.wallStyle === 'crystal') { drawCrystalWall(px, py, tw, th, x, y, seed, C, cracked); return; }
-  // Pixel-art wall: only walls that touch open floor get a tile, using DawnLike's
-  // directional pieces (H/V edges + the four corners). Rock buried inside the
-  // mass (no floor neighbour) is left as the dark background — like the official
-  // DawnLike maps — so we don't tile a solid square of bricks.
-  if (spriteReady) {
-    const wn = wallSpriteName(x, y);
-    if (wn === null) return;            // buried rock — leave background void
-    if (drawSprite(wn, px, py, tw)) {
-      if (C.spriteTint) { ctx.save(); ctx.globalCompositeOperation = 'overlay'; ctx.globalAlpha = C.spriteTintA || 0.35; ctx.fillStyle = C.spriteTint; ctx.fillRect(px, py, tw, th); ctx.restore(); }
-      if (cracked) { ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(px + tw*0.42, py + th*0.2, Math.max(1, tw*0.06), th*0.6); ctx.fillRect(px + tw*0.3, py + th*0.5, tw*0.3, Math.max(1, th*0.06)); }
-      return;
-    }
-  }
+  // Procedural rock wall (the original terrain look — DawnLike is reserved for
+  // objects like stairs, spikes, characters and items, not the base terrain).
   const h = Math.abs(seed);
   const W = Math.max(1, Math.floor(tw)), H = Math.max(1, Math.floor(th));
   const topLit = !isWallTile(x, y - 1);
@@ -6525,15 +6511,7 @@ function draw() {
         ctx.fill();
         ctx.restore();
       } else if (t === 6) {
-        // Water — real DawnLike water tile, with a faint moving highlight so it
-        // still shimmers. Falls back to the painted ripple below.
-        if (spriteReady && drawSprite('water', px, py, tw)) {
-          const wp2 = 0.5 + 0.5*Math.sin(Date.now()/600 + seed);
-          ctx.fillStyle = `rgba(190,230,255,${0.08 + 0.10*wp2})`;
-          ctx.fillRect(px+tw*0.18, py+th*(0.3+0.1*wp2), tw*0.4, Math.max(1, th*0.06));
-          continue;
-        }
-        // Water — deep, impassable, gently rippling.
+        // Water — deep, impassable, gently rippling (procedural terrain).
         ctx.fillStyle = '#0e2a40';
         ctx.fillRect(px, py, tw, th);
         const wp = 0.5 + 0.5*Math.sin(Date.now()/600 + seed);
@@ -6543,14 +6521,7 @@ function draw() {
         ctx.fillRect(px+tw*0.2, py+th*(0.3+0.1*wp), tw*0.35, Math.max(1, th*0.07));
         ctx.fillRect(px+tw*0.5, py+th*(0.6-0.1*wp), tw*0.28, Math.max(1, th*0.07));
       } else if (t === 7) {
-        // Lava — real DawnLike molten tile with a pulsing heat glow on top.
-        if (spriteReady && drawSprite('lava', px, py, tw)) {
-          const lp2 = 0.5 + 0.5*Math.sin(Date.now()/280 + seed);
-          ctx.save(); ctx.globalAlpha = 0.18 + 0.22*lp2; ctx.fillStyle = '#ff8a1e';
-          ctx.fillRect(px, py, tw, th); ctx.restore();
-          continue;
-        }
-        // Lava — passable but it burns; molten glow pulses.
+        // Lava — passable but it burns; molten glow pulses (procedural terrain).
         const lp = 0.5 + 0.5*Math.sin(Date.now()/280 + seed);
         ctx.fillStyle = '#3a0f06';
         ctx.fillRect(px, py, tw, th);
@@ -6560,27 +6531,24 @@ function draw() {
         ctx.fillRect(px+tw*0.25, py+th*0.3, tw*0.18, th*0.4);
         ctx.fillRect(px+tw*0.6, py+th*0.55, tw*0.15, th*0.25);
       } else if (t === 8) {
-        // Spike trap — DawnLike spikes drawn OVER a real floor tile (not a blank
-        // cell), so it reads as spikes embedded in the ground.
-        if (spriteReady && drawSprite(floorSpriteName(seed), px, py, tw)) {
-          if (C.spriteTint) { ctx.save(); ctx.globalCompositeOperation = 'overlay'; ctx.globalAlpha = C.spriteTintA || 0.35; ctx.fillStyle = C.spriteTint; ctx.fillRect(px, py, tw, th); ctx.restore(); }
-          drawSprite('spikes', px, py, tw);
-          continue;
-        }
-        // Spike trap — floor studded with metal spikes.
+        // Spike trap — DawnLike spikes drawn over the procedural floor, so the
+        // spikes stay pixel-art while the ground matches the old terrain.
         drawFloorBase(px, py, tw, th, seed, C);
-        ctx.fillStyle = '#c4c4d2';
-        for (let s = 0; s < 3; s++) {
-          const sx = px + tw*(0.2 + s*0.3);
-          ctx.beginPath();
-          ctx.moveTo(sx, py + th*0.8);
-          ctx.lineTo(sx + tw*0.1, py + th*0.3);
-          ctx.lineTo(sx + tw*0.2, py + th*0.8);
-          ctx.closePath();
-          ctx.fill();
+        if (!(spriteReady && drawSprite('spikes', px, py, tw))) {
+          // Fallback: painted metal spikes.
+          ctx.fillStyle = '#c4c4d2';
+          for (let s = 0; s < 3; s++) {
+            const sx = px + tw*(0.2 + s*0.3);
+            ctx.beginPath();
+            ctx.moveTo(sx, py + th*0.8);
+            ctx.lineTo(sx + tw*0.1, py + th*0.3);
+            ctx.lineTo(sx + tw*0.2, py + th*0.8);
+            ctx.closePath();
+            ctx.fill();
+          }
+          ctx.fillStyle = '#7a7a8a';
+          ctx.fillRect(px+tw*0.1, py+th*0.78, tw*0.8, Math.max(1, th*0.1));
         }
-        ctx.fillStyle = '#7a7a8a';
-        ctx.fillRect(px+tw*0.1, py+th*0.78, tw*0.8, Math.max(1, th*0.1));
       } else if (t === 9) {
         // Teleporter pad — a swirling purple portal.
         drawFloorBase(px, py, tw, th, seed, C);
@@ -6613,15 +6581,6 @@ function draw() {
         ctx.arc(px+tw*0.66, py+th*0.5, tw*0.08, 0, Math.PI*2);
         ctx.fill();
       } else {
-        // Pixel-art floor: a random dirt variant per cell (varied, never flat),
-        // biome-tinted, with ambient-occlusion shade under adjacent walls. Falls
-        // back to the procedural floor below if the atlas hasn't loaded.
-        if (spriteReady && !C.wallStyle && drawSprite(floorSpriteName(seed), px, py, tw)) {
-          if (C.spriteTint) { ctx.save(); ctx.globalCompositeOperation = 'overlay'; ctx.globalAlpha = C.spriteTintA || 0.35; ctx.fillStyle = C.spriteTint; ctx.fillRect(px, py, tw, th); ctx.restore(); }
-          if (y > 0 && (mapData[y-1][x] === 1 || mapData[y-1][x] === 10)) { ctx.fillStyle = 'rgba(0,0,0,0.30)'; ctx.fillRect(px, py, tw, Math.max(1, th*0.16)); ctx.fillStyle = 'rgba(0,0,0,0.13)'; ctx.fillRect(px, py + th*0.16, tw, Math.max(1, th*0.12)); }
-          if (x > 0 && (mapData[y][x-1] === 1 || mapData[y][x-1] === 10)) { ctx.fillStyle = 'rgba(0,0,0,0.18)'; ctx.fillRect(px, py, Math.max(1, tw*0.14), th); }
-          continue;
-        }
         // Floor base — organic per-tile variation instead of a checkerboard:
         // most tiles use the base colour, a few the alt, and every tile gets a
         // faint lightness jitter so the ground reads as natural, worn stone.
