@@ -6505,7 +6505,7 @@ function drawHeldWeapon(px, py, tw, th, facingRight) {
   // and AWAY from the body.
   const sz = Math.round(tw * 0.5);
   ctx.save();
-  ctx.translate(facingRight ? px + tw * 0.96 : px + tw * 0.04, py + th * 0.66);
+  ctx.translate(facingRight ? px + tw * 0.96 : px + tw * 0.04, py + th * 0.58);
   if (facingRight) ctx.scale(-1, 1);
   drawSpriteC('w_' + key, 0, 0, sz);
   ctx.restore();
