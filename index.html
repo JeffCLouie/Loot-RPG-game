@@ -8999,6 +8999,12 @@ function move(dx, dy) {
     log('🗝️ You found a vault key! Seek the locked door.', 'important');
   }
 
+  // Auto-pickup chests — step onto a tile and every chest on it opens itself.
+  if (pickupChestsAt(nx, ny) > 0) {
+    renderPanel();
+    updateBars();
+  }
+
   // Lava → burns you (never lethal on its own).
   if (tile === 7) {
     const burn = 4 + dungeonLevel;
@@ -10318,11 +10324,11 @@ function collectChestLoot(luck, ilvl, x, y) {
   }
 }
 
-function pickup() {
-  const idx = groundItems.findIndex(g => g.x===player.x && g.y===player.y);
-  if (idx === -1) { log('You wait...'); passTurn(); return; }
-  const chest = groundItems.splice(idx, 1)[0];
-
+// Open a single ground chest: it may spring into a Mimic, be trapped, or just
+// hand over loot. Returns 'mimic' when it springs to life so the caller can
+// stop opening any other chests stacked on the same tile and let the fight
+// begin; otherwise returns null.
+function openChest(chest) {
   // Rarely the chest is a Mimic — it springs to life and attacks.
   if (Math.random() < 0.10) {
     const mLevel = dungeonLevel + 1;
@@ -10348,10 +10354,7 @@ function pickup() {
     sfx('trap');
     log('🧰 It\'s a MIMIC! The chest lunges at you!', 'important');
     screenFlash('#cc0000');
-    updateBars();
-    saveGame();
-    draw();
-    return;
+    return 'mimic';
   }
 
   // Very small chance the chest is trapped.
@@ -10366,16 +10369,37 @@ function pickup() {
       applyStatusEffect('player', 'poison', 3, null);
       log('☠️ A trapped chest bursts with poison gas!', 'important');
     }
-    updateBars();
-    saveGame();
-    draw();
-    return;
+    return null;
   }
 
   // Otherwise it rolls fresh loot when opened — luckier chests roll richer.
   const luck = chest.luck || 1;
   collectChestLoot(luck, chest.ilvl || dungeonLevel, chest.x, chest.y);
+  return null;
+}
+
+// Open every chest stacked on a tile. A springing mimic halts the rest (you're
+// now in a fight). Returns the number of chests that were opened.
+function pickupChestsAt(x, y) {
+  let opened = 0;
+  while (true) {
+    const idx = groundItems.findIndex(g => g.x === x && g.y === y);
+    if (idx === -1) break;
+    const chest = groundItems.splice(idx, 1)[0];
+    opened++;
+    if (openChest(chest) === 'mimic') break;
+  }
+  return opened;
+}
+
+// The interact button / key: chests are now grabbed automatically on movement,
+// so this just opens anything already underfoot (e.g. a chest that dropped on
+// your tile) and otherwise passes the turn.
+function pickup() {
+  const opened = pickupChestsAt(player.x, player.y);
+  if (opened === 0) { log('You wait...'); passTurn(); return; }
   renderPanel();
+  updateBars();
   saveGame();
   draw();
 }
