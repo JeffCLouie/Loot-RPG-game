@@ -9146,11 +9146,14 @@ function renderSkills(el) {
     const reqRows = [];
     if ((sn.lvl || 1) > 1) {
       const ok = player.level >= sn.lvl;
-      reqRows.push(`<span class="${ok ? 'rqok' : 'rqno'}">${ok ? '✓' : '🔒'} Level ${sn.lvl}${ok ? '' : ` (you're ${player.level})`}</span>`);
+      // "Hero level" (not just "Lv5") so it can't be misread as a required skill rank.
+      reqRows.push(`<span class="${ok ? 'rqok' : 'rqno'}">${ok ? '✓' : '🔒'} Hero level ${sn.lvl}${ok ? '' : ` (you're ${player.level})`}</span>`);
     }
     if (sn.req) for (const [rid, rk] of sn.req) {
       const rn = skillNode(rid); const cur = skillRank(rid); const ok = cur >= rk;
-      const rankTxt = (rn && (rn.max || 1) > 1) || rk > 1 ? ` ${cur}/${rk}` : '';
+      // Only a multi-rank requirement shows a fraction; a rank-1 prereq just needs to
+      // be learned, so "Aegis" reads cleaner than a confusing "Aegis 3/1".
+      const rankTxt = rk > 1 ? ` ${cur}/${rk}` : '';
       reqRows.push(`<span class="${ok ? 'rqok' : 'rqno'}">${ok ? '✓' : '🔒'} ${rn ? rn.name : rid}${rankTxt}</span>`);
     }
     const reqMet = skillReqMet(sn);
