@@ -10613,7 +10613,8 @@ function renderSkillBar() {
     // Number keys 1–9 map to the first nine learned actives; any beyond that are
     // click/tap only (a deep build can learn more actives than there are keys).
     const idx = s.baseline ? 0 : ++extraNum;
-    const key = s.baseline ? 'R' : (idx <= 9 ? String(idx) : '');
+    // Potions hold keys 1–2, so the first seven extra actives map to 3–9.
+    const key = s.baseline ? 'R' : (idx <= 7 ? String(idx + 2) : '');
     const tip = `<div class='ht-name' style='color:#e6c34a'>${s.icon} ${s.name}</div><div class='ht-line'>${s.desc}</div><div class='ht-sub'>${s.mp} MP · ${s.cd}-turn cooldown${key ? ` · press ${key}` : ''}</div>`;
     return `<button class="skillbar-btn ${s.baseline ? 'baseline ' : ''}${ready ? 'ready' : 'disabled'}" ${hoverTip(tip)} onclick="castSkillById('${s.id}')">
       <span class="sb-key">${key}</span><span class="sb-icon">${s.icon}</span><span class="sb-info">${cd > 0 ? cd : s.mp + 'MP'}</span>
