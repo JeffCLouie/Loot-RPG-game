@@ -4037,6 +4037,10 @@ const FLOOR_MODS = [
   { id: 'haunted',  name: '👻 Haunted Halls',       dmgMult: 1.2,  lootMult: 1.3, eliteBonus: 0.15, desc: 'Restless spirits strike from the dark.' },
   { id: 'brittle',  name: '🍃 Brittle Bones',       dmgMult: 1,    lootMult: 1,   eliteBonus: 0,    desc: 'Foes are frail — strike them down fast.', hpMult: 0.55 },
   { id: 'bountiful',name: '🎁 Bountiful Floor',      dmgMult: 1.05, lootMult: 1.6, eliteBonus: 0,    desc: 'Chests hide around every corner.', chestBonus: 2 },
+  // A floor that hard-counters the heal-on-AoE grind: foes are tougher and your
+  // life-leech barely works here, so brute-forcing won't sustain you. The answer
+  // is prep — a Mercy pact, burst skills, a healing bowl — not the same old loop.
+  { id: 'warded',   name: '🛡️ Warded Halls',         dmgMult: 1.15, lootMult: 1.6, eliteBonus: 0.1,  desc: 'Foes are warded against life-draining — your lifesteal barely bites. Burst them down or come prepared.', hpMult: 1.3, lifestealMult: 0.35, prepHint: true },
   // A deliberate wall: a floor that may simply be beyond you right now. Rich if
   // you can survive it, lethal if you can't — turn back and grind if you must.
   { id: 'nightmare',name: '☠️ Nightmare Depths',     dmgMult: 1.7,  lootMult: 2.4, eliteBonus: 0.35, desc: 'Death itself stalks these halls. Turn back if you must.', hpMult: 1.45 },
@@ -4207,6 +4211,12 @@ let inventory = [];
 let stash = { gold: 0, items: [] };
 let equipped = { head: null, chest: null, hands: null, legs: null, weapon: null, ring: null, amulet: null };
 let groundItems = []; // chests on the floor: { x, y } — loot is rolled when opened
+// Death drop: when you fall, your whole bag is left as a recoverable grave on the
+// floor where you died. `graveSite` is the persistent record { floor, items, gold };
+// `graveMarker` is its {x,y} on the CURRENT floor (placed by generateMap when the
+// floor you fell on is rebuilt). Walk onto the marker to reclaim everything.
+let graveSite = null;
+let graveMarker = null;
 let merchant = null;  // { x, y, stock: [...] } when present
 let mystic = null;    // { x, y } — the Wandering Mystic, when present this floor
 let pact = null;      // active pact: { id, icon, name, desc, floors, fx } or null
@@ -5722,6 +5732,7 @@ function generateMap() {
   }
 
   if (floorMod.name) log(`${floorMod.name} — ${floorMod.desc}`, 'important');
+  if (floorMod.prepHint) log('💡 If this floor is too tough, retreat to town: strike a pact, cook a bowl, or forge gear, then come back ready.', 'important');
 
   spawnEnemies();
   spawnGroundLoot();
@@ -5729,6 +5740,52 @@ function generateMap() {
   spawnMystic();
   // Vault is built last so its chest survives spawnGroundLoot resetting the list.
   if (Math.random() < 0.2) tryBuildVault(reach);
+
+  // ── GUARANTEED FEATURE ── every floor should offer at least one interesting
+  // decision: a shrine worth a detour, a healing fountain, a teleporter, or a
+  // locked vault. If the random rolls left this floor barren, drop a shrine so
+  // there's always something to think about beyond "clear and descend".
+  {
+    let hasFeature = false;
+    for (let y = 1; y < MAP_H - 1 && !hasFeature; y++) {
+      for (let x = 1; x < MAP_W - 1; x++) {
+        const t = mapData[y][x];
+        if (t === 3 || t === 5 || t === 9 || t === 11) { hasFeature = true; break; }
+      }
+    }
+    if (!hasFeature) {
+      // Prefer a tile a few steps from the entrance (a real detour), but never
+      // leave the floor barren: fall back to any reachable floor tile.
+      let spot = null, fallback = null;
+      for (let i = 0; i < 60; i++) {
+        const c = randomFloorTile(reach);
+        if (!c) break;
+        fallback = c;
+        if ((Math.abs(c.x - player.x) + Math.abs(c.y - player.y)) >= 3) { spot = c; break; }
+      }
+      const c = spot || fallback;
+      if (c) { mapData[c.y][c.x] = 5; shrineData[c.y + ',' + c.x] = { kind: pick(SHRINE_KINDS) }; }
+    }
+  }
+
+  // ── GRAVE ── if you died on this floor, your dropped bag waits to be reclaimed.
+  // Placed on a reachable tile a little way from where you re-enter, so reaching
+  // it is a short run, not a free pickup.
+  graveMarker = null;
+  if (graveSite && graveSite.floor === dungeonLevel && (graveSite.items.length || graveSite.gold)) {
+    let spot = null, bestD = Infinity;
+    for (let i = 0; i < 120; i++) {
+      const c = randomFloorTile(reach);
+      if (!c) break;
+      const d = Math.abs(c.x - player.x) + Math.abs(c.y - player.y);
+      if (d >= 2 && d < bestD) { bestD = d; spot = c; }
+    }
+    if (spot) {
+      graveMarker = { x: spot.x, y: spot.y };
+      log('🪦 Your lost satchel lies somewhere on this floor — reclaim it.', 'important');
+    }
+  }
+
   // A mini-quest may take over the floor (after enemies/loot are placed).
   maybeSpawnQuest(reach);
 
@@ -6386,7 +6443,7 @@ function buildTown() {
   floorSerial++;
   // Clear every dungeon-only entity so nothing lingers into the safe hub.
   enemies = []; merchant = null; mystic = null; minions = []; combatBuffs = {};
-  groundItems = []; groundFood = []; groundGold = [];
+  groundItems = []; groundFood = []; groundGold = []; graveMarker = null;
   quest = null; teleporters = {}; shrineData = {};
   hasFountain = false; groundKey = null; hasKey = false;
   floorMod = FLOOR_MODS[0]; floorTint = 'rgba(120,90,40,0.10)';
@@ -9403,6 +9460,40 @@ function draw() {
     }
     ctx.restore();
 
+    // ── THREAT TELEGRAPH ── make "who can hit me, from where, this turn" legible.
+    // Ring any foe that can strike the hero on its next turn (melee adjacent, or
+    // ranged with line of sight in range); for ranged threats also draw a faint
+    // lane from the foe to the hero so off-screen chip damage is never a mystery.
+    if (!inTown && !e.isGoblin) {
+      const ebeh = BEHAVIORS[e.behavior] || BEHAVIORS.chaser;
+      const edist = Math.abs(e.x - player.x) + Math.abs(e.y - player.y);
+      const isRanged = ebeh.ranged || (e.size || 1) > 1;
+      const inRange = isRanged && edist <= (ebeh.range || 4) && hasLineToPlayer(e);
+      const threatens = edist <= 1 || inRange;
+      if (threatens) {
+        const tp = 0.5 + 0.5 * Math.sin(Date.now() / 220);
+        const pcx = offX + player.x * tw + tw / 2, pcy = offY + player.y * th + th / 2;
+        if (inRange) {
+          ctx.save();
+          ctx.globalAlpha = 0.18 + 0.12 * tp;
+          ctx.strokeStyle = '#ff6a55';
+          ctx.lineWidth = Math.max(1, tw * 0.04);
+          ctx.beginPath();
+          ctx.moveTo(cx, py + ch / 2);
+          ctx.lineTo(pcx, pcy);
+          ctx.stroke();
+          ctx.restore();
+        }
+        ctx.save();
+        ctx.strokeStyle = `rgba(255,80,64,${0.4 + 0.4 * tp})`;
+        ctx.lineWidth = Math.max(1.5, tw * 0.05);
+        ctx.beginPath();
+        ctx.arc(cx, py + ch / 2, cw * 0.46, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
     // Goblin loot tag or bounty marker, floated above. (Affixes show as the
     // coloured aura above — no floating icon.)
     if (e.questTarget || e.isGoblin) {
@@ -9425,6 +9516,19 @@ function draw() {
       ctx.fillRect(px+1, py, bw * (e.hp/e.maxHp), bh);
     }
   });
+
+  // Grave marker — your dropped satchel, waiting to be reclaimed. Drawn with the
+  // DawnLike grave tile and a soft gold halo so it reads as "loot to grab".
+  if (graveMarker) {
+    const gpx = offX + graveMarker.x * tw, gpy = offY + graveMarker.y * th;
+    const gsp = 0.5 + 0.5 * Math.sin(Date.now() / 300);
+    ctx.save();
+    ctx.shadowColor = `rgba(255,210,80,${0.5 + 0.35 * gsp})`;
+    ctx.shadowBlur = tw * 0.32;
+    if (!(spriteReady && drawSpriteC('feat_grave', gpx + tw / 2, gpy + th / 2 + th * 0.02, Math.round(tw * 0.8))))
+      drawEmoji('🪦', gpx + tw / 2, gpy + th / 2 + th * 0.04, Math.round(tw * 0.72));
+    ctx.restore();
+  }
 
   // Quest markers — NPCs, objectives, and pickups, each ringed to stand out.
   if (quest) {
@@ -9523,6 +9627,25 @@ function draw() {
     ctx.restore();
   });
 
+  // Ranged tracers — the visible "line of the shot" that fades quickly. Drawn
+  // over the world so you can always see who fired at you and from where.
+  const tnow = Date.now();
+  tracers = tracers.filter(tr => tnow - tr.born < tr.life);
+  tracers.forEach(tr => {
+    const t = (tnow - tr.born) / tr.life;
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, 1 - t);
+    ctx.strokeStyle = tr.color;
+    ctx.lineWidth = Math.max(1.5, tw * 0.07 * (1 - t));
+    ctx.shadowColor = tr.color;
+    ctx.shadowBlur = tw * 0.18;
+    ctx.beginPath();
+    ctx.moveTo(offX + tr.x0 * tw, offY + tr.y0 * th);
+    ctx.lineTo(offX + tr.x1 * tw, offY + tr.y1 * th);
+    ctx.stroke();
+    ctx.restore();
+  });
+
   // Floating damage numbers
   const now = Date.now();
   floatingTexts = floatingTexts.filter(ft => now - ft.start < ft.duration);
@@ -9572,6 +9695,13 @@ function spawnFloatingText(x, y, text, color) {
 // particles, and a white hit-flash on struck foes. All purely visual and
 // self-expiring; the pulse loop keeps repainting while any are live.
 let particles = [];
+// Ranged-attack tracers: a quick fading line from attacker to target so a bolt
+// from across the room is never invisible. Each { x0,y0,x1,y1,color,born,life }.
+let tracers = [];
+function spawnTracer(x0, y0, x1, y1, color) {
+  tracers.push({ x0: x0 + 0.5, y0: y0 + 0.5, x1: x1 + 0.5, y1: y1 + 0.5, color, born: Date.now(), life: 320 });
+  draw();
+}
 let shakeMag = 0, shakeUntil = 0;
 function addShake(mag) { shakeMag = Math.max(shakeMag, mag); shakeUntil = Date.now() + 200; draw(); }
 // Burst of `n` little sparks at map-tile (x,y), drifting and fading.
@@ -10051,6 +10181,19 @@ function move(dx, dy) {
     updateBars();
   }
 
+  // Reclaim your grave — step onto the dropped satchel to recover the whole bag.
+  if (graveMarker && graveMarker.x === nx && graveMarker.y === ny && graveSite) {
+    const got = graveSite.items.length;
+    inventory.push(...graveSite.items);
+    if (graveSite.gold) player.gold += graveSite.gold;
+    graveSite = null; graveMarker = null;
+    sfx('gold');
+    spawnFloatingText(player.x, player.y, 'RECLAIMED', '#ffd24b');
+    log(`🪦 You reclaim your lost satchel — ${got} item${got === 1 ? '' : 's'} back in your bag.`, 'loot');
+    renderPanel();
+    updateBars();
+  }
+
   // Auto-pickup the vault key
   if (groundKey && groundKey.x === nx && groundKey.y === ny) {
     groundKey = null; hasKey = true;
@@ -10202,16 +10345,23 @@ function thornsReflect(e) {
 // basic attacks and every weapon-based active so a Cleave/Whirlwind build sustains.
 function lifestealHeal(amount) {
   if (amount <= 0) return;
+  // Lifesteal is capped per swing so it no longer scales without limit on huge
+  // AoE hits: a single Cleave/Whirlwind can recover at most a slice of your max
+  // HP, so packing ten foes into one blow can't out-heal the damage they deal
+  // back. Some floors (Warded Halls) further dampen leeching via lifestealMult.
+  const lsMult = (floorMod && floorMod.lifestealMult) || 1;
+  const lsCap = Math.max(1, Math.round(player.maxHp * 0.12));
   // Life leech: lifesteal passives + gear Life Leech % (+ any lifesteal buff).
-  const ls = skillBonus('lifesteal') + buffMag('lifestealUp') + totalStat('LEECH') / 100 + foodFx('lifesteal'); // + Vampire/Tonkotsu ramen
+  const ls = (skillBonus('lifesteal') + buffMag('lifestealUp') + totalStat('LEECH') / 100 + foodFx('lifesteal')) * lsMult; // + Vampire/Tonkotsu ramen
   if (ls > 0 && player.hp < player.maxHp) {
-    const got = Math.min(Math.max(1, Math.round(amount * ls)), player.maxHp - player.hp);
+    const got = Math.min(Math.max(1, Math.round(amount * ls)), player.maxHp - player.hp, lsCap);
     if (got > 0) { player.hp += got; spawnFloatingText(player.x, player.y, `+${got}`, '#ff6688'); }
   }
-  // Mana leech: gear Mana Leech % restores MP from damage dealt.
+  // Mana leech: gear Mana Leech % restores MP from damage dealt (also capped).
+  const mlCap = Math.max(1, Math.round(player.maxMp * 0.12));
   const ml = totalStat('MPLEECH') / 100;
   if (ml > 0 && player.mp < player.maxMp) {
-    const got = Math.min(Math.max(1, Math.round(amount * ml)), player.maxMp - player.mp);
+    const got = Math.min(Math.max(1, Math.round(amount * ml)), player.maxMp - player.mp, mlCap);
     if (got > 0) { player.mp += got; spawnFloatingText(player.x, player.y - 0.3, `+${got}`, '#7fb0ff'); }
   }
 }
@@ -10900,7 +11050,11 @@ function resolveCast(node, rank) {
   }
 
   if (c.lifesteal && total > 0) {
-    const got = Math.min(Math.round(total * c.lifesteal), player.maxHp - player.hp);
+    // Capped like passive lifesteal so a big multi-target nova can't fully heal
+    // you off the pack it just hit; Warded Halls dampen it further.
+    const lsMult = (floorMod && floorMod.lifestealMult) || 1;
+    const cap = Math.max(1, Math.round(player.maxHp * 0.15));
+    const got = Math.min(Math.round(total * c.lifesteal * lsMult), player.maxHp - player.hp, cap);
     if (got > 0) { player.hp += got; spawnFloatingText(player.x, player.y, `+${got}`, '#ff6688'); }
   }
   if (c.heal) {
@@ -11321,9 +11475,17 @@ function enemyRangedAttack(e) {
   const dmg = applyIncomingMods(absorbWithMana(mitigateDamage(raw, e.level)));
   player.hp = Math.max(0, player.hp - dmg);
   sfx(e.isBoss ? 'boss' : 'hurt');
+  // Draw the shot so the source is unmistakable: a tracer from foe to hero, a
+  // spark burst on impact, and the damage number.
+  const tcol = e.isBoss ? '#ff7766' : '#c77dff';
+  spawnTracer(e.x, e.y, player.x, player.y, tcol);
+  spawnParticles(player.x, player.y, tcol, 6, 0.08);
   spawnFloatingText(player.x, player.y, `${dmg}`, '#c77dff');
   log(`✨ ${enemyLabel(e)} strikes ${HERO} from afar for ${dmg}!`);
+  // Even a non-critical hit from off-screen gets a soft flash so a ranged
+  // attacker chipping you from across the room never goes unsignalled.
   if (player.hp <= player.maxHp * 0.25) screenFlash('#cc0000');
+  else screenFlash('rgba(180,40,40,0.18)');
   tryBossStatusProc(e);
   updateBars();
   if (player.hp === 0) handleDeath();
@@ -11675,10 +11837,11 @@ function footDist(e) {
   return best;
 }
 
-// Death now drags you back to the safe TOWN, where the healer revives you at
-// full HP/MP with every ailment cleansed — but it still costs you half your
-// gold as the price of being patched up. You keep your level, gear, and floor
-// progress: the Dungeon Gate drops you back in on the floor where you fell.
+// Death drags you back to the safe TOWN, revived at half HP/MP with every ailment
+// cleansed. It still stings — half your purse goes to the healer and you lose a
+// little XP — but it no longer erases your build over a stray hazard step: you
+// KEEP every equipped piece, and your whole bag is left behind as a recoverable
+// grave on the floor where you fell. Walk back to the grave to reclaim it all.
 function handleDeath() {
   // Phoenix / Everything ramen: a `revive` bowl lets you cheat death ONCE. The
   // buff is burned, every ailment is cleansed, and you rise at half health/mana
@@ -11696,23 +11859,22 @@ function handleDeath() {
     updateBars(); renderPanel(); saveGame(); draw();
     return;
   }
-  // Death stings now: lose HALF your gold, all progress toward your next level,
-  // get knocked back a floor, and revive only half-healed.
+  // The cost of dying: half your gold as the healer's fee, and a quarter of your
+  // progress toward the next level. Your equipped gear is untouched.
   const lostGold = Math.floor(player.gold / 2);
   player.gold -= lostGold;
-  const lostXp = Math.min(player.xp, xpForLevel(player.level));
+  const lostXp = Math.min(player.xp, Math.round(xpForLevel(player.level) * 0.25));
   player.xp = Math.max(0, player.xp - lostXp);
-  // Lose everything in your bag, and one random equipped piece — but never your
-  // weapon, so you can always still fight your way back.
+  // Your bag isn't destroyed — it's dropped as a grave on the floor you fell on,
+  // ready to be reclaimed if you fight your way back. Any earlier unclaimed grave
+  // folds into the new one so you can never lose more than your current bag.
   const lostBag = inventory.length;
-  inventory = [];
-  let lostGear = null;
-  const gearSlots = SLOT_KEYS.filter(s => s !== 'weapon' && equipped[s]);
-  if (gearSlots.length) {
-    const slot = pick(gearSlots);
-    lostGear = equipped[slot];
-    equipped[slot] = null;
+  const prevGrave = (graveSite && Array.isArray(graveSite.items)) ? graveSite.items : [];
+  if (inventory.length || prevGrave.length) {
+    graveSite = { floor: dungeonLevel, items: [...prevGrave, ...inventory], gold: 0 };
   }
+  inventory = [];
+  graveMarker = null; // re-placed when that floor is next generated
   statusEffects = statusEffects.filter(s => s.target !== 'player');
   player.skillCds = {}; combatBuffs = {}; minions = []; bossHazards = []; // revived fresh — skills ready again
   sfx('death');
@@ -11726,8 +11888,8 @@ function handleDeath() {
   // Revived in town but WEAKENED — only half health and mana, not a full heal.
   player.hp = Math.max(1, Math.round(player.maxHp * 0.5));
   player.mp = Math.round(player.maxMp * 0.5);
-  showDeathScreen(lostGold, lostXp, dungeonReturn, lostBag, lostGear);
-  log(`💀 ${player.name || HERO} was SLAIN on floor ${fellOn}! Lost ${lostGold}g${lostXp ? ` and ${lostXp} XP` : ''}${lostBag ? `, your bag (${lostBag})` : ''}${lostGear ? ` and your ${lostGear.name}` : ''} — revived weakened in town.`, 'important');
+  showDeathScreen(lostGold, lostXp, dungeonReturn, lostBag, (graveSite ? fellOn : 0));
+  log(`💀 ${player.name || HERO} was SLAIN on floor ${fellOn}! Lost ${lostGold}g${lostXp ? ` and ${lostXp} XP` : ''}${lostBag ? `, and dropped your bag (${lostBag}) — reclaim it on floor ${fellOn}` : ''} — revived weakened in town.`, 'important');
   recomputeMaxStats();
   updateBars();
   renderPanel();
@@ -11736,16 +11898,17 @@ function handleDeath() {
 }
 
 // A hard, unmistakable death screen that spells out every penalty.
-function showDeathScreen(lostGold, lostXp, returnFloor, lostBag, lostGear) {
+function showDeathScreen(lostGold, lostXp, returnFloor, lostBag, graveFloor) {
   const el = document.getElementById('death-penalties');
   if (el) {
     const lines = [
-      `💰 Lost ${lostGold} gold (half your purse)`,
-      lostXp ? `✦ Lost ${lostXp} XP — back to the start of level ${player.level}` : null,
-      lostBag ? `🎒 Lost your whole bag (${lostBag} item${lostBag === 1 ? '' : 's'})` : null,
-      lostGear ? `🩹 A foe tore off your ${lostGear.name}` : null,
+      `💰 Lost ${lostGold} gold (the healer's fee)`,
+      lostXp ? `✦ Lost ${lostXp} XP` : null,
+      `🛡️ Kept all your equipped gear`,
+      (lostBag && graveFloor) ? `🪦 Your bag (${lostBag} item${lostBag === 1 ? '' : 's'}) lies on floor ${graveFloor} — go reclaim it` : null,
       `❤️ Revived at half health & mana`,
-      `⬇️ Knocked back — re-enter at floor ${returnFloor}`,
+      `⬇️ Re-enter at floor ${returnFloor}`,
+      `💡 Stuck? Bank gear at the Vault, cook a bowl, strike a pact, or forge gear before diving back.`,
     ].filter(Boolean);
     el.innerHTML = lines.map(t => `<div class="death-pen">${t}</div>`).join('');
   }
@@ -13114,7 +13277,7 @@ function saveGame() {
   try {
     const data = {
       player, inventory, equipped, dungeonLevel, buffs, pact,
-      inTown, dungeonReturn, stash,
+      inTown, dungeonReturn, stash, graveSite,
       ts: Date.now(),
     };
     localStorage.setItem(slotKey(activeSlot), JSON.stringify(data));
@@ -13205,6 +13368,11 @@ function loadGame() {
     if (!player.clearedFloors || typeof player.clearedFloors !== 'object') player.clearedFloors = {};
     inTown = !!data.inTown;
     dungeonReturn = data.dungeonReturn || data.dungeonLevel || 1;
+    // Restore an unclaimed death-grave, tolerating saves that predate it.
+    graveSite = (data.graveSite && Array.isArray(data.graveSite.items) && data.graveSite.items.length)
+      ? { floor: data.graveSite.floor || 1, items: data.graveSite.items.filter(it => it && it.slot), gold: Math.max(0, Math.floor(data.graveSite.gold) || 0) }
+      : null;
+    graveMarker = null;
     inventory = (data.inventory || []).filter(it => it && it.slot); // drop legacy typeKey-only items
     // Restore the town stash, tolerating saves that predate it.
     stash = { gold: 0, items: [] };
@@ -13792,9 +13960,9 @@ let lastPulse = 0;
 function pulseLoop(ts) {
   const hasElite = enemies.some(e => !e.dead && e.isElite);
   const hasShrine = Object.keys(shrineData).length > 0;
-  const juicing = particles.length || Date.now() < shakeUntil;
+  const juicing = particles.length || tracers.length || Date.now() < shakeUntil;
   const liquid = mapData.some(row => row && row.some(t => t === 6 || t === 7));
-  if ((inTown || merchant || mystic || hasFountain || hasShrine || quest || floatingTexts.length || statusEffects.length || hasElite || juicing || liquid) && ts - lastPulse > 30) { lastPulse = ts; draw(); }
+  if ((inTown || merchant || mystic || hasFountain || hasShrine || quest || graveMarker || floatingTexts.length || statusEffects.length || hasElite || juicing || liquid) && ts - lastPulse > 30) { lastPulse = ts; draw(); }
   requestAnimationFrame(pulseLoop);
 }
 requestAnimationFrame(pulseLoop);
