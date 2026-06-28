@@ -8765,6 +8765,32 @@ function draw() {
     }
   }
 
+  // Boss-conjured hazards — walls of flame and arcane barriers. Drawn over the
+  // floor but beneath actors. Fire uses the DawnLike flame tile; the barrier is a
+  // procedural magical construct (terrain-like, so procedural is fine).
+  bossHazards.forEach(h => {
+    const px = offX + h.x * tw, py = offY + h.y * th;
+    const cx = px + tw/2, cy = py + th/2;
+    const wob = 0.6 + 0.4 * Math.sin(Date.now()/120 + (h.x*7 + h.y*13));
+    if (h.kind === 'fire') {
+      glowUnder(cx, cy, tw*0.55, `rgba(255,110,40,${0.28 + 0.18*wob})`);
+      if (!(spriteReady && drawSpriteC('ic_fire', cx, cy, Math.round(tw*0.92))))
+        drawEmoji('🔥', cx, cy, Math.round(tw*0.8));
+    } else if (h.kind === 'wall') {
+      const a = h.turns <= 1 ? 0.5 : 0.85; // fades as it's about to crumble
+      ctx.save();
+      ctx.globalAlpha = a;
+      ctx.fillStyle = '#5b43a0';
+      ctx.fillRect(px+tw*0.06, py+th*0.06, tw*0.88, th*0.88);
+      ctx.fillStyle = `rgba(190,160,255,${0.5 + 0.4*wob})`;
+      ctx.fillRect(px+tw*0.06, py+th*0.06, tw*0.88, Math.max(1, th*0.14));
+      ctx.strokeStyle = `rgba(205,175,255,${0.55 + 0.35*wob})`;
+      ctx.lineWidth = Math.max(1, tw*0.05);
+      ctx.strokeRect(px+tw*0.06, py+th*0.06, tw*0.88, th*0.88);
+      ctx.restore();
+    }
+  });
+
   // Ground chests — a classic brown chest with gold trim, drawn by hand so it
   // looks the same on every device. Lucky chests glow brighter gold.
   groundItems.forEach(({ x, y, luck }) => {
@@ -9408,6 +9434,8 @@ function move(dx, dy) {
   const tile = mapData[ny][nx];
   if (tile === 1) return; // wall
   if (tile === 6) return; // deep water — impassable
+  // A boss-conjured barrier blocks the way until it crumbles.
+  if (bossWallAt(nx, ny)) { log('🧱 A wall of force blocks your path!'); return; }
 
   // Cracked wall → smash through it (opens a shortcut), then step in.
   if (tile === 10) {
@@ -10518,6 +10546,7 @@ function runEnemyTurn() {
     const dist = Math.abs(e.x - player.x) + Math.abs(e.y - player.y);
     if (dist <= 8) enemyMove(e);
   });
+  if (floorSerial === serial) tickBossHazards();
 }
 
 // ── ENEMY AI ──
@@ -10527,6 +10556,7 @@ function runEnemyTurn() {
 function enemyTileFree(x, y) {
   if (x < 0 || y < 0 || x >= MAP_W || y >= MAP_H) return false;
   if (mapData[y][x] !== 0) return false;
+  if (bossWallAt(x, y)) return false; // a conjured barrier blocks foes too
   if (x === player.x && y === player.y) return false;
   if (getEnemyAt(x, y)) return false;
   if (merchant && merchant.x === x && merchant.y === y) return false;
@@ -11955,17 +11985,6 @@ function itemCardHTML(item, opts = {}) {
     }
   }
   const power = item.slot ? itemPower(item) : 0;
-  // Power difference vs the comparison item, shown as a percentage so a +1 over a
-  // 10-power item reads as a meaningful +10% rather than a flat +1.
-  let powerDelta = '';
-  if (opts.compareTo && opts.compareTo !== item) {
-    const basePower = itemPower(opts.compareTo);
-    const d = power - basePower;
-    if (d !== 0) {
-      const pct = basePower > 0 ? Math.round(d / basePower * 100) : 100;
-      powerDelta = ` <span style="color:${d>0?'#5ee08a':'#e0556b'}">(${d>0?'+':''}${pct}%)</span>`;
-    }
-  }
   // Item level: drives raw stat size, so it's worth surfacing alongside power.
   const ilvlLine = (item.slot && item.ilvl)
     ? `<span style="color:#7fb0ff;font-weight:bold">ilvl ${item.ilvl}</span>` : '';
@@ -11974,7 +11993,7 @@ function itemCardHTML(item, opts = {}) {
     ${label}
     <div class="tt-name" style="color:${tier.color}">${item.name}</div>
     <div class="tt-tier" style="color:${tier.color}">${item.slot ? SLOTS[item.slot].label : 'potion'}${ilvlLine ? ' · ' + ilvlLine : ''}</div>
-    ${item.slot ? `<div style="color:#ffd24b;font-weight:bold;font-size:11px;margin:3px 0">⚡ Power: ${power}${powerDelta}</div>` : ''}
+    ${item.slot ? `<div style="color:#ffd24b;font-weight:bold;font-size:11px;margin:3px 0">⚡ Power: ${power}</div>` : ''}
     ${stats}
     ${weaponLine}
     <div style="color:#c8a84b;font-size:10px;margin-top:3px">Value: ${item.value}g</div>
