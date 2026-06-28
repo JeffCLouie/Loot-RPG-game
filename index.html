@@ -4230,8 +4230,10 @@ const CHANGELOG = [
 ];
 function showVersionHistory() {
   const el = document.getElementById('version-body');
+  // Contributor initials: Jeff Louie → JL, everyone else (ASuiter89, Claude) → AS.
+  const initials = (by) => by === 'Jeff Louie' ? 'JL' : 'AS';
   if (el) el.innerHTML = CHANGELOG.map(c =>
-    `<div class="version-entry"><div class="version-ver">${c.v}${c.by ? ` <span class="version-by">${c.by}</span>` : ''}</div>${c.notes.map(n => `<div class="version-note">• ${n}</div>`).join('')}</div>`).join('');
+    `<div class="version-entry"><div class="version-ver">${c.v}${c.by ? ` <span class="version-by">${initials(c.by)}</span>` : ''}</div>${c.notes.map(n => `<div class="version-note">• ${n}</div>`).join('')}</div>`).join('');
   document.getElementById('version-overlay').classList.add('open');
   const menu = document.getElementById('settings-menu');
   if (menu) menu.classList.remove('open');
