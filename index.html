@@ -7498,13 +7498,12 @@ function renderEnchantItem(item) {
   const locked = lockedStats(item);
   const poolStats = SLOT_AFFIX_POOLS[item.slot]?.stats || [];
   const poolAttrs = SLOT_AFFIX_POOLS[item.slot]?.attrs || [];
-  // Stable display order: follow the slot's pool order, with any legacy
-  // off-pool properties trailing. This keeps the list from reshuffling when a
-  // property is rerolled.
-  const orderBy = pool => (a, b) => {
-    const ia = pool.indexOf(a), ib = pool.indexOf(b);
-    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
-  };
+  // Stable display order: follow each property's position in item.stats/attrs.
+  // A type reroll rewrites the key in place (see replaceObjKey), so iterating
+  // the object's own key order keeps every property pinned to its row — the
+  // button you click never jumps somewhere else. (We deliberately do NOT re-sort
+  // by pool order here: that would yank a rerolled modifier to wherever its new
+  // type sits in the pool, reshuffling the whole list.)
   // Locked lines: headline/innate stats plus a cursed item's penalty — none of
   // these can be rerolled, so they're shown separately with a 🔒 and a tag that
   // says WHY (headline vs the permanent curse).
@@ -7540,10 +7539,10 @@ function renderEnchantItem(item) {
       <span class="ench-tipwrap" data-tip="${typeTip}" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()"><button class="shop-buy-btn ench-btn" ${canType?'':'disabled'} onclick="enchantRerollType(${item.id},'${kind}','${key}')">🔄 ${costLabel(typeCost)}</button></span></div>`;
   };
 
-  const statRows = Object.keys(item.stats).filter(k => !locked.includes(k)).sort(orderBy(poolStats)).map(k =>
+  const statRows = Object.keys(item.stats).filter(k => !locked.includes(k)).map(k =>
     propRow('stat', k, STAT_LABELS[k]||k, '', item.stats[k], statRangeLabel(item, k), otherStatTypes(item, k).map(s => STAT_LABELS[s]||s))
   ).join('');
-  const attrRows = Object.keys(item.attrs || {}).sort(orderBy(poolAttrs)).map(k =>
+  const attrRows = Object.keys(item.attrs || {}).map(k =>
     propRow('attr', k, ATTRIBUTES[k].label, 'color:#e6c34a', item.attrs[k], attrRangeLabel(item), otherAttrTypes(item, k).map(a => ATTRIBUTES[a].label))
   ).join('');
   const empty = (!statRows && !attrRows) ? `<div class="hc-line" style="opacity:0.6">No bonus properties yet.</div>` : '';
