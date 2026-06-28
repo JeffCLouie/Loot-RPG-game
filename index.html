@@ -385,9 +385,9 @@
   .attr-plus:active { background: #44bb44; }
   .attr-plus:disabled { background: #2a2a3a; color: #555; cursor: not-allowed; }
 
-  /* ── SKILL TREE (SKILLS tab) — branching node graph ── */
-  /* Two labelled trunks (offense / defense) over a fixed-height canvas. Nodes are
-     hand-placed by SKILL_TREE_LAYOUT; SVG draws the glowing branch connectors. */
+  /* ── SKILL TREE (SKILLS tab) — band-gated node graph ── */
+  /* Separate passive / active / path trees over a fixed-height canvas. Node
+     positions derive from each node's band (row) + col; SVG draws the connectors. */
   .sk-trunks { display: flex; justify-content: space-between; padding: 0 8px; margin: 10px 2px 0; }
   .sk-trunk { font-size: 9px; letter-spacing: 2px; color: #7a6fa8; }
   .sk-trunk.off { color: #e0855a; }
@@ -440,6 +440,33 @@
   .sk-pop .pop-buy:active { background: #6a55a8; }
   .sk-pop .pop-buy:disabled { background: #2a2a3a; color: #666; cursor: not-allowed; }
   .sk-pop .pop-buy.maxed { background: #2e7d32; color: #cdebcf; }
+
+  /* Sub-tabs across the three trees (passive / active / path). */
+  .sk-vtabs { display: flex; gap: 4px; margin: 8px 2px 2px; }
+  .sk-vtab { flex: 1; padding: 5px 2px; border: 1px solid #33304a; border-radius: 6px; background: #1a1626;
+    color: #9a8fd0; font-family: inherit; font-size: 8.5px; letter-spacing: .3px; cursor: pointer;
+    -webkit-tap-highlight-color: transparent; touch-action: manipulation; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sk-vtab.on { border-color: #8c6eff; background: #2a1f4a; color: #e8def8; box-shadow: 0 0 8px rgba(140,110,255,.4); }
+  /* Per-band level markers down the left edge of the tree. */
+  .sk-band { position: absolute; left: 1px; transform: translateY(-50%); font-size: 8px; color: #5a5470;
+    letter-spacing: .5px; pointer-events: none; z-index: 1; }
+  .sk-band.met { color: #7a86b8; }
+  /* Denser nodes (5 wide × 6 bands) with a 10-pip rank gauge. */
+  .sk-tree { height: 520px; }
+  .sk-tnode { width: 46px; height: 46px; border-radius: 9px; }
+  .sk-tnode .ic { font-size: 18px; }
+  .sk-tnode .nm { font-size: 6.5px; max-width: 44px; }
+  .sk-tnode .pips { gap: 1px; margin-top: 1px; flex-wrap: wrap; justify-content: center; max-width: 42px; }
+  .sk-tnode .pip { width: 3px; height: 3px; }
+  .sk-tnode .badge { width: 15px; height: 15px; font-size: 9px; line-height: 15px; top: -6px; right: -6px; }
+  /* Ascension preview cards shown on the PATH tab before specializing. */
+  .asc-prompt { padding: 10px 6px; }
+  .asc-title { color: var(--gold); font-size: 12px; text-align: center; margin-bottom: 4px; }
+  .asc-note { font-size: 9.5px; color: #cdc2e8; line-height: 1.5; text-align: center; margin-bottom: 10px; }
+  .asc-card { border: 1px solid #33304a; border-left-width: 4px; border-radius: 7px; background: #1a1626;
+    padding: 7px 9px; margin: 6px 0; }
+  .asc-head { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+  .asc-blurb { font-size: 9px; color: #b9aee0; margin-top: 3px; line-height: 1.45; }
 
   /* ── SKILL BAR (baseline class skill + learned actives) ── */
   #skill-bar { display: flex; gap: 5px; justify-content: center; flex-wrap: wrap; padding: 4px 6px; }
@@ -2546,7 +2573,7 @@ function playerDefense() {
 // negative (no stat should ever read below 0).
 function playerCritChance() {
   const rogueCrit = player.class === 'rogue' ? 0.08 : 0;
-  return Math.max(0, Math.min(0.6, 0.04 + rogueCrit + skillBonus('crit')
+  return Math.max(0, Math.min(0.6, 0.04 + rogueCrit + skillBonus('crit') + buffMag('critUp')
     + (totalStat('CRIT') + totalStat('LCK')) * 0.01
     + totalAttr('luck') * ATTR_FX.critPerLuck));
 }
@@ -2555,10 +2582,10 @@ function playerCritChance() {
 // Capped so you can never become untouchable — depth threat still outpaces it.
 function playerDodge() {
   const base = totalAttr('agility') * ATTR_FX.dodgePerAgi + totalStat('SPD') * 0.006
-    + totalStat('DODGE') / 100 + skillBonus('dodge');
+    + totalStat('DODGE') / 100 + skillBonus('dodge') + buffMag('dodgeUp');
   // Rogues are slipperier: a flat dodge bump and a slightly higher ceiling.
-  if (player.class === 'rogue') return Math.min(0.45, base + 0.08);
-  return Math.min(0.35, base);
+  if (player.class === 'rogue') return Math.min(0.6, base + 0.08);
+  return Math.min(0.5, base);
 }
 function recomputeMaxStats() {
   player.maxHp = baseMaxHp();
@@ -2572,7 +2599,8 @@ function recomputeMaxStats() {
 function hpRegenPerTurn() {
   let r = totalStat('REGEN') + Math.floor(totalAttr('vitality') * ATTR_FX.hpRegenPerVit);
   if (player.class === 'templar') r += 2; // Templar mends faster between fights
-  r += skillBonus('hpRegen'); // Second Wind / Divine Vigor
+  r += skillBonus('hpRegen'); // Recovery / Divine Vigor passives
+  r += Math.round(buffMag('regen')); // Redeemer / Bastion regen buffs
   return r;
 }
 function mpRegenPerTurn() {
@@ -2758,104 +2786,447 @@ function classDmgTakenMult() {
   return Math.max(0.1, base * (1 - skillBonus('dmgTaken')));
 }
 
-// ── SKILL TREES ──
-// A per-class tree of passive and active skills. Leveling grants 1 skill point
-// (separate from the 5 attribute points), spent here in the bag's SKILLS tab.
-// Nodes branch via `req` (prerequisite node ids + the rank each needs) and a
-// minimum character `lvl`. PASSIVE nodes carry an `fx` map summed across their
-// ranks (see skillBonus) and feed the derived-stat formulas; ACTIVE nodes carry
-// an `active` id cast from the on-screen skill bar / number keys (castSkillById).
+// ── SKILL TREES (v3) ──
+// Each class has a separate PASSIVE tree and ACTIVE tree, 30 nodes each, laid out
+// in 6 bands (rows) of 5. Every node maxes at rank 10; a node gated behind a
+// prerequisite only needs that prereq at rank 1 to unlock (D2-style banding).
+// Ascending (see ASCENSIONS) unlocks a focused specialization "PATH" tree.
 const SKILL_POINTS_PER_LEVEL = 1;
+// band index → minimum hero level for base trees, and for ascension PATH trees.
+const SKILL_BANDS = [1, 4, 8, 13, 19, 26];
+const ASC_BANDS   = [20, 25, 31];
+const ASCEND_LEVEL = 20;   // level at which the Trainer offers ascension
+
+// Build a tree from rows of node literals: assigns band/col/type/max/lvl and a
+// default prerequisite (the node directly above in the previous row) unless the
+// node already declares `req`. Ascension nodes (asc set) use ASC_BANDS for level.
+function buildTree(rows, kind, ascId) {
+  const out = [];
+  rows.forEach((row, b) => {
+    row.forEach((n, c) => {
+      n.band = b; n.col = c;
+      n.type = n.t || kind; delete n.t;
+      n.max = 10;
+      if (ascId) n.asc = ascId;
+      n.lvl = (ascId ? ASC_BANDS : SKILL_BANDS)[b];
+      if (!n.req && b > 0) {
+        const prev = rows[b - 1];
+        const parent = prev[Math.min(c, prev.length - 1)];
+        n.req = [parent.id];
+      }
+      out.push(n);
+    });
+  });
+  return out;
+}
+
+// Per-rank passive magnitudes are baked directly into each `fx` map below. The
+// keys are read by skillBonus() and folded into the derived-stat formulas:
+//   atkFlat flat ATK · dmgDealt %dmg · dmgTaken %reduce · maxHpPct · maxMpPct
+//   hpRegen · mpRegen flat/turn · lifesteal % · crit +chance · critDmg +mult
+//   dodge · spell %spell · manaShield · zeal · lowHpDmg · reflect · pen armor-pen
+//   block +block% · dr flat DR% · goldFind · magicFind · xpGain (%)
+//
+// Active nodes carry mp/cd and a `cast` descriptor resolved by resolveCast():
+//   shape: self|melee|cleave|nova|bolt|blast|line|chain|teleport|summon
+//   wpn (weapon-dmg mult) · spell (spell-base mult) flat/perLvl · radius · range
+//   status {effect,dur,chance} · heal {flat,perLevel,pctDmg} · lifesteal
+//   buff {id,dur,mag} (or array) · summon {kind,count,ttl}
+
 const SKILL_TREES = {
-  warrior: [
-    { id:'brutality',   name:'Brutality',   icon:'💢', type:'passive', max:3, lvl:1,  fx:{ dmgDealt:0.04 },              desc:'+4% damage dealt per rank.' },
-    { id:'toughness',   name:'Toughness',   icon:'🪨', type:'passive', max:3, lvl:1,  fx:{ maxHpPct:0.05 },             desc:'+5% max HP per rank.' },
-    { id:'warcry',      name:'War Cry',     icon:'📣', type:'active',  active:'warcry',    max:1, lvl:2, req:[['brutality',1]], mp:14, cd:6, desc:'Roar for +50% damage dealt for 5 turns.' },
-    { id:'ironhide',    name:'Iron Hide',   icon:'🛡️', type:'passive', max:3, lvl:3,  req:[['toughness',1]], fx:{ dmgTaken:0.04 }, desc:'-4% damage taken per rank.' },
-    { id:'bloodthirst', name:'Bloodthirst', icon:'🩸', type:'passive', max:2, lvl:4,  req:[['brutality',2]], fx:{ lifesteal:0.06 }, desc:'Heal 6% of the damage you deal, per rank.' },
-    { id:'whirlwind',   name:'Whirlwind',   icon:'🌀', type:'active',  active:'whirlwind', max:1, lvl:5, req:[['warcry',1]],   mp:16, cd:4, desc:'Strike every adjacent foe for 180% — chance to stun.' },
-    { id:'secondwind',  name:'Second Wind', icon:'💚', type:'passive', max:2, lvl:6,  req:[['toughness',2]], fx:{ hpRegen:1 },     desc:'+1 HP regen per turn, per rank.' },
-    { id:'juggernaut',  name:'Juggernaut',  icon:'🏰', type:'passive', max:1, lvl:9,  req:[['ironhide',3],['secondwind',1]], fx:{ dmgTaken:0.08, maxHpPct:0.10 }, desc:'-8% damage taken and +10% max HP.' },
-    { id:'executioner', name:'Executioner', icon:'☠️', type:'passive', max:1, lvl:10, req:[['bloodthirst',1]], fx:{ lowHpDmg:0.5 }, desc:'+50% damage to foes below 35% HP.' },
-    { id:'berserk',     name:'Berserk',     icon:'💥', type:'active',  active:'berserk',   max:1, lvl:12, req:[['whirlwind',1]],  mp:24, cd:8, desc:'Devastate every foe within 2 tiles for 220%.' },
-  ],
-  rogue: [
-    { id:'precision',   name:'Precision',     icon:'🎯', type:'passive', max:3, lvl:1,  fx:{ crit:0.03 },     desc:'+3% crit chance per rank.' },
-    { id:'evasion',     name:'Evasion',       icon:'💨', type:'passive', max:3, lvl:1,  fx:{ dodge:0.03 },    desc:'+3% dodge per rank.' },
-    { id:'poisonstrike',name:'Poison Strike', icon:'🧪', type:'active',  active:'poisonstrike', max:1, lvl:2, req:[['precision',1]], mp:10, cd:3, desc:'Stab an adjacent foe and inflict heavy poison.' },
-    { id:'lethality',   name:'Lethality',     icon:'🔪', type:'passive', max:3, lvl:3,  req:[['precision',1]], fx:{ critDmg:0.15 }, desc:'+15% crit damage per rank.' },
-    { id:'shadowstep',  name:'Shadowstep',    icon:'🌑', type:'active',  active:'shadowstep',   max:1, lvl:4, req:[['evasion',1]],  mp:12, cd:5, desc:'Blink to the nearest foe and land a guaranteed crit.' },
-    { id:'opportunist', name:'Opportunist',   icon:'🗡️', type:'passive', max:2, lvl:6,  req:[['lethality',1]], fx:{ lowHpDmg:0.2 }, desc:'+20% damage to foes below 35% HP, per rank.' },
-    { id:'fleetfoot',   name:'Fleet Foot',    icon:'🍃', type:'passive', max:2, lvl:6,  req:[['evasion',2]],   fx:{ dodge:0.03 },   desc:'+3% dodge per rank.' },
-    { id:'fanofknives', name:'Fan of Knives', icon:'🔅', type:'active',  active:'fanofknives',  max:1, lvl:8, req:[['poisonstrike',1]], mp:16, cd:4, desc:'Spray blades at every adjacent foe and poison them.' },
-    { id:'assassinate', name:'Assassinate',   icon:'☠️', type:'passive', max:1, lvl:10, req:[['lethality',3],['opportunist',1]], fx:{ critDmg:0.5 }, desc:'+50% crit damage.' },
-    { id:'deathmark',   name:'Death Mark',    icon:'🎯', type:'active',  active:'deathmark',    max:1, lvl:12, req:[['shadowstep',1],['fanofknives',1]], mp:22, cd:7, desc:'A huge guaranteed crit on one foe in range.' },
-  ],
-  mage: [
-    { id:'arcanemind',   name:'Arcane Mind',     icon:'🔵', type:'passive', max:3, lvl:1,  fx:{ maxMpPct:0.08, mpRegen:1 }, desc:'+8% max MP and +1 MP regen per rank.' },
-    { id:'spellpower',   name:'Spell Power',     icon:'✨', type:'passive', max:3, lvl:1,  fx:{ spell:0.10 },               desc:'+10% spell damage per rank.' },
-    { id:'frostnova',    name:'Frost Nova',      icon:'❄️', type:'active',  active:'frostnova',     max:1, lvl:2, req:[['spellpower',1]], mp:14, cd:5, desc:'Freeze every foe within 2 tiles, stunning them.' },
-    { id:'pyromancy',    name:'Pyromancy',       icon:'🔥', type:'passive', max:2, lvl:3,  req:[['spellpower',1]], fx:{ spell:0.08 }, desc:'+8% spell damage per rank.' },
-    { id:'manashield',   name:'Mana Shield',     icon:'🔮', type:'passive', max:2, lvl:4,  req:[['arcanemind',1]], fx:{ manaShield:0.25 }, desc:'Absorb 25% of incoming damage with MP, per rank.' },
-    { id:'chainlightning',name:'Chain Lightning',icon:'⚡', type:'active',  active:'chainlightning',max:1, lvl:5, req:[['frostnova',1]], mp:18, cd:4, desc:'Lightning arcs between up to 3 nearby foes.' },
-    { id:'attunement',   name:'Attunement',      icon:'🌀', type:'passive', max:2, lvl:6,  req:[['arcanemind',2]], fx:{ mpRegen:1, maxMpPct:0.06 }, desc:'+1 MP regen and +6% max MP per rank.' },
-    { id:'archmage',     name:'Archmage',        icon:'📜', type:'passive', max:1, lvl:9,  req:[['spellpower',3],['pyromancy',1]], fx:{ spell:0.30 }, desc:'+30% spell damage.' },
-    { id:'wardflesh',    name:'Ward Flesh',      icon:'🛡️', type:'passive', max:1, lvl:10, req:[['manashield',2]], fx:{ manaShield:0.20, maxMpPct:0.10 }, desc:'+20% mana shield and +10% max MP.' },
-    { id:'meteor',       name:'Meteor',          icon:'☄️', type:'active',  active:'meteor',        max:1, lvl:12, req:[['chainlightning',1],['archmage',1]], mp:28, cd:8, desc:'Call a meteor onto the nearest foe, scorching all around it.' },
-  ],
-  templar: [
-    { id:'divinevigor',  name:'Divine Vigor', icon:'💛', type:'passive', max:3, lvl:1,  fx:{ maxHpPct:0.05, hpRegen:1 }, desc:'+5% max HP and +1 HP regen per rank.' },
-    { id:'aegis',        name:'Aegis',        icon:'🛡️', type:'passive', max:3, lvl:1,  fx:{ dmgTaken:0.04 },            desc:'-4% damage taken per rank.' },
-    { id:'holysmite',    name:'Holy Smite',   icon:'🔆', type:'active',  active:'holysmite', max:1, lvl:2, req:[['divinevigor',1]], mp:12, cd:3, desc:'Smite a nearby foe and heal yourself.' },
-    { id:'zeal',         name:'Zeal',         icon:'⚔️', type:'passive', max:3, lvl:3,  req:[['divinevigor',1]], fx:{ zeal:0.10 }, desc:'Up to +10% damage per rank as your HP drops.' },
-    { id:'retribution',  name:'Retribution',  icon:'↩️', type:'passive', max:2, lvl:4,  req:[['aegis',1]], fx:{ reflect:0.15 }, desc:'Reflect 15% of melee damage taken, per rank.' },
-    { id:'sanctuary',    name:'Sanctuary',    icon:'⛪', type:'active',  active:'sanctuary', max:1, lvl:5, req:[['aegis',1]], mp:16, cd:6, desc:'Hallow the ground: -50% damage taken for 4 turns, and heal.' },
-    { id:'consecration', name:'Consecration', icon:'✝️', type:'passive', max:2, lvl:6,  req:[['zeal',2]], fx:{ dmgDealt:0.05 }, desc:'+5% damage dealt per rank.' },
-    { id:'bulwark',      name:'Bulwark',      icon:'🏰', type:'passive', max:1, lvl:9,  req:[['aegis',3],['retribution',1]], fx:{ dmgTaken:0.08, maxHpPct:0.10 }, desc:'-8% damage taken and +10% max HP.' },
-    { id:'fervor',       name:'Fervor',       icon:'🔥', type:'passive', max:1, lvl:10, req:[['zeal',3],['consecration',1]], fx:{ zeal:0.30 }, desc:'Up to +30% more damage as your HP drops.' },
-    { id:'judgment',     name:'Judgment',     icon:'⚖️', type:'active',  active:'judgment',  max:1, lvl:12, req:[['holysmite',1],['sanctuary',1]], mp:26, cd:8, desc:'Smite all nearby foes and restore a burst of health.' },
-  ],
-};
-
-// Hand-placed node positions for the visual skill tree, as [x, y] fractions of the
-// canvas (0–1). The two Lv1 passives root an OFFENSE trunk (left) and a DEFENSE
-// trunk (right); branches flow downward to the Lv12 capstone. Connector lines are
-// derived from each node's `req`, so only positions live here. Keep an entry for
-// every node id in SKILL_TREES above.
-const SKILL_TREE_LAYOUT = {
   warrior: {
-    brutality:[0.27,0.07], toughness:[0.73,0.07],
-    warcry:[0.13,0.27], bloodthirst:[0.40,0.27], ironhide:[0.60,0.27], secondwind:[0.87,0.27],
-    whirlwind:[0.13,0.50], executioner:[0.40,0.52], juggernaut:[0.735,0.52],
-    berserk:[0.13,0.78],
+    passive: buildTree([
+      [ {id:'w_brawn',name:'Brawn',icon:'💪',fx:{atkFlat:2},desc:'+2 attack power per rank.'},
+        {id:'w_hardiness',name:'Hardiness',icon:'🪨',fx:{maxHpPct:0.02},desc:'+2% max HP per rank.'},
+        {id:'w_temper',name:'Temper',icon:'🛡️',fx:{dmgTaken:0.012},desc:'-1.2% damage taken per rank.'},
+        {id:'w_bloodlust',name:'Bloodlust',icon:'🩸',fx:{lifesteal:0.01},desc:'Heal 1% of damage dealt per rank.'},
+        {id:'w_fury',name:'Fury',icon:'💢',fx:{dmgDealt:0.012},desc:'+1.2% damage dealt per rank.'} ],
+      [ {id:'w_ironskin',name:'Iron Skin',icon:'⛓️',fx:{dmgTaken:0.012},desc:'-1.2% damage taken per rank.'},
+        {id:'w_thickhide',name:'Thick Hide',icon:'🧱',fx:{dr:0.8},desc:'+0.8% damage reduction per rank.'},
+        {id:'w_cleaver',name:'Cleaver',icon:'🪓',fx:{dmgDealt:0.012},desc:'+1.2% damage dealt per rank.'},
+        {id:'w_vitalsurge',name:'Vital Surge',icon:'❤️',fx:{maxHpPct:0.025},desc:'+2.5% max HP per rank.'},
+        {id:'w_recovery',name:'Recovery',icon:'💚',fx:{hpRegen:1},desc:'+1 HP regen per turn per rank.'} ],
+      [ {id:'w_juggernaut',name:'Juggernaut',icon:'🏋️',fx:{maxHpPct:0.025},desc:'+2.5% max HP per rank.'},
+        {id:'w_shieldwall',name:'Shield Wall',icon:'🟦',fx:{block:1.2},desc:'+1.2% block chance per rank.'},
+        {id:'w_brutality',name:'Brutality',icon:'👊',fx:{atkFlat:3},desc:'+3 attack power per rank.'},
+        {id:'w_rage',name:'Rage',icon:'😤',fx:{dmgDealt:0.015},desc:'+1.5% damage dealt per rank.'},
+        {id:'w_spikes',name:'Spiked Armor',icon:'🌵',fx:{reflect:0.03},desc:'Reflect 3% of melee damage per rank.'} ],
+      [ {id:'w_unstoppable',name:'Unstoppable',icon:'🦏',fx:{dmgTaken:0.014},desc:'-1.4% damage taken per rank.'},
+        {id:'w_focus',name:'Battle Focus',icon:'🎯',fx:{crit:0.006},desc:'+0.6% crit chance per rank.'},
+        {id:'w_executioner',name:'Executioner',icon:'☠️',fx:{lowHpDmg:0.03},desc:'+3% damage to wounded foes per rank.'},
+        {id:'w_sanguine',name:'Sanguine',icon:'🧛',fx:{lifesteal:0.012},desc:'Heal 1.2% of damage dealt per rank.'},
+        {id:'w_resilience',name:'Resilience',icon:'🗿',fx:{maxHpPct:0.03},desc:'+3% max HP per rank.'} ],
+      [ {id:'w_titanic',name:'Titanic',icon:'🦛',fx:{maxHpPct:0.03,atkFlat:2},desc:'+3% max HP and +2 attack per rank.'},
+        {id:'w_crushing',name:'Crushing Blows',icon:'💥',fx:{critDmg:0.05},desc:'+5% crit damage per rank.'},
+        {id:'w_warlord',name:'Warlord',icon:'⚔️',fx:{dmgDealt:0.018},desc:'+1.8% damage dealt per rank.'},
+        {id:'w_bulwark',name:'Bulwark',icon:'🏰',fx:{dmgTaken:0.016},desc:'-1.6% damage taken per rank.'},
+        {id:'w_spoils',name:'Spoils of War',icon:'💰',fx:{goldFind:5},desc:'+5% gold found per rank.'} ],
+      [ {id:'w_immortal',name:'Immortal',icon:'♾️',fx:{maxHpPct:0.04,hpRegen:2},desc:'+4% max HP and +2 regen per rank.'},
+        {id:'w_berserkersoul',name:'Berserker Soul',icon:'🔥',fx:{dmgDealt:0.025},desc:'+2.5% damage dealt per rank.'},
+        {id:'w_conqueror',name:'Conqueror',icon:'👑',fx:{atkFlat:4,dmgDealt:0.012},desc:'+4 attack and +1.2% damage per rank.'},
+        {id:'w_livingaegis',name:'Living Aegis',icon:'🛡️',fx:{dmgTaken:0.02,reflect:0.05},desc:'-2% damage taken, reflect 5% per rank.'},
+        {id:'w_avatarwar',name:'Avatar of War',icon:'🌟',fx:{dmgDealt:0.02,critDmg:0.05},desc:'+2% damage and +5% crit damage per rank.'} ],
+    ], 'passive'),
+    active: buildTree([
+      [ {id:'wa_cleave',name:'Cleave',icon:'🪓',mp:10,cd:2,cast:{shape:'cleave',wpn:1.4},desc:'Strike every adjacent foe.'},
+        {id:'wa_bash',name:'Shield Bash',icon:'🛡️',mp:8,cd:3,cast:{shape:'melee',wpn:1.2,status:{effect:'stun',dur:2,chance:1}},desc:'Bash a foe, stunning it.'},
+        {id:'wa_throw',name:'Throwing Axe',icon:'🪃',mp:8,cd:2,cast:{shape:'bolt',range:5,wpn:1.1},desc:'Hurl an axe at a distant foe.'},
+        {id:'wa_warcry',name:'War Cry',icon:'📣',mp:12,cd:6,cast:{shape:'self',buff:{id:'dmgUp',dur:5,mag:0.4}},desc:'Roar: +40% damage for a few turns.'},
+        {id:'wa_charge',name:'Charge',icon:'🐂',mp:10,cd:4,cast:{shape:'teleport',range:6,wpn:1.6,status:{effect:'stun',dur:1,chance:1}},desc:'Charge a foe and stagger it.'} ],
+      [ {id:'wa_whirl',name:'Whirlwind',icon:'🌀',mp:14,cd:3,cast:{shape:'nova',radius:1,wpn:1.5},desc:'Spin, striking all adjacent foes.'},
+        {id:'wa_slam',name:'Ground Slam',icon:'💥',mp:16,cd:4,cast:{shape:'nova',radius:2,wpn:1.2,status:{effect:'stun',dur:1,chance:0.5}},desc:'A quake that may stun nearby foes.'},
+        {id:'wa_rend',name:'Rend',icon:'🩸',mp:10,cd:3,cast:{shape:'melee',wpn:1.0,status:{effect:'poison',dur:5,chance:1}},desc:'A deep bleeding wound (damage over time).'},
+        {id:'wa_brace',name:'Brace',icon:'😠',mp:8,cd:5,cast:{shape:'self',buff:{id:'defUp',dur:4,mag:0.3}},desc:'Brace: -30% damage taken.'},
+        {id:'wa_banner',name:'War Banner',icon:'🚩',mp:18,cd:8,cast:{shape:'summon',summon:{kind:'totem',count:1,ttl:14}},desc:'Plant a banner that fires at foes.'} ],
+      [ {id:'wa_leap',name:'Leap Slam',icon:'🦘',mp:16,cd:4,cast:{shape:'blast',range:5,radius:1,wpn:1.4},desc:'Leap and smash an area.'},
+        {id:'wa_reaping',name:'Reaping Swing',icon:'⚔️',mp:18,cd:3,cast:{shape:'cleave',wpn:1.8,lifesteal:0.2},desc:'A wide swing that heals you.'},
+        {id:'wa_quake',name:'Earthquake',icon:'🌋',mp:22,cd:6,cast:{shape:'nova',radius:3,wpn:1.3},desc:'Shatter the ground in a wide radius.'},
+        {id:'wa_roar',name:'Battle Roar',icon:'🦁',mp:16,cd:7,cast:{shape:'self',buff:{id:'dmgUp',dur:5,mag:0.5},heal:{flat:20,perLevel:2}},desc:'Damage up and a burst of healing.'},
+        {id:'wa_hook',name:'Grapple Hook',icon:'⛓️',mp:10,cd:4,cast:{shape:'teleport',range:7,wpn:1.3},desc:'Yank yourself to a far foe and strike.'} ],
+      [ {id:'wa_impale',name:'Impale',icon:'🗡️',mp:14,cd:3,cast:{shape:'line',range:4,wpn:1.6},desc:'Skewer every foe in a line.'},
+        {id:'wa_colossus',name:'Colossus Smash',icon:'🔨',mp:20,cd:4,cast:{shape:'blast',range:4,radius:1,wpn:2.0,status:{effect:'stun',dur:1,chance:1}},desc:'A smash that stuns the impact area.'},
+        {id:'wa_bladestorm',name:'Bladestorm',icon:'🌪️',mp:24,cd:5,cast:{shape:'nova',radius:2,wpn:1.7,status:{effect:'poison',dur:3,chance:0.5}},desc:'A storm of blades shreds all around.'},
+        {id:'wa_rally',name:'Rallying Cry',icon:'📢',mp:18,cd:8,cast:{shape:'self',buff:{id:'shield',dur:6,mag:60}},desc:'A shout that absorbs incoming damage.'},
+        {id:'wa_thunderclap',name:'Thunderclap',icon:'⚡',mp:16,cd:4,cast:{shape:'nova',radius:2,spell:0.8,status:{effect:'stun',dur:1,chance:0.6}},desc:'A shockwave dazes nearby foes.'} ],
+      [ {id:'wa_execstrike',name:"Executioner's Strike",icon:'☠️',mp:18,cd:4,cast:{shape:'melee',wpn:2.2},desc:'A brutal blow, lethal to the wounded.'},
+        {id:'wa_warstomp',name:'War Stomp',icon:'🦶',mp:24,cd:6,cast:{shape:'nova',radius:3,wpn:1.5,status:{effect:'stun',dur:2,chance:0.7}},desc:'Stomp stuns a wide area.'},
+        {id:'wa_vortex',name:'Blood Vortex',icon:'🌀',mp:22,cd:5,cast:{shape:'nova',radius:2,wpn:1.6,lifesteal:0.35},desc:'Tear all nearby foes, healing greatly.'},
+        {id:'wa_titanleap',name:'Titan Leap',icon:'🌑',mp:26,cd:7,cast:{shape:'blast',range:6,radius:2,wpn:2.0,status:{effect:'stun',dur:1,chance:1}},desc:'Crash down over a large area.'},
+        {id:'wa_avatar',name:'Avatar',icon:'🌟',mp:24,cd:10,cast:{shape:'self',buff:[{id:'dmgUp',dur:6,mag:0.6},{id:'defUp',dur:6,mag:0.4}]},desc:'Become a war god: damage up, damage down.'} ],
+      [ {id:'wa_cataclysm',name:'Cataclysm',icon:'☄️',mp:34,cd:9,cast:{shape:'nova',radius:4,wpn:2.2},desc:'Devastate everything around you.'},
+        {id:'wa_rampage',name:'Rampage',icon:'🔥',mp:30,cd:8,cast:{shape:'nova',radius:3,wpn:2.4,lifesteal:0.3,status:{effect:'poison',dur:4,chance:1}},desc:'An unstoppable, healing massacre.'},
+        {id:'wa_warmachine',name:'War Machine',icon:'🤖',mp:34,cd:12,cast:{shape:'summon',summon:{kind:'golem',count:1,ttl:24}},desc:'Summon a hulking iron golem to fight for you.'},
+        {id:'wa_apocalypse',name:'Apocalypse',icon:'💀',mp:36,cd:10,cast:{shape:'blast',range:7,radius:3,wpn:2.6,status:{effect:'stun',dur:2,chance:1}},desc:'Annihilate a distant battlefield.'},
+        {id:'wa_laststand',name:'Last Stand',icon:'♾️',mp:30,cd:14,cast:{shape:'self',buff:[{id:'shield',dur:8,mag:150},{id:'dmgUp',dur:8,mag:0.5}],heal:{flat:50,perLevel:4}},desc:'A heroic stand: huge shield, heal, and power.'} ],
+    ], 'active'),
   },
+
   rogue: {
-    precision:[0.27,0.07], evasion:[0.73,0.07],
-    lethality:[0.13,0.27], poisonstrike:[0.40,0.27], shadowstep:[0.60,0.27], fleetfoot:[0.87,0.27],
-    opportunist:[0.13,0.50], fanofknives:[0.40,0.50],
-    assassinate:[0.13,0.73], deathmark:[0.50,0.73],
+    passive: buildTree([
+      [ {id:'r_precision',name:'Precision',icon:'🎯',fx:{crit:0.007},desc:'+0.7% crit chance per rank.'},
+        {id:'r_evasion',name:'Evasion',icon:'💨',fx:{dodge:0.009},desc:'+0.9% dodge per rank.'},
+        {id:'r_finesse',name:'Finesse',icon:'🤺',fx:{atkFlat:2},desc:'+2 attack power per rank.'},
+        {id:'r_venom',name:'Venom',icon:'🧪',fx:{dmgDealt:0.012},desc:'+1.2% damage dealt per rank.'},
+        {id:'r_quick',name:'Quickness',icon:'🍃',fx:{dodge:0.008},desc:'+0.8% dodge per rank.'} ],
+      [ {id:'r_lethality',name:'Lethality',icon:'🔪',fx:{critDmg:0.05},desc:'+5% crit damage per rank.'},
+        {id:'r_shadows',name:'Shadows',icon:'🌑',fx:{dodge:0.01},desc:'+1% dodge per rank.'},
+        {id:'r_opportunist',name:'Opportunist',icon:'🗡️',fx:{lowHpDmg:0.03},desc:'+3% damage to wounded foes per rank.'},
+        {id:'r_toxins',name:'Toxins',icon:'☠️',fx:{dmgDealt:0.012},desc:'+1.2% damage dealt per rank.'},
+        {id:'r_fleet',name:'Fleet Foot',icon:'👟',fx:{dodge:0.01},desc:'+1% dodge per rank.'} ],
+      [ {id:'r_deadly',name:'Deadly Aim',icon:'🏹',fx:{crit:0.008},desc:'+0.8% crit chance per rank.'},
+        {id:'r_cloak',name:'Cloaked',icon:'🥷',fx:{dmgTaken:0.012},desc:'-1.2% damage taken per rank.'},
+        {id:'r_savagery',name:'Savagery',icon:'💢',fx:{critDmg:0.06},desc:'+6% crit damage per rank.'},
+        {id:'r_corrosion',name:'Corrosion',icon:'🧫',fx:{pen:0.02},desc:'+2% armor penetration per rank.'},
+        {id:'r_thief',name:'Cutpurse',icon:'💰',fx:{goldFind:5},desc:'+5% gold found per rank.'} ],
+      [ {id:'r_assassinate',name:'Assassinate',icon:'🔻',fx:{lowHpDmg:0.035},desc:'+3.5% damage to wounded foes per rank.'},
+        {id:'r_phantom',name:'Phantom',icon:'👻',fx:{dodge:0.012},desc:'+1.2% dodge per rank.'},
+        {id:'r_exposeweak',name:'Expose Weakness',icon:'🩹',fx:{critDmg:0.06},desc:'+6% crit damage per rank.'},
+        {id:'r_lifesteal',name:'Bloodletting',icon:'🩸',fx:{lifesteal:0.012},desc:'Heal 1.2% of damage dealt per rank.'},
+        {id:'r_scavenger',name:'Scavenger',icon:'🍀',fx:{magicFind:3},desc:'+3% magic find per rank.'} ],
+      [ {id:'r_killer',name:'Cold Killer',icon:'❄️',fx:{crit:0.009,critDmg:0.04},desc:'+0.9% crit and +4% crit damage per rank.'},
+        {id:'r_untouch',name:'Untouchable',icon:'🌫️',fx:{dodge:0.013},desc:'+1.3% dodge per rank.'},
+        {id:'r_butcher',name:'Butcher',icon:'🔪',fx:{dmgDealt:0.018},desc:'+1.8% damage dealt per rank.'},
+        {id:'r_plague',name:'Plaguebearer',icon:'🦠',fx:{lowHpDmg:0.04},desc:'+4% damage to wounded foes per rank.'},
+        {id:'r_xp',name:'Cunning',icon:'📘',fx:{xpGain:4},desc:'+4% XP gain per rank.'} ],
+      [ {id:'r_perfectkill',name:'Perfect Kill',icon:'🌟',fx:{critDmg:0.08},desc:'+8% crit damage per rank.'},
+        {id:'r_ghostwalk',name:'Ghostwalk',icon:'🌀',fx:{dodge:0.015,dmgTaken:0.012},desc:'+1.5% dodge and -1.2% damage taken per rank.'},
+        {id:'r_deathdealer',name:'Death Dealer',icon:'💀',fx:{dmgDealt:0.022},desc:'+2.2% damage dealt per rank.'},
+        {id:'r_venomlord',name:'Venom Lord',icon:'🐍',fx:{dmgDealt:0.015,pen:0.02},desc:'+1.5% damage and +2% pen per rank.'},
+        {id:'r_apex',name:'Apex Predator',icon:'👑',fx:{crit:0.01,critDmg:0.05},desc:'+1% crit and +5% crit damage per rank.'} ],
+    ], 'passive'),
+    active: buildTree([
+      [ {id:'ra_backstab',name:'Backstab',icon:'🎯',mp:10,cd:2,cast:{shape:'melee',wpn:2.0,crit:true},desc:'A guaranteed critical on one foe.'},
+        {id:'ra_poison',name:'Poison Strike',icon:'🧪',mp:8,cd:2,cast:{shape:'melee',wpn:1.1,status:{effect:'poison',dur:5,chance:1}},desc:'A venomous stab (damage over time).'},
+        {id:'ra_throwknife',name:'Throwing Knife',icon:'🔪',mp:6,cd:2,cast:{shape:'bolt',range:6,wpn:1.1},desc:'A thrown blade strikes a distant foe.'},
+        {id:'ra_smoke',name:'Smoke Bomb',icon:'💨',mp:12,cd:6,cast:{shape:'self',buff:{id:'dodgeUp',dur:5,mag:0.3}},desc:'Vanish in smoke: +30% dodge.'},
+        {id:'ra_dash',name:'Shadowstep',icon:'🌑',mp:10,cd:4,cast:{shape:'teleport',range:6,wpn:1.8,crit:true},desc:'Blink to a foe and land a crit.'} ],
+      [ {id:'ra_fanknives',name:'Fan of Knives',icon:'🔅',mp:14,cd:3,cast:{shape:'nova',radius:1,wpn:1.2,status:{effect:'poison',dur:4,chance:1}},desc:'Spray blades, poisoning adjacent foes.'},
+        {id:'ra_gut',name:'Gutting Strike',icon:'🗡️',mp:10,cd:3,cast:{shape:'melee',wpn:1.6,status:{effect:'poison',dur:4,chance:1}},desc:'Open a bleeding wound.'},
+        {id:'ra_caltrops',name:'Caltrops',icon:'🌟',mp:14,cd:5,cast:{shape:'nova',radius:2,wpn:0.8,status:{effect:'poison',dur:3,chance:0.8}},desc:'Scatter spikes that poison the area.'},
+        {id:'ra_focusbuff',name:'Deadly Focus',icon:'🎯',mp:12,cd:6,cast:{shape:'self',buff:{id:'critUp',dur:5,mag:0.25}},desc:'+25% crit chance for a few turns.'},
+        {id:'ra_pin',name:'Pinning Shot',icon:'🏹',mp:10,cd:3,cast:{shape:'bolt',range:7,wpn:1.2,status:{effect:'stun',dur:1,chance:1}},desc:'A shot that pins a foe in place.'} ],
+      [ {id:'ra_volley',name:'Arrow Volley',icon:'🏹',mp:18,cd:4,cast:{shape:'blast',range:6,radius:2,wpn:1.2},desc:'Rain arrows over a distant area.'},
+        {id:'ra_eviscerate',name:'Eviscerate',icon:'🔪',mp:16,cd:3,cast:{shape:'melee',wpn:2.4,crit:true},desc:'A savage finisher on one foe.'},
+        {id:'ra_bladeflurry',name:'Blade Flurry',icon:'🌀',mp:18,cd:4,cast:{shape:'nova',radius:1,wpn:1.8,lifesteal:0.15},desc:'A flurry that hits and heals.'},
+        {id:'ra_shadowclone',name:'Shadow Clone',icon:'🥷',mp:20,cd:8,cast:{shape:'summon',summon:{kind:'shadow',count:1,ttl:16}},desc:'Summon a shadow that fights for you.'},
+        {id:'ra_blink',name:'Blink Strike',icon:'⚡',mp:14,cd:3,cast:{shape:'teleport',range:7,wpn:1.6},desc:'Flash to a distant foe and strike.'} ],
+      [ {id:'ra_pierce',name:'Piercing Shot',icon:'➡️',mp:16,cd:3,cast:{shape:'line',range:6,wpn:1.7},desc:'An arrow pierces foes in a line.'},
+        {id:'ra_deathmark',name:'Death Mark',icon:'🎯',mp:18,cd:5,cast:{shape:'bolt',range:6,wpn:3.0,crit:true},desc:'A huge guaranteed crit on one foe.'},
+        {id:'ra_venomnova',name:'Venom Nova',icon:'🟢',mp:20,cd:5,cast:{shape:'nova',radius:2,wpn:1.4,status:{effect:'poison',dur:5,chance:1}},desc:'A toxic burst poisons everything near.'},
+        {id:'ra_vanish',name:'Vanish',icon:'🌫️',mp:16,cd:8,cast:{shape:'self',buff:[{id:'dodgeUp',dur:5,mag:0.4},{id:'critUp',dur:5,mag:0.2}]},desc:'Fade away: huge dodge and crit.'},
+        {id:'ra_twinclone',name:'Twin Shadows',icon:'👥',mp:24,cd:9,cast:{shape:'summon',summon:{kind:'shadow',count:2,ttl:14}},desc:'Summon two shadow assassins.'} ],
+      [ {id:'ra_massacre',name:'Massacre',icon:'💀',mp:22,cd:4,cast:{shape:'nova',radius:2,wpn:2.0,crit:true},desc:'Crit every foe around you.'},
+        {id:'ra_killshot',name:'Kill Shot',icon:'🎯',mp:20,cd:5,cast:{shape:'bolt',range:8,wpn:3.4,crit:true},desc:'A lethal precision shot.'},
+        {id:'ra_plaguebomb',name:'Plague Bomb',icon:'🦠',mp:24,cd:6,cast:{shape:'blast',range:6,radius:2,wpn:1.5,status:{effect:'poison',dur:6,chance:1}},desc:'A bomb that plagues a distant area.'},
+        {id:'ra_phantomdash',name:'Phantom Assault',icon:'🌀',mp:22,cd:6,cast:{shape:'teleport',range:8,wpn:2.6,crit:true,lifesteal:0.25},desc:'Blink, crit, and steal life.'},
+        {id:'ra_warband',name:'Shadow Pack',icon:'👥',mp:28,cd:10,cast:{shape:'summon',summon:{kind:'shadow',count:3,ttl:14}},desc:'A pack of three shadows joins the fight.'} ],
+      [ {id:'ra_thousandcuts',name:'Thousand Cuts',icon:'🌪️',mp:30,cd:7,cast:{shape:'nova',radius:3,wpn:2.4,status:{effect:'poison',dur:4,chance:1}},desc:'A whirlwind of poisoned blades.'},
+        {id:'ra_executioner',name:'Coup de Grâce',icon:'☠️',mp:26,cd:6,cast:{shape:'melee',wpn:4.0,crit:true},desc:'An execution blow on one foe.'},
+        {id:'ra_deathrain',name:'Death from Above',icon:'☄️',mp:32,cd:8,cast:{shape:'blast',range:8,radius:3,wpn:2.2,crit:true},desc:'A storm of crits over a far battlefield.'},
+        {id:'ra_perfectvanish',name:'Perfect Shadow',icon:'🌑',mp:26,cd:12,cast:{shape:'self',buff:[{id:'dodgeUp',dur:8,mag:0.45},{id:'critUp',dur:8,mag:0.3},{id:'dmgUp',dur:8,mag:0.4}]},desc:'Ascend to pure shadow: dodge, crit, power.'},
+        {id:'ra_legion',name:'Shadow Legion',icon:'👤',mp:36,cd:14,cast:{shape:'summon',summon:{kind:'shadow',count:4,ttl:18}},desc:'Summon a legion of four shadows.'} ],
+    ], 'active'),
   },
+
   mage: {
-    spellpower:[0.27,0.07], arcanemind:[0.73,0.07],
-    frostnova:[0.13,0.27], pyromancy:[0.40,0.27], manashield:[0.60,0.27], attunement:[0.87,0.27],
-    chainlightning:[0.13,0.50], archmage:[0.40,0.50], wardflesh:[0.73,0.50],
-    meteor:[0.27,0.74],
+    passive: buildTree([
+      [ {id:'m_arcane',name:'Arcane Mind',icon:'🔵',fx:{maxMpPct:0.03,mpRegen:1},desc:'+3% max MP and +1 MP regen per rank.'},
+        {id:'m_spellpower',name:'Spell Power',icon:'✨',fx:{spell:0.02},desc:'+2% spell damage per rank.'},
+        {id:'m_focus',name:'Focus',icon:'🎯',fx:{crit:0.006},desc:'+0.6% crit chance per rank.'},
+        {id:'m_ward',name:'Ward',icon:'🔮',fx:{manaShield:0.03},desc:'Absorb 3% of hits with MP per rank.'},
+        {id:'m_glass',name:'Glass Body',icon:'💎',fx:{dodge:0.008},desc:'+0.8% dodge per rank.'} ],
+      [ {id:'m_pyromancy',name:'Pyromancy',icon:'🔥',fx:{spell:0.02},desc:'+2% spell damage per rank.'},
+        {id:'m_cryomancy',name:'Cryomancy',icon:'❄️',fx:{spell:0.02},desc:'+2% spell damage per rank.'},
+        {id:'m_attunement',name:'Attunement',icon:'🌀',fx:{maxMpPct:0.03,mpRegen:1},desc:'+3% max MP and +1 MP regen per rank.'},
+        {id:'m_manashield',name:'Mana Shield',icon:'🛡️',fx:{manaShield:0.03},desc:'Absorb 3% of hits with MP per rank.'},
+        {id:'m_haste',name:'Quickcast',icon:'⚡',fx:{spell:0.018},desc:'+1.8% spell damage per rank.'} ],
+      [ {id:'m_combustion',name:'Combustion',icon:'💥',fx:{spell:0.025},desc:'+2.5% spell damage per rank.'},
+        {id:'m_frostbite',name:'Frostbite',icon:'🧊',fx:{spell:0.025},desc:'+2.5% spell damage per rank.'},
+        {id:'m_conduit',name:'Conduit',icon:'🔌',fx:{maxMpPct:0.04},desc:'+4% max MP per rank.'},
+        {id:'m_runeskin',name:'Rune Skin',icon:'📜',fx:{dmgTaken:0.013},desc:'-1.3% damage taken per rank.'},
+        {id:'m_arcanecrit',name:'Arcane Edge',icon:'🔷',fx:{critDmg:0.05},desc:'+5% crit damage per rank.'} ],
+      [ {id:'m_inferno',name:'Inferno',icon:'🌋',fx:{spell:0.03},desc:'+3% spell damage per rank.'},
+        {id:'m_blizzard',name:'Permafrost',icon:'☃️',fx:{spell:0.03},desc:'+3% spell damage per rank.'},
+        {id:'m_overflow',name:'Mana Overflow',icon:'🌊',fx:{maxMpPct:0.04,mpRegen:1},desc:'+4% max MP and +1 regen per rank.'},
+        {id:'m_barrier',name:'Arcane Barrier',icon:'🔰',fx:{manaShield:0.035},desc:'Absorb 3.5% of hits with MP per rank.'},
+        {id:'m_magicfind',name:'Treasure Sense',icon:'🍀',fx:{magicFind:3},desc:'+3% magic find per rank.'} ],
+      [ {id:'m_archmage',name:'Archmage',icon:'📚',fx:{spell:0.035},desc:'+3.5% spell damage per rank.'},
+        {id:'m_elementalist',name:'Elementalist',icon:'🌈',fx:{spell:0.03,critDmg:0.04},desc:'+3% spell and +4% crit damage per rank.'},
+        {id:'m_wellspring',name:'Wellspring',icon:'⛲',fx:{maxMpPct:0.05,mpRegen:2},desc:'+5% max MP and +2 regen per rank.'},
+        {id:'m_aegis',name:'Spell Aegis',icon:'🛡️',fx:{manaShield:0.04,maxMpPct:0.02},desc:'+4% absorb and +2% max MP per rank.'},
+        {id:'m_scholar',name:'Scholar',icon:'📘',fx:{xpGain:4},desc:'+4% XP gain per rank.'} ],
+      [ {id:'m_omniscience',name:'Omniscience',icon:'🌟',fx:{spell:0.04,crit:0.008},desc:'+4% spell and +0.8% crit per rank.'},
+        {id:'m_avatarmagic',name:'Avatar of Magic',icon:'🔮',fx:{spell:0.045},desc:'+4.5% spell damage per rank.'},
+        {id:'m_infinite',name:'Infinite Well',icon:'♾️',fx:{maxMpPct:0.06,mpRegen:2},desc:'+6% max MP and +2 regen per rank.'},
+        {id:'m_immortalward',name:'Immortal Ward',icon:'🔱',fx:{manaShield:0.05,dmgTaken:0.012},desc:'+5% absorb and -1.2% damage taken per rank.'},
+        {id:'m_ascendant',name:'Ascendant',icon:'👑',fx:{spell:0.04,critDmg:0.06},desc:'+4% spell and +6% crit damage per rank.'} ],
+    ], 'passive'),
+    active: buildTree([
+      [ {id:'ma_firebolt',name:'Firebolt',icon:'🔥',mp:8,cd:1,cast:{shape:'bolt',range:6,spell:1.0,flat:14,perLvl:2.5},desc:'A bolt of fire on the nearest foe.'},
+        {id:'ma_frostshard',name:'Frost Shard',icon:'❄️',mp:8,cd:2,cast:{shape:'bolt',range:6,spell:0.9,status:{effect:'stun',dur:1,chance:0.5}},desc:'An icy shard that may freeze.'},
+        {id:'ma_spark',name:'Spark',icon:'⚡',mp:6,cd:1,cast:{shape:'bolt',range:5,spell:0.8},desc:'A quick jolt of lightning.'},
+        {id:'ma_barrier',name:'Mana Barrier',icon:'🔮',mp:12,cd:6,cast:{shape:'self',buff:{id:'shield',dur:6,mag:50}},desc:'A shimmering shield of mana.'},
+        {id:'ma_blink',name:'Blink',icon:'✨',mp:8,cd:4,cast:{shape:'teleport',range:6,spell:0.8},desc:'Teleport beside a foe and zap it.'} ],
+      [ {id:'ma_fireball',name:'Fireball',icon:'🔴',mp:14,cd:3,cast:{shape:'blast',range:6,radius:1,spell:1.1,flat:16,perLvl:2.5},desc:'An explosive ball of fire.'},
+        {id:'ma_frostnova',name:'Frost Nova',icon:'🧊',mp:14,cd:4,cast:{shape:'nova',radius:2,spell:0.7,status:{effect:'stun',dur:2,chance:1}},desc:'Freeze and stun all nearby foes.'},
+        {id:'ma_chainlightning',name:'Chain Lightning',icon:'⚡',mp:16,cd:3,cast:{shape:'chain',range:6,chain:3,spell:1.0},desc:'Lightning arcs between foes.'},
+        {id:'ma_emberbuff',name:'Kindle',icon:'🕯️',mp:12,cd:6,cast:{shape:'self',buff:{id:'spellUp',dur:5,mag:0.4}},desc:'+40% spell damage for a few turns.'},
+        {id:'ma_arcaneorb',name:'Arcane Orb',icon:'🔵',mp:14,cd:3,cast:{shape:'bolt',range:7,spell:1.3},desc:'A heavy orb of raw arcane force.'} ],
+      [ {id:'ma_flamewave',name:'Flame Wave',icon:'🌊',mp:18,cd:4,cast:{shape:'line',range:5,spell:1.2,status:{effect:'poison',dur:3,chance:0.7}},desc:'A wave of fire that scorches a line.'},
+        {id:'ma_blizzard',name:'Blizzard',icon:'❄️',mp:22,cd:5,cast:{shape:'blast',range:6,radius:2,spell:1.0,status:{effect:'stun',dur:1,chance:0.6}},desc:'A storm of ice over an area.'},
+        {id:'ma_thunderstorm',name:'Thunderstorm',icon:'🌩️',mp:22,cd:5,cast:{shape:'nova',radius:3,spell:1.0},desc:'Lightning lashes everything around you.'},
+        {id:'ma_elemental',name:'Summon Elemental',icon:'🔥',mp:20,cd:8,cast:{shape:'summon',summon:{kind:'elemental',count:1,ttl:18}},desc:'Conjure a fire elemental ally.'},
+        {id:'ma_teleport',name:'Arcane Step',icon:'🌀',mp:14,cd:4,cast:{shape:'teleport',range:8,spell:1.0},desc:'Long-range teleport strike.'} ],
+      [ {id:'ma_meteor',name:'Meteor',icon:'☄️',mp:24,cd:5,cast:{shape:'blast',range:7,radius:2,spell:1.6,flat:24,perLvl:3},desc:'A meteor smashes a distant area.'},
+        {id:'ma_iceprison',name:'Ice Prison',icon:'🔒',mp:20,cd:5,cast:{shape:'nova',radius:2,spell:0.9,status:{effect:'stun',dur:3,chance:1}},desc:'Lock nearby foes in ice.'},
+        {id:'ma_voltaic',name:'Voltaic Surge',icon:'⚡',mp:22,cd:4,cast:{shape:'chain',range:7,chain:5,spell:1.1},desc:'Lightning that arcs through five foes.'},
+        {id:'ma_arcanepower',name:'Arcane Power',icon:'🔷',mp:18,cd:8,cast:{shape:'self',buff:[{id:'spellUp',dur:5,mag:0.5},{id:'critUp',dur:5,mag:0.2}]},desc:'Spell power and crit surge.'},
+        {id:'ma_twinelemental',name:'Twin Elementals',icon:'🌪️',mp:26,cd:9,cast:{shape:'summon',summon:{kind:'elemental',count:2,ttl:16}},desc:'Conjure two elemental allies.'} ],
+      [ {id:'ma_firestorm',name:'Firestorm',icon:'🔥',mp:26,cd:5,cast:{shape:'nova',radius:3,spell:1.5,status:{effect:'poison',dur:4,chance:0.8}},desc:'A roaring firestorm engulfs the area.'},
+        {id:'ma_absolutezero',name:'Absolute Zero',icon:'🧊',mp:28,cd:6,cast:{shape:'nova',radius:3,spell:1.3,status:{effect:'stun',dur:2,chance:1}},desc:'Flash-freeze everything around you.'},
+        {id:'ma_stormcall',name:'Storm Call',icon:'🌩️',mp:28,cd:6,cast:{shape:'blast',range:7,radius:3,spell:1.5},desc:'Call a thunderstorm onto a far area.'},
+        {id:'ma_disintegrate',name:'Disintegrate',icon:'☢️',mp:24,cd:4,cast:{shape:'line',range:7,spell:2.0},desc:'A beam that disintegrates a line of foes.'},
+        {id:'ma_golem',name:'Arcane Golem',icon:'🗿',mp:30,cd:10,cast:{shape:'summon',summon:{kind:'golem',count:1,ttl:22}},desc:'Animate a powerful arcane golem.'} ],
+      [ {id:'ma_apocalypse',name:'Pyroclasm',icon:'🌋',mp:36,cd:8,cast:{shape:'nova',radius:4,spell:2.0,status:{effect:'poison',dur:4,chance:1}},desc:'An apocalyptic eruption of fire.'},
+        {id:'ma_iceage',name:'Ice Age',icon:'❄️',mp:36,cd:9,cast:{shape:'blast',range:8,radius:4,spell:1.8,status:{effect:'stun',dur:3,chance:1}},desc:'Entomb a vast area in ice.'},
+        {id:'ma_thundergod',name:"Thunder God's Wrath",icon:'⚡',mp:34,cd:7,cast:{shape:'chain',range:9,chain:8,spell:1.6},desc:'Lightning leaps through eight foes.'},
+        {id:'ma_meteorshower',name:'Meteor Shower',icon:'☄️',mp:40,cd:10,cast:{shape:'blast',range:9,radius:3,spell:2.4,flat:30,perLvl:4},desc:'A shower of meteors devastates a far field.'},
+        {id:'ma_elementarmy',name:'Elemental Host',icon:'🌟',mp:38,cd:14,cast:{shape:'summon',summon:{kind:'elemental',count:3,ttl:20}},desc:'Summon a host of three elementals.'} ],
+    ], 'active'),
   },
+
   templar: {
-    divinevigor:[0.27,0.07], aegis:[0.73,0.07],
-    zeal:[0.13,0.27], holysmite:[0.40,0.27], retribution:[0.60,0.27], sanctuary:[0.87,0.27],
-    consecration:[0.13,0.50], bulwark:[0.65,0.50],
-    fervor:[0.13,0.72], judgment:[0.62,0.74],
+    passive: buildTree([
+      [ {id:'t_vigor',name:'Divine Vigor',icon:'💛',fx:{maxHpPct:0.025,hpRegen:1},desc:'+2.5% max HP and +1 regen per rank.'},
+        {id:'t_aegis',name:'Aegis',icon:'🛡️',fx:{dmgTaken:0.013},desc:'-1.3% damage taken per rank.'},
+        {id:'t_zeal',name:'Zeal',icon:'⚔️',fx:{zeal:0.02},desc:'Up to +2% damage as HP drops, per rank.'},
+        {id:'t_faith',name:'Faith',icon:'✨',fx:{spell:0.02},desc:'+2% spell damage per rank.'},
+        {id:'t_temperance',name:'Temperance',icon:'🕊️',fx:{maxMpPct:0.025},desc:'+2.5% max MP per rank.'} ],
+      [ {id:'t_devotion',name:'Devotion',icon:'🙏',fx:{maxHpPct:0.025,hpRegen:1},desc:'+2.5% max HP and +1 regen per rank.'},
+        {id:'t_retribution',name:'Retribution',icon:'↩️',fx:{reflect:0.04},desc:'Reflect 4% of melee damage per rank.'},
+        {id:'t_consecration',name:'Consecration',icon:'✝️',fx:{dmgDealt:0.013},desc:'+1.3% damage dealt per rank.'},
+        {id:'t_blessing',name:'Blessing',icon:'😇',fx:{spell:0.02},desc:'+2% spell (healing) power per rank.'},
+        {id:'t_resolve',name:'Resolve',icon:'🧱',fx:{dr:0.8},desc:'+0.8% damage reduction per rank.'} ],
+      [ {id:'t_sanctity',name:'Sanctity',icon:'⛪',fx:{maxHpPct:0.03},desc:'+3% max HP per rank.'},
+        {id:'t_thornsaura',name:'Holy Thorns',icon:'🌟',fx:{reflect:0.05},desc:'Reflect 5% of melee damage per rank.'},
+        {id:'t_fervor',name:'Fervor',icon:'🔥',fx:{zeal:0.025},desc:'Up to +2.5% damage as HP drops, per rank.'},
+        {id:'t_radiance',name:'Radiance',icon:'☀️',fx:{spell:0.025},desc:'+2.5% spell power per rank.'},
+        {id:'t_block',name:'Bastion',icon:'🟦',fx:{block:1.3},desc:'+1.3% block chance per rank.'} ],
+      [ {id:'t_bulwark',name:'Bulwark',icon:'🏰',fx:{dmgTaken:0.015,maxHpPct:0.02},desc:'-1.5% damage taken, +2% HP per rank.'},
+        {id:'t_vengeance',name:'Vengeance',icon:'⚡',fx:{reflect:0.05,dmgDealt:0.01},desc:'Reflect 5% and +1% damage per rank.'},
+        {id:'t_crusade',name:'Crusade',icon:'⚔️',fx:{dmgDealt:0.016},desc:'+1.6% damage dealt per rank.'},
+        {id:'t_sacred',name:'Sacred Light',icon:'🔆',fx:{spell:0.03},desc:'+3% spell power per rank.'},
+        {id:'t_lifebond',name:'Lifebond',icon:'💗',fx:{lifesteal:0.012,hpRegen:1},desc:'Heal 1.2% of damage and +1 regen per rank.'} ],
+      [ {id:'t_indomitable',name:'Indomitable',icon:'🗿',fx:{maxHpPct:0.035,dmgTaken:0.012},desc:'+3.5% HP and -1.2% damage taken per rank.'},
+        {id:'t_judgewrath',name:"Judge's Wrath",icon:'⚖️',fx:{dmgDealt:0.018},desc:'+1.8% damage dealt per rank.'},
+        {id:'t_zealot',name:'Zealot',icon:'🔥',fx:{zeal:0.03,crit:0.005},desc:'Up to +3% damage as HP drops, +0.5% crit per rank.'},
+        {id:'t_seraph',name:'Seraphic',icon:'😇',fx:{spell:0.035,maxMpPct:0.02},desc:'+3.5% spell and +2% MP per rank.'},
+        {id:'t_almsgiver',name:'Almsgiver',icon:'💰',fx:{goldFind:5},desc:'+5% gold found per rank.'} ],
+      [ {id:'t_immortal',name:'Eternal',icon:'♾️',fx:{maxHpPct:0.04,hpRegen:2},desc:'+4% max HP and +2 regen per rank.'},
+        {id:'t_divinewrath',name:'Divine Wrath',icon:'🌟',fx:{dmgDealt:0.022,spell:0.02},desc:'+2.2% damage and +2% spell per rank.'},
+        {id:'t_paragon',name:'Paragon',icon:'👑',fx:{zeal:0.035,dmgDealt:0.012},desc:'Up to +3.5% as HP drops, +1.2% damage per rank.'},
+        {id:'t_archon',name:'Archon Ward',icon:'🔱',fx:{dmgTaken:0.02,reflect:0.05},desc:'-2% damage taken, reflect 5% per rank.'},
+        {id:'t_avatarlight',name:'Avatar of Light',icon:'🕊️',fx:{spell:0.04,hpRegen:2},desc:'+4% spell power and +2 regen per rank.'} ],
+    ], 'passive'),
+    active: buildTree([
+      [ {id:'ta_smite',name:'Holy Smite',icon:'🔆',mp:10,cd:2,cast:{shape:'bolt',range:5,spell:1.0,heal:{pctDmg:0.4}},desc:'Smite a foe and heal for part of it.'},
+        {id:'ta_mend',name:'Mend',icon:'✨',mp:10,cd:3,cast:{shape:'self',heal:{flat:40,perLevel:4}},desc:'Restore a burst of health.'},
+        {id:'ta_shieldself',name:'Holy Shield',icon:'🛡️',mp:12,cd:6,cast:{shape:'self',buff:{id:'shield',dur:6,mag:55}},desc:'A blessed shield absorbs damage.'},
+        {id:'ta_strike',name:'Blessed Strike',icon:'⚔️',mp:8,cd:2,cast:{shape:'melee',wpn:1.4,heal:{pctDmg:0.2}},desc:'A holy blow that heals you.'},
+        {id:'ta_chastise',name:'Chastise',icon:'💫',mp:10,cd:3,cast:{shape:'nova',radius:1,spell:0.8,status:{effect:'stun',dur:1,chance:0.6}},desc:'A pulse of light dazes adjacent foes.'} ],
+      [ {id:'ta_consecrate',name:'Consecrate',icon:'✝️',mp:16,cd:4,cast:{shape:'nova',radius:2,spell:1.0,heal:{flat:15,perLevel:2}},desc:'Hallow the ground, hurting foes and healing you.'},
+        {id:'ta_sanctuary',name:'Sanctuary',icon:'⛪',mp:16,cd:6,cast:{shape:'self',buff:{id:'defUp',dur:5,mag:0.4},heal:{flat:20,perLevel:2}},desc:'Halve incoming damage and heal.'},
+        {id:'ta_hammer',name:'Hammer of Faith',icon:'🔨',mp:14,cd:3,cast:{shape:'bolt',range:5,spell:1.2,status:{effect:'stun',dur:1,chance:0.7}},desc:'A holy hammer that may stun.'},
+        {id:'ta_blessbuff',name:'Crusader Zeal',icon:'⚔️',mp:14,cd:6,cast:{shape:'self',buff:{id:'dmgUp',dur:5,mag:0.4}},desc:'+40% damage for a few turns.'},
+        {id:'ta_guardian',name:'Guardian Spirit',icon:'👼',mp:18,cd:8,cast:{shape:'summon',summon:{kind:'spirit',count:1,ttl:16}},desc:'Call a guardian spirit to fight beside you.'} ],
+      [ {id:'ta_judgment',name:'Judgment',icon:'⚖️',mp:22,cd:5,cast:{shape:'nova',radius:2,spell:1.3,heal:{flat:25,perLevel:3}},desc:'Smite all nearby foes and restore health.'},
+        {id:'ta_holyfire',name:'Holy Fire',icon:'🔥',mp:20,cd:4,cast:{shape:'blast',range:6,radius:2,spell:1.3},desc:'Sacred flames erupt over an area.'},
+        {id:'ta_aegisfield',name:'Aegis Field',icon:'🔰',mp:18,cd:8,cast:{shape:'self',buff:[{id:'shield',dur:6,mag:80},{id:'defUp',dur:6,mag:0.25}]},desc:'A protective field of holy power.'},
+        {id:'ta_smiteline',name:'Lance of Light',icon:'➡️',mp:18,cd:3,cast:{shape:'line',range:6,spell:1.4},desc:'A lance of light pierces a line of foes.'},
+        {id:'ta_twinguardian',name:'Twin Guardians',icon:'👼',mp:24,cd:9,cast:{shape:'summon',summon:{kind:'spirit',count:2,ttl:14}},desc:'Summon two guardian spirits.'} ],
+      [ {id:'ta_wrath',name:'Wrath of God',icon:'🌩️',mp:24,cd:5,cast:{shape:'nova',radius:3,spell:1.5,status:{effect:'stun',dur:1,chance:0.6}},desc:'Divine wrath strikes everything around.'},
+        {id:'ta_holynova',name:'Holy Nova',icon:'💥',mp:22,cd:4,cast:{shape:'nova',radius:2,spell:1.4,heal:{flat:30,perLevel:3}},desc:'A burst that smites foes and heals you greatly.'},
+        {id:'ta_redeemer',name:'Redeemer',icon:'😇',mp:20,cd:7,cast:{shape:'self',buff:[{id:'dmgUp',dur:6,mag:0.5},{id:'regen',dur:6,mag:8}]},desc:'Damage up and powerful regeneration.'},
+        {id:'ta_condemn',name:'Condemn',icon:'⛓️',mp:20,cd:5,cast:{shape:'blast',range:5,radius:2,spell:1.2,status:{effect:'stun',dur:2,chance:1}},desc:'Bind foes in chains of light.'},
+        {id:'ta_archon',name:'Archangel',icon:'🪽',mp:28,cd:10,cast:{shape:'summon',summon:{kind:'spirit',count:1,ttl:24,strong:true}},desc:'Summon a mighty archangel guardian.'} ],
+      [ {id:'ta_divinestorm',name:'Divine Storm',icon:'🌟',mp:26,cd:5,cast:{shape:'nova',radius:3,spell:1.7,heal:{flat:20,perLevel:2}},desc:'A storm of light scours the area.'},
+        {id:'ta_sunbeam',name:'Solar Beam',icon:'☀️',mp:26,cd:5,cast:{shape:'line',range:7,spell:2.0},desc:'A searing beam of sunlight.'},
+        {id:'ta_bastion',name:'Bastion of Faith',icon:'🏰',mp:24,cd:9,cast:{shape:'self',buff:[{id:'shield',dur:8,mag:120},{id:'defUp',dur:8,mag:0.35},{id:'regen',dur:8,mag:6}]},desc:'An unbreakable bastion of holy defense.'},
+        {id:'ta_meteorlight',name:'Falling Star',icon:'☄️',mp:28,cd:6,cast:{shape:'blast',range:7,radius:3,spell:1.8,heal:{flat:25,perLevel:2}},desc:'A star of light crashes down and heals you.'},
+        {id:'ta_seraphhost',name:'Seraph Host',icon:'🪽',mp:30,cd:11,cast:{shape:'summon',summon:{kind:'spirit',count:3,ttl:16}},desc:'Summon three radiant seraphim.'} ],
+      [ {id:'ta_judgmentday',name:'Judgment Day',icon:'⚖️',mp:36,cd:8,cast:{shape:'nova',radius:4,spell:2.2,heal:{flat:40,perLevel:3}},desc:'The final judgment scours all and heals you.'},
+        {id:'ta_lightofheaven',name:'Light of Heaven',icon:'🌅',mp:36,cd:9,cast:{shape:'blast',range:8,radius:4,spell:2.0,status:{effect:'stun',dur:2,chance:1}},desc:'Heaven\'s light blinds and burns a vast area.'},
+        {id:'ta_avatar',name:'Avatar of Light',icon:'🕊️',mp:30,cd:12,cast:{shape:'self',buff:[{id:'dmgUp',dur:8,mag:0.5},{id:'defUp',dur:8,mag:0.4},{id:'spellUp',dur:8,mag:0.5},{id:'regen',dur:8,mag:10}]},desc:'Ascend as an avatar of light.'},
+        {id:'ta_holyground',name:'Hallowed Ground',icon:'⛪',mp:34,cd:8,cast:{shape:'nova',radius:4,spell:1.6,heal:{flat:50,perLevel:4},status:{effect:'stun',dur:1,chance:0.6}},desc:'Consecrate a vast area, healing hugely.'},
+        {id:'ta_celestialhost',name:'Celestial Host',icon:'🌟',mp:40,cd:14,cast:{shape:'summon',summon:{kind:'spirit',count:4,ttl:20,strong:true}},desc:'Summon four mighty celestial guardians.'} ],
+    ], 'active'),
   },
 };
 
-// The current class's tree (empty array for a classless legacy save).
-function classSkillTree() { return (player.class && SKILL_TREES[player.class]) || []; }
+// ── ASCENSIONS ──
+// At ASCEND_LEVEL the Trainer lets a class ASCEND into one of two specializations.
+// Ascending grants a focused PATH tree (6 nodes, 3 bands) of signature passives and
+// powerful actives — many summon autonomous minions. Re-ascending refunds path
+// points; changing class clears the ascension.
+const ASCENSIONS = {
+  berserker: { base:'warrior', name:'Berserker', icon:'🪓', color:'#e0533a',
+    blurb:'A frenzied juggernaut — the lower your health, the deadlier you become.',
+    tree: buildTree([
+      [ {id:'b_rage',name:'Undying Rage',icon:'😡',t:'passive',fx:{zeal:0.04,lifesteal:0.015},desc:'Up to +4% damage as HP drops, heal 1.5% of damage per rank.'},
+        {id:'b_frenzy',name:'Frenzy',icon:'🌀',t:'active',mp:18,cd:5,cast:{shape:'self',buff:[{id:'dmgUp',dur:6,mag:0.7},{id:'critUp',dur:6,mag:0.2}]},desc:'Work into a killing frenzy.'} ],
+      [ {id:'b_bloodbath',name:'Bloodbath',icon:'🩸',t:'active',mp:24,cd:5,cast:{shape:'nova',radius:2,wpn:2.2,lifesteal:0.45},desc:'Drench the area in blood, healing massively.'},
+        {id:'b_thickskin',name:'Berserker Hide',icon:'🦏',t:'passive',fx:{dmgTaken:0.02,maxHpPct:0.03},desc:'-2% damage taken and +3% HP per rank.'} ],
+      [ {id:'b_warbringer',name:'Warbringer',icon:'💀',t:'active',mp:34,cd:9,cast:{shape:'nova',radius:4,wpn:3.0,lifesteal:0.4,status:{effect:'poison',dur:4,chance:1}},desc:'An apocalyptic, self-healing rampage.'},
+        {id:'b_immortalrage',name:'Immortal Rage',icon:'♾️',t:'passive',fx:{lowHpDmg:0.05,lifesteal:0.02},desc:'+5% damage to wounded foes, heal 2% of damage per rank.'} ],
+    ], null, 'berserker') },
+  guardian: { base:'warrior', name:'Guardian', icon:'🛡️', color:'#5a8fd0',
+    blurb:'An immovable bulwark that punishes attackers and shields allies.',
+    tree: buildTree([
+      [ {id:'g_fortress',name:'Fortress',icon:'🏰',t:'passive',fx:{dmgTaken:0.025,block:1.5},desc:'-2.5% damage taken and +1.5% block per rank.'},
+        {id:'g_taunt',name:'Iron Wall',icon:'🧱',t:'active',mp:16,cd:6,cast:{shape:'self',buff:[{id:'defUp',dur:6,mag:0.5},{id:'thorns',dur:6,mag:12}]},desc:'Brace as an iron wall: halve damage, reflect blows.'} ],
+      [ {id:'g_aegis',name:'Aegis Charge',icon:'🔰',t:'active',mp:20,cd:5,cast:{shape:'blast',range:5,radius:2,wpn:1.6,status:{effect:'stun',dur:2,chance:1},buff:{id:'shield',dur:5,mag:70}},desc:'Charge in, stun, and raise a shield.'},
+        {id:'g_retribution',name:'Retribution',icon:'↩️',t:'passive',fx:{reflect:0.08,dr:1.0},desc:'Reflect 8% of melee damage and +1% DR per rank.'} ],
+      [ {id:'g_sentinel',name:'Stone Sentinel',icon:'🗿',t:'active',mp:32,cd:11,cast:{shape:'summon',summon:{kind:'golem',count:1,ttl:28,strong:true}},desc:'Raise an immense stone sentinel to guard you.'},
+        {id:'g_unbreakable',name:'Unbreakable',icon:'♾️',t:'passive',fx:{maxHpPct:0.05,dmgTaken:0.02},desc:'+5% max HP and -2% damage taken per rank.'} ],
+    ], null, 'guardian') },
+
+  assassin: { base:'rogue', name:'Assassin', icon:'🗡️', color:'#46c08a',
+    blurb:'A lethal killer — crits, poison, and executions from the shadows.',
+    tree: buildTree([
+      [ {id:'as_mastery',name:"Killer's Mastery",icon:'🎯',t:'passive',fx:{crit:0.012,critDmg:0.08},desc:'+1.2% crit and +8% crit damage per rank.'},
+        {id:'as_mark',name:'Marked for Death',icon:'☠️',t:'active',mp:20,cd:5,cast:{shape:'bolt',range:7,wpn:4.5,crit:true},desc:'A devastating mark — a colossal crit.'} ],
+      [ {id:'as_shroud',name:'Death Shroud',icon:'🌫️',t:'active',mp:18,cd:7,cast:{shape:'self',buff:[{id:'critUp',dur:6,mag:0.35},{id:'dmgUp',dur:6,mag:0.4}]},desc:'Cloak yourself in lethal intent.'},
+        {id:'as_venomblade',name:'Venom Mastery',icon:'🐍',t:'passive',fx:{lowHpDmg:0.05,pen:0.03},desc:'+5% damage to wounded foes and +3% pen per rank.'} ],
+      [ {id:'as_deathblossom',name:'Death Blossom',icon:'🌸',t:'active',mp:30,cd:7,cast:{shape:'nova',radius:3,wpn:2.6,crit:true,status:{effect:'poison',dur:5,chance:1}},desc:'A whirlwind of poisoned crits.'},
+        {id:'as_perfect',name:'Perfect Strike',icon:'👑',t:'passive',fx:{critDmg:0.1,dmgDealt:0.015},desc:'+10% crit damage and +1.5% damage per rank.'} ],
+    ], null, 'assassin') },
+  shadowdancer: { base:'rogue', name:'Shadowdancer', icon:'🌑', color:'#9a7bce',
+    blurb:'An untouchable trickster who fights through a host of shadow clones.',
+    tree: buildTree([
+      [ {id:'sd_elusive',name:'Elusive',icon:'💨',t:'passive',fx:{dodge:0.02,dmgTaken:0.015},desc:'+2% dodge and -1.5% damage taken per rank.'},
+        {id:'sd_mirror',name:'Mirror Images',icon:'👥',t:'active',mp:22,cd:8,cast:{shape:'summon',summon:{kind:'shadow',count:3,ttl:16}},desc:'Split into three shadow clones.'} ],
+      [ {id:'sd_dance',name:'Shadow Dance',icon:'🌀',t:'active',mp:18,cd:6,cast:{shape:'self',buff:[{id:'dodgeUp',dur:6,mag:0.4},{id:'critUp',dur:6,mag:0.25}]},desc:'Become a blur of shadow.'},
+        {id:'sd_swarm',name:'Shadow Affinity',icon:'🖤',t:'passive',fx:{dmgDealt:0.018,dodge:0.012},desc:'+1.8% damage and +1.2% dodge per rank.'} ],
+      [ {id:'sd_legion',name:'Nightfall Legion',icon:'👤',t:'active',mp:34,cd:12,cast:{shape:'summon',summon:{kind:'shadow',count:5,ttl:20}},desc:'Summon five shadow assassins at once.'},
+        {id:'sd_phantom',name:'Phantom Form',icon:'♾️',t:'passive',fx:{dodge:0.025,critDmg:0.06},desc:'+2.5% dodge and +6% crit damage per rank.'} ],
+    ], null, 'shadowdancer') },
+
+  pyromancer: { base:'mage', name:'Pyromancer', icon:'🔥', color:'#ff7a3a',
+    blurb:'A master of fire who reduces whole rooms to ash.',
+    tree: buildTree([
+      [ {id:'py_mastery',name:'Fire Mastery',icon:'🔥',t:'passive',fx:{spell:0.04,critDmg:0.05},desc:'+4% spell damage and +5% crit damage per rank.'},
+        {id:'py_immolate',name:'Immolation',icon:'🌋',t:'active',mp:22,cd:4,cast:{shape:'nova',radius:3,spell:1.6,status:{effect:'poison',dur:4,chance:1}},desc:'Erupt in flame, burning everything near.'} ],
+      [ {id:'py_meteor',name:'Cinder Storm',icon:'☄️',t:'active',mp:28,cd:6,cast:{shape:'blast',range:8,radius:3,spell:2.0},desc:'A storm of cinders rains on a far area.'},
+        {id:'py_kindle',name:'Inner Flame',icon:'🕯️',t:'passive',fx:{spell:0.045,maxMpPct:0.03},desc:'+4.5% spell damage and +3% MP per rank.'} ],
+      [ {id:'py_phoenix',name:'Phoenix',icon:'🦅',t:'active',mp:34,cd:11,cast:{shape:'summon',summon:{kind:'elemental',count:1,ttl:24,strong:true}},desc:'Summon a blazing phoenix to incinerate foes.'},
+        {id:'py_conflagration',name:'Conflagration',icon:'🔥',t:'passive',fx:{spell:0.05,critDmg:0.06},desc:'+5% spell damage and +6% crit damage per rank.'} ],
+    ], null, 'pyromancer') },
+  necromancer: { base:'mage', name:'Necromancer', icon:'💀', color:'#7a9a5a',
+    blurb:'A dark summoner who raises an undead army from the fallen.',
+    tree: buildTree([
+      [ {id:'nc_mastery',name:'Dark Mastery',icon:'💀',t:'passive',fx:{spell:0.035,maxMpPct:0.03},desc:'+3.5% spell damage and +3% MP per rank.'},
+        {id:'nc_raise',name:'Raise Skeletons',icon:'🦴',t:'active',mp:20,cd:6,cast:{shape:'summon',summon:{kind:'skeleton',count:2,ttl:22}},desc:'Raise two skeletal warriors from the dead.'} ],
+      [ {id:'nc_archers',name:'Skeletal Archers',icon:'🏹',t:'active',mp:22,cd:7,cast:{shape:'summon',summon:{kind:'skelarcher',count:2,ttl:20}},desc:'Raise two skeleton archers.'},
+        {id:'nc_curse',name:'Curse of Decay',icon:'🟣',t:'passive',fx:{spell:0.03,pen:0.03},desc:'+3% spell damage and +3% pen per rank.'} ],
+      [ {id:'nc_army',name:'Army of the Dead',icon:'⚰️',t:'active',mp:36,cd:13,cast:{shape:'summon',summon:{kind:'skeleton',count:4,ttl:22}},desc:'Raise a horde of four skeletal warriors.'},
+        {id:'nc_golem',name:'Bone Golem',icon:'🦴',t:'active',mp:34,cd:12,cast:{shape:'summon',summon:{kind:'golem',count:1,ttl:26,strong:true}},desc:'Assemble a towering bone golem.'} ],
+    ], null, 'necromancer') },
+
+  crusader: { base:'templar', name:'Crusader', icon:'⚔️', color:'#e8b84a',
+    blurb:'A holy warrior who smites the wicked with searing light.',
+    tree: buildTree([
+      [ {id:'cr_zeal',name:'Holy Zeal',icon:'🔥',t:'passive',fx:{zeal:0.04,dmgDealt:0.015},desc:'Up to +4% damage as HP drops, +1.5% damage per rank.'},
+        {id:'cr_smite',name:'Divine Storm',icon:'⚡',t:'active',mp:24,cd:5,cast:{shape:'nova',radius:3,spell:1.7,heal:{flat:25,perLevel:2}},desc:'A storm of holy power that heals you.'} ],
+      [ {id:'cr_lance',name:'Heaven\'s Lance',icon:'➡️',t:'active',mp:22,cd:4,cast:{shape:'line',range:7,spell:2.2},desc:'A lance of light pierces all in a line.'},
+        {id:'cr_valor',name:'Valor',icon:'🛡️',t:'passive',fx:{dmgTaken:0.02,maxHpPct:0.025},desc:'-2% damage taken and +2.5% HP per rank.'} ],
+      [ {id:'cr_judgment',name:'Final Judgment',icon:'⚖️',t:'active',mp:36,cd:9,cast:{shape:'nova',radius:4,spell:2.4,heal:{flat:40,perLevel:3},status:{effect:'stun',dur:1,chance:0.6}},desc:'Pass final judgment on all around you.'},
+        {id:'cr_avatar',name:'Avatar of Justice',icon:'👑',t:'passive',fx:{dmgDealt:0.02,spell:0.03},desc:'+2% damage and +3% spell power per rank.'} ],
+    ], null, 'crusader') },
+  sentinel: { base:'templar', name:'Sentinel', icon:'🪽', color:'#cfe0ff',
+    blurb:'A divine warden who commands a host of angelic guardians.',
+    tree: buildTree([
+      [ {id:'se_devotion',name:'Devout',icon:'😇',t:'passive',fx:{maxHpPct:0.03,spell:0.03},desc:'+3% max HP and +3% spell power per rank.'},
+        {id:'se_call',name:'Call Seraph',icon:'👼',t:'active',mp:24,cd:8,cast:{shape:'summon',summon:{kind:'spirit',count:2,ttl:20}},desc:'Summon two guardian seraphim.'} ],
+      [ {id:'se_aegis',name:'Divine Aegis',icon:'🔰',t:'active',mp:22,cd:8,cast:{shape:'self',buff:[{id:'shield',dur:7,mag:110},{id:'regen',dur:7,mag:8}]},desc:'A radiant aegis shields and mends you.'},
+        {id:'se_grace',name:'Grace',icon:'🕊️',t:'passive',fx:{hpRegen:2,dmgTaken:0.015},desc:'+2 regen and -1.5% damage taken per rank.'} ],
+      [ {id:'se_archangel',name:'Archangel',icon:'🪽',t:'active',mp:36,cd:12,cast:{shape:'summon',summon:{kind:'spirit',count:1,ttl:30,strong:true}},desc:'Summon a mighty archangel that wars for you.'},
+        {id:'se_host',name:'Heavenly Host',icon:'🌟',t:'passive',fx:{spell:0.04,maxHpPct:0.03},desc:'+4% spell power and +3% max HP per rank.'} ],
+    ], null, 'sentinel') },
+};
+
+// ── MINIONS ──
+// Autonomous allies summoned by certain actives. Each turn a minion seeks the
+// nearest foe, paths to it, and strikes (ranged kinds shoot from afar). They
+// expire after `ttl` turns. dmg/level scale is applied at summon time from the
+// summoner's level and the skill's rank.
+const MINION_KINDS = {
+  skeleton:  { icon:'🦴', color:'#d8d2c0', base:6,  perLvl:1.4, ranged:false, range:1, speed:1, hp:30 },
+  skelarcher:{ icon:'🏹', color:'#cfc8b0', base:5,  perLvl:1.3, ranged:true,  range:5, speed:1, hp:22 },
+  shadow:    { icon:'🥷', color:'#9a7bce', base:7,  perLvl:1.6, ranged:false, range:1, speed:2, hp:24 },
+  wolf:      { icon:'🐺', color:'#9aa0a8', base:6,  perLvl:1.3, ranged:false, range:1, speed:2, hp:26 },
+  elemental: { icon:'🔥', color:'#ff8844', base:7,  perLvl:1.7, ranged:true,  range:5, speed:1, hp:30 },
+  spirit:    { icon:'👼', color:'#ffe9a0', base:7,  perLvl:1.5, ranged:true,  range:5, speed:1, hp:30 },
+  golem:     { icon:'🗿', color:'#b0a890', base:12, perLvl:2.2, ranged:false, range:1, speed:1, hp:80 },
+  totem:     { icon:'🚩', color:'#e0a050', base:6,  perLvl:1.4, ranged:true,  range:5, speed:0, hp:30 },
+};
+
+// The current class's passive/active trees (empty for a classless legacy save).
+function classTrees() { return (player.class && SKILL_TREES[player.class]) || { passive: [], active: [] }; }
+// The chosen ascension's PATH tree (empty until the hero ascends).
+function ascData() { return (player.ascension && ASCENSIONS[player.ascension]) || null; }
+function ascTree() { const a = ascData(); return a ? a.tree : []; }
+// A specific tree by view name, for the SKILLS panel sub-tabs.
+function skillTreeFor(view) {
+  const t = classTrees();
+  return view === 'active' ? t.active : view === 'path' ? ascTree() : t.passive;
+}
+// Every node the hero can interact with (both base trees + the unlocked PATH
+// tree). This flat list is the single hook for skillBonus / spent / lookups, so
+// a passive anywhere is "live" the instant it's bought.
+function classSkillTree() { const t = classTrees(); return t.passive.concat(t.active, ascTree()); }
 function skillNode(id) { return classSkillTree().find(n => n.id === id) || null; }
 function skillRank(id) { return (player.skills && player.skills[id]) || 0; }
-// Sum a passive bonus key across every owned node rank in the current tree. This
-// is the single hook every derived-stat formula reads, so a passive is "live"
-// the instant it's bought with no per-stat bookkeeping.
+// Sum a passive bonus key across every owned node rank (both trees + path).
 function skillBonus(key) {
   if (!player.skills) return 0;
   let sum = 0;
@@ -2864,13 +3235,14 @@ function skillBonus(key) {
   }
   return sum;
 }
-// Spell-damage multiplier from Spell Power / Pyromancy / Archmage (Mage tree).
-function spellPowerMult() { return 1 + skillBonus('spell') + totalStat('SPELLPWR') / 100; }
-// Prereqs satisfied? (high enough level AND every required node at its rank).
+// Spell-damage multiplier from spell passives + gear + transient spell buffs.
+function spellPowerMult() { return 1 + skillBonus('spell') + buffMag('spellUp') + totalStat('SPELLPWR') / 100; }
+// Prereqs satisfied? (high enough level, ascension matches, every prereq owned).
 function skillReqMet(node) {
   if (!node) return false;
+  if (node.asc && player.ascension !== node.asc) return false;
   if (player.level < (node.lvl || 1)) return false;
-  if (node.req) for (const [rid, rk] of node.req) if (skillRank(rid) < rk) return false;
+  if (node.req) for (const rid of node.req) if (skillRank(rid) < 1) return false;
   return true;
 }
 function skillMaxed(node) { return skillRank(node.id) >= (node.max || 1); }
@@ -2881,14 +3253,14 @@ function spentSkillPoints() {
   return classSkillTree().reduce((s, n) => s + skillRank(n.id), 0);
 }
 // Castable actives: the always-available baseline class skill first, then every
-// unlocked active node — each keyed by its own id for an independent cooldown.
+// unlocked active node (base or path) — each keyed by its own id for cooldowns.
 function activeSkillList() {
   const cls = playerClass();
   const list = [];
   if (cls && cls.skill) list.push({ ...cls.skill, baseline: true });
   for (const n of classSkillTree()) {
     if (n.type === 'active' && skillRank(n.id) > 0) {
-      list.push({ id: n.active, name: n.name, icon: n.icon, mp: n.mp, cd: n.cd, desc: n.desc });
+      list.push({ id: n.id, name: n.name, icon: n.icon, mp: n.mp, cd: n.cd, desc: n.desc, node: n });
     }
   }
   return list;
@@ -3049,8 +3421,11 @@ let player = { x: 5, y: 5, hp: 100, maxHp: 100, mp: 60, maxMp: 60, gold: 0, leve
   // attributes convert into damage, passives, the active skill, and which weapons
   // can be equipped.
   class: null, skillCd: 0,
+  // Ascension — the advanced specialization chosen at the Trainer (null until the
+  // hero ascends at level 20+). Unlocks that path's focused skill tree.
+  ascension: null,
   // Skill tree — 1 skill point earned per level (separate from attribute points),
-  // spent on the class's passive/active nodes. `skills` maps node id → rank;
+  // spent on the class's passive/active/path nodes. `skills` maps node id → rank;
   // `skillCds` holds each active skill's independent cooldown.
   skillPoints: 0, skills: {}, skillCds: {},
   // Hero attributes — every one starts at ATTR_BASE and is raised by spending
@@ -3079,11 +3454,23 @@ let shrineData = {};  // "y,x" -> { kind } for shrine tiles on this floor
 const SHRINE_KINDS = ['power','guard','fortune','blood','wisdom'];
 // Temporary shrine buffs, each counts down a number of floors.
 let buffs = { power: 0, guard: 0, fortune: 0 };
-// Transient combat buffs from active skills (War Cry, Sanctuary, …), keyed by id
-// to a remaining-turn count and ticked down each turn in runEnemyTurn. Purely
-// in-combat and short-lived, so it is intentionally NOT saved.
+// Transient combat buffs from active skills (War Cry, Sanctuary, shields, …),
+// keyed by id to { t: remaining turns, mag: magnitude }, ticked down each turn in
+// runEnemyTurn. Purely in-combat and short-lived, so intentionally NOT saved.
+// Known ids (read by the derived-stat / damage formulas): dmgUp, defUp, critUp,
+// dodgeUp, regen, spellUp, thorns, lifestealUp, and shield (mag = remaining HP it
+// can still absorb). applyBuff stacks magnitude and refreshes duration.
 let combatBuffs = {};
-function hasBuff(id) { return (combatBuffs[id] || 0) > 0; }
+function hasBuff(id) { const b = combatBuffs[id]; return !!b && b.t > 0; }
+function buffMag(id) { const b = combatBuffs[id]; return (b && b.t > 0) ? b.mag : 0; }
+function applyBuff(id, turns, mag) {
+  const b = combatBuffs[id];
+  if (b && b.t > 0) { b.t = Math.max(b.t, turns); b.mag = (id === 'shield') ? b.mag + mag : Math.max(b.mag, mag); }
+  else combatBuffs[id] = { t: turns, mag };
+}
+// Autonomous summoned allies (skeletons, elementals, golems, …). Transient like
+// combat buffs, so never saved; cleared on floor change / town / death.
+let minions = [];
 let floatingTexts = [];
 let statusEffects = [];
 let groundFood = [];
@@ -3106,6 +3493,7 @@ let enemies = [];
 let currentTab = 'inv';
 let selectedItem = null;
 let selectedSkillId = null; // skill-tree node whose detail popover is open (null = none)
+let skillView = 'passive';  // which SKILLS sub-tree is shown: passive | active | path
 let mapData = [];
 let dungeonLevel = 1;
 
@@ -4742,7 +5130,7 @@ function buildTown() {
   inTown = true;
   floorSerial++;
   // Clear every dungeon-only entity so nothing lingers into the safe hub.
-  enemies = []; merchant = null; mystic = null;
+  enemies = []; merchant = null; mystic = null; minions = []; combatBuffs = {};
   groundItems = []; groundFood = []; groundGold = [];
   quest = null; teleporters = {}; shrineData = {};
   hasFountain = false; groundKey = null; hasKey = false;
@@ -5293,6 +5681,7 @@ function renderTrainer() {
       <span class="shop-price">${skillRespecCost()}g</span>
       <button class="shop-buy-btn" ${(player.gold >= skillRespecCost() && spentSkillPoints() > 0) ? '' : 'disabled'} onclick="respecSkills()">RESET</button>
     </div>
+    ${trainerAscensionBlock()}
     <div class="town-blurb" style="margin-top:10px">Retrain into a different class for ${classChangeCost()}g. Your attributes are kept; if your new class can't wield your weapon, it goes back in your bag.</div>
     ${CLASS_KEYS.map(k => {
       const c = CLASSES[k];
@@ -5305,6 +5694,58 @@ function renderTrainer() {
         <button class="shop-buy-btn" ${cur || player.gold < ccost ? 'disabled' : ''} onclick="changeClass('${k}')">${cur ? '—' : ccost + 'g'}</button>
       </div>`;
     }).join('')}`);
+}
+// Switching specialization (or ascending after a class change) costs gold; the
+// very first ascension is free. Path points are refunded when you switch.
+function ascendCost() { return 120 + (player.maxFloor || 1) * 12; }
+// The Trainer's Ascension section: prompt to reach the level, then the two
+// specialization choices for the current class (one may already be chosen).
+function trainerAscensionBlock() {
+  if (!player.class) return '';
+  const opts = Object.keys(ASCENSIONS).filter(k => ASCENSIONS[k].base === player.class);
+  if (!opts.length) return '';
+  const lvl = player.level || 1;
+  const ready = lvl >= ASCEND_LEVEL;
+  const intro = `<div class="town-blurb" style="margin-top:10px">${ready
+    ? `<b>Ascension</b> — specialize your ${CLASSES[player.class].name} into an advanced path, unlocking a focused skill tree of signature powers.`
+    : `<b>Ascension</b> unlocks at Hero level ${ASCEND_LEVEL} (you're ${lvl}). Specialize your ${CLASSES[player.class].name} into an advanced path.`}</div>`;
+  const rows = opts.map(k => {
+    const a = ASCENSIONS[k];
+    const cur = player.ascension === k;
+    const cost = player.ascension ? ascendCost() : 0;
+    const can = ready && !cur && player.gold >= cost;
+    const priceTxt = cur ? '★ active' : (cost ? cost + 'g' : (ready ? 'Free' : '🔒'));
+    return `<div class="shop-row">
+      <span class="loot-icon">${a.icon}</span>
+      <div class="shop-row-info"><div class="shop-row-name" style="color:${a.color}">${a.name}${cur ? ' (current)' : ''}</div>
+        <div class="shop-row-sub">${a.blurb}</div></div>
+      <button class="shop-buy-btn" ${can ? '' : 'disabled'} onclick="ascend('${k}')">${priceTxt}</button>
+    </div>`;
+  }).join('');
+  return intro + rows;
+}
+function ascend(key) {
+  const a = ASCENSIONS[key];
+  if (!a || a.base !== player.class) return;
+  if ((player.level || 1) < ASCEND_LEVEL) { log(`Ascension requires Hero level ${ASCEND_LEVEL}.`); return; }
+  if (player.ascension === key) return;
+  const cost = player.ascension ? ascendCost() : 0;
+  if (player.gold < cost) { log('Not enough gold to switch your ascension.'); return; }
+  player.gold -= cost;
+  // Refund any points spent in the previous path tree before switching.
+  let refunded = 0;
+  if (player.ascension && ASCENSIONS[player.ascension]) {
+    for (const n of ASCENSIONS[player.ascension].tree) { refunded += skillRank(n.id); delete player.skills[n.id]; }
+  }
+  player.ascension = key;
+  player.skillPoints = (player.skillPoints || 0) + refunded;
+  recomputeMaxStats();
+  if (player.hp > player.maxHp) player.hp = player.maxHp;
+  if (player.mp > player.maxMp) player.mp = player.maxMp;
+  sfx('levelup'); screenFlash(a.color);
+  log(`${a.icon} You ascend as a ${a.name}! A new path of power opens.${refunded ? ` ${refunded} path point${refunded === 1 ? '' : 's'} refunded.` : ''}`, 'important');
+  skillView = 'path';
+  updateBars(); renderPanel(); renderTrainer(); renderSkillBar(); draw(); saveGame();
 }
 function respecAttrs() {
   const spent = spentAttrPoints();
@@ -5912,6 +6353,8 @@ function drawTownNpcs(offX, offY, tw, th, scale) {
 
 function spawnEnemies() {
   enemies = [];
+  // Summoned minions and transient combat buffs don't carry between floors.
+  minions = []; combatBuffs = {};
   const isBossFloor = dungeonLevel % 5 === 0;
   let count = isBossFloor
     ? 1 + Math.floor(dungeonLevel / 5)
@@ -7270,6 +7713,26 @@ function draw() {
     if (quest.markers) quest.markers.forEach(m => { if (!m.done) drawMark(m.x, m.y, quest.type === 'beacons' ? '🔥' : '🍄', GOLD, quest.type === 'beacons' ? 'q_beacon' : 'q_mushroom'); });
   }
 
+  // Summoned minions — autonomous allies, drawn with a soft coloured aura and a
+  // thin lifespan bar so the player can read how long each will last.
+  minions.forEach(m => {
+    const mx = offX + m.x * tw, my = offY + m.y * th;
+    drawActorShadow(mx + tw/2, my + th*0.82, tw);
+    ctx.save();
+    if (m.hitAt && Date.now() - m.hitAt < 110) ctx.filter = 'brightness(2.2)';
+    ctx.shadowColor = m.color; ctx.shadowBlur = Math.max(2, tw * (m.strong ? 0.3 : 0.2));
+    ctx.font = `${Math.round(tw * (m.strong ? 0.78 : 0.66))}px serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(m.icon, mx + tw/2, my + th/2 + th*0.02);
+    ctx.restore();
+    // Lifespan bar (cyan) so the temporary nature reads at a glance.
+    const bw = tw - 4, bh = Math.max(2, th * 0.1);
+    const frac = Math.max(0, Math.min(1, m.ttl / 18));
+    ctx.fillStyle = '#000'; ctx.fillRect(mx+2, my+1, bw+1, bh+1);
+    ctx.fillStyle = '#2b6f8f'; ctx.fillRect(mx+2, my+1, bw, bh);
+    ctx.fillStyle = '#5fd0ff'; ctx.fillRect(mx+2, my+1, bw * frac, bh);
+  });
+
   // Player
   const px = offX + player.x * tw, py = offY + player.y * th;
   // Soft under-the-feet contact shadow grounds the hero (no coloured backing
@@ -7849,28 +8312,41 @@ function totalStat(name) {
 function mitigateDamage(raw, lvl) {
   const def = playerDefense();
   const mitigation = def / (def + 18 + (lvl || dungeonLevel) * 6);
-  // Sanctuary (Templar active) halves incoming damage while it's up.
-  const sanct = hasBuff('sanctuary') ? 0.5 : 1;
+  // Sanctuary / Brace / Bastion etc. raise a defUp buff that reduces the blow.
+  const defUp = Math.max(0, 1 - Math.min(0.85, buffMag('defUp')));
   // Warrior passive + skill-tree defence passives shave off another slice.
-  return Math.max(1, Math.round(raw * (1 - mitigation) * classDmgTakenMult() * sanct));
+  return Math.max(1, Math.round(raw * (1 - mitigation) * classDmgTakenMult() * defUp));
 }
 
 // Post-mitigation gear layers applied to any incoming hit: a Block % chance to
 // halve it, then a flat Damage Reduction %. Both are capped so they can't make the
 // hero untouchable. Returns the final HP damage (≥1).
 function applyIncomingMods(dmg) {
-  if (Math.random() < Math.min(0.6, totalStat('BLOCK') / 100)) {
+  if (Math.random() < Math.min(0.6, (totalStat('BLOCK') + skillBonus('block')) / 100)) {
     dmg = Math.max(1, Math.round(dmg * 0.5));
     spawnFloatingText(player.x, player.y - 0.3, 'BLOCK', '#cfe0ff');
   }
-  const dr = Math.min(0.6, totalStat('DR') / 100);
+  const dr = Math.min(0.6, (totalStat('DR') + skillBonus('dr')) / 100);
   if (dr > 0) dmg = Math.max(1, Math.round(dmg * (1 - dr)));
+  dmg = absorbWithShield(dmg);
   return dmg;
+}
+
+// Holy Shield / Mana Barrier / Bastion: a transient shield (combatBuffs.shield,
+// mag = remaining HP it can soak) absorbs incoming damage before it reaches HP.
+function absorbWithShield(dmg) {
+  const b = combatBuffs.shield;
+  if (!b || b.t <= 0 || b.mag <= 0 || dmg <= 0) return dmg;
+  const soak = Math.min(dmg, b.mag);
+  b.mag -= soak;
+  spawnFloatingText(player.x, player.y - 0.3, `🛡${soak}`, '#cfe0ff');
+  if (b.mag <= 0) delete combatBuffs.shield;
+  return Math.max(0, dmg - soak);
 }
 
 // Thorns (gear): reflect a flat amount back at a melee attacker after it hits you.
 function thornsReflect(e) {
-  const thorns = totalStat('THORNS');
+  const thorns = totalStat('THORNS') + Math.round(buffMag('thorns')); // gear + Iron Wall buff
   if (thorns > 0 && e && !e.dead) {
     spawnFloatingText(e.x, e.y, `${thorns}`, '#ffcc66');
     dealDamage(e, thorns, false);
@@ -7881,8 +8357,8 @@ function thornsReflect(e) {
 // basic attacks and every weapon-based active so a Cleave/Whirlwind build sustains.
 function lifestealHeal(amount) {
   if (amount <= 0) return;
-  // Life leech: Bloodthirst (skill) + gear Life Leech %.
-  const ls = skillBonus('lifesteal') + totalStat('LEECH') / 100;
+  // Life leech: lifesteal passives + gear Life Leech % (+ any lifesteal buff).
+  const ls = skillBonus('lifesteal') + buffMag('lifestealUp') + totalStat('LEECH') / 100;
   if (ls > 0 && player.hp < player.maxHp) {
     const got = Math.min(Math.max(1, Math.round(amount * ls)), player.maxHp - player.hp);
     if (got > 0) { player.hp += got; spawnFloatingText(player.x, player.y, `+${got}`, '#ff6688'); }
@@ -7932,13 +8408,14 @@ function adjacentEnemies(e) {
 // Returns { dmg, isCrit }.
 function rollPlayerHit(e) {
   const isCrit = Math.random() < playerCritChance();
-  let dmg = getWeaponDamage() + player.level * 2 + totalStat('ATK') + attrDamage();
+  let dmg = getWeaponDamage() + player.level * 2 + totalStat('ATK') + attrDamage() + skillBonus('atkFlat');
   const hitDivisor = e.isBoss ? 9 : (e.isElite ? 6 : 4);
   const hitCap = Math.max(1, Math.floor(e.maxHp / hitDivisor));
   if (dmg > hitCap) dmg = Math.max(1, Math.round(hitCap * (rnd(80, 100) / 100)));
   if (buffs.power) dmg = Math.round(dmg * 1.5);
   dmg = Math.round(dmg * classDmgDealtMult()); // Warrior + damage passives
-  if (hasBuff('warcry')) dmg = Math.round(dmg * 1.5); // War Cry self-buff
+  const dmgUp = buffMag('dmgUp'); // War Cry / Frenzy / Avatar self-buffs
+  if (dmgUp > 0) dmg = Math.round(dmg * (1 + dmgUp));
   // Increased Damage % (gear): a flat multiplier on every hit.
   const idmg = totalStat('IDMG');
   if (idmg > 0) dmg = Math.round(dmg * (1 + idmg / 100));
@@ -7957,7 +8434,7 @@ function rollPlayerHit(e) {
   // shines against the toughest enemies (and pairs naturally with Dmg vs Bosses).
   const armor = enemyArmorPct(e);
   if (armor > 0) {
-    const pen = Math.min(0.9, totalStat('PEN') / 100);
+    const pen = Math.min(0.9, totalStat('PEN') / 100 + skillBonus('pen'));
     dmg = Math.round(dmg * (1 - armor * (1 - pen)));
   }
   return { dmg: Math.max(1, dmg), isCrit };
@@ -7992,9 +8469,9 @@ function onEnemyDefeated(e) {
   const label = enemyLabel(e);
   const xpMult = e.isBoss ? 5 : (e.isElite ? 2 : 1);
   const goldMult = e.isBoss ? 3 : (e.isElite ? 2 : 1);
-  const xp = Math.round(12 * dungeonLevel * xpMult * pfx('xp', 1) * (1 + totalStat('XPGAIN') / 100));
+  const xp = Math.round(12 * dungeonLevel * xpMult * pfx('xp', 1) * (1 + (totalStat('XPGAIN') + skillBonus('xpGain')) / 100));
   player.xp += xp;
-  const gold = Math.round((rnd(2, 8) + dungeonLevel * 3) * goldMult * (floorMod.goldMult || 1) * pfx('gold', 1) * (1 + totalStat('GOLDFIND') / 100));
+  const gold = Math.round((rnd(2, 8) + dungeonLevel * 3) * goldMult * (floorMod.goldMult || 1) * pfx('gold', 1) * (1 + (totalStat('GOLDFIND') + skillBonus('goldFind')) / 100));
   player.gold += gold;
   spawnFloatingText(e.x + 0.35, e.y, `+${gold}g`, '#ffd24b');
   log(`${label} defeated! +${xp} XP, +${gold}g`, 'important');
@@ -8016,7 +8493,7 @@ function onEnemyDefeated(e) {
   if (e.minion) { checkLevelUp(); updateFloorClear(); return; }
   // The floor modifier, an active Fortune buff, gear Magic Find, and any pact all
   // sweeten every drop roll.
-  const lootMult = (floorMod.lootMult || 1) * (buffs.fortune ? 1.5 : 1) * pfx('loot', 1) * (1 + totalStat('MAGICFIND') / 100);
+  const lootMult = (floorMod.lootMult || 1) * (buffs.fortune ? 1.5 : 1) * pfx('loot', 1) * (1 + (totalStat('MAGICFIND') + skillBonus('magicFind')) / 100);
   // Drop a chest — bosses and elites always drop, with richer loot. The luck
   // value is how many rarity rolls the chest makes (more rolls = better odds).
   // Enemy drops land straight in your pack — no need to walk over and open them.
@@ -8260,25 +8737,16 @@ function castSkillById(id) {
 // Dispatch an active skill id to its implementation. Each returns true if it
 // actually fired (so castSkillById knows whether to spend the turn/MP).
 function runActiveSkill(id) {
+  // The four baseline class skills keep their bespoke implementations.
   switch (id) {
-    case 'cleave':         return skillCleave();
-    case 'backstab':       return skillBackstab();
-    case 'firebolt':       return skillFirebolt();
-    case 'mend':           return skillMend();
-    case 'warcry':         return skillWarCry();
-    case 'whirlwind':      return skillWhirlwind();
-    case 'berserk':        return skillBerserk();
-    case 'poisonstrike':   return skillPoisonStrike();
-    case 'shadowstep':     return skillShadowstep();
-    case 'fanofknives':    return skillFanOfKnives();
-    case 'deathmark':      return skillDeathMark();
-    case 'frostnova':      return skillFrostNova();
-    case 'chainlightning': return skillChainLightning();
-    case 'meteor':         return skillMeteor();
-    case 'holysmite':      return skillHolySmite();
-    case 'sanctuary':      return skillSanctuary();
-    case 'judgment':       return skillJudgment();
+    case 'cleave':   return skillCleave();
+    case 'backstab': return skillBackstab();
+    case 'firebolt': return skillFirebolt();
+    case 'mend':     return skillMend();
   }
+  // Everything else is a data-driven tree / path active resolved from its `cast`.
+  const node = skillNode(id);
+  if (node && node.type === 'active' && node.cast) return resolveCast(node, skillRank(id));
   return false;
 }
 
@@ -8381,214 +8849,279 @@ function spellBase(flat, perLevel) {
   return (flat + player.level * perLevel + totalAttr('spirit') * ATTR_FX.spellPerSpr) * spellPowerMult();
 }
 
-// Warrior — War Cry: a rallying shout that boosts your damage for several turns.
-function skillWarCry() {
-  combatBuffs.warcry = 5;
-  sfx('crit');
-  spawnFloatingText(player.x, player.y, '📣', '#ffcf6b');
-  log(`📣 ${HERO} lets out a War Cry — +50% damage for the next few turns!`, 'important');
-  return true;
+// ── DATA-DRIVEN ACTIVE SKILLS ──
+// Every learned tree / path active routes through resolveCast(node, rank): it
+// reads the node's `cast` descriptor, gathers targets by shape, scales magnitudes
+// by rank, applies damage / status / heal / buff / summon, and returns true if it
+// fired (false = nothing to do, so castSkillById refunds the turn and mana).
+
+// Magnitudes grow ~12% per rank; status chance/duration and summon counts grow
+// more slowly, so a rank-10 skill is strong but not absurd.
+function rankScale(rank) { return 1 + 0.12 * ((rank || 1) - 1); }
+
+// Base physical magnitude for weapon actives (a normal swing's raw number, plus
+// any flat ATK passives), before per-skill multiplier and modifiers.
+function skillWeaponBase() {
+  return getWeaponDamage() + player.level * 2 + totalStat('ATK') + attrDamage() + skillBonus('atkFlat');
+}
+// Shared offense multipliers for an active's blow (class %, buffs, IDMG, boss dmg,
+// zeal, execute, crit, enemy armor / pen). Returns the modified float.
+function applyOffenseMods(dmg, e, forceCrit, isSpell) {
+  if (buffs.power) dmg *= 1.5;
+  if (!isSpell) dmg *= classDmgDealtMult();
+  const du = buffMag('dmgUp'); if (du) dmg *= (1 + du);
+  const idmg = totalStat('IDMG'); if (idmg && !isSpell) dmg *= (1 + idmg / 100);
+  const bd = totalStat('BOSSDMG'); if (bd && e && (e.isBoss || e.isElite)) dmg *= (1 + bd / 100);
+  const zeal = skillBonus('zeal'); if (zeal && !isSpell) dmg *= (1 + zeal * (1 - player.hp / player.maxHp));
+  const lowHp = skillBonus('lowHpDmg') + totalStat('EXEC') / 100;
+  if (lowHp && e && e.hp < e.maxHp * 0.35) dmg *= (1 + lowHp);
+  if (forceCrit || Math.random() < playerCritChance()) dmg *= critDamageMult();
+  const armor = enemyArmorPct(e);
+  if (armor > 0) { const pen = Math.min(0.9, totalStat('PEN') / 100 + skillBonus('pen')); dmg *= (1 - armor * (1 - pen)); }
+  return dmg;
+}
+// One weapon-based blow for an active: capped so burst can't one-shot a boss.
+function skillPhysDamage(e, mult, rank, forceCrit) {
+  let dmg = applyOffenseMods(skillWeaponBase() * mult * rankScale(rank), e, forceCrit, false);
+  const cap = Math.ceil(e.maxHp * (e.isBoss ? 0.5 : 0.8));
+  return Math.max(1, Math.min(Math.round(dmg), cap));
+}
+// One spell-based blow for an active (scales with Spirit + spell passives/buffs).
+function skillSpellDamage(e, cast, mult, rank) {
+  let dmg = applyOffenseMods(spellBase(cast.flat || 12, cast.perLvl || 2) * mult * rankScale(rank), e, false, true);
+  const cap = Math.ceil(e.maxHp * (e.isBoss ? 0.5 : 0.85));
+  return Math.max(1, Math.min(Math.round(dmg), cap));
 }
 
-// Warrior — Whirlwind: a spinning attack that hits every adjacent foe and may stun.
-function skillWhirlwind() {
-  const adj = adjacentToPlayer();
-  if (!adj.length) { log('🌀 No foe within reach to whirl through.'); return false; }
-  sfx('crit');
-  let total = 0;
-  adj.forEach(e => {
-    const h = rollPlayerHit(e);
-    const d = Math.max(1, Math.round(h.dmg * 1.8));
-    total += d;
-    dealDamage(e, d, true);
-    if (!e.dead && Math.random() < 0.35) applyStatusEffect(e, 'stun', 1, 'player');
+// Direction (cardinal) toward the nearest foe in range, for line/beam shapes.
+function nearestFoeDir(range) {
+  const f = foesInRange(range)[0];
+  if (!f) return null;
+  const dx = f.x - player.x, dy = f.y - player.y;
+  if (Math.abs(dx) >= Math.abs(dy)) return [Math.sign(dx) || 1, 0];
+  return [0, Math.sign(dy) || 1];
+}
+// Foes along a ray from the player (perp tolerance 1 tile so it's forgiving).
+function foesInLine(dir, range) {
+  const [dx, dy] = dir;
+  return enemies.filter(o => {
+    if (o.dead) return false;
+    const rx = o.x - player.x, ry = o.y - player.y;
+    const along = rx * dx + ry * dy;
+    if (along < 1 || along > range) return false;
+    const perp = dx !== 0 ? Math.abs(ry) : Math.abs(rx);
+    return perp <= 1;
   });
-  lifestealHeal(total);
-  log(`🌀 ${HERO} whirls through ${adj.length} foe${adj.length === 1 ? '' : 's'} for ${total}!`, 'important');
-  return true;
 }
-
-// Warrior — Berserk: an explosive frenzy hitting everything within 2 tiles.
-function skillBerserk() {
-  const foes = enemiesNear(2);
-  if (!foes.length) { log('💥 No foes near enough to devastate.'); return false; }
-  sfx('crit'); screenFlash('#ff7733');
-  let total = 0;
-  foes.forEach(e => {
-    const h = rollPlayerHit(e);
-    const d = Math.max(1, Math.round(h.dmg * 2.2));
-    total += d;
-    dealDamage(e, d, true);
-  });
-  lifestealHeal(total);
-  log(`💥 ${HERO} erupts in a Berserk frenzy, hitting ${foes.length} foe${foes.length === 1 ? '' : 's'} for ${total}!`, 'important');
-  return true;
-}
-
-// Rogue — Poison Strike: a venomous stab that poisons an adjacent foe.
-function skillPoisonStrike() {
-  const adj = adjacentToPlayer().sort((a, b) => a.hp - b.hp);
-  if (!adj.length) { log('🧪 No foe adjacent to strike.'); return false; }
-  const e = adj[0];
-  const h = rollPlayerHit(e);
-  const d = Math.max(1, Math.round(h.dmg * 1.2));
-  sfx('attack');
-  dealDamage(e, d, h.isCrit);
-  if (!e.dead) applyStatusEffect(e, 'poison', 5, 'player');
-  log(`🧪 ${HERO} stabs ${enemyLabel(e)} for ${d} and leaves it poisoned!`, 'important');
-  return true;
-}
-
-// Rogue — Shadowstep: blink beside the nearest foe and land a guaranteed crit.
-function skillShadowstep() {
-  const foes = foesInRange(6);
-  if (!foes.length) { log('🌑 No foe within blink range.'); return false; }
-  const e = foes[0];
-  const spot = adjacentOpenTile(e);
-  if (spot) { player.x = spot.x; player.y = spot.y; }
-  spawnFloatingText(player.x, player.y, '🌑', '#9a7bce');
-  let dmg = getWeaponDamage() + player.level * 2 + totalStat('ATK') + attrDamage();
-  dmg = Math.round(dmg * 2.5 * classDmgDealtMult() * critDamageMult());
-  if (buffs.power) dmg = Math.round(dmg * 1.5);
-  dmg = Math.max(1, Math.min(dmg, Math.ceil(e.maxHp * 0.6)));
-  sfx('crit');
-  dealDamage(e, dmg, true);
-  log(`🌑 ${HERO} shadowsteps and crits ${enemyLabel(e)} for ${dmg}!`, 'important');
-  return true;
-}
-
-// Rogue — Fan of Knives: spray every adjacent foe and poison them.
-function skillFanOfKnives() {
-  const adj = adjacentToPlayer();
-  if (!adj.length) { log('🔅 No foes adjacent to spray.'); return false; }
-  sfx('crit');
-  let total = 0;
-  adj.forEach(e => {
-    const h = rollPlayerHit(e);
-    const d = Math.max(1, Math.round(h.dmg * 1.1));
-    total += d;
-    dealDamage(e, d, h.isCrit);
-    if (!e.dead) applyStatusEffect(e, 'poison', 4, 'player');
-  });
-  log(`🔅 ${HERO} fans blades into ${adj.length} foe${adj.length === 1 ? '' : 's'} for ${total}, poisoning them!`, 'important');
-  return true;
-}
-
-// Rogue — Death Mark: a massive guaranteed crit on the nearest foe in range.
-function skillDeathMark() {
-  const foes = foesInRange(6);
-  if (!foes.length) { log('🎯 No foe in range to mark.'); return false; }
-  const e = foes[0];
-  let dmg = getWeaponDamage() + player.level * 2 + totalStat('ATK') + attrDamage();
-  dmg = Math.round(dmg * 4.0 * classDmgDealtMult() * critDamageMult());
-  if (buffs.power) dmg = Math.round(dmg * 1.5);
-  dmg = Math.max(1, Math.min(dmg, Math.ceil(e.maxHp * 0.7)));
-  sfx('crit'); screenFlash('#88ff88');
-  dealDamage(e, dmg, true);
-  log(`🎯 DEATH MARK! ${HERO} obliterates ${enemyLabel(e)} for ${dmg}!`, 'important');
-  return true;
-}
-
-// Mage — Frost Nova: an icy burst that damages and stuns nearby foes.
-function skillFrostNova() {
-  const foes = enemiesNear(2);
-  if (!foes.length) { log('❄️ No foes near enough to freeze.'); return false; }
-  sfx('attack');
-  spawnFloatingText(player.x, player.y, '❄️', '#9fe8ff');
-  const base = spellBase(10, 1.5);
-  let total = 0;
-  foes.forEach(e => {
-    const d = Math.max(1, Math.round(base * 0.6));
-    total += d;
-    dealDamage(e, d, true);
-    if (!e.dead) applyStatusEffect(e, 'stun', 2, 'player');
-  });
-  log(`❄️ ${HERO}'s Frost Nova freezes ${foes.length} foe${foes.length === 1 ? '' : 's'} for ${total}!`, 'important');
-  return true;
-}
-
-// Mage — Chain Lightning: a bolt that arcs between up to three nearby foes.
-function skillChainLightning() {
-  let cur = foesInRange(6)[0];
-  if (!cur) { log('⚡ No foe within range.'); return false; }
-  sfx('attack');
-  const base = spellBase(18, 2);
-  const hit = [];
-  let mult = 1;
-  for (let i = 0; i < 3 && cur; i++) {
-    const d = Math.max(1, Math.round(base * mult));
-    dealDamage(cur, d, true);
-    spawnFloatingText(cur.x, cur.y, '⚡', '#ffe680');
-    hit.push(cur);
-    mult *= 0.6;
-    cur = enemies
-      .filter(o => !o.dead && !hit.includes(o) && (Math.abs(o.x - hit[i].x) + Math.abs(o.y - hit[i].y)) <= 3)
-      .sort((a, b) => (Math.abs(a.x - hit[i].x) + Math.abs(a.y - hit[i].y)) - (Math.abs(b.x - hit[i].x) + Math.abs(b.y - hit[i].y)))[0];
+// Greedy chain: nearest unhit foe within 3 tiles of the last, up to n links.
+function chainTargets(first, n, range) {
+  const hit = [first]; let last = first;
+  for (let k = 1; k < n; k++) {
+    const nxt = enemies.filter(o => !o.dead && !hit.includes(o) && (Math.abs(o.x - last.x) + Math.abs(o.y - last.y)) <= 3)
+      .sort((a, b) => (Math.abs(a.x - last.x) + Math.abs(a.y - last.y)) - (Math.abs(b.x - last.x) + Math.abs(b.y - last.y)))[0];
+    if (!nxt) break;
+    hit.push(nxt); last = nxt;
   }
-  log(`⚡ ${HERO}'s Chain Lightning leaps through ${hit.length} foe${hit.length === 1 ? '' : 's'}!`, 'important');
+  return hit;
+}
+
+// The heart of the system: resolve one active node at a given rank.
+function resolveCast(node, rank) {
+  const c = node.cast; if (!c) return false;
+  const rs = rankScale(rank);
+  let targets = [], center = { x: player.x, y: player.y };
+
+  switch (c.shape) {
+    case 'self': case 'summon': break;
+    case 'melee': {
+      const adj = adjacentToPlayer().sort((a, b) => a.hp - b.hp);
+      if (!adj.length) { log(`${node.icon} No foe within reach.`); return false; }
+      targets = [adj[0]]; center = adj[0]; break;
+    }
+    case 'cleave': {
+      targets = adjacentToPlayer();
+      if (!targets.length) { log(`${node.icon} No foe within reach.`); return false; }
+      break;
+    }
+    case 'nova': {
+      targets = enemiesNear(c.radius || 1);
+      if (!targets.length && !c.heal && !c.buff) { log(`${node.icon} No foes near enough.`); return false; }
+      break;
+    }
+    case 'bolt': {
+      const f = foesInRange(c.range || 6)[0];
+      if (!f) { log(`${node.icon} No foe within range.`); return false; }
+      targets = [f]; center = f; break;
+    }
+    case 'blast': {
+      const f = foesInRange(c.range || 6)[0];
+      if (!f) { log(`${node.icon} No foe within range.`); return false; }
+      center = f; targets = enemiesNear(c.radius || 1, f.x, f.y); break;
+    }
+    case 'line': {
+      const dir = nearestFoeDir(c.range || 5);
+      if (!dir) { log(`${node.icon} No foe in range.`); return false; }
+      targets = foesInLine(dir, c.range || 5);
+      if (!targets.length) { log(`${node.icon} No foe in line.`); return false; }
+      break;
+    }
+    case 'chain': {
+      const first = foesInRange(c.range || 6)[0];
+      if (!first) { log(`${node.icon} No foe within range.`); return false; }
+      targets = chainTargets(first, c.chain || 3, c.range || 6); break;
+    }
+    case 'teleport': {
+      const f = foesInRange(c.range || 6)[0];
+      if (!f) { log(`${node.icon} No foe within range.`); return false; }
+      const spot = adjacentOpenTile(f);
+      if (spot) { player.x = spot.x; player.y = spot.y; }
+      targets = [f]; center = f; break;
+    }
+  }
+
+  // Feedback.
+  sfx(c.shape === 'self' ? 'potion' : (c.summon ? 'shrine' : (targets.length > 2 ? 'boss' : 'attack')));
+  if (c.shape !== 'self' && c.shape !== 'summon') spawnFloatingText(center.x, center.y, node.icon, '#ffe6a0');
+  if ((c.radius || 0) >= 3 || (c.wpn || 0) >= 2.2 || (c.spell || 0) >= 1.8) screenFlash('#ffd27a');
+
+  // Summons short-circuit (no damage pass).
+  if (c.summon) { doSummon(c.summon, rank); return true; }
+
+  // Damage pass.
+  let total = 0, i = 0;
+  for (const e of targets) {
+    if (e.dead) { i++; continue; }
+    const falloff = (c.shape === 'chain') ? Math.pow(0.7, i) : 1;
+    let dmg = 0;
+    if (c.wpn) dmg = skillPhysDamage(e, c.wpn * falloff, rank, c.crit);
+    else if (c.spell) dmg = skillSpellDamage(e, c, c.spell * falloff, rank);
+    if (dmg > 0) { total += dmg; dealDamage(e, dmg, !!c.crit); }
+    if (c.status && !e.dead) {
+      const chance = Math.min(1, c.status.chance + 0.03 * (rank - 1));
+      if (Math.random() < chance) applyStatusEffect(e, c.status.effect, c.status.dur + Math.floor((rank - 1) / 3), 'player');
+    }
+    i++;
+  }
+
+  if (c.lifesteal && total > 0) {
+    const got = Math.min(Math.round(total * c.lifesteal), player.maxHp - player.hp);
+    if (got > 0) { player.hp += got; spawnFloatingText(player.x, player.y, `+${got}`, '#ff6688'); }
+  }
+  if (c.heal) {
+    let heal = 0;
+    if (c.heal.flat) heal += (c.heal.flat + player.level * (c.heal.perLevel || 0)) * rs;
+    if (c.heal.pctDmg) heal += total * c.heal.pctDmg;
+    heal = Math.min(player.maxHp - player.hp, Math.round(heal));
+    if (heal > 0) { player.hp += heal; spawnFloatingText(player.x, player.y, `+${heal}`, '#7fffaa'); }
+  }
+  if (c.buff) {
+    const arr = Array.isArray(c.buff) ? c.buff : [c.buff];
+    for (const b of arr) {
+      const flat = (b.id === 'shield' || b.id === 'regen' || b.id === 'thorns');
+      const mag = flat ? Math.round(b.mag * rs) : +(b.mag * (1 + 0.05 * (rank - 1))).toFixed(3);
+      applyBuff(b.id, b.dur, mag);
+    }
+    spawnFloatingText(player.x, player.y, node.icon, '#cfe0ff');
+  }
+
+  log(`${node.icon} ${HERO} casts ${node.name}${total > 0 ? ` for ${total}` : ''}${targets.length > 1 ? ` across ${targets.length} foes` : ''}!`, 'important');
   return true;
 }
 
-// Mage — Meteor: a falling rock that smashes the nearest foe and scorches around it.
-function skillMeteor() {
-  const c = foesInRange(7)[0];
-  if (!c) { log('☄️ No foe within range.'); return false; }
-  sfx('boss'); screenFlash('#ff7733');
-  spawnFloatingText(c.x, c.y, '☄️', '#ff8844');
-  const base = spellBase(26, 2.5);
-  const foes = enemiesNear(1, c.x, c.y);
-  let total = 0;
-  foes.forEach(e => {
-    const d = Math.max(1, Math.round(base * (e === c ? 1 : 0.6)));
-    total += d;
-    dealDamage(e, d, true);
+// ── SUMMONED MINIONS ──
+// doSummon spawns autonomous allies near the hero; runMinionTurn drives them.
+function doSummon(spec, rank) {
+  const kind = MINION_KINDS[spec.kind]; if (!kind) return;
+  let count = Math.min(8, (spec.count || 1) + Math.floor(((rank || 1) - 1) / 4));
+  const spots = openTilesNear(player.x, player.y, count + 4);
+  const mult = spec.strong ? 1.7 : 1;
+  let made = 0;
+  for (let k = 0; k < count; k++) {
+    const s = spots[k] || spots[spots.length - 1];
+    if (!s) break;
+    const dmg = Math.max(1, Math.round((kind.base + player.level * kind.perLvl) * rankScale(rank) * mult));
+    const hp = Math.round((kind.hp + player.level * 3) * mult);
+    minions.push({ x: s.x, y: s.y, kind: spec.kind, icon: kind.icon, color: kind.color,
+      dmg, hp, maxHp: hp, ranged: kind.ranged, range: kind.range, speed: kind.speed,
+      ttl: spec.ttl || 16, hitAt: 0, strong: !!spec.strong });
+    made++;
+  }
+  sfx('shrine'); spawnParticles(player.x, player.y, kind.color, 10, 0.09);
+  if (made > 0) log(`✦ ${HERO} summons ${kind.icon}${made > 1 ? ' ×' + made : ' ' + minionName(spec.kind)}!`, 'important');
+  else log('No room to summon here.');
+}
+function minionName(kind) {
+  return ({ skeleton:'a skeleton', skelarcher:'an archer', shadow:'a shadow', wolf:'a wolf',
+    elemental:'an elemental', spirit:'a guardian', golem:'a golem', totem:'a banner' })[kind] || 'an ally';
+}
+// Open walkable tiles around (x,y), nearest ring first.
+function openTilesNear(x, y, want) {
+  const out = [];
+  for (let r = 1; r <= 5 && out.length < want; r++) {
+    for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+      const nx = x + dx, ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= MAP_W || ny >= MAP_H) continue;
+      if (mapData[ny][nx] !== 0) continue;
+      if (nx === player.x && ny === player.y) continue;
+      if (getEnemyAt(nx, ny)) continue;
+      if (minionAt(nx, ny)) continue;
+      out.push({ x: nx, y: ny });
+    }
+  }
+  return out;
+}
+function minionAt(x, y) { return minions.find(m => m.x === x && m.y === y); }
+function nearestEnemyTo(x, y) {
+  let best = null, bd = 1e9;
+  for (const e of enemies) { if (e.dead) continue; const d = Math.abs(e.x - x) + Math.abs(e.y - y); if (d < bd) { bd = d; best = e; } }
+  return best;
+}
+function minionTileFree(x, y) {
+  if (x < 0 || y < 0 || x >= MAP_W || y >= MAP_H) return false;
+  if (mapData[y][x] !== 0) return false;
+  if (x === player.x && y === player.y) return false;
+  if (getEnemyAt(x, y)) return false;
+  if (minionAt(x, y)) return false;
+  return true;
+}
+// Each hero turn: every minion seeks the nearest foe, paths to it (ranged kinds
+// shoot from afar), strikes if adjacent, then loses a turn of lifespan.
+function runMinionTurn() {
+  if (!minions.length) return;
+  for (const m of minions) {
+    if (m.ttl <= 0) continue;
+    const tgt = nearestEnemyTo(m.x, m.y);
+    if (tgt) {
+      const dist = Math.abs(tgt.x - m.x) + Math.abs(tgt.y - m.y);
+      if (dist <= 1) minionAttack(m, tgt, false);
+      else if (m.ranged && dist <= m.range) minionAttack(m, tgt, true);
+      else if (m.speed > 0) {
+        for (let s = 0; s < m.speed; s++) {
+          const t2 = nearestEnemyTo(m.x, m.y); if (!t2) break;
+          if (Math.abs(t2.x - m.x) + Math.abs(t2.y - m.y) <= 1) break;
+          const step = enemyPathStep(m, t2.x, t2.y); if (!step) break;
+          const nx = m.x + step[0], ny = m.y + step[1];
+          if (nx === t2.x && ny === t2.y) break;
+          if (minionTileFree(nx, ny)) { m.x = nx; m.y = ny; } else break;
+        }
+        const t3 = nearestEnemyTo(m.x, m.y);
+        if (t3 && Math.abs(t3.x - m.x) + Math.abs(t3.y - m.y) <= 1) minionAttack(m, t3, false);
+      }
+    }
+    m.ttl--;
+  }
+  minions = minions.filter(m => {
+    if (m.ttl <= 0 || m.hp <= 0) { spawnParticles(m.x, m.y, m.color, 8, 0.08); return false; }
+    return true;
   });
-  log(`☄️ ${HERO} calls down a Meteor for ${total} across ${foes.length} foe${foes.length === 1 ? '' : 's'}!`, 'important');
-  return true;
 }
-
-// Templar — Holy Smite: searing light that damages a foe and heals you for part of it.
-function skillHolySmite() {
-  const e = foesInRange(4)[0];
-  if (!e) { log('🔆 No foe within range to smite.'); return false; }
-  const dmg = Math.max(1, Math.round(spellBase(18, 2.5)));
-  sfx('crit');
-  spawnFloatingText(e.x, e.y, '🔆', '#ffe680');
-  dealDamage(e, dmg, true);
-  const heal = Math.min(player.maxHp - player.hp, Math.round(dmg * 0.5));
-  if (heal > 0) { player.hp += heal; spawnFloatingText(player.x, player.y, `+${heal}`, '#7fffaa'); }
-  log(`🔆 ${HERO} smites ${enemyLabel(e)} for ${dmg}${heal > 0 ? ` and heals ${heal}` : ''}!`, 'important');
-  return true;
-}
-
-// Templar — Sanctuary: hallow the ground for halved incoming damage, and heal.
-function skillSanctuary() {
-  combatBuffs.sanctuary = 5;
-  const heal = Math.min(player.maxHp - player.hp, Math.round(30 + player.level * 3 + totalAttr('spirit') * ATTR_FX.spellPerSpr));
-  if (heal > 0) player.hp += heal;
-  sfx('potion');
-  spawnFloatingText(player.x, player.y, '⛪', '#ffe9a0');
-  log(`⛪ ${HERO} consecrates the ground — incoming damage halved for a few turns${heal > 0 ? `, +${heal} HP` : ''}.`, 'important');
-  return true;
-}
-
-// Templar — Judgment: smite every nearby foe and restore a burst of health.
-function skillJudgment() {
-  const foes = enemiesNear(2);
-  if (!foes.length && player.hp >= player.maxHp) { log('⚖️ No foes near and already at full health.'); return false; }
-  sfx('boss'); screenFlash('#ffe9a0');
-  const base = spellBase(22, 2.5);
-  let total = 0;
-  foes.forEach(e => {
-    const d = Math.max(1, Math.round(base));
-    total += d;
-    dealDamage(e, d, true);
-    spawnFloatingText(e.x, e.y, '⚖️', '#ffe680');
-  });
-  const heal = Math.min(player.maxHp - player.hp, Math.round(40 + player.level * 4));
-  if (heal > 0) player.hp += heal;
-  log(`⚖️ ${HERO} passes Judgment${foes.length ? ` on ${foes.length} foe${foes.length === 1 ? '' : 's'} for ${total}` : ''}${heal > 0 ? `, restoring ${heal} HP` : ''}!`, 'important');
-  return true;
+function minionAttack(m, e, ranged) {
+  let dmg = Math.round(m.dmg * rnd(85, 115) / 100);
+  m.hitAt = Date.now();
+  if (ranged) spawnFloatingText(m.x, m.y, '➳', m.color);
+  dmg = Math.max(1, Math.min(dmg, Math.ceil(e.maxHp * (e.isBoss ? 0.2 : 0.5))));
+  dealDamage(e, dmg, false);
 }
 
 // Run every nearby living enemy's turn once, bailing if the floor changes
@@ -8598,7 +9131,10 @@ function runEnemyTurn() {
   // and any transient combat buffs (War Cry, Sanctuary, …).
   if (player.skillCds) for (const k in player.skillCds) if (player.skillCds[k] > 0) player.skillCds[k]--;
   if (player.potionCd > 0) player.potionCd--;
-  for (const k in combatBuffs) if (combatBuffs[k] > 0) combatBuffs[k]--;
+  for (const k in combatBuffs) { const b = combatBuffs[k]; if (b && b.t > 0) { b.t--; if (b.t <= 0) delete combatBuffs[k]; } }
+  // Summoned minions act on the hero's turn — before foes, so they can soak and
+  // strike — then count down their lifespan.
+  runMinionTurn();
   const serial = floorSerial;
   enemies.filter(e => !e.dead).forEach(e => {
     if (floorSerial !== serial) return;
@@ -8907,7 +9443,7 @@ function handleDeath() {
   const lostGold = Math.floor(player.gold / 2);
   player.gold -= lostGold;
   statusEffects = statusEffects.filter(s => s.target !== 'player');
-  player.skillCds = {}; combatBuffs = {}; // revived fresh — skills ready again
+  player.skillCds = {}; combatBuffs = {}; minions = []; // revived fresh — skills ready again
   sfx('death');
   // Remember where you fell so the Dungeon Gate can return you there.
   dungeonReturn = dungeonLevel;
@@ -9348,8 +9884,10 @@ function renderHero(el) {
       <div class="hc-line">${cls.passive}</div>
       <div class="hc-line">⚔️ Damage scales with <b>${ATTRIBUTES[dmgA.primary].label}</b>${dmgA.secondary ? ` & ${ATTRIBUTES[dmgA.secondary].label}` : ''}</div>
       <div class="hc-line">${cls.skill.icon} <b>${cls.skill.name}</b> — ${cls.skill.desc} <span style="opacity:0.7">(${cls.skill.mp} MP)</span></div>
+      ${ascData() ? `<div class="hc-line" style="color:${ascData().color}">${ascData().icon} <b>${ascData().name}</b> — ${ascData().blurb}</div>`
+        : (cls && (player.level || 1) >= ASCEND_LEVEL ? `<div class="hc-line" style="color:#e8c267">🌟 Ready to ascend — visit the Trainer 🎓</div>` : '')}
       <div class="hc-line" style="opacity:0.75">Weapons: ${cls.weapons.join(', ')}</div>
-      <div class="hc-line" style="opacity:0.6">Change class at the town Trainer 🎓</div>
+      <div class="hc-line" style="opacity:0.6">Change class · ascend at the town Trainer 🎓</div>
     </div>` : '';
   el.innerHTML = `
     <div class="hero-power">
@@ -9363,28 +9901,76 @@ function renderHero(el) {
     ${derived}`;
 }
 
-// SKILLS tab: the class skill tree, drawn as a branching node graph. Two trunks
-// (offense / defense) root in the Lv1 passives and flow down to the capstone.
-// Tiles are hand-placed via SKILL_TREE_LAYOUT; SVG draws the branch connectors,
-// which light up once their prerequisite is owned. Tapping a node opens a detail
-// popover with a Learn button (buySkill) — see selectSkill / positionSkillPop.
+// SKILLS tab: separate PASSIVE / ACTIVE / PATH trees, each drawn as a band-gated
+// node graph (Diablo-2 style). Node positions are derived from each node's band
+// (row) and col so 30-node trees lay out automatically; SVG draws the branch
+// connectors, lit once their prerequisite is owned. Tapping a node opens a detail
+// popover with a Learn button. The PATH tree unlocks after ascending.
+function setSkillView(v) { skillView = v; selectedSkillId = null; renderPanel(); }
+
+// Fractional [x,y] position (0–1) of a node from its band/col within a tree.
+function nodePos(n, cols, bands) {
+  return [ (n.col + 0.5) / cols, (n.band + 0.6) / (bands + 0.1) ];
+}
+function treeDims(tree) {
+  let cols = 1, bands = 1;
+  for (const n of tree) { cols = Math.max(cols, n.col + 1); bands = Math.max(bands, n.band + 1); }
+  return { cols, bands };
+}
+
 function renderSkills(el) {
   const cls = playerClass();
   if (!cls) { el.innerHTML = '<div class="hero-sub" style="padding:12px">Pick a class to unlock its skill tree.</div>'; selectedSkillId = null; return; }
   const pts = player.skillPoints || 0;
-  const tree = classSkillTree();
-  const layout = SKILL_TREE_LAYOUT[player.class] || {};
+  const asc = ascData();
+  // Sub-tab selector across the three trees.
+  const tabBtn = (v, label) => `<button class="sk-vtab ${skillView === v ? 'on' : ''}" onclick="setSkillView('${v}')">${label}</button>`;
+  const pathLabel = asc ? `${asc.icon} ${asc.name.toUpperCase()}` : '🔒 PATH';
+  const tabs = `<div class="sk-vtabs">${tabBtn('passive', '🛡 PASSIVE')}${tabBtn('active', '⚡ ACTIVE')}${tabBtn('path', pathLabel)}</div>`;
 
-  // Branch connectors: one line per node→prerequisite. Lit (bright purple) once
-  // the prerequisite has any rank, dim grey while still locked. A wider faint line
-  // under each lit line fakes a glow; non-scaling-stroke keeps widths even though
-  // the viewBox is stretched non-uniformly to fill the canvas.
+  const header = `
+    <div class="hero-power">
+      <div class="hp-label">🌟 SKILL POINTS</div>
+      <div class="hp-value">${pts}</div>
+    </div>
+    <div class="hero-sub">${cls.icon} ${cls.name}${asc ? ` · <span style="color:${asc.color}">${asc.icon} ${asc.name}</span>` : ''} · ${spentSkillPoints()} learned</div>
+    <div class="hero-points">${pts > 0 ? `${pts} point${pts > 1 ? 's' : ''} to spend!` : 'Level up to earn more skill points.'}</div>
+    ${tabs}`;
+
+  // The PATH tab before ascending: a prompt and the two specialization previews.
+  if (skillView === 'path' && !asc) {
+    const opts = Object.keys(ASCENSIONS).filter(k => ASCENSIONS[k].base === player.class);
+    const cards = opts.map(k => {
+      const a = ASCENSIONS[k];
+      return `<div class="asc-card" style="border-left-color:${a.color}">
+        <div class="asc-head"><span>${a.icon}</span><b style="color:${a.color}">${a.name}</b></div>
+        <div class="asc-blurb">${a.blurb}</div></div>`;
+    }).join('');
+    const ready = (player.level || 1) >= ASCEND_LEVEL;
+    el.innerHTML = header + `
+      <div class="asc-prompt">
+        <div class="asc-title">Choose an Ascension</div>
+        <div class="asc-note">${ready
+          ? `You are ready to ascend! Visit the town <b>Trainer 🎓</b> to specialize and unlock this path's tree.`
+          : `Reach <b>Hero level ${ASCEND_LEVEL}</b>, then ascend at the town <b>Trainer 🎓</b> to specialize (you're ${player.level || 1}).`}</div>
+        ${cards}
+      </div>`;
+    return;
+  }
+
+  const tree = skillTreeFor(skillView);
+  const { cols, bands } = treeDims(tree);
+  const byId = {}; tree.forEach(n => byId[n.id] = n);
+
+  // Branch connectors (one per node→prerequisite within this tree).
   let lines = '';
   for (const n of tree) {
-    const p = layout[n.id]; if (!p || !n.req) continue;
-    for (const [rid] of n.req) {
-      const q = layout[rid]; if (!q) continue;
-      const x1 = (q[0] * 100).toFixed(1), y1 = (q[1] * 100).toFixed(1);
+    if (!n.req) continue;
+    const p = nodePos(n, cols, bands);
+    for (const rid of n.req) {
+      const q = byId[rid]; if (!q) continue;
+      const a = nodePos(q, cols, bands);
+      const x1 = (a[0] * 100).toFixed(1), y1 = (a[1] * 100).toFixed(1);
       const x2 = (p[0] * 100).toFixed(1), y2 = (p[1] * 100).toFixed(1);
       if (skillRank(rid) > 0) {
         lines += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#8c6eff" stroke-opacity="0.28" stroke-width="6" vector-effect="non-scaling-stroke"/>`;
@@ -9395,23 +9981,27 @@ function renderSkills(el) {
     }
   }
 
-  // Node tiles. State precedence: maxed > available-to-buy > owned > locked, so a
-  // partly-ranked node you can still spend on glows purple to draw the eye there.
+  // Per-band level labels down the left edge so the gating reads clearly.
+  let bandLabels = '';
+  const seenBand = {};
+  for (const n of tree) {
+    if (seenBand[n.band]) continue; seenBand[n.band] = true;
+    const y = ((n.band + 0.6) / (bands + 0.1) * 100).toFixed(1);
+    const met = (player.level || 1) >= n.lvl;
+    bandLabels += `<div class="sk-band ${met ? 'met' : ''}" style="top:${y}%">Lv${n.lvl}</div>`;
+  }
+
+  // Node tiles. State precedence: maxed > available > owned > ready > locked.
   const tiles = tree.map(n => {
-    const p = layout[n.id]; if (!p) return '';
+    const p = nodePos(n, cols, bands);
     const rank = skillRank(n.id);
     const maxd = skillMaxed(n);
     const owned = rank > 0;
     const avail = canBuySkill(n);
-    // "ready" = prereqs + level are satisfied; you only lack a skill point. Showing
-    // this distinctly from a true prereq-lock stops the tree from looking gated when
-    // an unowned node is actually a single level-up away.
     const ready = !owned && !avail && skillReqMet(n);
     const state = maxd ? 'maxed' : avail ? 'avail' : owned ? 'owned' : ready ? 'ready' : 'locked';
-    const badge = maxd ? '✓' : avail ? '+' : owned ? '✓' : ready ? '☆' : '🔒';
-    const pips = (n.max || 1) > 1
-      ? `<div class="pips">${Array.from({ length: n.max }, (_, i) => `<span class="pip${i < rank ? ' on' : ''}"></span>`).join('')}</div>`
-      : '';
+    const badge = maxd ? '✓' : avail ? '+' : owned ? rank : ready ? '☆' : '🔒';
+    const pips = `<div class="pips">${Array.from({ length: 10 }, (_, i) => `<span class="pip${i < rank ? ' on' : ''}"></span>`).join('')}</div>`;
     return `<button class="sk-tnode ${state}${n.type === 'active' ? ' act' : ''}${selectedSkillId === n.id ? ' sel' : ''}" id="sknode-${n.id}"
         style="left:${(p[0] * 100).toFixed(2)}%;top:${(p[1] * 100).toFixed(2)}%" onclick="selectSkill('${n.id}')">
       <span class="badge">${badge}</span><span class="ic">${n.icon}</span>
@@ -9421,35 +10011,28 @@ function renderSkills(el) {
 
   // Detail popover for the selected node (placed by positionSkillPop after layout).
   let pop = '';
-  const sn = selectedSkillId ? skillNode(selectedSkillId) : null;
-  if (sn && layout[sn.id]) {
+  const sn = selectedSkillId ? byId[selectedSkillId] : null;
+  if (sn) {
     const rank = skillRank(sn.id);
-    const typeTxt = sn.type === 'active' ? `⚡ ACTIVE · ${sn.mp}MP · ${sn.cd}cd` : 'PASSIVE';
-    const rankTxt = (sn.max || 1) > 1 ? ` <span style="color:#e8c267">${rank}/${sn.max}</span>` : (rank > 0 ? ' ✓' : '');
-    // One row per requirement, each marked met (green) or short (red), and prereq
-    // nodes show your current rank vs what's needed so "how much further?" is obvious.
+    const typeTxt = sn.type === 'active' ? `⚡ ACTIVE · ${sn.mp}MP · ${sn.cd}cd · ${castShapeLabel(sn.cast)}` : 'PASSIVE';
+    const rankTxt = ` <span style="color:#e8c267">${rank}/${sn.max}</span>`;
     const reqRows = [];
     if ((sn.lvl || 1) > 1) {
-      const ok = player.level >= sn.lvl;
-      // "Hero level" (not just "Lv5") so it can't be misread as a required skill rank.
+      const ok = (player.level || 1) >= sn.lvl;
       reqRows.push(`<span class="${ok ? 'rqok' : 'rqno'}">${ok ? '✓' : '🔒'} Hero level ${sn.lvl}${ok ? '' : ` (you're ${player.level})`}</span>`);
     }
-    if (sn.req) for (const [rid, rk] of sn.req) {
-      const rn = skillNode(rid); const cur = skillRank(rid); const ok = cur >= rk;
-      // Only a multi-rank requirement shows a fraction; a rank-1 prereq just needs to
-      // be learned, so "Aegis" reads cleaner than a confusing "Aegis 3/1".
-      const rankTxt = rk > 1 ? ` ${cur}/${rk}` : '';
-      reqRows.push(`<span class="${ok ? 'rqok' : 'rqno'}">${ok ? '✓' : '🔒'} ${rn ? rn.name : rid}${rankTxt}</span>`);
+    if (sn.req) for (const rid of sn.req) {
+      const rn = byId[rid] || skillNode(rid); const ok = skillRank(rid) >= 1;
+      reqRows.push(`<span class="${ok ? 'rqok' : 'rqno'}">${ok ? '✓' : '🔒'} ${rn ? rn.name : rid}</span>`);
     }
     const reqMet = skillReqMet(sn);
     let reqHtml = reqRows.length ? `<div class="rq">${reqRows.join('<br>')}</div>` : '';
-    // Prereqs met but no point banked: make it clear the node is reachable, not stuck.
     if (reqMet && !skillMaxed(sn) && (player.skillPoints || 0) <= 0) {
       reqHtml += `<div class="rq-hint">☆ Ready — earn a skill point by leveling up.</div>`;
     }
     const buyBtn = skillMaxed(sn)
-      ? `<button class="pop-buy maxed" disabled>✓ Maxed</button>`
-      : `<button class="pop-buy" ${canBuySkill(sn) ? '' : 'disabled'} onclick="buySkill('${sn.id}')">${(sn.max || 1) > 1 ? `Learn (rank ${rank + 1}/${sn.max})` : 'Learn'}</button>`;
+      ? `<button class="pop-buy maxed" disabled>✓ Maxed (10/10)</button>`
+      : `<button class="pop-buy" ${canBuySkill(sn) ? '' : 'disabled'} onclick="buySkill('${sn.id}')">Learn (rank ${rank + 1}/${sn.max})</button>`;
     pop = `<div class="sk-pop" id="sk-pop">
       <b>${sn.icon} ${sn.name}</b>${rankTxt}
       <div class="ty">${typeTxt}</div>
@@ -9459,20 +10042,26 @@ function renderSkills(el) {
     </div>`;
   }
 
-  el.innerHTML = `
-    <div class="hero-power">
-      <div class="hp-label">🌟 SKILL POINTS</div>
-      <div class="hp-value">${pts}</div>
-    </div>
-    <div class="hero-sub">${cls.icon} ${cls.name} · ${spentSkillPoints()} learned</div>
-    <div class="hero-points">${pts > 0 ? `${pts} point${pts > 1 ? 's' : ''} to spend!` : 'Level up to earn more skill points.'}</div>
-    <div class="sk-trunks"><span class="sk-trunk off">◆ OFFENSE</span><span class="sk-trunk def">DEFENSE ◆</span></div>
+  el.innerHTML = header + `
     <div class="sk-tree" id="sk-tree" onclick="if(event.target.id==='sk-tree'){selectedSkillId=null;renderPanel();}">
       <svg viewBox="0 0 100 100" preserveAspectRatio="none">${lines}</svg>
+      ${bandLabels}
       ${tiles}
       ${pop}
     </div>`;
   positionSkillPop();
+}
+
+// A short human label for an active's targeting shape, shown in its popover.
+function castShapeLabel(c) {
+  if (!c) return '';
+  const r = c.radius ? ` r${c.radius}` : '';
+  const rg = c.range ? ` ${c.range} tiles` : '';
+  return ({
+    self: 'self', melee: 'melee', cleave: 'cleave (adjacent)', nova: `burst${r}`,
+    bolt: `single${rg}`, blast: `area${rg}${r}`, line: `line${rg}`, chain: `chain×${c.chain || 3}`,
+    teleport: `blink${rg}`, summon: `summon ${c.summon ? c.summon.kind : ''}`,
+  })[c.shape] || c.shape;
 }
 
 // Toggle the detail popover for a skill node (tap the open node again to close).
@@ -9528,8 +10117,11 @@ function renderSkillBar() {
   bar.innerHTML = healBtn + manaBtn + skills.map((s) => {
     const cd = skillCd(s.id);
     const ready = cd === 0 && player.mp >= s.mp && player.hp > 0;
-    const key = s.baseline ? 'R' : String(++extraNum);
-    return `<button class="skillbar-btn ${s.baseline ? 'baseline ' : ''}${ready ? 'ready' : 'disabled'}" title="${s.name} — ${s.desc} (${s.mp} MP, ${s.cd}-turn cooldown) · press ${key}" onclick="castSkillById('${s.id}')">
+    // Number keys 1–9 map to the first nine learned actives; any beyond that are
+    // click/tap only (a deep build can learn more actives than there are keys).
+    const idx = s.baseline ? 0 : ++extraNum;
+    const key = s.baseline ? 'R' : (idx <= 9 ? String(idx) : '');
+    return `<button class="skillbar-btn ${s.baseline ? 'baseline ' : ''}${ready ? 'ready' : 'disabled'}" title="${s.name} — ${s.desc} (${s.mp} MP, ${s.cd}-turn cooldown)${key ? ` · press ${key}` : ''}" onclick="castSkillById('${s.id}')">
       <span class="sb-key">${key}</span><span class="sb-icon">${s.icon}</span><span class="sb-info">${cd > 0 ? cd : s.mp + 'MP'}</span>
     </button>`;
   }).join('');
@@ -9580,7 +10172,7 @@ function chooseClass(key) {
   const cls = CLASSES[key];
   if (!cls) return;
   player.class = key;
-  player.skillCd = 0;
+  player.skillCd = 0; player.ascension = null;
   player.skills = {}; player.skillCds = {}; combatBuffs = {};
   recomputeMaxStats();
   player.hp = player.maxHp;
@@ -9614,7 +10206,7 @@ function changeClass(key) {
   // tree so the player can re-spec into the new class's skills from scratch.
   const refunded = spentSkillPoints();
   player.class = key;
-  player.skillCd = 0;
+  player.skillCd = 0; player.ascension = null;
   player.skills = {}; player.skillCds = {}; combatBuffs = {};
   player.skillPoints = (player.skillPoints || 0) + refunded;
   recomputeMaxStats();
@@ -9949,8 +10541,8 @@ document.addEventListener('keydown', e => {
   if (e.key==='q'||e.key==='Q')          useHealthPotion();
   if (e.key==='e'||e.key==='E')          useManaPotion();
   if (e.key==='r'||e.key==='R')          castSkill();
-  // Number keys cast learned tree actives in skill-bar order.
-  if (e.key>='1' && e.key<='4') {
+  // Number keys 1–9 cast learned tree/path actives in skill-bar order.
+  if (e.key>='1' && e.key<='9') {
     const extras = activeSkillList().filter(s => !s.baseline);
     const sk = extras[parseInt(e.key, 10) - 1];
     if (sk) castSkillById(sk.id);
@@ -10040,6 +10632,10 @@ function loadGame() {
     // init flow prompts the player to choose one. Drop any unknown class id.
     if (player.class && !CLASSES[player.class]) player.class = null;
     if (player.skillCd == null) player.skillCd = 0;
+    // Migrate saves that predate ascension. Drop an ascension that doesn't belong
+    // to the current class (e.g. after a class change on an older save).
+    if (player.ascension === undefined) player.ascension = null;
+    if (player.ascension && (!ASCENSIONS[player.ascension] || ASCENSIONS[player.ascension].base !== player.class)) player.ascension = null;
     // Migrate saves that predate the skill tree.
     if (player.skillPoints == null) player.skillPoints = 0;
     if (!player.skills || typeof player.skills !== 'object') player.skills = {};
