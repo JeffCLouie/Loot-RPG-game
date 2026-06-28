@@ -10110,6 +10110,7 @@ function enemyArmorPct(e) {
 // died (rewards handled by onEnemyDefeated).
 function dealDamage(e, dmg, isCrit) {
   if (e.dead) return true;
+  if (e.shieldT > 0) dmg = Math.max(1, Math.round(dmg * 0.5)); // boss ward halves the blow
   // Vulnerable (cursed/marked) foes take amplified damage from every source.
   if (statusEffects.some(s => s.target === e && s.effect === 'vuln')) dmg = Math.round(dmg * 1.35);
   e.hp -= dmg;
