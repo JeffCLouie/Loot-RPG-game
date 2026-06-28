@@ -10598,7 +10598,7 @@ function renderSkills(el) {
     const badge = maxd ? '✓' : avail ? '+' : owned ? rank : ready ? '☆' : '🔒';
     const pips = `<div class="pips">${Array.from({ length: 10 }, (_, i) => `<span class="pip${i < rank ? ' on' : ''}"></span>`).join('')}</div>`;
     return `<button class="sk-tnode ${state}${n.type === 'active' ? ' act' : ''}${selectedSkillId === n.id ? ' sel' : ''}" id="sknode-${n.id}"
-        style="left:${(p[0] * 100).toFixed(2)}%;top:${(p[1] * 100).toFixed(2)}%" onclick="selectSkill('${n.id}')">
+        style="left:${(p[0] * 100).toFixed(2)}%;top:${(p[1] * 100).toFixed(2)}%" onclick="selectSkill('${n.id}')" ondblclick="buySkill('${n.id}')">
       <span class="badge">${badge}</span><span class="ic">${n.icon}</span>
       <span class="nm">${n.name}</span>${pips}
     </button>`;
