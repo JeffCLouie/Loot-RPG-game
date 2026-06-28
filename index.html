@@ -10160,7 +10160,11 @@ function hideTooltip() { ttEl.style.display = 'none'; tooltipShowing = null; }
 // gear hover card. The content lives in the element's data-tip attribute; the
 // wrapper carries the handlers so it fires even when the button is disabled.
 const hoverTipEl = document.getElementById('hovertip');
+// Only real pointers get hover tooltips — on touch, a tap emulates mouseenter
+// and these would pop open at random (e.g. the spell/skill tips on mobile).
+const HOVER_MQ = window.matchMedia('(hover: hover) and (pointer: fine)');
 function showHoverTip(e, el) {
+  if (!HOVER_MQ.matches) return;
   const html = el && el.dataset ? el.dataset.tip : '';
   if (!html) return;
   hoverTipEl.innerHTML = html;
