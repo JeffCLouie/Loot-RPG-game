@@ -511,17 +511,8 @@
   /* Vector item icons: silhouettes tinted to rarity, sized to their container. */
   .svg-icon { width: 18px; height: 18px; display: block; }
   .slot-icon .svg-icon { width: 16px; height: 16px; }
-  .cos-chip .svg-icon { width: 18px; height: 18px; }
-  .cos-preview .svg-icon { width: 20px; height: 20px; margin: 0 auto; }
 
-  /* ── COSMETICS / APPEARANCE ── */
-  .cos-head { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 8px; }
-  .cos-title { font-size: 11px; color: #c9a84a; letter-spacing: 1px; margin-bottom: 2px; }
-  .cos-sub { font-size: 9px; color: #555; margin-bottom: 8px; line-height: 1.4; }
-  .cos-block { margin-bottom: 8px; }
-  .cos-blk-head { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
-  .cos-preview { width: 24px; text-align: center; font-size: 18px; line-height: 1; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.6)); }
-  .cos-slot-label { color: #999; font-size: 10px; }
+  /* Chip row (used by the gamble slot picker) */
   .cos-chips { display: flex; flex-wrap: wrap; gap: 4px; }
   .cos-chip {
     flex-shrink: 0;
@@ -538,10 +529,8 @@
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation;
   }
-  .cos-chip.gear { font-family: 'Courier New', monospace; font-size: 9px; font-weight: bold; letter-spacing: 1px; color: #aaa; }
   .cos-chip:active { background: #2a2a3c; }
   .cos-chip.sel { border-color: #c9a84a; background: #2c2616; box-shadow: 0 0 6px rgba(201,168,74,0.5); }
-  .cos-empty { font-size: 9px; color: #555; font-style: italic; padding: 2px 0; }
 
   /* Inline action buttons on loot/gear rows */
   .row-btn {
@@ -9507,8 +9496,7 @@ function renderPanel() {
     }).join('');
   } else if (currentTab === 'equip') {
     el.innerHTML = SLOT_KEYS.map(s => renderSlot(s, SLOTS[s].label)).join('') +
-      `<div style="margin-top:8px;font-size:10px;color:#555">Tap EQUIP on any loot<br>item to gear up.</div>` +
-      renderCosmetics();
+      `<div style="margin-top:8px;font-size:10px;color:#555">Tap EQUIP on any loot<br>item to gear up.</div>`;
   } else if (currentTab === 'skills') {
     renderSkills(el);
   } else {
@@ -9873,53 +9861,6 @@ function renderSlot(slot, label) {
     </div>
     ${item ? `<button class="row-btn unequip-row-btn" onclick="unequip('${slot}')">✕</button>` : ''}
   </div>`;
-}
-
-// COSMETICS: change how the hero *looks* without changing what's equipped. Pick
-// from the wardrobe of looks you've found, per visual slot (head / chest / weapon).
-const COS_LABELS = { head: '🪖 Head', chest: '🛡 Chest', weapon: '⚔ Weapon' };
-function renderCosmetics() {
-  if (!player.cosmetics) player.cosmetics = { head:null, chest:null, weapon:null };
-  if (!player.wardrobe) player.wardrobe = { head:[], chest:[], weapon:[] };
-  const blocks = VISUAL_SLOTS.map(slot => {
-    const looks = player.wardrobe[slot] || [];
-    const override = player.cosmetics[slot] || null;
-    const shown = visualIcon(slot);
-    // "Match gear" chip (clears any override) is always offered first.
-    let chips = `<button class="cos-chip gear ${override ? '' : 'sel'}"
-        ${hoverTip(`<div class='ht-name'>Match Gear</div><div class='ht-line'>Show your equipped gear's own look.</div>`)} onclick="pickCosmetic('${slot}','')">GEAR</button>`;
-    // One tappable chip per discovered look.
-    chips += looks.map(l =>
-      `<button class="cos-chip ${override === l.icon ? 'sel' : ''}"
-         ${hoverTip(`<div class='ht-name'>${(l.name || 'Look').replace(/'/g,'&#39;')}</div>`)} onclick="pickCosmetic('${slot}','${l.icon}')">${iconMarkup(l.icon, '#dddde6', false)}</button>`
-    ).join('');
-    const empty = looks.length ? '' :
-      `<div class="cos-empty">Find ${COS_LABELS[slot].replace(/^\S+\s/, '').toLowerCase()} loot to unlock looks.</div>`;
-    return `<div class="cos-block">
-      <div class="cos-blk-head">
-        <span class="cos-preview">${shown ? iconMarkup(shown, '#cfcfe0', false) : '—'}</span>
-        <span class="cos-slot-label">${COS_LABELS[slot]}</span>
-      </div>
-      <div class="cos-chips">${chips}</div>
-      ${empty}
-    </div>`;
-  }).join('');
-  return `<div class="cos-head">
-    <div class="cos-title">👁 APPEARANCE</div>
-    <div class="cos-sub">Tap a look to wear it — your sprite changes, but your equipped gear and stats don't.</div>
-    ${blocks}
-  </div>`;
-}
-
-// Wear a chosen look for a visual slot. An empty icon clears the override so the
-// slot mirrors equipped gear again.
-function pickCosmetic(slot, icon) {
-  if (!VISUAL_SLOTS.includes(slot)) return;
-  if (!player.cosmetics) player.cosmetics = { head:null, chest:null, weapon:null };
-  player.cosmetics[slot] = icon || null;
-  renderPanel();
-  draw();         // restyle the sprite immediately
-  saveGame();
 }
 
 // One-tap equip: route an item straight to its own slot.
