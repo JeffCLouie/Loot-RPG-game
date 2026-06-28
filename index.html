@@ -665,6 +665,9 @@
     border-color: #6a5a2a;
     box-shadow: 0 0 5px rgba(201,168,74,0.4);
   }
+  /* Dim the DawnLike key when unlocked; full-bright (gold-glow button) when locked. */
+  .lock-toggle-btn .dl-ic { opacity: 0.38; }
+  .lock-toggle-btn.on .dl-ic { opacity: 1; }
   /* Subtle gold edge on a locked loot row so it reads at a glance. */
   .loot-item.locked { border-left-color: #c9a84a; }
 
@@ -6086,8 +6089,9 @@ function renderShop() {
     const rows = inventory.map((item, i) => {
       const sellPrice = Math.max(1, Math.round(item.value * 0.5));
       const stats = item.stats ? itemStatLine(item) : '';
+      const lockIco = dlIcon('key', 16) || '🔒';
       const action = item.locked
-        ? `<button class="shop-sell-btn" onclick="toggleLockShop(${i})" title="Locked — tap to unlock">🔒</button>`
+        ? `<button class="shop-sell-btn" onclick="toggleLockShop(${i})" title="Locked — tap to unlock">${lockIco}</button>`
         : `<button class="shop-sell-btn" onclick="sellItem(${i})">SELL</button>`;
       return `<div class="shop-row${item.locked ? ' locked' : ''}">
         <span class="loot-icon">${iconMarkup(itemIcon(item), tierColor(item))}</span>
@@ -6096,7 +6100,7 @@ function renderShop() {
           <div class="shop-row-sub">${item.slot ? SLOTS[item.slot].label.replace(/^\S+\s/, '') : 'potion'}</div>
           ${stats ? `<div class="shop-row-stats">${stats}</div>` : ''}
         </div>
-        <span class="shop-price">${item.locked ? '🔒' : sellPrice + 'g'}</span>
+        <span class="shop-price">${item.locked ? lockIco : sellPrice + 'g'}</span>
         ${action}
       </div>`;
     }).join('');
@@ -6805,7 +6809,7 @@ function renderSalvage() {
   } else {
     const rows = list.map(({ item, i }) => {
       const action = item.locked
-        ? `<button class="shop-sell-btn" onclick="toggleLockCraft(${i})" title="Locked — tap to unlock">🔒</button>`
+        ? `<button class="shop-sell-btn" onclick="toggleLockCraft(${i})" title="Locked — tap to unlock">${dlIcon('key', 16) || '🔒'}</button>`
         : `<button class="shop-sell-btn" onclick="salvageItem(${i})">SALVAGE</button>`;
       return `
       <div class="shop-row${item.locked ? ' locked' : ''}">
@@ -11972,7 +11976,7 @@ function renderPanel() {
       const diff = equipable ? `<div class="item-diff">${statDiffLine(item)}</div>` : '';
       const lockBtn = `<button class="row-btn lock-toggle-btn ${item.locked?'on':''}" onclick="toggleLock(${i})" ${hoverTip(item.locked
         ? `<div class='ht-name'>🔒 Locked</div><div class='ht-line'>Safe from selling &amp; salvage. Tap to unlock.</div>`
-        : `<div class='ht-name'>🔓 Unlocked</div><div class='ht-line'>Tap to lock — keeps it from being sold or salvaged.</div>`)}>${item.locked?'🔒':'🔓'}</button>`;
+        : `<div class='ht-name'>🔓 Unlocked</div><div class='ht-line'>Tap to lock — keeps it from being sold or salvaged.</div>`)}>${dlIcon('key', 16) || (item.locked ? '🔒' : '🔓')}</button>`;
       return `
       <div class="loot-item item-${item.tier} ${selectedItem===i?'selected':''} ${isUpgrade?'upgrade':''} ${item.locked?'locked':''}">
         <span class="loot-icon">${iconMarkup(itemIcon(item), tierColor(item))}</span>
