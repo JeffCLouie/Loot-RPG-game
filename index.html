@@ -9689,7 +9689,7 @@ const SAVE_KEY = 'dungeonLoot_save_v1';
 // original single-save key so any existing game is adopted as the first slot
 // with no migration; the rest get a suffixed key. The active slot is the one
 // that auto-saves and loads, and is remembered across reloads.
-const SLOT_COUNT = 3;
+const SLOT_COUNT = 10;
 const ACTIVE_SLOT_KEY = 'dungeonLoot_activeSlot';
 function slotKey(i) { return i === 0 ? SAVE_KEY : SAVE_KEY + '_s' + i; }
 let activeSlot = (function () {
