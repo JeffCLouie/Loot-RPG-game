@@ -1638,7 +1638,7 @@
           <span class="action-icon" id="sound-icon">🔊</span><span class="action-label" id="sound-label">ON</span>
         </button>
         <button class="settings-item zoom-action" onclick="toggleZoom()">
-          <span class="action-icon" id="zoom-icon">🔍</span><span class="action-label" id="zoom-label">CLOSE</span>
+          <span class="action-icon" id="zoom-icon">🔍</span><span class="action-label" id="zoom-label">WIDE</span>
         </button>
         <button class="settings-item slots-action" onclick="openSlots()">
           <span class="action-icon">💾</span><span class="action-label">SLOTS</span>
@@ -3695,12 +3695,18 @@ const audio = {
 };
 try { audio.muted = localStorage.getItem(AUDIO_KEY) === 'off'; } catch (e) {}
 
-// ── ZOOM ── how many tiles span the shorter axis of the play area. Default 9
-// (close, big tiles). The zoom button toggles a one-tile-wider perimeter: +1
-// tile on every side means 2 more tiles across, so 9 → 11. Persisted per device.
+// ── ZOOM ── how many tiles span the shorter axis of the play area. Fewer
+// tiles = bigger tiles. The zoom button cycles through these stops; each step
+// adds one tile to every side (a wider perimeter). Default is the first stop.
+// Persisted per device as an index into ZOOM_STOPS.
 const ZOOM_KEY = 'dungeonLootZoom';
-let zoomedOut = false;
-try { zoomedOut = localStorage.getItem(ZOOM_KEY) === 'out'; } catch (e) {}
+const ZOOM_STOPS = [11, 13, 15];
+const ZOOM_LABELS = ['WIDE', 'WIDER', 'WIDEST'];
+let zoomLevel = 0;
+try {
+  const z = parseInt(localStorage.getItem(ZOOM_KEY), 10);
+  if (z >= 0 && z < ZOOM_STOPS.length) zoomLevel = z;
+} catch (e) {}
 
 // Lazily create the AudioContext and the gain graph (master → sfx / music).
 function audioInit() {
@@ -4303,11 +4309,12 @@ function updateSoundButton() {
   if (btn) btn.classList.toggle('muted', audio.muted);
 }
 
-// Toggle the play-area zoom: default (9 tiles) ↔ one-tile-wider perimeter
-// (11 tiles). Persist the choice, redraw immediately, and refresh the button.
+// Cycle the play-area zoom through ZOOM_STOPS (wraps back to the default at the
+// end). Each step widens the view by one tile on every side. Persist the
+// choice, redraw immediately, and refresh the button.
 function toggleZoom() {
-  zoomedOut = !zoomedOut;
-  try { localStorage.setItem(ZOOM_KEY, zoomedOut ? 'out' : 'in'); } catch (e) {}
+  zoomLevel = (zoomLevel + 1) % ZOOM_STOPS.length;
+  try { localStorage.setItem(ZOOM_KEY, String(zoomLevel)); } catch (e) {}
   sfx('click');
   updateZoomButton();
   draw();
@@ -4315,8 +4322,9 @@ function toggleZoom() {
 function updateZoomButton() {
   const ic = document.getElementById('zoom-icon');
   const lbl = document.getElementById('zoom-label');
-  if (ic) ic.textContent = zoomedOut ? '🔎' : '🔍';
-  if (lbl) lbl.textContent = zoomedOut ? 'WIDE' : 'CLOSE';
+  // Magnifier fills in as the view widens, hinting "press again for more".
+  if (ic) ic.textContent = zoomLevel === 0 ? '🔍' : '🔎';
+  if (lbl) lbl.textContent = ZOOM_LABELS[zoomLevel];
 }
 
 // Settings popup: holds the Sound toggle + New Game controls behind the ⚙️
@@ -7753,7 +7761,7 @@ function draw() {
   // ── FOLLOW CAMERA ──
   // Aim to show ~VIEW_TILES across the shorter axis, so tiles are large.
   // Fewer tiles = bigger tiles, so the game reads well at default browser zoom.
-  const VIEW_TILES = zoomedOut ? 11 : 9;
+  const VIEW_TILES = ZOOM_STOPS[zoomLevel];
   const tw = Math.ceil(Math.min(W, H) / VIEW_TILES);
   const th = tw;
 
