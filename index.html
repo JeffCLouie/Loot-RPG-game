@@ -80,17 +80,11 @@
   }
   #gold-display { color: var(--gold); font-size: 11px; }
 
-  /* "Watch Live" link → spectator stream page (watch.html) */
-  #watch-live-link {
-    display: inline-flex; align-items: center; gap: 5px;
-    font-size: 11px; font-weight: bold; letter-spacing: 0.5px;
-    color: #ff3b4e; text-decoration: none; text-transform: uppercase;
-    padding: 2px 8px; border: 1px solid #ff3b4e; border-radius: 4px;
-    background: rgba(255,59,78,0.08); transition: background 0.15s;
-  }
-  #watch-live-link:hover { background: rgba(255,59,78,0.2); }
+  /* "Watch" settings button → spectator stream page (watch.html) */
+  .settings-item.watch-action { color: #ff6b78; }
+  .settings-item.watch-action .action-icon { display: inline-flex; align-items: center; justify-content: center; }
   .watch-live-dot {
-    width: 8px; height: 8px; border-radius: 50%;
+    width: 9px; height: 9px; border-radius: 50%;
     background: #ff3b4e; box-shadow: 0 0 6px #ff3b4e;
     animation: watch-live-pulse 1.4s ease-in-out infinite;
   }
@@ -1407,7 +1401,6 @@
     #stats { font-size: 14px; gap: 16px; }
     .bar-track { width: 92px; height: 16px; }
     #gold-display { font-size: 14px; }
-    #watch-live-link { font-size: 13px; }
     .hud-item { font-size: 14px; }
     .xp-track { width: 58px; height: 7px; }
 
@@ -1832,7 +1825,6 @@
   <div class="hud-item" id="pact-hud" style="display:none" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">🔮 <span class="hud-val" id="pact-num"></span></div>
   <div class="hud-item" id="food-hud" style="display:none" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()"></div>
   <div id="gold-display" data-tip="<div class='ht-name' style='color:var(--gold)'>💰 Gold</div><div class='ht-line'>The dungeon's main currency. Spend it at the town shops, the Forge, the Enchanter, and the Stash.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">💰 <span id="gold-count">0</span>g</div>
-  <a id="watch-live-link" href="./watch.html" data-tip="<div class='ht-name' style='color:var(--live)'>📺 Watch Live</div><div class='ht-line'>Watch Claude play Dungeon Loot live on the spectator stream.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()"><span class="watch-live-dot"></span>Watch Live</a>
 </div>
 
 <!-- MAIN -->
@@ -1915,6 +1907,11 @@
         </button>
         <button class="settings-item" onclick="showPlayTime()">
           <span class="action-icon">⏱️</span><span class="action-label">TIME</span>
+        </button>
+        <!-- Opens the spectator stream (watch.html) where you can watch Claude
+             play Dungeon Loot live. -->
+        <button class="settings-item watch-action" onclick="window.open('./watch.html','_blank')" data-tip="<div class='ht-name' style='color:#ff6b78'>📺 Watch Live</div><div class='ht-line'>Watch Claude play Dungeon Loot live on the spectator stream.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
+          <span class="action-icon"><span class="watch-live-dot"></span></span><span class="action-label">WATCH</span>
         </button>
         <!-- Movement-pad position & opacity. Hidden on desktop (no touch d-pad);
              populated by renderDpadControls() when the menu opens. -->
