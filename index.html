@@ -928,6 +928,64 @@
   .class-card .cc-name { font-size: 14px; font-weight: bold; letter-spacing: 1px; }
   .class-card .cc-blurb { font-size: 10px; color: #b9a98a; line-height: 1.4; margin-bottom: 3px; }
   .class-card .cc-detail { font-size: 9px; color: #8a7d63; line-height: 1.5; }
+
+  /* ── CHARACTER NAME + LEADERBOARD overlays (share the class-overlay look) ── */
+  #name-overlay, #lb-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.85);
+    display: none; align-items: center; justify-content: center;
+    z-index: 410; padding: 16px;
+  }
+  #name-overlay.open, #lb-overlay.open { display: flex; }
+  #name-modal, #lb-modal {
+    background: #16120c; border: 2px solid #9f7a3f; border-radius: 10px;
+    width: 100%; max-width: 400px; max-height: 88vh; overflow-y: auto;
+    -webkit-overflow-scrolling: touch; padding: 16px;
+    box-shadow: 0 0 30px rgba(255,200,100,0.3);
+  }
+  #name-modal { max-width: 360px; }
+  .ov-title { color: #ffe9b0; font-size: 16px; font-weight: bold; text-align: center; display: block; }
+  .ov-sub { color: #b9a98a; font-size: 11px; text-align: center; margin: 6px 0 12px; line-height: 1.4; }
+  #name-input {
+    width: 100%; box-sizing: border-box; background: #221a10; border: 1px solid var(--border);
+    border-radius: 6px; color: #ffe9b0; font-family: 'Courier New', monospace;
+    font-size: 16px; text-align: center; letter-spacing: 1px; padding: 11px 12px; margin-bottom: 12px;
+  }
+  #name-input:focus { outline: none; border-color: var(--gold); }
+  .ov-btn {
+    width: 100%; box-sizing: border-box; padding: 11px; border: 1px solid var(--gold);
+    border-radius: 6px; background: #2a2113; color: var(--gold); font-family: 'Courier New', monospace;
+    font-size: 14px; font-weight: bold; letter-spacing: 1px; cursor: pointer;
+    -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  }
+  .ov-btn:active { background: #3a2e16; }
+  .ov-link {
+    display: block; text-align: center; margin-top: 11px; color: #9ab0c9;
+    font-size: 11px; cursor: pointer; text-decoration: underline;
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* Leaderboard tabs + rows */
+  .lb-tabs { display: flex; gap: 6px; margin-bottom: 9px; }
+  .lb-tab {
+    flex: 1; padding: 8px 4px; border: 1px solid var(--border); border-radius: 6px;
+    background: #1b160f; color: #b9a98a; font-family: 'Courier New', monospace;
+    font-size: 11px; font-weight: bold; cursor: pointer; text-align: center;
+    -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  }
+  .lb-tab.on { border-color: var(--gold); color: var(--gold); background: #2a2113; }
+  .lb-status { color: #8a7d63; font-size: 10px; text-align: center; margin-bottom: 8px; min-height: 12px; line-height: 1.4; }
+  .lb-list { display: flex; flex-direction: column; gap: 3px; }
+  .lb-row {
+    display: flex; align-items: center; gap: 8px; padding: 7px 9px;
+    background: #1b160f; border: 1px solid var(--border); border-radius: 6px;
+    font-size: 12px;
+  }
+  .lb-row.me { border-color: var(--gold); background: #241d10; }
+  .lb-rank { width: 26px; color: #8a7d63; font-weight: bold; text-align: right; flex: 0 0 auto; }
+  .lb-class { font-size: 14px; flex: 0 0 auto; width: 18px; text-align: center; }
+  .lb-name { flex: 1 1 auto; color: #e8d5a8; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lb-val { color: var(--gold); font-weight: bold; flex: 0 0 auto; white-space: nowrap; }
+  .lb-foot { margin-top: 12px; }
+
   .town-blurb { font-size: 11px; color: #b9a98a; margin-bottom: 8px; line-height: 1.4; }
   /* Stash vault — gold deposit/withdraw bar and section headings. */
   .stash-gold-bar { display: flex; gap: 6px; margin: 6px 0; align-items: stretch; }
@@ -1566,6 +1624,34 @@
     <span id="class-title">Choose your Hero</span>
     <div id="class-sub"></div>
     <div id="class-cards"></div>
+  </div>
+</div>
+
+<!-- New-game name entry — shown before the class pick on a fresh game. -->
+<div id="name-overlay">
+  <div id="name-modal">
+    <span class="ov-title">⚔️ Name Your Hero</span>
+    <div class="ov-sub">Enter the name that will carry your deeds onto the global leaderboards.</div>
+    <input id="name-input" maxlength="16" placeholder="Adventurer" autocomplete="off"
+           spellcheck="false" onkeydown="if(event.key==='Enter')submitName()">
+    <button class="ov-btn" onclick="submitName()">Begin Your Quest ▶</button>
+    <span class="ov-link" onclick="showLeaderboard()">🏆 View the Leaderboards</span>
+  </div>
+</div>
+
+<!-- Global leaderboards — deepest floor, highest level, most gold across all players. -->
+<div id="lb-overlay" onclick="if(event.target===this)closeLeaderboard()">
+  <div id="lb-modal">
+    <span class="ov-title">🏆 Leaderboards</span>
+    <div class="ov-sub">The deepest, strongest, and richest heroes across everyone who plays.</div>
+    <div class="lb-tabs">
+      <button class="lb-tab on" id="lb-tab-floor" onclick="setLbTab('floor')">⬇️ Furthest</button>
+      <button class="lb-tab" id="lb-tab-level" onclick="setLbTab('level')">⭐ Level</button>
+      <button class="lb-tab" id="lb-tab-gold" onclick="setLbTab('gold')">💰 Gold</button>
+    </div>
+    <div class="lb-status" id="lb-status"></div>
+    <div class="lb-list" id="lb-list"></div>
+    <div class="lb-foot"><button class="ov-btn" onclick="closeLeaderboard()">Close</button></div>
   </div>
 </div>
 
@@ -2754,6 +2840,9 @@ function pfx(field, dflt) { return (pact && pact.fx[field] != null) ? pact.fx[fi
 // ══════════════════════════════════════════
 
 let player = { x: 5, y: 5, hp: 100, maxHp: 100, mp: 60, maxMp: 60, gold: 0, level: 1, xp: 0, healPotions: 2, manaPotions: 0, healthPotionsBought: 0,
+  // Chosen character name (null until entered on a new game) and the peak gold
+  // ever held — both feed the global leaderboards.
+  name: null, maxGold: 0,
   // Deepest dungeon floor reached — the Dungeon Gate in town lets you re-enter
   // on any floor up to this, so you can backtrack to grind levels and gear.
   maxFloor: 1,
@@ -4598,7 +4687,12 @@ function openTownHub() {
        <span class="tm-icon">🌀</span>
        <span class="tm-text"><span class="tm-name">Dungeon Gate</span><span class="tm-desc">Descend to floor ${gateFloor}, or pick another</span></span>
      </button>`;
-  setTownContent(`<div class="town-blurb">A safe haven away from the dungeon. Pick a service, then take the Dungeon Gate when you're ready to delve again.</div><div class="town-menu">${tiles}${gateTile}</div>`);
+  const boardTile =
+    `<button class="town-menu-btn" onclick="showLeaderboard()">
+       <span class="tm-icon">🏆</span>
+       <span class="tm-text"><span class="tm-name">Leaderboards</span><span class="tm-desc">The deepest, strongest &amp; richest heroes</span></span>
+     </button>`;
+  setTownContent(`<div class="town-blurb">A safe haven away from the dungeon. Pick a service, then take the Dungeon Gate when you're ready to delve again.</div><div class="town-menu">${tiles}${gateTile}${boardTile}</div>`);
 }
 // Return from a service panel to the hub menu (also used by the backdrop tap).
 function townBack() {
@@ -8504,7 +8598,7 @@ function handleDeath() {
   // The healer's care: revived to full and cleansed of poison & curses.
   player.hp = player.maxHp;
   player.mp = player.maxMp;
-  log(`💀 ${HERO} was slain! The healer revived you in town — lost ${lostGold}g for the trouble.`, 'important');
+  log(`💀 ${player.name || HERO} was slain! The healer revived you in town — lost ${lostGold}g for the trouble.`, 'important');
   log('⛑️ Fully restored. Take the 🌀 Dungeon Gate when you\'re ready to head back down.');
   updateBars();
   saveGame();
@@ -9098,6 +9192,8 @@ function showClassPick() {
   const sub = document.getElementById('class-sub');
   const cards = document.getElementById('class-cards');
   if (!ov) return;
+  const title = document.getElementById('class-title');
+  if (title) title.textContent = player.name ? `Choose ${player.name}'s Class` : 'Choose your Hero';
   sub.textContent = 'Pick a class — it shapes which attributes your damage scales off, the weapons you can wield, and the special skill you cast. You can retrain later at the town Trainer.';
   cards.innerHTML = CLASS_KEYS.map(k => {
     const c = CLASSES[k];
@@ -9520,6 +9616,8 @@ function saveGame() {
   } catch (e) {
     // localStorage unavailable (e.g. inside artifact preview) — fail silently
   }
+  // Push this character's best stats to the global leaderboard (debounced).
+  lbScheduleSubmit();
 }
 
 function loadGame() {
@@ -9580,6 +9678,10 @@ function loadGame() {
     }
     // Migrate saves that predate the deepest-floor tracker / town hub.
     if (player.maxFloor == null) player.maxFloor = data.dungeonLevel || 1;
+    // Migrate saves that predate character names / global leaderboards. A null
+    // name is fine — the init flow prompts for one on the next load.
+    if (player.name === undefined) player.name = null;
+    if (player.maxGold == null) player.maxGold = player.gold || 0;
     // Migrate saves that predate cleared-floor tracking.
     if (!player.clearedFloors || typeof player.clearedFloors !== 'object') player.clearedFloors = {};
     inTown = !!data.inTown;
@@ -9672,6 +9774,211 @@ function confirmNewGame() {
 }
 
 // ══════════════════════════════════════════
+// GLOBAL LEADERBOARD
+// ══════════════════════════════════════════
+// Scores are shared across everyone who plays via a Supabase table. The two
+// values below are a project URL and its public "anon" key. The anon key is
+// designed to be embedded in client code — a row-level-security policy on the
+// `leaderboard` table only allows reading and submitting leaderboard rows, so
+// it is safe to ship here. Leave BOTH blank to fall back to a device-local
+// leaderboard kept in localStorage (so the feature still works offline).
+//
+// Setup: create a free project at https://supabase.com, run the SQL from the
+// pull request / README to create the `leaderboard` table + access policies,
+// then paste your Project URL and the anon (public) key below.
+const LB_SUPABASE_URL = 'https://imqhmqtpbvkomsusgzux.supabase.co'; // base URL, no trailing path
+const LB_SUPABASE_KEY = 'sb_publishable_SxnH6A4uxqZq5ZW_PqUeLQ_9ZKd4WfV'; // anon / publishable key (safe to be public)
+
+const LB_LOCAL_KEY = 'dungeonLoot_leaderboard_v1';
+// The three ranked boards: which stored column each sorts by and how to show it.
+const LB_SORTS = {
+  floor: { col: 'max_floor', fmt: v => 'Floor ' + v },
+  level: { col: 'level',     fmt: v => 'Lv ' + v },
+  gold:  { col: 'gold',      fmt: v => v + 'g' },
+};
+let lbTab = 'floor';
+let lbLastSig = '';       // last-submitted stat signature — skips no-op writes
+let lbSubmitTimer = null; // pending debounced submit, if any
+
+function lbEnabled() { return !!(LB_SUPABASE_URL && LB_SUPABASE_KEY); }
+function lbHeaders(extra) {
+  return Object.assign({
+    'apikey': LB_SUPABASE_KEY,
+    'Authorization': 'Bearer ' + LB_SUPABASE_KEY,
+    'Content-Type': 'application/json',
+  }, extra || {});
+}
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+// This character's current bests, shaped for the leaderboard table. Values are
+// taken as-is (just coerced to whole numbers for the integer columns) — every
+// submitted score is treated as real.
+function lbInt(v, lo) { v = Math.floor(Number(v)); return Number.isFinite(v) && v > lo ? v : lo; }
+function lbEntryFromPlayer() {
+  return {
+    name: String(player.name || 'Adventurer').slice(0, 16),
+    player_class: player.class || null,
+    max_floor: lbInt(player.maxFloor || 1, 1),
+    level: lbInt(player.level || 1, 1),
+    gold: lbInt(player.maxGold || player.gold || 0, 0),
+  };
+}
+
+// Debounced submit: a flurry of saves coalesces into one network write, and
+// identical stats are never re-sent.
+function lbScheduleSubmit() {
+  if (!player || !player.name) return;
+  player.maxGold = Math.max(player.maxGold || 0, player.gold || 0);
+  const sig = [player.name, player.maxFloor || 1, player.level || 1, player.maxGold || 0, player.class || ''].join('|');
+  if (sig === lbLastSig) return;
+  lbLastSig = sig;
+  if (lbSubmitTimer) return; // a write is already queued; it'll pick up the latest stats
+  lbSubmitTimer = setTimeout(() => { lbSubmitTimer = null; lbSubmit(); }, 4000);
+}
+
+// Upsert this character's row (keyed by name). Best-effort: network failures are
+// swallowed, and a local mirror is always kept so the board renders offline.
+function lbSubmit() {
+  const entry = lbEntryFromPlayer();
+  lbSubmitLocal(entry);
+  if (!lbEnabled()) return;
+  try {
+    fetch(LB_SUPABASE_URL + '/rest/v1/leaderboard?on_conflict=name', {
+      method: 'POST',
+      headers: lbHeaders({ 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
+      body: JSON.stringify(entry),
+      keepalive: true,
+    }).catch(() => {});
+  } catch (e) {}
+}
+
+// Device-local mirror of the board — keeps monotonic bests per name.
+function lbSubmitLocal(entry) {
+  try {
+    const all = JSON.parse(localStorage.getItem(LB_LOCAL_KEY) || '[]');
+    const i = all.findIndex(e => e && e.name === entry.name);
+    if (i >= 0) {
+      all[i] = {
+        name: entry.name,
+        player_class: entry.player_class,
+        max_floor: Math.max(all[i].max_floor || 1, entry.max_floor),
+        level: Math.max(all[i].level || 1, entry.level),
+        gold: Math.max(all[i].gold || 0, entry.gold),
+      };
+    } else {
+      all.push(entry);
+    }
+    localStorage.setItem(LB_LOCAL_KEY, JSON.stringify(all));
+  } catch (e) {}
+}
+function lbFetchLocal(col) {
+  let all = [];
+  try { all = JSON.parse(localStorage.getItem(LB_LOCAL_KEY) || '[]'); } catch (e) {}
+  return all.filter(Boolean).sort((a, b) => (b[col] || 0) - (a[col] || 0)).slice(0, 50);
+}
+
+// Fetch the top 50 for a board. Returns { rows, local } — local is true when no
+// backend is configured (so the UI can say the board is device-only). The
+// request is bounded by a timeout so a stalled network fails over to the local
+// mirror instead of leaving the board stuck on "Loading…".
+async function lbFetch(tab) {
+  const sort = LB_SORTS[tab] || LB_SORTS.floor;
+  if (!lbEnabled()) return { rows: lbFetchLocal(sort.col), local: true };
+  const url = LB_SUPABASE_URL +
+    '/rest/v1/leaderboard?select=name,player_class,max_floor,level,gold&order=' +
+    sort.col + '.desc&limit=50';
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 8000);
+  try {
+    const res = await fetch(url, { headers: lbHeaders(), signal: ctrl.signal });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return { rows: await res.json(), local: false };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function showLeaderboard() {
+  const ov = document.getElementById('lb-overlay');
+  if (!ov) return;
+  ov.classList.add('open');
+  setLbTab(lbTab);
+}
+function closeLeaderboard() {
+  const ov = document.getElementById('lb-overlay');
+  if (ov) ov.classList.remove('open');
+}
+function setLbTab(tab) {
+  lbTab = LB_SORTS[tab] ? tab : 'floor';
+  ['floor', 'level', 'gold'].forEach(t => {
+    const el = document.getElementById('lb-tab-' + t);
+    if (el) el.classList.toggle('on', t === lbTab);
+  });
+  renderLeaderboard();
+}
+async function renderLeaderboard() {
+  const list = document.getElementById('lb-list');
+  const status = document.getElementById('lb-status');
+  if (!list) return;
+  const sort = LB_SORTS[lbTab];
+  const myName = player && player.name;
+  status.textContent = 'Loading…';
+  list.innerHTML = '';
+  let data;
+  try {
+    data = await lbFetch(lbTab);
+  } catch (e) {
+    // Couldn't reach the global board — fall back to the local mirror.
+    data = { rows: lbFetchLocal(sort.col), local: true, errored: true };
+  }
+  // A slow fetch could resolve after the player switched tabs; ignore if so.
+  if (!document.getElementById('lb-overlay').classList.contains('open')) return;
+  const rows = data.rows || [];
+  if (data.errored) status.textContent = '⚠️ Could not reach the global board — showing scores from this device.';
+  else if (data.local) status.textContent = 'Local leaderboard (no backend configured yet).';
+  else status.textContent = rows.length ? 'Global · top ' + rows.length : 'Global leaderboard';
+  if (!rows.length) {
+    list.innerHTML = '<div class="lb-row"><span class="lb-name">No heroes yet — be the first!</span></div>';
+    return;
+  }
+  const medal = ['🥇', '🥈', '🥉'];
+  list.innerHTML = rows.map((r, i) => {
+    const cls = r.player_class && CLASSES[r.player_class] ? CLASSES[r.player_class].icon : '🧙';
+    const rank = medal[i] || (i + 1);
+    const me = myName && r.name === myName ? ' me' : '';
+    return `<div class="lb-row${me}">
+      <span class="lb-rank">${rank}</span>
+      <span class="lb-class">${cls}</span>
+      <span class="lb-name">${escapeHtml(r.name)}</span>
+      <span class="lb-val">${sort.fmt(r[sort.col] || 0)}</span>
+    </div>`;
+  }).join('');
+}
+
+// New-game name entry — shown before the class pick on a fresh game.
+function showNameEntry() {
+  const ov = document.getElementById('name-overlay');
+  if (!ov) return;
+  const input = document.getElementById('name-input');
+  if (input) input.value = player.name || '';
+  ov.classList.add('open');
+  setTimeout(() => { try { if (input) { input.focus(); input.select(); } } catch (e) {} }, 60);
+}
+function submitName() {
+  const input = document.getElementById('name-input');
+  let name = ((input && input.value) || '').trim().replace(/\s+/g, ' ').slice(0, 16);
+  if (!name) name = 'Adventurer';
+  player.name = name;
+  const ov = document.getElementById('name-overlay');
+  if (ov) ov.classList.remove('open');
+  saveGame();
+  if (!player.class) showClassPick();
+}
+
+// ══════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════
 
@@ -9682,8 +9989,11 @@ draw();
 updateBars();
 renderPanel();
 
-// New game (or a save from before classes existed) — make the player pick a class.
-if (!player.class) showClassPick();
+// New game — name your hero first, then pick a class. submitName() chains into
+// the class pick. Older saves with a class but no name keep playing; they can
+// set a name later (it defaults to "Adventurer" on the leaderboard until then).
+if (!player.name && !player.class) showNameEntry();
+else if (!player.class) showClassPick();
 
 if (hadSave) {
   log(`Welcome back, level ${player.level} adventurer.`, 'important');
