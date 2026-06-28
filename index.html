@@ -7338,7 +7338,13 @@ function tickStatusEffects() {
         e.hp -= dmg;
         spawnFloatingText(e.x, e.y, `${dmg}`, '#44dd44');
         log(`🧪 Poison deals ${dmg} to ${e.isBoss ? e.name : e.type}!`);
-        if (e.hp <= 0) { e.dead = true; log(`${e.isBoss ? e.name : e.type} succumbed to poison!`, 'important'); }
+        if (e.hp <= 0) {
+          // Route poison kills through the normal death handler so the foe still
+          // grants XP/gold/loot AND the floor-clear check runs — otherwise a
+          // last hostile that dies to a poison tick leaves the stairs sealed.
+          log(`${e.isBoss ? e.name : e.type} succumbed to poison!`, 'important');
+          onEnemyDefeated(e);
+        }
       }
     }
     s.turns--;
