@@ -12846,6 +12846,12 @@ function quickEquip(i) {
   sfx('equip');
   log(`Equipped: ${logItem(item)}`, 'loot');
   recordWardrobe(item);
+  // Gear can carry HP/MP and Vitality/Spirit, so worn changes shift the derived
+  // max HP/MP — recompute them (and clamp current values) so the bars don't lag.
+  recomputeMaxStats();
+  if (player.hp > player.maxHp) player.hp = player.maxHp;
+  if (player.mp > player.maxMp) player.mp = player.maxMp;
+  updateBars();
   renderPanel();
   draw();          // re-skin the sprite with the newly worn gear
   saveGame();
@@ -12872,6 +12878,12 @@ function unequip(slot) {
   equipped[slot] = null;
   hideTooltip();
   log(`Unequipped: ${logItem(item)}`);
+  // Dropping gear can lower HP/MP and Vitality/Spirit, so recompute the derived
+  // max HP/MP (and clamp current values) instead of leaving the bars stale.
+  recomputeMaxStats();
+  if (player.hp > player.maxHp) player.hp = player.maxHp;
+  if (player.mp > player.maxMp) player.mp = player.maxMp;
+  updateBars();
   renderPanel();
   draw();          // sprite drops the gear it was wearing
   saveGame();
