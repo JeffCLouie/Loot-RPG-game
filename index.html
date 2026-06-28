@@ -566,6 +566,7 @@
   .item-type { font-size: 10px; opacity: 0.7; }
   /* Item power badge — a single gold number shown alongside an item's stats. */
   .item-power { color: #ffd24b; font-weight: bold; opacity: 0.95; margin-left: 5px; white-space: nowrap; }
+  .item-diff { font-size: 10px; margin-top: 1px; line-height: 1.3; }
 
   /* ── TOOLTIP ── */
   #tooltip {
@@ -4175,6 +4176,35 @@ function itemStatLine(item) {
   return item.slot ? `⚡${itemPower(item)}${body ? ' · ' + body : ''}` : body;
 }
 
+// Concise, colour-coded list of how an item's stats differ from whatever is
+// currently equipped in its slot — e.g. "+3 ATK  -1 DEF". Surfaces the real
+// changes at a glance (no single aggregate % to fixate on).
+function statDiffLine(item) {
+  if (!item || !item.slot) return '';
+  const cur = equipped[item.slot];
+  if (!cur) return '<span style="color:#9fd0ff">new slot</span>';
+  const num = (it, k) => {
+    let v = it.stats ? it.stats[k] : undefined;
+    if (v === undefined) v = it.attrs ? it.attrs[k] : undefined;
+    if (v === undefined) return 0;
+    if (typeof v === 'string') { const [lo, hi] = v.split('-').map(Number); return (lo + hi) / 2; }
+    return v;
+  };
+  const keys = new Set([
+    ...Object.keys(item.stats || {}), ...Object.keys(cur.stats || {}),
+    ...Object.keys(item.attrs || {}), ...Object.keys(cur.attrs || {}),
+  ]);
+  const parts = [];
+  for (const k of keys) {
+    const d = Math.round(num(item, k) - num(cur, k));
+    if (!d) continue;
+    const short = STAT_SHORT[k] || (ATTRIBUTES[k] && ATTRIBUTES[k].short) || k;
+    const c = d > 0 ? '#5ee08a' : '#e0556b';
+    parts.push(`<span style="color:${c}">${d > 0 ? '+' : ''}${d} ${short}</span>`);
+  }
+  return parts.length ? parts.join('  ') : '<span style="color:#888">no stat change</span>';
+}
+
 function openShop() {
   if (!merchant) return;
   document.getElementById('shop-overlay').classList.add('open');
@@ -4234,17 +4264,8 @@ function renderShop() {
         const equippedHere = equipped[s.item.slot];
         const delta = ip - (equippedHere ? itemPower(equippedHere) : 0);
         isUpgrade = delta > 0;
-        let deltaTag = '';
-        if (equippedHere) {
-          const basePower = itemPower(equippedHere);
-          const c = delta > 0 ? '#5ee08a' : (delta < 0 ? '#e0556b' : '#888');
-          const arrow = delta > 0 ? '▲' : (delta < 0 ? '▼' : '=');
-          // Show the swing as a percentage so it matches the compare tooltip.
-          const pct = basePower > 0 ? Math.round(delta / basePower * 100) : 100;
-          deltaTag = ` <span style="color:${c}">${arrow}${delta>0?'+':''}${pct}%</span>`;
-        }
-        sub += ` <span class="item-power">⚡${ip}${deltaTag}</span>`;
-        if (isUpgrade) name = '<span class="up-arrow">▲</span> ' + name;
+        sub += ` <span class="item-power">⚡${ip}</span>`;
+        if (equippedHere) sub += `  ${statDiffLine(s.item)}`;
       }
       const sicon = s.kind === 'potion' ? (s.heal ? '🧪' : '🔷') : itemIcon(s.item);
       const scolor = s.kind === 'potion' ? null : tierColor(s.item);
@@ -8808,23 +8829,16 @@ function renderPanel() {
       const equippedHere = equipable ? equipped[item.slot] : null;
       const delta = equipable ? ip - (equippedHere ? itemPower(equippedHere) : 0) : 0;
       const isUpgrade = equipable && delta > 0;
-      let deltaTag = '';
-      if (equippedHere) {
-        const basePower = itemPower(equippedHere);
-        const c = delta > 0 ? '#5ee08a' : (delta < 0 ? '#e0556b' : '#888');
-        const arrow = delta > 0 ? '▲' : (delta < 0 ? '▼' : '=');
-        // Show the swing as a percentage so it matches the compare tooltip.
-        const pct = basePower > 0 ? Math.round(delta / basePower * 100) : 100;
-        deltaTag = ` <span style="color:${c}">${arrow}${delta>0?'+':''}${pct}%</span>`;
-      }
-      const pwr = equipable ? `<span class="item-power">⚡${ip}${deltaTag}</span>` : '';
+      const pwr = equipable ? `<span class="item-power">⚡${ip}</span>` : '';
+      const diff = equipable ? `<div class="item-diff">${statDiffLine(item)}</div>` : '';
       return `
       <div class="loot-item item-${item.tier} ${selectedItem===i?'selected':''} ${isUpgrade?'upgrade':''}">
         <span class="loot-icon">${iconMarkup(itemIcon(item), tierColor(item))}</span>
         <div class="loot-info" onclick="selectItem(${i}, this)"
              onmouseenter="showTooltip(event,${i})" onmouseleave="hideTooltip()">
-          <div class="item-name">${isUpgrade?'<span class="up-arrow">▲</span> ':''}${item.name}${craftedMark(item)}</div>
+          <div class="item-name">${item.name}${craftedMark(item)}</div>
           <div class="item-type">${slotName}${pwr}</div>
+          ${diff}
         </div>
         ${equipable
           ? (canEquipItem(item)
