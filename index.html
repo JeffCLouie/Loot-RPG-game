@@ -392,6 +392,9 @@
     border-radius: 50%; font-size: 11px; line-height: 18px; text-align: center; font-weight: bold; }
   .sk-tnode.locked { opacity: .45; filter: grayscale(.6); }
   .sk-tnode.locked .badge { background: #1a1626; color: #6a647a; border: 1px solid #33304a; }
+  /* Prereqs + level met, just waiting on a skill point — reads as "ready", not hard-locked. */
+  .sk-tnode.ready { border-color: #6a57a8; background: #221b38; opacity: .9; box-shadow: 0 0 6px rgba(140,110,255,.28); }
+  .sk-tnode.ready .badge { background: var(--gold); color: #231a08; }
   .sk-tnode.avail { border-color: #8c6eff; background: #2a1f4a; box-shadow: 0 0 10px rgba(140,110,255,.55); }
   .sk-tnode.avail .badge { background: #8c6eff; color: #fff; }
   .sk-tnode.owned { border-color: var(--gold); background: #2c2440; }
@@ -407,9 +410,13 @@
   .sk-pop b { color: var(--gold); }
   .sk-pop .ty { color: #9a8fd0; font-size: 9px; margin-top: 1px; }
   .sk-pop .ds { margin-top: 3px; color: #cdc2e8; }
-  .sk-pop .rq { font-size: 9px; margin-top: 3px; }
+  .sk-pop .rq { font-size: 9px; margin-top: 3px; line-height: 1.5; }
   .sk-pop .rq.no { color: #e08a8a; }
   .sk-pop .rq.ok { color: #7ad08a; }
+  /* Per-requirement rows: green when that prereq is satisfied, red when still short. */
+  .sk-pop .rqok { color: #7ad08a; }
+  .sk-pop .rqno { color: #e08a8a; }
+  .sk-pop .rq-hint { font-size: 9px; margin-top: 3px; color: #e8c267; }
   .sk-pop .pop-buy { width: 100%; margin-top: 6px; padding: 5px; border: none; border-radius: 5px;
     background: #4a3a7a; color: #fff; font-family: inherit; font-size: 10px; font-weight: bold;
     cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
@@ -9054,8 +9061,12 @@ function renderSkills(el) {
     const maxd = skillMaxed(n);
     const owned = rank > 0;
     const avail = canBuySkill(n);
-    const state = maxd ? 'maxed' : avail ? 'avail' : owned ? 'owned' : 'locked';
-    const badge = maxd ? '✓' : avail ? '+' : owned ? '✓' : '🔒';
+    // "ready" = prereqs + level are satisfied; you only lack a skill point. Showing
+    // this distinctly from a true prereq-lock stops the tree from looking gated when
+    // an unowned node is actually a single level-up away.
+    const ready = !owned && !avail && skillReqMet(n);
+    const state = maxd ? 'maxed' : avail ? 'avail' : owned ? 'owned' : ready ? 'ready' : 'locked';
+    const badge = maxd ? '✓' : avail ? '+' : owned ? '✓' : ready ? '☆' : '🔒';
     const pips = (n.max || 1) > 1
       ? `<div class="pips">${Array.from({ length: n.max }, (_, i) => `<span class="pip${i < rank ? ' on' : ''}"></span>`).join('')}</div>`
       : '';
@@ -9073,11 +9084,24 @@ function renderSkills(el) {
     const rank = skillRank(sn.id);
     const typeTxt = sn.type === 'active' ? `⚡ ACTIVE · ${sn.mp}MP · ${sn.cd}cd` : 'PASSIVE';
     const rankTxt = (sn.max || 1) > 1 ? ` <span style="color:#e8c267">${rank}/${sn.max}</span>` : (rank > 0 ? ' ✓' : '');
-    const bits = [];
-    if ((sn.lvl || 1) > 1) bits.push(`Lv${sn.lvl}`);
-    if (sn.req) for (const [rid, rk] of sn.req) { const rn = skillNode(rid); bits.push(`${rn ? rn.name : rid}${rk > 1 ? ` ${rk}` : ''}`); }
+    // One row per requirement, each marked met (green) or short (red), and prereq
+    // nodes show your current rank vs what's needed so "how much further?" is obvious.
+    const reqRows = [];
+    if ((sn.lvl || 1) > 1) {
+      const ok = player.level >= sn.lvl;
+      reqRows.push(`<span class="${ok ? 'rqok' : 'rqno'}">${ok ? '✓' : '🔒'} Level ${sn.lvl}${ok ? '' : ` (you're ${player.level})`}</span>`);
+    }
+    if (sn.req) for (const [rid, rk] of sn.req) {
+      const rn = skillNode(rid); const cur = skillRank(rid); const ok = cur >= rk;
+      const rankTxt = (rn && (rn.max || 1) > 1) || rk > 1 ? ` ${cur}/${rk}` : '';
+      reqRows.push(`<span class="${ok ? 'rqok' : 'rqno'}">${ok ? '✓' : '🔒'} ${rn ? rn.name : rid}${rankTxt}</span>`);
+    }
     const reqMet = skillReqMet(sn);
-    const reqHtml = bits.length ? `<div class="rq ${reqMet ? 'ok' : 'no'}">${reqMet ? '✓ ' : '🔒 '}${bits.join(' · ')}</div>` : '';
+    let reqHtml = reqRows.length ? `<div class="rq">${reqRows.join('<br>')}</div>` : '';
+    // Prereqs met but no point banked: make it clear the node is reachable, not stuck.
+    if (reqMet && !skillMaxed(sn) && (player.skillPoints || 0) <= 0) {
+      reqHtml += `<div class="rq-hint">☆ Ready — earn a skill point by leveling up.</div>`;
+    }
     const buyBtn = skillMaxed(sn)
       ? `<button class="pop-buy maxed" disabled>✓ Maxed</button>`
       : `<button class="pop-buy" ${canBuySkill(sn) ? '' : 'disabled'} onclick="buySkill('${sn.id}')">${(sn.max || 1) > 1 ? `Learn (rank ${rank + 1}/${sn.max})` : 'Learn'}</button>`;
