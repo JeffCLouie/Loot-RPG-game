@@ -2419,12 +2419,14 @@ function spentAttrPoints() {
 // floor — but there is intentionally NO hard wall: a pure exponential curve
 // would eventually outrun any possible build and make some floor mathematically
 // impossible, whereas this one stays beatable at every depth given the effort.
-//   floor 1 → 1.0x   floor 10 → ~1.9x   floor 20 → ~3.3x   floor 30 → ~4.8x
-//   floor 50 → ~8x   floor 100 → ~18x   (keeps rising, no ceiling)
+//   floor 1 → 1.0x   floor 10 → ~2.9x   floor 20 → ~5.6x   floor 30 → ~8.6x
+//   floor 50 → ~15x   floor 100 → ~34x   (keeps rising, no ceiling)
 function depthThreat(level) {
-  // 1 + (depth-1)^1.2 / 15 — gentle start, steady polynomial climb, no cap.
+  // 1 + (depth-1)^1.2 / 7.5 — gentle start, steady polynomial climb, no cap.
+  // The growth term climbs twice as fast as the original /15 curve, so every
+  // floor's threat multiplier above the floor-1 baseline is doubled.
   const d = Math.max(0, (level || 1) - 1);
-  return 1 + Math.pow(d, 1.2) / 15;
+  return 1 + Math.pow(d, 1.2) / 7.5;
 }
 
 // Total power of a single item: weighted sum of its stats + a rarity bonus.
