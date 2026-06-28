@@ -251,6 +251,21 @@
   .version-by.as { color: #ffe3c4; background: rgba(220, 140, 60, 0.32); }
   .version-note { font-size: 11px; color: var(--text); opacity: 0.85; line-height: 1.45; }
 
+  /* Time-played popup — reuses the version overlay's framing. */
+  #playtime-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 400; display: none; align-items: center; justify-content: center; padding: 16px; }
+  #playtime-overlay.open { display: flex; }
+  #playtime-card { background: linear-gradient(180deg, #241c38, #181226); border: 2px solid var(--frame); border-radius: 10px; max-width: 360px; width: 100%; max-height: 80vh; overflow-y: auto; padding: 14px; box-shadow: 0 6px 24px rgba(0,0,0,0.6); }
+  .pt-total { text-align: center; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+  .pt-total-val { color: var(--gold); font-size: 24px; font-weight: bold; letter-spacing: 1px; }
+  .pt-total-label { font-size: 10px; color: #8a7d63; letter-spacing: 1px; text-transform: uppercase; margin-top: 2px; }
+  .pt-row { display: flex; align-items: center; gap: 8px; padding: 7px 4px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+  .pt-row.active { background: rgba(255, 200, 80, 0.06); border-radius: 6px; }
+  .pt-class { font-size: 16px; flex: 0 0 auto; }
+  .pt-name { flex: 1; font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pt-name .pt-here { color: var(--gold); font-size: 9px; font-weight: bold; letter-spacing: 0.5px; margin-left: 4px; }
+  .pt-val { flex: 0 0 auto; font-size: 12px; color: #b9a98a; font-variant-numeric: tabular-nums; }
+  .pt-empty { font-size: 11px; color: #8a7d63; text-align: center; padding: 10px; }
+
   /* Movement-pad controls tucked into the settings popup. The floating d-pad
      only exists on touch devices, so these controls are hidden unless the
      pointer is coarse (i.e. on mobile). */
@@ -1677,6 +1692,9 @@
         <button class="settings-item" onclick="showVersionHistory()">
           <span class="action-icon">📜</span><span class="action-label">VERSION</span>
         </button>
+        <button class="settings-item" onclick="showPlayTime()">
+          <span class="action-icon">⏱️</span><span class="action-label">TIME</span>
+        </button>
         <!-- Movement-pad position & opacity. Hidden on desktop (no touch d-pad);
              populated by renderDpadControls() when the menu opens. -->
         <div id="dpad-settings">
@@ -1703,6 +1721,16 @@
     <div id="version-card">
       <div class="version-head">📜 Version History <button class="version-x" onclick="closeVersion()">✕</button></div>
       <div id="version-body"></div>
+    </div>
+  </div>
+
+  <!-- Play-time popup, opened from the ⚙️ settings menu. Shows the grand total
+       across every save slot plus a per-character breakdown. -->
+  <div id="playtime-overlay" onclick="if(event.target===this)closePlayTime()">
+    <div id="playtime-card">
+      <div class="version-head">⏱️ Time Played <button class="version-x" onclick="closePlayTime()">✕</button></div>
+      <div id="playtime-total"></div>
+      <div id="playtime-body"></div>
     </div>
   </div>
 
@@ -4419,6 +4447,7 @@ document.addEventListener('click', (e) => {
 
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
+  { v: 'Time played counter', by: 'Claude', notes: ['New ⏱️ TIME button in Settings shows your grand total play time across every character, plus a per-hero breakdown.', 'Each save slot now lists how long that character has been played.'] },
   { v: 'Diverse music & boss themes', by: 'Jeff Louie', notes: ['More distinct styles (March, Bloom, Veil, Tide) that drift about every 2 minutes.', 'Boss fights hijack the soundtrack with a fast, menacing Boss track until the floor is cleared.'] },
   { v: 'PC hotkeys', by: 'Jeff Louie', notes: ['1 heal, 2 mana, E use (with Space), Esc closes menus; skills moved to 3-9.'] },
   { v: 'Death: lose your bag', by: 'Jeff Louie', notes: ['Dying also takes your whole bag and one random equipped piece — never your weapon.'] },
@@ -4492,6 +4521,47 @@ function showVersionHistory() {
   if (menu) menu.classList.remove('open');
 }
 function closeVersion() { document.getElementById('version-overlay').classList.remove('open'); }
+
+// Time-played popup: grand total across every save slot plus a per-character
+// breakdown, sorted by most-played. The hero you're on reads its live counter
+// (it hasn't necessarily been saved this second), so the total stays current.
+function showPlayTime() {
+  const totalEl = document.getElementById('playtime-total');
+  const bodyEl = document.getElementById('playtime-body');
+  const rows = [];
+  let total = 0;
+  for (let i = 0; i < SLOT_COUNT; i++) {
+    const s = slotSummary(i);
+    if (!s) continue;
+    // Prefer the live in-memory counter for the slot we're actively playing.
+    const ms = (i === activeSlot && typeof player === 'object' && player)
+      ? (player.playMs || 0) : s.playMs;
+    total += ms;
+    rows.push({ i, ms, name: s.name || 'Adventurer', cls: s.cls });
+  }
+  rows.sort((a, b) => b.ms - a.ms);
+  if (totalEl) {
+    totalEl.className = 'pt-total';
+    totalEl.innerHTML = `<div class="pt-total-val">${formatPlayTime(total)}</div>`
+      + `<div class="pt-total-label">Total across all characters</div>`;
+  }
+  if (bodyEl) {
+    bodyEl.innerHTML = rows.length
+      ? rows.map(r => {
+          const icon = r.cls ? CLASSES[r.cls].icon : '🧙';
+          const here = r.i === activeSlot ? `<span class="pt-here">● PLAYING</span>` : '';
+          return `<div class="pt-row${r.i === activeSlot ? ' active' : ''}">`
+            + `<span class="pt-class">${icon}</span>`
+            + `<span class="pt-name">${escapeHtml(r.name)}${here}</span>`
+            + `<span class="pt-val">${formatPlayTime(r.ms)}</span></div>`;
+        }).join('')
+      : `<div class="pt-empty">No characters yet.</div>`;
+  }
+  document.getElementById('playtime-overlay').classList.add('open');
+  const menu = document.getElementById('settings-menu');
+  if (menu) menu.classList.remove('open');
+}
+function closePlayTime() { document.getElementById('playtime-overlay').classList.remove('open'); }
 
 // ══════════════════════════════════════════
 // CANVAS SETUP
@@ -11338,6 +11408,7 @@ document.querySelectorAll('.dpad-btn').forEach(btn => {
 function handleEscape() {
   const close = (id, fn) => { const el = document.getElementById(id); if (el && el.classList.contains('open')) { fn(); return true; } return false; };
   if (close('version-overlay', closeVersion)) return true;
+  if (close('playtime-overlay', closePlayTime)) return true;
   if (close('death-overlay', closeDeath)) return true;
   if (close('settings-menu', () => document.getElementById('settings-menu').classList.remove('open'))) return true;
   if (close('shop-overlay', shopClose)) return true;
@@ -11606,6 +11677,50 @@ function wipeSave() {
   location.reload();
 }
 
+// ── Play-time heartbeat ─────────────────────────────────────────────────────
+// Accumulate wall-clock time the active hero is actually being played into
+// player.playMs. We tick once a second, only counting time while the tab is
+// visible, and clamp the delta so a throttled/backgrounded tab can't dump a
+// huge catch-up chunk. The total rides along in the normal save (it's a field
+// on `player`); we also nudge a save every ~20s so idle time still persists,
+// and flush on tab-hide / unload to capture the tail end of a session.
+let _ptLastBeat = Date.now();
+let _ptSinceSave = 0;
+function playTimeBeat() {
+  const now = Date.now();
+  let dt = now - _ptLastBeat;
+  _ptLastBeat = now;
+  if (typeof document !== 'undefined' && document.hidden) return;
+  if (dt < 0) dt = 0;
+  if (dt > 5000) dt = 1000; // background throttle / sleep — count a nominal tick
+  if (typeof player === 'object' && player) player.playMs = (player.playMs || 0) + dt;
+  _ptSinceSave += dt;
+  if (_ptSinceSave >= 20000) { _ptSinceSave = 0; try { saveGame(); } catch (e) {} }
+}
+setInterval(playTimeBeat, 1000);
+// Reset the beat clock when the tab regains focus so the hidden gap isn't billed,
+// and flush the accumulated time before the page goes away.
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { try { saveGame(); } catch (e) {} }
+    _ptLastBeat = Date.now();
+  });
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', () => { try { saveGame(); } catch (e) {} });
+}
+
+// Format a millisecond span as a compact human play-time string: "3h 12m",
+// "12m", or "45s" for brand-new heroes. Always returns at least "0s".
+function formatPlayTime(ms) {
+  let s = Math.floor((ms || 0) / 1000);
+  const h = Math.floor(s / 3600); s -= h * 3600;
+  const m = Math.floor(s / 60); s -= m * 60;
+  if (h > 0) return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  if (m > 0) return s > 0 ? `${m}m ${s}s` : `${m}m`;
+  return `${s}s`;
+}
+
 // ── Save-slot management + overlay ──────────────────────────────────────────
 // A lightweight summary of whatever character lives in a slot, or null if the
 // slot is empty / unreadable. Used to paint the slot list without loading.
@@ -11704,7 +11819,7 @@ function renderSlots() {
         <span class="slot-class">${icon}</span>
         <span class="slot-name">${who}</span>
       </div>
-      <div class="slot-stats">Lv ${s.level} · ${where} · ${s.gold}g${time ? ` · <span class="slot-time">saved ${time}</span>` : ''}</div>
+      <div class="slot-stats">Lv ${s.level} · ${where} · ${s.gold}g · <span class="slot-time">⏱️ ${formatPlayTime(s.playMs)}</span>${time ? ` · <span class="slot-time">saved ${time}</span>` : ''}</div>
       <div class="slot-actions">${playBtn}${delBtn}</div>
     </div>`;
   }
