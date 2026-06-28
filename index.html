@@ -11369,9 +11369,29 @@ document.addEventListener('click', (e) => {
 }, true);
 
 // ── LOG ──
+// Emoji → DawnLike icon sprite for play-log lines. Any emoji listed here is
+// swapped for the matching pixel-art tile so the log reads in the same DawnLike
+// style as the rest of the game. Emojis without an atlas tile are left as-is.
+const LOG_ICON_SPRITE = {
+  '🔥':'ic_fire', '❄️':'ic_ice', '⚡':'ic_stun', '🧪':'ic_poison', '☠️':'ic_poison',
+  '🎯':'ic_target', '💰':'ic_money', '🔮':'ic_orb', '🔑':'ic_key', '❤️':'ic_heart',
+  '🔨':'ic_mallet', '🏦':'ic_coffer', '⬆️':'ic_up', '⬇️':'ic_down', '✨':'ic_wand',
+};
+// Replace mapped emojis in a log message with crisp DawnLike icon spans. Falls
+// back to the original text until the sprite atlas has loaded.
+function dlLogIcons(msg) {
+  if (!spriteReady) return msg;
+  let out = msg;
+  for (const emo in LOG_ICON_SPRITE) {
+    if (out.indexOf(emo) === -1) continue;
+    const span = dlIcon(LOG_ICON_SPRITE[emo], 16);
+    if (span) out = out.split(emo).join(span);
+  }
+  return out;
+}
 function log(msg, cls='') {
   const el = document.getElementById('log');
-  el.innerHTML += `<div class="log-line ${cls}">${msg}</div>`;
+  el.innerHTML += `<div class="log-line ${cls}">${dlLogIcons(msg)}</div>`;
   el.scrollTop = el.scrollHeight;
 }
 
