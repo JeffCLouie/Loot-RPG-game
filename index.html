@@ -615,6 +615,10 @@
   }
   #tooltip .tt-name { font-weight: bold; font-size: 12px; margin-bottom: 4px; }
   #tooltip .tt-stat { color: #8899bb; }
+  /* Native (headline/innate) stats read brighter than rollable affixes, with a
+     small dim tag, so it's clear they come from the base and can't be rerolled. */
+  #tooltip .tt-stat.tt-native { color: #cdd6f4; }
+  #tooltip .tt-tag { font-size: 9px; font-style: italic; color: #5a6680; margin-left: 2px; }
   #tooltip .tt-flavor { color: #666; font-style: italic; margin-top: 4px; font-size: 10px; }
   /* Weapon reach grid: a row of small tiles — gold = you, red = squares you can
      strike. Used in the weapon tooltip and the Forge so reach reads at a glance. */
@@ -5624,9 +5628,9 @@ function availAttrAffixes(item) {
 }
 // Count of bonus (non-headline) affixes the item carries.
 function itemAffixCounts(item) {
-  const head = headlineStats(item);
+  const locked = lockedStats(item);
   return {
-    statN: Object.keys(item.stats).filter(s => !head.includes(s)).length,
+    statN: Object.keys(item.stats).filter(s => !locked.includes(s)).length,
     attrN: Object.keys(item.attrs || {}).length,
   };
 }
@@ -5671,8 +5675,8 @@ function enchantRerollAll(id) {
   const cost = rerollAllCost(item);
   const caps = TIER_AFFIX_CAPS[item.tier] || { stat:0, attr:0 };
   if (!canAfford(cost) || (caps.stat + caps.attr) === 0) return;
-  const head = headlineStats(item);
-  for (const k of Object.keys(item.stats)) if (!head.includes(k)) delete item.stats[k];
+  const locked = lockedStats(item);
+  for (const k of Object.keys(item.stats)) if (!locked.includes(k)) delete item.stats[k];
   item.attrs = {};
   const mult = tierMult(item.tier);
   addStatAffixes(item, item.ilvl, mult, rollAffixCount(caps.stat));
@@ -5693,7 +5697,7 @@ function enchantRerollValue(id, kind, key) {
   if (!canAfford(cost)) return;
   const mult = tierMult(item.tier);
   if (kind === 'stat') {
-    if (headlineStats(item).includes(key) || !(key in item.stats)) return;
+    if (lockedStats(item).includes(key) || !(key in item.stats)) return;
     item.stats[key] = affixStatValue(key, item.ilvl, mult);
   } else {
     if (!item.attrs || !(key in item.attrs)) return;
@@ -5714,7 +5718,7 @@ function enchantRerollType(id, kind, key) {
   if (!canAfford(cost)) return;
   const mult = tierMult(item.tier);
   if (kind === 'stat') {
-    if (headlineStats(item).includes(key) || !(key in item.stats)) return;
+    if (lockedStats(item).includes(key) || !(key in item.stats)) return;
     const pool = otherStatTypes(item, key);
     if (!pool.length) return; // no other stat this slot can hold
     const ns = pick(pool);
@@ -5772,6 +5776,7 @@ function renderEnchantItem(item) {
   const caps = TIER_AFFIX_CAPS[item.tier] || { stat:0, attr:0 };
   const { statN, attrN } = itemAffixCounts(item);
   const head = headlineStats(item);
+  const locked = lockedStats(item);
   const poolStats = SLOT_AFFIX_POOLS[item.slot]?.stats || [];
   const poolAttrs = SLOT_AFFIX_POOLS[item.slot]?.attrs || [];
   // Stable display order: follow the slot's pool order, with any legacy
@@ -5781,10 +5786,17 @@ function renderEnchantItem(item) {
     const ia = pool.indexOf(a), ib = pool.indexOf(b);
     return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
   };
-  // Headline (locked) lines.
-  const headRows = head.filter(k => k in item.stats).map(k =>
-    `<div class="hc-line" style="opacity:0.6">🔒 ${(typeof item.stats[k]==='string')?item.stats[k]:'+'+item.stats[k]} ${STAT_LABELS[k]||k} <span style="font-size:9px">(headline)</span></div>`
-  ).join('');
+  // Locked lines: headline/innate stats plus a cursed item's penalty — none of
+  // these can be rerolled, so they're shown separately with a 🔒 and a tag that
+  // says WHY (headline vs the permanent curse).
+  const lockRows = locked.filter(k => k in item.stats).map(k => {
+    const v = item.stats[k];
+    const valStr = (typeof v === 'string') ? v : (v < 0 ? '' : '+') + v;
+    const curse = item.cursed && !head.includes(k);
+    const style = curse ? 'opacity:0.85;color:#e0556b' : 'opacity:0.6';
+    const tag = curse ? '(cursed)' : '(headline)';
+    return `<div class="hc-line" style="${style}">🔒 ${valStr} ${STAT_LABELS[k]||k} <span style="font-size:9px">${tag}</span></div>`;
+  }).join('');
   const valCost = rerollValueCost(item), typeCost = rerollTypeCost(item);
 
   // One property row: a Value reroll (same modifier, new number) and a Type
@@ -5809,7 +5821,7 @@ function renderEnchantItem(item) {
       <span class="ench-tipwrap" data-tip="${typeTip}" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()"><button class="shop-buy-btn ench-btn" ${canType?'':'disabled'} onclick="enchantRerollType(${item.id},'${kind}','${key}')">🔄 ${costLabel(typeCost)}</button></span></div>`;
   };
 
-  const statRows = Object.keys(item.stats).filter(k => !head.includes(k)).sort(orderBy(poolStats)).map(k =>
+  const statRows = Object.keys(item.stats).filter(k => !locked.includes(k)).sort(orderBy(poolStats)).map(k =>
     propRow('stat', k, STAT_LABELS[k]||k, '', item.stats[k], statRangeLabel(item, k), otherStatTypes(item, k).map(s => STAT_LABELS[s]||s))
   ).join('');
   const attrRows = Object.keys(item.attrs || {}).sort(orderBy(poolAttrs)).map(k =>
@@ -5852,7 +5864,7 @@ function renderEnchantItem(item) {
       <div class="shop-row-info item-${item.tier}" style="margin-left:8px"><div class="shop-row-name">${item.name}${craftedMark(item)}</div>
       <div class="shop-row-sub">${SLOTS[item.slot].label.replace(/^\S+\s/,'')} · ilvl ${item.ilvl} · ${statN}/${caps.stat} stats · ${attrN}/${caps.attr} attrs</div></div></div>
     <div class="ench-legend">🎲 reroll value · 🔄 reroll modifier · hover a button for details</div>
-    ${headRows}
+    ${lockRows}
     ${empty}${statRows}${attrRows}
     <div class="shop-row" style="margin-top:6px;gap:6px">${augBtn}${allBtn}</div>
     ${blockMsg ? `<div class="hc-line" style="opacity:0.6;margin-top:4px">${blockMsg}</div>` : ''}
@@ -6496,6 +6508,22 @@ function headlineStats(item) {
   return [...base]; // ring / amulet: pure-affix apart from the base's innate stat
 }
 
+// The full set of stats that are LOCKED on an item — never rerolled, removed, or
+// counted as a rollable affix. That's every headline/innate stat PLUS a cursed
+// item's penalty stat: a curse is permanent, so the Enchanter can't reroll the
+// drawback away. Newer cursed drops record `item.curseStat`; for older saves we
+// fall back to "any negative stat" (only a curse ever makes a stat negative).
+function lockedStats(item) {
+  const locked = headlineStats(item).slice();
+  if (item.cursed) {
+    for (const [k, v] of Object.entries(item.stats)) {
+      const isPenalty = item.curseStat === k || (typeof v === 'number' && v < 0);
+      if (isPenalty && !locked.includes(k)) locked.push(k);
+    }
+  }
+  return locked;
+}
+
 function generateItem(rolls = 1, ilvl = null, forceTier = null, forceSlot = null) {
   // forceTier pins the rarity (used by the town gambler, which rolls its own
   // rarity distribution); otherwise rarity comes from the usual luck rolls.
@@ -6553,6 +6581,9 @@ function generateItem(rolls = 1, ilvl = null, forceTier = null, forceSlot = null
     stats[boostStat] = (stats[boostStat] || 0) + curseSwing(boostStat, lvl, mult, true);
     if (curseStat) stats[curseStat] = (stats[curseStat] || 0) - curseSwing(curseStat, lvl, mult, false); // negative = penalty
     item.cursed = true;
+    // Remember which property carries the curse penalty so the Enchanter can lock
+    // it — a curse is a curse, you can't simply reroll the drawback away.
+    if (curseStat) item.curseStat = curseStat;
     item.name = '☠ ' + item.name;
     item.flavor = 'Cursed: great power at a price.';
     item.value = Math.round(value * 1.5);
@@ -10038,12 +10069,19 @@ function positionTooltip(anchor) {
 // difference vs that item as a percentage change.
 function itemCardHTML(item, opts = {}) {
   const tier = TIERS[item.tier];
+  const head = item.slot ? headlineStats(item) : [];
   const statRows = Object.entries(item.stats).map(([k,v]) => {
     // DMG is a range string like "8-12"; others are flat numbers (negative on a curse).
     const negative = (typeof v === 'number') && v < 0;
     const val = (typeof v === 'string') ? v : (v < 0 ? '' : '+') + v;
+    // Native (headline/innate) stats come from the base and can't be rerolled, so
+    // mark them apart from rollable affixes. A curse penalty (negative) is tagged too.
+    const isNative = head.includes(k);
+    const cls = 'tt-stat' + (isNative ? ' tt-native' : '');
     const style = negative ? ' style="color:#e0556b"' : '';
-    return `<div class="tt-stat"${style}>${val} ${STAT_LABELS[k] || k}</div>`;
+    const tag = negative ? ' <span class="tt-tag">cursed</span>'
+              : isNative ? ' <span class="tt-tag">native</span>' : '';
+    return `<div class="${cls}"${style}>${val} ${STAT_LABELS[k] || k}${tag}</div>`;
   });
   // Attribute affixes (+Might, +Luck, …) get their own coloured rows.
   if (item.attrs) for (const [k, v] of Object.entries(item.attrs)) {
