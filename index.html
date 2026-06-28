@@ -7770,26 +7770,89 @@ function draw() {
         ctx.stroke();
         ctx.restore();
       } else if (t === 3) {
-        // Fountain of Healing — stone basin with glowing blue water
+        // Fountain of Healing — a tiered stone fountain with water spraying
+        // from a central spout into a glowing basin.
         drawFloorBase(px, py, tw, th, seed, C);
-        // stone rim
-        ctx.fillStyle = '#5a5a72';
-        ctx.beginPath();
-        ctx.arc(px+tw/2, py+th/2, tw*0.42, 0, Math.PI*2);
-        ctx.fill();
-        // water, gently pulsing
-        const wp = 0.5 + 0.5*Math.sin(Date.now()/400);
-        ctx.fillStyle = `rgba(90,180,255,${0.7+0.3*wp})`;
-        ctx.beginPath();
-        ctx.arc(px+tw/2, py+th/2, tw*0.32, 0, Math.PI*2);
-        ctx.fill();
-        // glow
+        const cx = px + tw/2, cy = py + th/2, s = tw/TILE;
+        const tNow = Date.now();
+        const wp = 0.5 + 0.5*Math.sin(tNow/400);   // slow pool shimmer
+        // soft ground shadow
         ctx.save();
-        ctx.shadowColor = '#8ad0ff';
-        ctx.shadowBlur = 10 * (tw/TILE);
-        ctx.fillStyle = '#bfe8ff';
+        ctx.fillStyle = 'rgba(0,0,0,0.28)';
         ctx.beginPath();
-        ctx.arc(px+tw/2, py+th/2, tw*0.14, 0, Math.PI*2);
+        ctx.ellipse(cx, cy + th*0.30, tw*0.40, th*0.20, 0, 0, Math.PI*2);
+        ctx.fill();
+        ctx.restore();
+        // outer stone basin — darker base ring for depth
+        ctx.fillStyle = '#3d3d52';
+        ctx.beginPath();
+        ctx.ellipse(cx, cy + th*0.06, tw*0.44, th*0.34, 0, 0, Math.PI*2);
+        ctx.fill();
+        // stone rim (lighter on top to read as 3D)
+        ctx.fillStyle = '#6a6a86';
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, tw*0.44, th*0.32, 0, 0, Math.PI*2);
+        ctx.fill();
+        ctx.fillStyle = '#85859e';
+        ctx.beginPath();
+        ctx.ellipse(cx, cy - th*0.02, tw*0.44, th*0.16, 0, Math.PI, Math.PI*2);
+        ctx.fill();
+        // water pool inside the basin
+        ctx.fillStyle = `rgba(70,160,235,${0.85+0.15*wp})`;
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, tw*0.34, th*0.24, 0, 0, Math.PI*2);
+        ctx.fill();
+        // animated ripple rings on the pool
+        ctx.save();
+        ctx.strokeStyle = 'rgba(190,230,255,0.5)';
+        ctx.lineWidth = Math.max(1, 1.4*s);
+        for (let r = 0; r < 2; r++) {
+          const rr = ((tNow/700 + r*0.5) % 1);
+          ctx.globalAlpha = 0.5 * (1 - rr);
+          ctx.beginPath();
+          ctx.ellipse(cx, cy, tw*0.30*rr + tw*0.05, th*0.20*rr + th*0.04, 0, 0, Math.PI*2);
+          ctx.stroke();
+        }
+        ctx.restore();
+        // central stone pedestal + top dish
+        ctx.fillStyle = '#6a6a86';
+        ctx.fillRect(cx - tw*0.07, cy - th*0.20, tw*0.14, th*0.22);
+        ctx.fillStyle = '#85859e';
+        ctx.beginPath();
+        ctx.ellipse(cx, cy - th*0.20, tw*0.16, th*0.07, 0, 0, Math.PI*2);
+        ctx.fill();
+        ctx.fillStyle = `rgba(120,200,255,${0.8+0.2*wp})`;
+        ctx.beginPath();
+        ctx.ellipse(cx, cy - th*0.20, tw*0.10, th*0.04, 0, 0, Math.PI*2);
+        ctx.fill();
+        // glowing water jet spraying up from the dish
+        ctx.save();
+        ctx.shadowColor = '#9ad8ff';
+        ctx.shadowBlur = 8 * s;
+        ctx.strokeStyle = 'rgba(200,240,255,0.85)';
+        ctx.lineWidth = Math.max(1.5, 2*s);
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - th*0.22);
+        ctx.lineTo(cx, cy - th*0.46);
+        ctx.stroke();
+        // arcing droplets falling back into the pool
+        ctx.fillStyle = 'rgba(210,240,255,0.95)';
+        for (let d = 0; d < 6; d++) {
+          const ph = ((tNow/520 + d/6) % 1);          // 0→1 arc progress
+          const dir = d % 2 ? 1 : -1;
+          const dx = dir * tw*0.30 * ph;
+          const dy = -th*0.42 + (th*0.66) * (ph*ph);  // up then accelerate down
+          ctx.beginPath();
+          ctx.arc(cx + dx, cy - th*0.04 + dy, Math.max(1, 1.6*s), 0, Math.PI*2);
+          ctx.fill();
+        }
+        ctx.restore();
+        // overall healing glow
+        ctx.save();
+        ctx.globalAlpha = 0.10 + 0.10*wp;
+        ctx.fillStyle = '#8ad0ff';
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, tw*0.5, th*0.4, 0, 0, Math.PI*2);
         ctx.fill();
         ctx.restore();
       } else if (t === 5) {
