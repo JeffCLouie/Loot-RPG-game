@@ -285,6 +285,13 @@
   .sound-action:active { background: #2f4a6b; }
   .sound-action.muted { background: #262626; border-color: #444; color: #888; }
 
+  .slots-action {
+    background: #1f2a22;
+    border-color: #2f4a38;
+    color: #bcffd0;
+  }
+  .slots-action:active { background: #2f4a38; }
+
   .newgame-action {
     background: #2a1a1a;
     border-color: #4a2a2a;
@@ -940,19 +947,55 @@
   .class-card .cc-blurb { font-size: 10px; color: #b9a98a; line-height: 1.4; margin-bottom: 3px; }
   .class-card .cc-detail { font-size: 9px; color: #8a7d63; line-height: 1.5; }
 
-  /* ── CHARACTER NAME + LEADERBOARD overlays (share the class-overlay look) ── */
-  #name-overlay, #lb-overlay {
+  /* ── CHARACTER NAME + LEADERBOARD + SAVE SLOTS overlays (share the class-overlay look) ── */
+  #name-overlay, #lb-overlay, #slots-overlay {
     position: fixed; inset: 0; background: rgba(0,0,0,0.85);
     display: none; align-items: center; justify-content: center;
     z-index: 410; padding: 16px;
   }
-  #name-overlay.open, #lb-overlay.open { display: flex; }
-  #name-modal, #lb-modal {
+  #name-overlay.open, #lb-overlay.open, #slots-overlay.open { display: flex; }
+  #name-modal, #lb-modal, #slots-modal {
     background: #16120c; border: 2px solid #9f7a3f; border-radius: 10px;
     width: 100%; max-width: 400px; max-height: 88vh; overflow-y: auto;
     -webkit-overflow-scrolling: touch; padding: 16px;
     box-shadow: 0 0 30px rgba(255,200,100,0.3);
   }
+
+  /* Save-slot rows: each holds a character summary (or "empty") plus actions. */
+  .slot-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+  .slot-row {
+    border: 1px solid var(--border); border-radius: 7px; background: #1b160f;
+    padding: 9px 10px;
+  }
+  .slot-row.active { border-color: var(--gold); background: #241d10; }
+  .slot-row.empty { opacity: 0.92; }
+  .slot-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .slot-num { font-size: 11px; font-weight: bold; color: #8a7d63; letter-spacing: 1px; flex: 0 0 auto; }
+  .slot-badge {
+    font-size: 9px; font-weight: bold; color: #16120c; background: var(--gold);
+    border-radius: 4px; padding: 1px 5px; letter-spacing: 1px; flex: 0 0 auto;
+  }
+  .slot-class { font-size: 16px; flex: 0 0 auto; }
+  .slot-name {
+    flex: 1 1 auto; color: #ffe9b0; font-weight: bold; font-size: 13px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .slot-name.muted { color: #8a7d63; font-weight: normal; font-style: italic; }
+  .slot-stats { font-size: 11px; color: #b9a98a; margin-bottom: 8px; line-height: 1.4; }
+  .slot-stats .slot-time { color: #8a7d63; }
+  .slot-actions { display: flex; gap: 6px; }
+  .slot-btn {
+    flex: 1 1 0; box-sizing: border-box; padding: 8px 6px; border: 1px solid var(--gold);
+    border-radius: 6px; background: #2a2113; color: var(--gold);
+    font-family: 'Courier New', monospace; font-size: 12px; font-weight: bold;
+    letter-spacing: 1px; cursor: pointer; -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation; text-align: center;
+  }
+  .slot-btn:active { background: #3a2e16; }
+  .slot-btn.current { opacity: 0.6; cursor: default; }
+  .slot-btn.danger { flex: 0 0 auto; border-color: #7a3a2c; color: #d98a72; background: #251512; }
+  .slot-btn.danger:active { background: #3a1e16; }
+  .slot-btn.danger.armed { background: var(--hp); color: #fff; border-color: #fff; }
   #name-modal { max-width: 360px; }
   .ov-title { color: #ffe9b0; font-size: 16px; font-weight: bold; text-align: center; display: block; }
   .ov-sub { color: #b9a98a; font-size: 11px; text-align: center; margin: 6px 0 12px; line-height: 1.4; }
@@ -1529,6 +1572,9 @@
         <button class="settings-item sound-action" onclick="toggleSound()">
           <span class="action-icon" id="sound-icon">🔊</span><span class="action-label" id="sound-label">ON</span>
         </button>
+        <button class="settings-item slots-action" onclick="openSlots()">
+          <span class="action-icon">💾</span><span class="action-label">SLOTS</span>
+        </button>
         <button class="settings-item newgame-action" onclick="confirmNewGame()">
           <span class="action-icon">↻</span><span class="action-label">NEW</span>
         </button>
@@ -1663,6 +1709,17 @@
     <div class="lb-status" id="lb-status"></div>
     <div class="lb-list" id="lb-list"></div>
     <div class="lb-foot"><button class="ov-btn" onclick="closeLeaderboard()">Close</button></div>
+  </div>
+</div>
+
+<!-- Save slots — keep several characters side by side; load one, start a fresh
+     hero in an empty slot, or wipe a slot. The slot you're playing is marked. -->
+<div id="slots-overlay" onclick="if(event.target===this)closeSlots()">
+  <div id="slots-modal">
+    <span class="ov-title">💾 Save Slots</span>
+    <div class="ov-sub">Keep a few heroes on the go. Load a slot to play it, or start a new adventure in an empty one — your current game is saved automatically.</div>
+    <div class="slot-list" id="slot-list"></div>
+    <div class="lb-foot"><button class="ov-btn" onclick="closeSlots()">Close</button></div>
   </div>
 </div>
 
@@ -9627,6 +9684,22 @@ function pick(arr) { return arr[Math.floor(Math.random()*arr.length)]; }
 
 const SAVE_KEY = 'dungeonLoot_save_v1';
 
+// ── Save slots ──────────────────────────────────────────────────────────────
+// Several independent characters can live side by side. Slot 0 reuses the
+// original single-save key so any existing game is adopted as the first slot
+// with no migration; the rest get a suffixed key. The active slot is the one
+// that auto-saves and loads, and is remembered across reloads.
+const SLOT_COUNT = 3;
+const ACTIVE_SLOT_KEY = 'dungeonLoot_activeSlot';
+function slotKey(i) { return i === 0 ? SAVE_KEY : SAVE_KEY + '_s' + i; }
+let activeSlot = (function () {
+  try {
+    const n = parseInt(localStorage.getItem(ACTIVE_SLOT_KEY), 10);
+    if (n >= 0 && n < SLOT_COUNT) return n;
+  } catch (e) {}
+  return 0;
+})();
+
 function saveGame() {
   try {
     const data = {
@@ -9634,7 +9707,7 @@ function saveGame() {
       inTown, dungeonReturn, stash,
       ts: Date.now(),
     };
-    localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+    localStorage.setItem(slotKey(activeSlot), JSON.stringify(data));
   } catch (e) {
     // localStorage unavailable (e.g. inside artifact preview) — fail silently
   }
@@ -9644,7 +9717,7 @@ function saveGame() {
 
 function loadGame() {
   try {
-    const raw = localStorage.getItem(SAVE_KEY);
+    const raw = localStorage.getItem(slotKey(activeSlot));
     if (!raw) return false;
     const data = JSON.parse(raw);
     if (!data.player) return false;
@@ -9773,8 +9846,138 @@ function loadGame() {
 }
 
 function wipeSave() {
-  try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
+  // Clears the slot you're currently playing, then reloads into a fresh hero.
+  try { localStorage.removeItem(slotKey(activeSlot)); } catch (e) {}
   location.reload();
+}
+
+// ── Save-slot management + overlay ──────────────────────────────────────────
+// A lightweight summary of whatever character lives in a slot, or null if the
+// slot is empty / unreadable. Used to paint the slot list without loading.
+function slotSummary(i) {
+  try {
+    const raw = localStorage.getItem(slotKey(i));
+    if (!raw) return null;
+    const d = JSON.parse(raw);
+    if (!d || !d.player) return null;
+    const p = d.player;
+    return {
+      name: p.name || null,
+      cls: (p.class && CLASSES[p.class]) ? p.class : null,
+      level: p.level || 1,
+      floor: p.maxFloor || d.dungeonLevel || 1,
+      gold: p.gold || 0,
+      inTown: !!d.inTown,
+      ts: d.ts || 0,
+    };
+  } catch (e) { return null; }
+}
+
+// Human-friendly "saved ... ago" stamp for a slot's last-write time.
+function slotTimeAgo(ts) {
+  if (!ts) return '';
+  const s = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+  if (s < 60) return 'just now';
+  const m = Math.floor(s / 60);
+  if (m < 60) return m + 'm ago';
+  const h = Math.floor(m / 60);
+  if (h < 24) return h + 'h ago';
+  const dy = Math.floor(h / 24);
+  return dy + 'd ago';
+}
+
+// Persist the active slot, then reload so the game boots cleanly from it. A
+// reload is the simplest reliable reset — init() rebuilds all state from the
+// chosen slot (or starts a fresh hero if it's empty).
+function activateSlot(i) {
+  if (i < 0 || i >= SLOT_COUNT) return;
+  try { localStorage.setItem(ACTIVE_SLOT_KEY, String(i)); } catch (e) {}
+  activeSlot = i;
+  location.reload();
+}
+
+let slotDeleteArmed = -1; // which slot's DELETE is primed for the confirm tap
+function openSlots() {
+  slotDeleteArmed = -1;
+  const menu = document.getElementById('settings-menu');
+  if (menu) menu.classList.remove('open');
+  const ov = document.getElementById('slots-overlay');
+  if (!ov) return;
+  renderSlots();
+  ov.classList.add('open');
+}
+function closeSlots() {
+  slotDeleteArmed = -1;
+  const ov = document.getElementById('slots-overlay');
+  if (ov) ov.classList.remove('open');
+}
+
+function renderSlots() {
+  const list = document.getElementById('slot-list');
+  if (!list) return;
+  let html = '';
+  for (let i = 0; i < SLOT_COUNT; i++) {
+    const s = slotSummary(i);
+    const isActive = i === activeSlot;
+    const badge = isActive ? '<span class="slot-badge">PLAYING</span>' : '';
+    if (!s) {
+      // Empty slot — offer to start a fresh hero here.
+      html += `<div class="slot-row empty${isActive ? ' active' : ''}">
+        <div class="slot-head">
+          <span class="slot-num">SLOT ${i + 1}</span>${badge}
+          <span class="slot-name muted">Empty</span>
+        </div>
+        <div class="slot-actions">
+          <button class="slot-btn" onclick="newGameInSlot(${i})">＋ New Game</button>
+        </div>
+      </div>`;
+      continue;
+    }
+    const icon = s.cls ? CLASSES[s.cls].icon : '🧙';
+    const who = escapeHtml(s.name || 'Adventurer');
+    const where = s.inTown ? 'In Town' : ('Floor ' + s.floor);
+    const time = slotTimeAgo(s.ts);
+    const playBtn = isActive
+      ? `<button class="slot-btn current" disabled>● Playing</button>`
+      : `<button class="slot-btn" onclick="activateSlot(${i})">▶ Load</button>`;
+    const armed = slotDeleteArmed === i;
+    const delBtn = `<button class="slot-btn danger${armed ? ' armed' : ''}" onclick="deleteSlot(${i})">${armed ? 'Sure?' : '🗑'}</button>`;
+    html += `<div class="slot-row${isActive ? ' active' : ''}">
+      <div class="slot-head">
+        <span class="slot-num">SLOT ${i + 1}</span>${badge}
+        <span class="slot-class">${icon}</span>
+        <span class="slot-name">${who}</span>
+      </div>
+      <div class="slot-stats">Lv ${s.level} · ${where} · ${s.gold}g${time ? ` · <span class="slot-time">saved ${time}</span>` : ''}</div>
+      <div class="slot-actions">${playBtn}${delBtn}</div>
+    </div>`;
+  }
+  list.innerHTML = html;
+}
+
+// Start a brand-new hero in slot i. If the slot already holds a character it's
+// wiped first (the slot list only shows ＋ New Game on empty slots, so this
+// path is reached on empties), then we boot into it — init() shows name entry.
+function newGameInSlot(i) {
+  try { localStorage.removeItem(slotKey(i)); } catch (e) {}
+  activateSlot(i);
+}
+
+// Two-tap delete: first tap arms the slot, second confirms. Arming auto-clears
+// when you tap a different slot or after a short timeout.
+function deleteSlot(i) {
+  if (slotDeleteArmed !== i) {
+    slotDeleteArmed = i;
+    renderSlots();
+    setTimeout(() => { if (slotDeleteArmed === i) { slotDeleteArmed = -1; renderSlots(); } }, 3000);
+    return;
+  }
+  slotDeleteArmed = -1;
+  try { localStorage.removeItem(slotKey(i)); } catch (e) {}
+  // Wiping the slot you're actively playing means there's nothing to fall back
+  // on — reload starts a fresh hero in it. Otherwise just refresh the list.
+  if (i === activeSlot) { location.reload(); return; }
+  renderSlots();
 }
 
 let newGameArmed = false;
