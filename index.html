@@ -2880,7 +2880,7 @@ function audioInit() {
 
     // SFX bus: mostly dry with a touch of reverb.
     audio.sfxGain = audio.ctx.createGain();
-    audio.sfxGain.gain.value = 0.6;
+    audio.sfxGain.gain.value = 0.4;
     audio.sfxGain.connect(audio.master);
     const sfxVerb = audio.ctx.createGain();
     sfxVerb.gain.value = 0.12;
@@ -2889,7 +2889,7 @@ function audioInit() {
 
     // Music bus: more reverb for a lush, spacious dungeon ambience.
     audio.musicGain = audio.ctx.createGain();
-    audio.musicGain.gain.value = 0.2;
+    audio.musicGain.gain.value = 0.28;
     audio.musicGain.connect(audio.master);
     const musicVerb = audio.ctx.createGain();
     musicVerb.gain.value = 0.3;
