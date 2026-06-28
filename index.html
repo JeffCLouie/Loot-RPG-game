@@ -234,6 +234,10 @@
     gap: 6px;
     padding: 8px;
     min-width: 150px;
+    /* Cap the width so the 20-swatch STYLE row scrolls inside the popup instead
+       of forcing the whole shrink-to-fit menu out to full screen width. */
+    max-width: min(280px, calc(100vw - 24px));
+    box-sizing: border-box;
     background: linear-gradient(180deg, #1a1430, #2c2344);
     border: 1px solid var(--frame);
     border-radius: 10px;
@@ -339,6 +343,9 @@
     padding-bottom: 6px;
     scrollbar-width: thin;
     -webkit-overflow-scrolling: touch;
+    /* Stay within the capped popup so the row scrolls rather than widening it. */
+    max-width: 100%;
+    min-width: 0;
   }
   .dp-sw {
     flex: 0 0 auto;
