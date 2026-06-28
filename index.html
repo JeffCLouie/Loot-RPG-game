@@ -3298,67 +3298,121 @@ function sfx(name) {
 // repeats note-for-note. Everything is scheduled a fraction of a second ahead
 // of the playhead so it never glitches.
 let musicTimer = null, musicStep = 0, musicNext = 0;
-let musicProg = null, musicLeadIdx = 4;
-// The track drifts between distinct instrument palettes ("sections") over time:
-// it holds one timbre for a couple of minutes, then slowly crossfades into the
-// next so the music keeps reinventing itself instead of sounding static.
-let musicSectionIdx = 0;      // index of the palette currently playing
+let musicProg = null, musicLeadIdx = 4, musicArpIdx = 0, musicBarCount = 0;
+// The track drifts between distinct *styles* ("sections") over time. Each style
+// has its own scale/mode, bank of chord progressions, rhythmic groove AND
+// instruments — so it is genuinely different music, not just a different tempo.
+// It holds one style for a couple of minutes, then slowly crossfades into the
+// next: the timbres blend continuously while the harmony and groove pivot at the
+// midpoint of the fade (masked by the equal blend), so the character changes
+// noticeably without ever hard-cutting.
+let musicSectionIdx = 0;      // style whose timbre/feel is currently playing
+let musicStructIdx = 0;       // style whose scale/chords/groove drive the notes
 let musicTrans = null;        // active crossfade: { fromIdx, toIdx, start, end }
 let musicSectionEndTime = 0;  // ctx time at which the current section drifts on
-const SECTION_MIN = 95;       // shortest a section holds before drifting (sec)
-const SECTION_MAX = 150;      // longest a section holds before drifting (sec)
-const SECTION_FADE = 16;      // how long the crossfade between sections lasts (sec)
-const MUSIC_TEMPO = 0.26;     // base eighth-note step; sections nudge it (~115 BPM)
+const SECTION_MIN = 78;       // shortest a style holds before drifting (sec)
+const SECTION_MAX = 135;      // longest a style holds before drifting (sec)
+const SECTION_FADE = 14;      // how long the crossfade between styles lasts (sec)
 const STEPS_PER_BAR = 8;      // eighth-notes per 4/4 bar
 const A2 = 110;               // reference pitch in Hz
 // Semitone offset from A2 → Hz.
 const mhz = (semi) => A2 * Math.pow(2, semi / 12);
-// A natural-minor scale (semitone offsets) the melody wanders within.
-const MUSIC_SCALE = [0, 2, 3, 5, 7, 8, 10, 12, 14, 15, 17, 19, 24];
-// Diatonic chords as semitone offsets from A2 (root, third, fifth).
-const MUSIC_CHORDS = {
-  Am: [0, 3, 7],  Dm: [5, 8, 12], Em: [7, 10, 14],
-  C:  [3, 7, 10], F:  [8, 12, 15], G:  [10, 14, 17],
-};
-// A handful of 4-bar progressions; the engine rotates between them for variety.
-const MUSIC_PROGS = [
-  ['Am', 'F',  'C',  'G'],
-  ['Am', 'Dm', 'G',  'C'],
-  ['Am', 'C',  'Dm', 'Em'],
-  ['Am', 'F',  'G',  'Em'],
-];
 const mpick = (a) => a[Math.floor(Math.random() * a.length)];
 
-// ── Instrument palettes ("sections") ──
-// Each section is a full timbre kit — bass, pad/arp and lead get their own
-// oscillator shape and filter, plus per-section density and percussion mix. The
-// engine plays one for a couple of minutes, then crossfades into another, so the
-// same generative theme is re-voiced again and again with different instruments.
+// ── Musical styles ("sections") ──
+// Each style is a complete kit: a scale/mode the melody wanders, its own bank of
+// chord progressions (each in its own key/mode), a rhythmic groove (bass
+// pattern, arpeggio, percussion, swing, octaves) and a timbre set (bass/pad/lead
+// oscillators + filters). The continuous fields (tempo, densities, percussion
+// volumes) crossfade smoothly between styles; the discrete musical structure
+// (scale, progs, groove) pivots cleanly at the midpoint of the fade. Triads are
+// [root, third, fifth] in semitones from A2; scales are absolute semitone
+// offsets spanning ~2 octaves. groove patterns are per-eighth-note across a bar.
 const MUSIC_SECTIONS = [
+  // Brooding A natural-minor dungeon — the classic theme, steady heartbeat kit.
   { name: 'Cavern',  tempo: 0.26,
+    scale: [0, 2, 3, 5, 7, 8, 10, 12, 14, 15, 17, 19, 24],
+    progs: [
+      [[0,3,7],[8,12,15],[3,7,10],[10,14,17]],   // Am  F   C   G
+      [[0,3,7],[5,8,12],[7,10,14],[0,3,7]],       // Am  Dm  Em  Am
+    ],
     bass: { type: 'sawtooth', cutoff: 620,  q: 3, detune: 4, vol: 0.30 },
     pad:  { type: 'sine',     cutoff: 1500, q: 1, detune: 4, vol: 0.13 },
     lead: { type: 'triangle', cutoff: 3000, q: 1, detune: 5, vol: 0.20 },
-    leadDensity: 0.72, arpDensity: 0.5,
-    kickVol: 1.0, kickMidVol: 1.0, hatVol: 0.05 },
-  { name: 'Crystal', tempo: 0.24,
-    bass: { type: 'triangle', cutoff: 900,  q: 2, detune: 4, vol: 0.26 },
-    pad:  { type: 'triangle', cutoff: 2200, q: 1, detune: 6, vol: 0.12 },
-    lead: { type: 'sine',     cutoff: 4200, q: 1, detune: 3, vol: 0.18 },
-    leadDensity: 0.6, arpDensity: 0.66,
-    kickVol: 0.55, kickMidVol: 0.3, hatVol: 0.035 },
-  { name: 'Forge',   tempo: 0.225,
+    leadDensity: 0.66, arpDensity: 0.45,
+    kickVol: 1.0, kickMidVol: 0.9, hatVol: 0.05,
+    groove: { swing: 0.0, leadOct: 12, arpOct: 0, arpEvery: 2, leadLong: 0.3, leadRest: 0.12,
+      bassPat: [{d:'r',l:3.6}, null, null, null, {d:'5',l:3.0}, null, null, null],
+      kickPat: ['main', null, null, null, 'mid', null, null, null],
+      hatPat:  [0,1,0,1,0,1,0,1] } },
+
+  // Bright, shimmering D Dorian — busy bell arpeggios, light swung kit.
+  { name: 'Crystal', tempo: 0.235,
+    scale: [5, 7, 8, 10, 12, 14, 15, 17, 19, 20, 22, 24, 26],
+    progs: [
+      [[5,8,12],[10,14,17],[5,8,12],[10,14,17]], // Dm  G   Dm  G   (Dorian IV)
+      [[5,8,12],[7,10,14],[10,14,17],[3,7,10]],   // Dm  Em  G   C
+    ],
+    bass: { type: 'triangle', cutoff: 900,  q: 2, detune: 4, vol: 0.24 },
+    pad:  { type: 'triangle', cutoff: 2600, q: 1, detune: 6, vol: 0.12 },
+    lead: { type: 'sine',     cutoff: 4600, q: 1, detune: 3, vol: 0.17 },
+    leadDensity: 0.5, arpDensity: 0.72,
+    kickVol: 0.5, kickMidVol: 0.3, hatVol: 0.04,
+    groove: { swing: 0.12, leadOct: 24, arpOct: 12, arpEvery: 1, leadLong: 0.45, leadRest: 0.18,
+      bassPat: [{d:'r',l:2.0}, null, {d:'5',l:1.4}, null, {d:'r',l:2.0}, null, {d:'3',l:1.4}, null],
+      kickPat: ['mid', null, null, null, 'mid', null, null, null],
+      hatPat:  [0,0,1,0,0,0,1,0] } },
+
+  // Dark, exotic A harmonic-minor forge — square-wave industrial drive.
+  { name: 'Forge',   tempo: 0.205,
+    scale: [0, 2, 3, 5, 7, 8, 11, 12, 14, 15, 17, 19, 20],
+    progs: [
+      [[0,3,7],[5,8,12],[7,11,14],[0,3,7]],       // Am  Dm  E   Am  (harmonic-minor V)
+      [[0,3,7],[8,12,15],[7,11,14],[0,3,7]],       // Am  F   E   Am
+    ],
     bass: { type: 'square',   cutoff: 520,  q: 4, detune: 6, vol: 0.22 },
-    pad:  { type: 'sawtooth', cutoff: 1200, q: 2, detune: 4, vol: 0.11 },
-    lead: { type: 'square',   cutoff: 2500, q: 1, detune: 5, vol: 0.16 },
-    leadDensity: 0.82, arpDensity: 0.45,
-    kickVol: 1.1, kickMidVol: 0.9, hatVol: 0.07 },
+    pad:  { type: 'sawtooth', cutoff: 1200, q: 2, detune: 4, vol: 0.10 },
+    lead: { type: 'square',   cutoff: 2500, q: 1, detune: 5, vol: 0.15 },
+    leadDensity: 0.8, arpDensity: 0.4,
+    kickVol: 1.1, kickMidVol: 0.85, hatVol: 0.07,
+    groove: { swing: 0.0, leadOct: 0, arpOct: 0, arpEvery: 2, leadLong: 0.18, leadRest: 0.08,
+      bassPat: [{d:'r',l:1.0}, null, null, {d:'r',l:1.0}, {d:'5',l:1.0}, null, {d:'r',l:1.0}, null],
+      kickPat: ['main', null, 'mid', null, 'main', null, 'mid', null],
+      hatPat:  [0,1,0,1,0,1,0,1] } },
+
+  // Airy, dreamy C Lydian — ambient drone, no percussion, very sparse.
   { name: 'Mist',    tempo: 0.30,
+    scale: [3, 5, 7, 9, 10, 12, 14, 15, 17, 19, 21, 22, 24],
+    progs: [
+      [[3,7,10],[5,9,12],[3,7,10],[10,14,17]],   // C   D   C   G   (Lydian II)
+      [[3,7,10],[10,14,17],[5,9,12],[3,7,10]],     // C   G   D   C
+    ],
     bass: { type: 'sine',     cutoff: 400,  q: 1, detune: 3, vol: 0.30 },
-    pad:  { type: 'sine',     cutoff: 1000, q: 1, detune: 4, vol: 0.14 },
-    lead: { type: 'triangle', cutoff: 2200, q: 1, detune: 4, vol: 0.17 },
-    leadDensity: 0.5, arpDensity: 0.7,
-    kickVol: 0.35, kickMidVol: 0.0, hatVol: 0.0 },
+    pad:  { type: 'sine',     cutoff: 1100, q: 1, detune: 4, vol: 0.15 },
+    lead: { type: 'triangle', cutoff: 2400, q: 1, detune: 4, vol: 0.17 },
+    leadDensity: 0.35, arpDensity: 0.2,
+    kickVol: 0.0, kickMidVol: 0.0, hatVol: 0.0,
+    groove: { swing: 0.0, leadOct: 24, arpOct: 12, arpEvery: 4, leadLong: 0.6, leadRest: 0.3,
+      bassPat: [{d:'r',l:7.0}, null, null, null, null, null, null, null],
+      kickPat: [null, null, null, null, null, null, null, null],
+      hatPat:  [0,0,0,0,0,0,0,0] } },
+
+  // Loose, bluesy A minor-pentatonic — heavy swing, laid-back groove.
+  { name: 'Hollow',  tempo: 0.25,
+    scale: [0, 3, 5, 7, 10, 12, 15, 17, 19, 22, 24],
+    progs: [
+      [[0,3,7],[3,7,10],[5,8,12],[0,3,7]],         // Am  C   Dm  Am
+      [[0,3,7],[10,14,17],[3,7,10],[5,8,12]],       // Am  G   C   Dm
+    ],
+    bass: { type: 'sawtooth', cutoff: 700,  q: 3, detune: 5, vol: 0.28 },
+    pad:  { type: 'square',   cutoff: 1400, q: 2, detune: 5, vol: 0.10 },
+    lead: { type: 'triangle', cutoff: 2800, q: 1, detune: 6, vol: 0.19 },
+    leadDensity: 0.6, arpDensity: 0.35,
+    kickVol: 0.85, kickMidVol: 0.6, hatVol: 0.05,
+    groove: { swing: 0.3, leadOct: 12, arpOct: 0, arpEvery: 2, leadLong: 0.35, leadRest: 0.16,
+      bassPat: [{d:'r',l:3.0}, null, null, {d:'5',l:1.0}, null, null, {d:'r',l:1.5}, null],
+      kickPat: ['main', null, null, null, 'mid', null, 'mid', null],
+      hatPat:  [0,1,0,1,0,1,0,1] } },
 ];
 
 // The crossfade state at a given playhead time: which two palettes are in play
@@ -3424,38 +3478,38 @@ function musicHat(when, vol) {
   src.connect(f); f.connect(g); g.connect(audio.musicGain);
   src.start(when); src.stop(when + 0.05);
 }
-// Wander the melody: land on chord tones for stability, otherwise step along
-// the scale a degree or two. Returns a semitone offset from A2.
-function musicLeadStep(chord) {
+// Wander the melody within a given style's scale: land on chord tones for
+// stability, otherwise step along the scale a degree or two. Returns a semitone
+// offset from A2. A chord tone may sit an octave above the scale's base, so try
+// both before falling back.
+function musicLeadStep(scale, chord) {
   if (Math.random() < 0.45) {
     const t = chord[Math.floor(Math.random() * chord.length)];
-    const i = MUSIC_SCALE.indexOf(t);
-    musicLeadIdx = i < 0 ? 4 : i;
+    let i = scale.indexOf(t);
+    if (i < 0) i = scale.indexOf(t - 12);
+    musicLeadIdx = i < 0 ? Math.min(4, scale.length - 1) : i;
   } else {
     musicLeadIdx += mpick([-2, -1, 1, 2]);
-    musicLeadIdx = Math.max(0, Math.min(MUSIC_SCALE.length - 1, musicLeadIdx));
   }
-  return MUSIC_SCALE[musicLeadIdx];
+  musicLeadIdx = Math.max(0, Math.min(scale.length - 1, musicLeadIdx));
+  return scale[musicLeadIdx];
 }
 function scheduleMusic() {
   const ctx = audio.ctx;
   if (!ctx || audio.muted || ctx.state === 'suspended') return;
-  if (!musicProg) musicProg = mpick(MUSIC_PROGS);
+  if (!musicProg) musicProg = mpick(MUSIC_SECTIONS[musicStructIdx].progs);
   if (!musicSectionEndTime) {
     musicSectionEndTime = musicNext + SECTION_MIN + Math.random() * (SECTION_MAX - SECTION_MIN);
   }
   // Schedule every step that falls inside the look-ahead window.
   while (musicNext < ctx.currentTime + 0.3) {
     const when = musicNext;
-    const bar = Math.floor(musicStep / STEPS_PER_BAR);
     const beat = musicStep % STEPS_PER_BAR;
-    const chord = MUSIC_CHORDS[musicProg[bar % musicProg.length]];
-    const root = chord[0];
 
     // ── Section lifecycle ──
     // Finish a crossfade once the playhead clears it, then schedule the next
-    // hold. Otherwise, at the top of a phrase, if the hold has elapsed, begin
-    // drifting toward a fresh palette (never the same one twice in a row).
+    // hold. Otherwise, at the top of a bar, if the hold has elapsed, begin
+    // drifting toward a fresh style (never the same one twice in a row).
     if (musicTrans && when >= musicTrans.end) {
       musicSectionIdx = musicTrans.toIdx;
       musicTrans = null;
@@ -3467,6 +3521,27 @@ function scheduleMusic() {
       musicTrans = { fromIdx: musicSectionIdx, toIdx: next, start: when, end: when + SECTION_FADE };
     }
 
+    // Which style's *musical structure* (scale/chords/groove) drives this step.
+    // It pivots to the incoming style at the midpoint of the crossfade — where
+    // the two timbres are balanced, so the harmonic/groove change is masked —
+    // and only on a bar line, so the phrase never lurches mid-bar.
+    let structIdx = musicSectionIdx;
+    if (musicTrans) {
+      const mid = (musicTrans.start + musicTrans.end) / 2;
+      structIdx = when >= mid ? musicTrans.toIdx : musicTrans.fromIdx;
+    }
+    if (beat === 0 && structIdx !== musicStructIdx) {
+      musicStructIdx = structIdx;
+      musicProg = mpick(MUSIC_SECTIONS[structIdx].progs);
+      musicBarCount = 0;
+      musicArpIdx = 0;
+    }
+
+    const S = MUSIC_SECTIONS[musicStructIdx];
+    const g = S.groove;
+    const chord = musicProg[musicBarCount % musicProg.length];
+    const root = chord[0];
+
     // Resolve the timbre/feel for this step (crossfaded mid-transition).
     const blend = musicBlend(when);
     const tempo = musicLerp('tempo', blend);
@@ -3476,36 +3551,43 @@ function scheduleMusic() {
     const kickMidVol = musicLerp('kickMidVol', blend);
     const hatVol = musicLerp('hatVol', blend);
 
-    // At the top of each 4-bar phrase, sometimes swap to a new progression so
-    // the theme keeps evolving instead of looping forever.
-    if (beat === 0 && bar % musicProg.length === 0 && musicStep > 0 && Math.random() < 0.5) {
-      musicProg = mpick(MUSIC_PROGS);
+    // Swing: nudge the offbeat eighths a touch late for a lilt (style-dependent).
+    const swung = when + (beat % 2 === 1 ? tempo * g.swing : 0);
+
+    // At the top of each phrase, sometimes swap to another progression within
+    // the same style so the theme keeps evolving instead of looping forever.
+    if (beat === 0 && musicBarCount > 0 && musicBarCount % musicProg.length === 0 && Math.random() < 0.5) {
+      musicProg = mpick(S.progs);
     }
 
-    // Bass: a warm root on the downbeat, a fifth pulse mid-bar.
-    if (beat === 0) {
-      musicVoice('bass', blend, { freq: mhz(root - 12), dur: tempo * 3.6, when, attack: 0.02 });
-    } else if (beat === 4) {
-      musicVoice('bass', blend, { freq: mhz(chord[2] - 12), dur: tempo * 3.0, when, attack: 0.02 });
+    // Bass: follow the style's per-beat pattern (root/fifth/third, an octave low).
+    const bp = g.bassPat[beat];
+    if (bp) {
+      const semi = (bp.d === '5' ? chord[2] : bp.d === '3' ? chord[1] : root) - 12;
+      musicVoice('bass', blend, { freq: mhz(semi), dur: tempo * bp.l, when: swung, attack: 0.02 });
     }
 
-    // Pad/arp: a soft arpeggio cycling the chord tones underneath.
-    if (beat % 2 === 0 || Math.random() < arpDensity) {
-      musicVoice('pad', blend, { freq: mhz(chord[beat % chord.length]), dur: tempo * 1.6, when, attack: 0.04 });
+    // Pad/arp: cycle the chord tones underneath; busier styles fill more beats.
+    if (beat % g.arpEvery === 0 || Math.random() < arpDensity) {
+      const tone = chord[musicArpIdx % chord.length];
+      musicArpIdx++;
+      musicVoice('pad', blend, { freq: mhz(tone + g.arpOct), dur: tempo * 1.6, when: swung, attack: 0.04 });
     }
 
-    // Lead: an improvised melody that breathes (occasional rests + long notes).
-    if (Math.random() < leadDensity) {
-      const note = musicLeadStep(chord);
-      musicVoice('lead', blend, { freq: mhz(note + 12),
-        dur: tempo * (Math.random() < 0.3 ? 1.7 : 0.85), when, attack: 0.012 });
+    // Lead: an improvised melody that breathes (style-tuned rests + long notes).
+    if (Math.random() > g.leadRest && Math.random() < leadDensity) {
+      const note = musicLeadStep(S.scale, chord);
+      musicVoice('lead', blend, { freq: mhz(note + g.leadOct),
+        dur: tempo * (Math.random() < g.leadLong ? 1.7 : 0.85), when: swung, attack: 0.012 });
     }
 
-    // Percussion: a heartbeat kick with brushed offbeat hats, mixed per section.
-    if (beat === 0 && kickVol > 0.01) musicKick(when, kickVol);
-    if (beat === 4 && kickMidVol > 0.01) musicKick(when, kickMidVol);
-    if (beat % 2 === 1 && hatVol > 0.005) musicHat(when, hatVol);
+    // Percussion: the style's kick/hat pattern, with volumes crossfaded.
+    const kp = g.kickPat[beat];
+    if (kp === 'main' && kickVol > 0.01) musicKick(when, kickVol);
+    else if (kp === 'mid' && kickMidVol > 0.01) musicKick(when, kickMidVol);
+    if (g.hatPat[beat] && hatVol > 0.005) musicHat(swung, hatVol);
 
+    if (beat === STEPS_PER_BAR - 1) musicBarCount++;
     musicStep++;
     musicNext += tempo;
   }
@@ -3514,8 +3596,11 @@ function startMusic() {
   const ctx = audioInit();
   if (!ctx) return;
   musicNext = ctx.currentTime + 0.1;
-  // Start on a random palette so reloads don't always open the same way.
+  musicStep = 0; musicBarCount = 0; musicArpIdx = 0; musicLeadIdx = 4;
+  // Start on a random style so reloads don't always open the same way.
   musicSectionIdx = Math.floor(Math.random() * MUSIC_SECTIONS.length);
+  musicStructIdx = musicSectionIdx;
+  musicProg = null;
   musicTrans = null;
   musicSectionEndTime = 0;
   if (musicTimer) clearInterval(musicTimer);
@@ -3558,6 +3643,7 @@ document.addEventListener('click', (e) => {
 
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
+  { v: 'Shifting Soundtrack', notes: ['Music now drifts between distinct styles — each with its own scale, chord progressions, groove and instruments (brooding Cavern, bright Crystal, dark Forge, airy Mist, bluesy Hollow).', 'Styles slowly crossfade into one another instead of just changing tempo.'] },
   { v: 'Bosses & Beasts', notes: ['Some bosses are now huge 2–3 tile behemoths that cast and have reach.', 'Treasure Goblins fumble their escape far more often, so they\'re catchable.'] },
   { v: 'Living Water & Lava', notes: ['Liquids merge into cohesive pools with organic edges, shores (sand/grass or molten crust) and animation.'] },
   { v: 'World Reskin', notes: ['Golden Sun / FFT-style palettes, natural rock & tree walls, and many seasonal & exotic floor themes.'] },
