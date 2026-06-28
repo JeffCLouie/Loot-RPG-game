@@ -4199,6 +4199,22 @@ let musicSectionIdx = 0;      // style whose timbre/feel is currently playing
 let musicStructIdx = 0;       // style whose scale/chords/groove drive the notes
 let musicTrans = null;        // active crossfade: { fromIdx, toIdx, start, end }
 let musicSectionEndTime = 0;  // ctx time at which the current section drifts on
+// Per-performance variation: each time a style takes over the musical structure
+// we re-roll a key (transposition) and a tempo multiplier, so the *same* style
+// sounds genuinely different each time it comes around — a different song, not a
+// replay. These are picked in rollMusicVariation() whenever the structure pivots.
+let musicKeyOffset = 0;       // semitones every voice is transposed by
+let musicTempoMul = 1;        // multiplies the style's base tempo (>1 = slower)
+let musicRegister = 0;        // extra octave nudge on the lead (0 or ±12)
+// Candidate keys to transpose into. All keep the style's mode intact (the whole
+// scale shifts together); the spread is small enough to stay in a pleasant
+// register. Picked per performance for harmonic variety between songs.
+const MUSIC_KEYS = [-5, -3, -2, 0, 0, 2, 4, 5, 7];
+function rollMusicVariation() {
+  musicKeyOffset = mpick(MUSIC_KEYS);
+  musicTempoMul = 0.86 + Math.random() * 0.28;        // ±~14% tempo swing
+  musicRegister = mpick([0, 0, 0, 12, -12]);          // occasional octave lift/drop
+}
 const SECTION_MIN = 110;      // shortest a style holds before drifting (sec)
 const SECTION_MAX = 130;      // longest a style holds before drifting (sec) — ~2 min
 const SECTION_FADE = 12;      // how long the crossfade between styles lasts (sec)
@@ -4528,6 +4544,7 @@ function scheduleMusic() {
       musicProg = mpick(MUSIC_SECTIONS[structIdx].progs);
       musicBarCount = 0;
       musicArpIdx = 0;
+      rollMusicVariation();   // fresh key/tempo/register for this performance
     }
 
     const S = MUSIC_SECTIONS[musicStructIdx];
@@ -4537,7 +4554,7 @@ function scheduleMusic() {
 
     // Resolve the timbre/feel for this step (crossfaded mid-transition).
     const blend = musicBlend(when);
-    const tempo = musicLerp('tempo', blend);
+    const tempo = musicLerp('tempo', blend) * musicTempoMul;
     const leadDensity = musicLerp('leadDensity', blend);
     const arpDensity = musicLerp('arpDensity', blend);
     const kickVol = musicLerp('kickVol', blend);
@@ -4557,20 +4574,20 @@ function scheduleMusic() {
     const bp = g.bassPat[beat];
     if (bp) {
       const semi = (bp.d === '5' ? chord[2] : bp.d === '3' ? chord[1] : root) - 12;
-      musicVoice('bass', blend, { freq: mhz(semi), dur: tempo * bp.l, when: swung, attack: 0.02 });
+      musicVoice('bass', blend, { freq: mhz(semi + musicKeyOffset), dur: tempo * bp.l, when: swung, attack: 0.02 });
     }
 
     // Pad/arp: cycle the chord tones underneath; busier styles fill more beats.
     if (beat % g.arpEvery === 0 || Math.random() < arpDensity) {
       const tone = chord[musicArpIdx % chord.length];
       musicArpIdx++;
-      musicVoice('pad', blend, { freq: mhz(tone + g.arpOct), dur: tempo * 1.6, when: swung, attack: 0.04 });
+      musicVoice('pad', blend, { freq: mhz(tone + g.arpOct + musicKeyOffset), dur: tempo * 1.6, when: swung, attack: 0.04 });
     }
 
     // Lead: an improvised melody that breathes (style-tuned rests + long notes).
     if (Math.random() > g.leadRest && Math.random() < leadDensity) {
       const note = musicLeadStep(S.scale, chord);
-      musicVoice('lead', blend, { freq: mhz(note + g.leadOct),
+      musicVoice('lead', blend, { freq: mhz(note + g.leadOct + musicKeyOffset + musicRegister),
         dur: tempo * (Math.random() < g.leadLong ? 1.7 : 0.85), when: swung, attack: 0.012 });
     }
 
@@ -4596,6 +4613,7 @@ function startMusic() {
   musicProg = null;
   musicTrans = null;
   musicSectionEndTime = 0;
+  rollMusicVariation();   // randomize key/tempo for the opening style
   if (musicTimer) clearInterval(musicTimer);
   musicTimer = setInterval(scheduleMusic, 60);
   scheduleMusic();
