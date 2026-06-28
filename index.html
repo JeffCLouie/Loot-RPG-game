@@ -2520,14 +2520,7 @@ function drawLPCTerrain(ox, oy, tw, x0, y0, x1, y1) {
   ctx.imageSmoothingEnabled = false;
   lpcFill(B.wall, ox, oy, tw, cx0, cy0, cx1, cy1);
   lpcLayer(B.floor, isFloor, ox, oy, tw, cx0, cy0, cx1, cy1);
-  for (let y = cy0; y < cy1; y++) for (let x = cx0; x < cx1; x++) {
-    if (solid(x, y) && y+1 < MAP_H && !solid(x, y+1)) {
-      const g = ctx.createLinearGradient(0, oy+(y+1)*tw, 0, oy+(y+1)*tw + tw*0.5);
-      g.addColorStop(0, 'rgba(0,0,0,0.30)'); g.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = g; ctx.fillRect(ox + x*tw, oy+(y+1)*tw, tw, tw*0.5);
-    }
-  }
-  // per-tile detail removed — fill-tile variants now provide variation without a grid
+  // (wall drop-shadow removed)
   if (B.water) lpcLayer(B.water, isWater, ox, oy, tw, cx0, cy0, cx1, cy1);
   lpcLayer('Lava', isLava, ox, oy, tw, cx0, cy0, cx1, cy1);
 }
