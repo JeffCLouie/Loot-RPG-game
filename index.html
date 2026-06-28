@@ -606,6 +606,11 @@
   #tooltip .tt-name { font-weight: bold; font-size: 12px; margin-bottom: 4px; }
   #tooltip .tt-stat { color: #8899bb; }
   #tooltip .tt-flavor { color: #666; font-style: italic; margin-top: 4px; font-size: 10px; }
+  /* Weapon reach grid: a row of small tiles — gold = you, red = squares you can
+     strike. Used in the weapon tooltip and the Forge so reach reads at a glance. */
+  .range-grid { display: inline-flex; gap: 2px; vertical-align: middle; }
+  .range-grid .rg-cell { width: 11px; height: 11px; border-radius: 2px; border: 1px solid transparent; box-sizing: border-box; }
+  .range-cap { font-size: 9px; color: #b9a98a; margin-left: 6px; vertical-align: middle; letter-spacing: .5px; }
   #tooltip .tt-tier { font-size: 10px; opacity: 0.7; }
   /* Side-by-side compare: hovered item next to the currently-equipped piece. */
   #tooltip.comparing { max-width: 440px; }
@@ -1089,6 +1094,10 @@
   }
   .forge-opt:active { background: #2a2113; }
   .forge-opt.on { border-color: var(--gold); color: var(--gold); background: #2a2113; }
+  /* Off-class weapon bases at the Forge: greyed and unclickable so you can't
+     accidentally craft a weapon your class can't wield. */
+  .forge-opt-locked { opacity: 0.38; cursor: not-allowed; background: #1a150d; color: #8a7d63; }
+  .forge-opt-locked:active { background: #1a150d; }
   .forge-tiers .forge-opt { flex-direction: column; gap: 1px; padding: 6px 2px; }
 
   /* Brief full-screen colour flash for crits, low HP, and big events. */
@@ -1784,6 +1793,71 @@ const SLOT_AFFIX_POOLS = {
   ring:   { stats: ['CRIT','CRITDMG','ATK','IDMG','LEECH','MPLEECH','GOLDFIND','MAGICFIND','MATFIND','HP','MP','DEF','DBLSTRIKE','BOSSDMG','EXEC','PEN','MCR','MPKILL','CLEAVE'], attrs: ['might','agility','luck','spirit','vitality'] },
   amulet: { stats: ['MP','HP','REGEN','SPELLPWR','CDR','MCR','MPLEECH','MPKILL','HPKILL','THORNS','MAGICFIND','DR','ATK','DEF','BOSSDMG','GOLDFIND','XPGAIN','MATFIND'], attrs: ['spirit','luck','vitality','might','agility'] },
 };
+
+// ── ITEM BASE PROFILES ──
+// Within a slot, the chosen base (Sword vs Dagger, Helm vs Hood, Amulet vs
+// Pendant) now shapes its stats — so the base you pick at the 🔨 Forge, and the
+// base a drop rolls, actually matters instead of being pure flavour.
+//   • Weapons scale their damage (`dmg`) and how wide the low–high range rolls
+//     (`spread`), so an Axe hits harder but swingier than a steady Dagger.
+//   • Armor scales its defence (`def`); gloves also scale their bonus attack
+//     (`atk`), so heavy plate guards more while light pieces lean offensive.
+//   • Jewelry has no headline stat, so each base instead carries one INNATE
+//     signature stat (`innate`) — a Signet always finds gold, a Necklace always
+//     boosts spell power. Innate stats are protected like a headline: they show
+//     in the preview and survive the Enchanter's rerolls (see headlineStats).
+// Multipliers default to 1 (a neutral base) when a key is omitted.
+const BASE_STATS = {
+  // weapons — dmg scales the hit, spread scales the high–low damage range
+  Sword:  { dmg: 1.00, spread: 0.40 },   // balanced all-rounder
+  Axe:    { dmg: 1.20, spread: 0.75 },   // big, swingy hits
+  Dagger: { dmg: 0.72, spread: 0.18 },   // light but very consistent
+  Staff:  { dmg: 0.85, spread: 0.30 },   // caster reach over raw power
+  Bow:    { dmg: 0.90, spread: 0.55 },   // ranged, variable
+  Mace:   { dmg: 1.15, spread: 0.45 },   // heavy, fairly steady
+  Spear:  { dmg: 1.00, spread: 0.35 },   // reliable reach
+  Scythe: { dmg: 1.10, spread: 0.65 },   // wide, swingy arc
+  // head
+  Helm: { def: 1.25 }, Cap: { def: 0.80 }, Crown: { def: 0.85 }, Hood: { def: 0.90 }, Circlet: { def: 0.80 },
+  // chest
+  Chestplate: { def: 1.30 }, Robe: { def: 0.70 }, Cuirass: { def: 1.10 }, Tunic: { def: 0.85 }, Mail: { def: 1.15 },
+  // hands — def vs atk lean
+  Gauntlets: { def: 1.25, atk: 0.90 }, Gloves: { def: 0.85, atk: 1.15 }, Bracers: { def: 1.05, atk: 1.00 }, Grips: { def: 0.90, atk: 1.10 },
+  // legs
+  Greaves: { def: 1.25 }, Leggings: { def: 0.85 }, Tassets: { def: 1.10 }, Trousers: { def: 0.90 },
+  // jewelry — each base's signature innate stat (drawn from its slot pool)
+  Ring: { innate: 'CRIT' }, Band: { innate: 'HP' }, Signet: { innate: 'GOLDFIND' }, Loop: { innate: 'MP' },
+  Amulet: { innate: 'MP' }, Pendant: { innate: 'HP' }, Necklace: { innate: 'SPELLPWR' }, Talisman: { innate: 'MAGICFIND' }, Charm: { innate: 'REGEN' },
+};
+function baseProfile(name) { return BASE_STATS[name] || {}; }
+// Apply a base's headline (and jewelry innate) stats onto a fresh item's stats
+// object. Shared by the Forge's blank pieces and generateItem's drops so both
+// honour the base. Records any innate jewelry stat on item.baseStats so the
+// Enchanter treats it as protected (see headlineStats).
+function applyBaseStats(item, baseName, lvl, mult, dmgMult, opts = {}) {
+  const bp = baseProfile(baseName);
+  const slot = item.slot;
+  if (slot === 'weapon') {
+    const base = Math.max(1, Math.floor((2 + lvl * 1.2) * dmgMult * (bp.dmg || 1)));
+    const spread = Math.max(1, Math.floor(base * (bp.spread != null ? bp.spread : 0.4)));
+    item.stats.DMG = `${base}-${base + spread}`;
+  } else if (slot === 'head' || slot === 'chest' || slot === 'hands' || slot === 'legs') {
+    const slotDef = { chest: 1.3, legs: 1.0, head: 0.8, hands: 0.7 }[slot];
+    item.stats.DEF = Math.max(1, Math.floor((1 + lvl) * mult * slotDef * (bp.def || 1)));
+    if (slot === 'hands') item.stats.ATK = Math.max(1, Math.floor((1 + lvl * 0.35) * mult * 0.6 * (bp.atk || 1)));
+  } else if (bp.innate) {
+    // ring / amulet: bake in the base's signature stat and mark it protected.
+    // opts.fixed → use the band's midpoint so the Forge preview is deterministic
+    // (matches the piece you'll get); drops roll a random value within the band.
+    if (opts.fixed) {
+      const r = affixStatRange(bp.innate, lvl, mult);
+      item.stats[bp.innate] = Math.round((r.min + r.max) / 2);
+    } else {
+      item.stats[bp.innate] = affixStatValue(bp.innate, lvl, mult);
+    }
+    item.baseStats = [bp.innate];
+  }
+}
 
 // ── ITEM ICONS ──
 // Every base item name maps to a vector-icon *key* (see ICON_PATHS below) so loot
@@ -2657,6 +2731,44 @@ function weaponStyle() {
   return 'slash';
 }
 
+// ── WEAPON REACH ──
+// How many tiles ahead each weapon can strike (1 = melee, must be adjacent). This
+// is the single source of truth shared by combat (tryRangedAttack) and the little
+// range grid shown in the weapon tooltip and the Forge, so what you see matches
+// what you can actually hit.
+const WEAPON_RANGE = { Sword:1, Axe:1, Dagger:1, Staff:4, Bow:4, Mace:1, Spear:2, Scythe:1 };
+// Same reach keyed by attack style, derived so combat code that works off the
+// resolved style stays in lockstep with the table above.
+const STYLE_RANGE = {};
+for (const b in WEAPON_STYLES) STYLE_RANGE[WEAPON_STYLES[b]] = WEAPON_RANGE[b];
+// One-line description of how each style swings — surfaced in the weapon tooltip
+// and the Forge so a base's feel is legible without reading the source comment.
+const WEAPON_STYLE_DESC = {
+  slash:  'Balanced strike, light follow-through to a 2nd foe',
+  cleave: 'Hits every adjacent foe at once',
+  flurry: 'Two rapid strikes with extra crit',
+  bolt:   'Magic blast at range (costs a little MP)',
+  shot:   'Fires across the room — no reprisal from afar',
+  crush:  'Heavy blow that can stun',
+  thrust: 'Reaches an extra tile, striking without reprisal',
+  reap:   'Wide arc that heals you for part of the hit',
+};
+// The reach of a base, or of an item's resolved weapon type.
+function weaponRange(base) { return WEAPON_RANGE[base] || 1; }
+// A tiny horizontal map of a weapon's reach: the gold centre tile is you, each red
+// tile ahead is a square it can strike; faint tiles behind keep you centred so the
+// reach reads at a glance. Shared by the weapon tooltip and the Forge preview.
+function weaponRangeGridHTML(base) {
+  const range = weaponRange(base);
+  let cells = '';
+  for (let i = -range; i <= range; i++) {
+    const bg = i === 0 ? '#e3c344' : i > 0 ? '#c0392b' : '#241c14';
+    const bd = i === 0 ? '#f4e08a' : i > 0 ? '#e0556b' : '#3a3226';
+    cells += `<span class="rg-cell" style="background:${bg};border-color:${bd}"></span>`;
+  }
+  return `<span class="range-grid">${cells}</span><span class="range-cap">reach ${range}</span>`;
+}
+
 // ── CHARACTER CLASSES ──
 // Every class now starts with the SAME attributes (ATTR_BASE in each). A class's
 // identity instead lives in `dmgAttrs` — the primary/secondary attributes its
@@ -2725,6 +2837,14 @@ function canEquipItem(item) {
   if (!cls) return true;
   const t = weaponBaseType(item);
   return !t || cls.weapons.includes(t);
+}
+
+// Can the current class wield this weapon BASE type (Sword, Bow, …)? Used to grey
+// out off-class bases at the Forge so you don't craft something you can't equip.
+function classCanUseWeaponBase(base) {
+  const cls = playerClass();
+  if (!cls) return true;            // a classless hero has no weapon restriction
+  return cls.weapons.includes(base);
 }
 
 // Combat passives keyed off the chosen class — now also folding in any damage
@@ -4933,21 +5053,32 @@ function craftTabsHTML() {
   </div>`;
 }
 function forgeSelectSlot(slot) { forgeSlot = slot; forgeBase = null; renderForge(); }
-function forgeSelectBase(name) { forgeBase = name; renderForge(); }
+function forgeSelectBase(name) {
+  // Ignore taps on off-class weapon bases — they're greyed out for a reason.
+  if (forgeSlot === 'weapon' && !classCanUseWeaponBase(name)) return;
+  forgeBase = name; renderForge();
+}
 function forgeSelectTier(tier) { forgeTier = tier; renderForge(); }
 
 function renderForge() {
   if (!CRAFT_TIERS.includes(forgeTier)) forgeTier = 'normal';
   if (!SLOT_KEYS.includes(forgeSlot)) forgeSlot = 'weapon';
   const names = SLOTS[forgeSlot].names;
+  const isWeapon = forgeSlot === 'weapon';
   if (!forgeBase || !names.includes(forgeBase)) forgeBase = names[0];
+  // Default to a base this class can actually wield, so the preview never opens
+  // on a weapon you couldn't equip.
+  if (isWeapon && !classCanUseWeaponBase(forgeBase)) forgeBase = names.find(classCanUseWeaponBase) || names[0];
 
   const slotBtns = SLOT_KEYS.map(s =>
     `<button class="forge-opt ${s === forgeSlot ? 'on' : ''}" onclick="forgeSelectSlot('${s}')">${SLOTS[s].label}</button>`
   ).join('');
-  const baseBtns = names.map(n =>
-    `<button class="forge-opt ${n === forgeBase ? 'on' : ''}" onclick="forgeSelectBase('${n}')">${n}</button>`
-  ).join('');
+  const baseBtns = names.map(n => {
+    const locked = isWeapon && !classCanUseWeaponBase(n);
+    const cls = `forge-opt${n === forgeBase ? ' on' : ''}${locked ? ' forge-opt-locked' : ''}`;
+    const reach = isWeapon ? ` <span style="opacity:.6;font-size:9px">⟷${weaponRange(n)}</span>` : '';
+    return `<button class="${cls}" ${locked ? 'disabled' : `onclick="forgeSelectBase('${n}')"`}>${n}${reach}${locked ? ' 🔒' : ''}</button>`;
+  }).join('');
   const tierBtns = CRAFT_TIERS.map(t => {
     const caps = TIER_AFFIX_CAPS[t] || { stat: 0, attr: 0 };
     return `<button class="forge-opt ${t === forgeTier ? 'on' : ''}" style="${t === forgeTier ? '' : `color:${TIERS[t].color}`}" onclick="forgeSelectTier('${t}')">
@@ -4960,13 +5091,27 @@ function renderForge() {
   const preview = craftBlankItem(forgeSlot, forgeTier, forgeBase);
   const caps = TIER_AFFIX_CAPS[forgeTier] || { stat: 0, attr: 0 };
 
+  // For weapons, surface the selected base's reach grid + how it swings, plus a
+  // note that off-class bases are locked. Other slots get a one-line hint that the
+  // base shapes its headline / signature stat.
+  const cls = playerClass();
+  let baseHint = '';
+  if (isWeapon) {
+    const style = WEAPON_STYLES[forgeBase];
+    baseHint = `<div style="padding:1px 2px 3px">${weaponRangeGridHTML(forgeBase)}` +
+      (WEAPON_STYLE_DESC[style] ? `<div style="color:#9a8d70;font-size:9px;margin-top:3px;font-style:italic">${WEAPON_STYLE_DESC[style]}</div>` : '') +
+      (cls ? `<div style="color:#8a7d63;font-size:9px;margin-top:3px">🔒 bases are weapons your ${cls.name} can't wield</div>` : '') +
+      `</div>`;
+  }
+
   setTownContent(`
     ${craftTabsHTML()}
-    <div class="town-blurb">The Craftsman forges a <b>blank</b> piece at your current depth (ilvl ${craftIlvl()}) — just its base damage or defense, with empty modifier slots. Take it to the 🪄 Enchanter to fill them in. Rarity sets how many modifiers it can hold.</div>
+    <div class="town-blurb">The Craftsman forges a <b>blank</b> piece at your current depth (ilvl ${craftIlvl()}) — its base damage or defense set by the base you pick, with empty modifier slots. Take it to the 🪄 Enchanter to fill them in. Rarity sets how many modifiers it can hold.</div>
     <div class="forge-label">Item type</div>
     <div class="forge-grid forge-slots">${slotBtns}</div>
     <div class="forge-label">Base</div>
     <div class="forge-grid forge-bases">${baseBtns}</div>
+    ${baseHint}
     <div class="forge-label">Rarity <span style="opacity:.6">(stat + attr slots)</span></div>
     <div class="forge-grid forge-tiers">${tierBtns}</div>
     <div class="shop-row" style="margin-top:10px">
@@ -4987,25 +5132,20 @@ function renderForge() {
 // no bonus affixes. Deterministic so the Forge preview matches what you'll get.
 function craftBlankItem(slot, tier, baseName) {
   const lvl = craftIlvl();
-  const stats = {}, attrs = {};
   const mult = tierMult(tier);
   const dmgMult = { junk: 0.55, normal: 0.8, uncommon: 1, rare: 1.3, epic: 1.65, legendary: 2.1, unique: 2.6 }[tier];
-  if (slot === 'weapon') {
-    const base = Math.max(1, Math.floor((2 + lvl * 1.2) * dmgMult));
-    const spread = Math.max(1, Math.floor(base * 0.4));
-    stats.DMG = `${base}-${base + spread}`;
-  } else if (slot === 'head' || slot === 'chest' || slot === 'hands' || slot === 'legs') {
-    const slotDef = { chest: 1.3, legs: 1.0, head: 0.8, hands: 0.7 }[slot];
-    stats.DEF = Math.max(1, Math.floor((1 + lvl) * mult * slotDef));
-    if (slot === 'hands') stats.ATK = Math.max(1, Math.floor((1 + lvl * 0.35) * mult * 0.6));
-  }
   const baseValue = { junk: 1, normal: 5, uncommon: 20, rare: 80, epic: 300, legendary: 1200, unique: 5000 }[tier];
   const value = Math.round(baseValue * (1 + lvl * 0.12));
-  return {
+  const item = {
     id: Math.random(), name: 'Crafted ' + baseName, tier, slot, ilvl: lvl,
-    stats, attrs, value, crafted: true, flavor: 'Forged by your own hand.',
+    stats: {}, attrs: {}, value, crafted: true, flavor: 'Forged by your own hand.',
     icon: ITEM_ICONS[baseName] || SLOT_ICONS[slot],
   };
+  // The base shapes the headline (weapon DMG / armor DEF) and gives jewelry its
+  // innate signature stat, so picking a base at the Forge has a real effect.
+  // fixed:true keeps the preview deterministic so it matches the forged piece.
+  applyBaseStats(item, baseName, lvl, mult, dmgMult, { fixed: true });
+  return item;
 }
 
 function craftItem() {
@@ -6199,10 +6339,13 @@ function addAttrAffixes(item, lvl, mult, count) {
 // The set of stats that count as an item's headline (never rerolled/removed):
 // weapon damage, and the armor DEF/ATK granted by the slot itself.
 function headlineStats(item) {
-  if (item.slot === 'weapon') return ['DMG'];
-  if (item.slot === 'hands')  return ['DEF','ATK'];
-  if (item.slot === 'head' || item.slot === 'chest' || item.slot === 'legs') return ['DEF'];
-  return []; // ring / amulet are pure-affix
+  // A jewelry base's innate signature stat (item.baseStats) counts as a headline:
+  // it's protected from reroll/removal and doesn't eat into the affix budget.
+  const base = item.baseStats || [];
+  if (item.slot === 'weapon') return ['DMG', ...base];
+  if (item.slot === 'hands')  return ['DEF', 'ATK', ...base];
+  if (item.slot === 'head' || item.slot === 'chest' || item.slot === 'legs') return ['DEF', ...base];
+  return [...base]; // ring / amulet: pure-affix apart from the base's innate stat
 }
 
 function generateItem(rolls = 1, ilvl = null, forceTier = null, forceSlot = null) {
@@ -6231,29 +6374,18 @@ function generateItem(rolls = 1, ilvl = null, forceTier = null, forceSlot = null
   // Weapon damage uses a slightly gentler curve so epic+ weapons aren't overpowered.
   const dmgMult = { junk:0.55, normal:0.8, uncommon:1, rare:1.3, epic:1.65, legendary:2.1, unique:2.6 }[tier];
 
-  // Headline stat by slot: weapons deal damage, armor gives defense, jewelry gives
-  // pure affixes. Each headline scales linearly with item level, so depth steadily
-  // lifts raw power. The headline is never an affix, so it's never duplicated below.
-  if (slot === 'weapon') {
-    const base = Math.max(1, Math.floor((2 + lvl * 1.2 + rnd(0,2)) * dmgMult));
-    const spread = Math.max(1, Math.floor(base * 0.4));
-    stats.DMG = `${base}-${base + spread}`;
-  } else if (slot === 'head' || slot === 'chest' || slot === 'hands' || slot === 'legs') {
-    // Bigger armor pieces give more DEF than smaller ones.
-    const slotDef = { chest: 1.3, legs: 1.0, head: 0.8, hands: 0.7 }[slot];
-    stats.DEF = Math.max(1, Math.floor((1 + lvl + rnd(0,2)) * mult * slotDef));
-    // Gloves also grant a little attack power — far less than a weapon.
-    if (slot === 'hands') {
-      stats.ATK = Math.max(1, Math.floor((1 + lvl * 0.35) * mult * 0.6));
-    }
-  }
-
   // Base value by rarity, lifted by item level so deeper gear is worth more.
   const baseValue = { junk:1, normal:5, uncommon:20, rare:80, epic:300, legendary:1200, unique:5000 }[tier];
   let value = Math.round(baseValue * (1 + lvl * 0.12));
 
   const item = { id: Math.random(), name, tier, slot, ilvl: lvl, stats, attrs, value,
     flavor: pick(FLAVOR[tier]), icon: ITEM_ICONS[baseName] || SLOT_ICONS[slot] };
+
+  // Headline stat by slot, shaped by the rolled base (Axe hits harder than a
+  // Dagger, plate guards more than a robe) — and a jewelry base's innate stat.
+  // The headline/innate is never an affix, so it's never duplicated below. A small
+  // random nudge keeps two same-base drops from being identical.
+  applyBaseStats(item, baseName, lvl + rnd(0,2) * 0.6, mult, dmgMult);
 
   // Roll bonus affixes — stats and attributes from the slot's pools, each up to
   // its rarity cap, never duplicating a stat/attribute or the headline.
@@ -8119,11 +8251,9 @@ function tryRangedAttack(dx, dy) {
   if (dx === 0 && dy === 0) return false;
   if (getEnemyAt(player.x + dx, player.y + dy)) return false; // adjacent → normal melee
   const style = weaponStyle();
-  let range, mpCost = 0;
-  if (style === 'shot') range = 4;
-  else if (style === 'bolt') { range = 4; mpCost = 4; }
-  else if (style === 'thrust') range = 2;
-  else return false;
+  const range = STYLE_RANGE[style] || 1;
+  if (range < 2) return false;            // melee-only weapons can't poke at range
+  const mpCost = style === 'bolt' ? 4 : 0; // the Staff's bolt spends a little mana
   if (mpCost && player.mp < mpCost) return false;
   let x = player.x, y = player.y;
   for (let step = 1; step <= range; step++) {
@@ -9713,6 +9843,16 @@ function itemCardHTML(item, opts = {}) {
     statRows.push(`<div class="tt-stat" style="color:#e6c34a">+${v} ${ATTRIBUTES[k].label}</div>`);
   }
   const stats = statRows.join('') || '<div class="tt-stat" style="color:#666">No bonuses</div>';
+  // Weapons show their reach (a little tile grid) and how the base swings.
+  let weaponLine = '';
+  if (item.slot === 'weapon') {
+    const base = weaponBaseType(item);
+    const style = base ? WEAPON_STYLES[base] : null;
+    if (base) {
+      weaponLine = `<div style="margin-top:5px">${weaponRangeGridHTML(base)}</div>` +
+        (WEAPON_STYLE_DESC[style] ? `<div style="color:#9a8d70;font-size:9px;margin-top:2px;font-style:italic">${WEAPON_STYLE_DESC[style]}</div>` : '');
+    }
+  }
   const power = item.slot ? itemPower(item) : 0;
   // Power difference vs the comparison item, shown as a percentage so a +1 over a
   // 10-power item reads as a meaningful +10% rather than a flat +1.
@@ -9735,6 +9875,7 @@ function itemCardHTML(item, opts = {}) {
     <div class="tt-tier" style="color:${tier.color}">${item.slot ? SLOTS[item.slot].label : 'potion'}${ilvlLine ? ' · ' + ilvlLine : ''}</div>
     ${item.slot ? `<div style="color:#ffd24b;font-weight:bold;font-size:11px;margin:3px 0">⚡ Power: ${power}${powerDelta}</div>` : ''}
     ${stats}
+    ${weaponLine}
     <div style="color:#c8a84b;font-size:10px;margin-top:3px">Value: ${item.value}g</div>
     <div class="tt-flavor">${item.flavor}</div>`;
 }
