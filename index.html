@@ -317,9 +317,10 @@
   .slots-action:active { background: #2f4a38; }
 
   .newgame-action {
-    background: #2a1a1a;
-    border-color: #4a2a2a;
-    color: #c89090;
+    background: #3a1414;
+    border-color: #a32222;
+    color: #ff5a5a;
+    font-weight: bold;
   }
   .newgame-action:active { background: var(--hp); color: #fff; }
   .newgame-action.armed { background: var(--hp); color: #fff; border-color: #fff; }
@@ -1650,6 +1651,9 @@
       <!-- Settings popup, anchored to the control bar (its positioned ancestor).
            stopPropagation keeps it open while you toggle sound or arm New Game. -->
       <div id="settings-menu" onclick="event.stopPropagation()">
+        <button class="settings-item newgame-action" onclick="confirmNewGame()">
+          <span class="action-icon">↻</span><span class="action-label">NEW RUN</span>
+        </button>
         <button class="settings-item sound-action" onclick="toggleSound()">
           <span class="action-icon" id="sound-icon">🔊</span><span class="action-label" id="sound-label">ON</span>
         </button>
@@ -1658,9 +1662,6 @@
         </button>
         <button class="settings-item slots-action" onclick="openSlots()">
           <span class="action-icon">💾</span><span class="action-label">SLOTS</span>
-        </button>
-        <button class="settings-item newgame-action" onclick="confirmNewGame()">
-          <span class="action-icon">↻</span><span class="action-label">NEW</span>
         </button>
         <button class="settings-item" onclick="showLeaderboard()">
           <span class="action-icon">🏆</span><span class="action-label">BOARDS</span>
