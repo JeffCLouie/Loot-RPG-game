@@ -11735,20 +11735,40 @@ document.addEventListener('click', (e) => {
 // Emoji → DawnLike icon sprite for play-log lines. Any emoji listed here is
 // swapped for the matching pixel-art tile so the log reads in the same DawnLike
 // style as the rest of the game. Emojis without an atlas tile are left as-is.
+// Keys are the BARE emoji codepoint (no U+FE0F variation selector); dlLogIcons
+// matches both the bare and the variation-selector form so either spelling in a
+// log() call resolves. Every value must be a real SPRITE_IDX key or the emoji is
+// simply left as text.
 const LOG_ICON_SPRITE = {
-  '🔥':'ic_fire', '❄️':'ic_ice', '⚡':'ic_stun', '🧪':'ic_poison', '☠️':'ic_poison',
-  '🎯':'ic_target', '💰':'ic_money', '🔮':'ic_orb', '🔑':'ic_key', '❤️':'ic_heart',
-  '🔨':'ic_mallet', '🏦':'ic_coffer', '⬆️':'ic_up', '⬇️':'ic_down', '✨':'ic_wand',
+  // Elements / status / generic icons (purpose-built DawnLike icon tiles).
+  '🔥':'ic_fire', '❄':'ic_ice', '⚡':'ic_stun', '🧪':'ic_poison', '☠':'ic_poison',
+  '🎯':'ic_target', '💰':'ic_money', '🪙':'ic_money', '🔮':'ic_orb', '✨':'ic_wand',
+  '🪄':'ic_wand', '❤':'ic_heart', '🔨':'ic_mallet', '🏦':'ic_coffer', '⬆':'ic_up',
+  '⬇':'ic_down',
+  // Keys & doors.
+  '🔑':'ic_key', '🗝':'ic_key', '🔒':'feat_door', '🔓':'feat_door',
+  // World objects & dungeon features.
+  '🌀':'feat_portal', '⛲':'feat_shrine', '🗿':'feat_shrine', '🧰':'chest',
+  '🎁':'chest', '🏺':'q_relic', '🍄':'q_mushroom', '♻':'mat_scrap', '🍗':'food',
+  '🍞':'food', '📖':'scroll', '✉':'scroll',
+  // Gear & weapons (clear single-object sprites).
+  '🛡':'a_shield', '🗡':'w_dagger', '🔪':'w_dagger', '🪓':'w_axe', '⚔':'w_sword',
+  // Creatures that show up in flavour lines.
+  '🐀':'e_rat', '🦇':'e_bat', '👻':'e_ghost', '👺':'e_goblin', '🐲':'e_dragon',
 };
 // Replace mapped emojis in a log message with crisp DawnLike icon spans. Falls
-// back to the original text until the sprite atlas has loaded.
+// back to the original text until the sprite atlas has loaded. The variation-
+// selector (U+FE0F) form is matched first so a bare-codepoint key never strips
+// the emoji and orphans a dangling selector.
 function dlLogIcons(msg) {
   if (!spriteReady) return msg;
   let out = msg;
   for (const emo in LOG_ICON_SPRITE) {
-    if (out.indexOf(emo) === -1) continue;
     const span = dlIcon(LOG_ICON_SPRITE[emo], 16);
-    if (span) out = out.split(emo).join(span);
+    if (!span) continue;
+    const vs = emo + '️';
+    if (out.indexOf(vs) !== -1) out = out.split(vs).join(span);
+    if (out.indexOf(emo) !== -1) out = out.split(emo).join(span);
   }
   return out;
 }
