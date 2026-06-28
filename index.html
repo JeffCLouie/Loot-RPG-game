@@ -10598,13 +10598,13 @@ function renderSkillBar() {
   const hpFull = player.hp >= player.maxHp;
   const mpFull = player.mp >= player.maxMp;
   const urgent = potReady && player.hp < player.maxHp * 0.35;
-  const healTip = `<div class='ht-name' style='color:var(--hp)'>❤️ Health Potion</div><div class='ht-line'>Quaff to restore a burst of health.</div><div class='ht-sub'>press Q · 3-turn cooldown</div>`;
-  const manaTip = `<div class='ht-name' style='color:var(--mp)'>🔷 Mana Potion</div><div class='ht-line'>Quaff to restore a burst of mana.</div><div class='ht-sub'>press E · 3-turn cooldown</div>`;
+  const healTip = `<div class='ht-name' style='color:var(--hp)'>❤️ Health Potion</div><div class='ht-line'>Quaff to restore a burst of health.</div><div class='ht-sub'>press 1 · 3-turn cooldown</div>`;
+  const manaTip = `<div class='ht-name' style='color:var(--mp)'>🔷 Mana Potion</div><div class='ht-line'>Quaff to restore a burst of mana.</div><div class='ht-sub'>press 2 · 3-turn cooldown</div>`;
   const healBtn = `<button class="skillbar-btn potion ${potReady && !hpFull ? '' : 'empty'} ${urgent ? 'urgent' : ''}" ${hoverTip(healTip)} onclick="useHealthPotion()">
-      <span class="sb-key">Q</span><span class="sb-icon">${HEAL_POTION_SVG}</span><span class="sb-info" id="heal-label">${pcd > 0 ? pcd : ''}</span>
+      <span class="sb-key">1</span><span class="sb-icon">${HEAL_POTION_SVG}</span><span class="sb-info" id="heal-label">${pcd > 0 ? pcd : ''}</span>
     </button>`;
   const manaBtn = `<button class="skillbar-btn potion mana ${potReady && !mpFull ? '' : 'empty'}" ${hoverTip(manaTip)} onclick="useManaPotion()">
-      <span class="sb-key">E</span><span class="sb-icon">${MANA_POTION_SVG}</span><span class="sb-info">${pcd > 0 ? pcd : ''}</span>
+      <span class="sb-key">2</span><span class="sb-icon">${MANA_POTION_SVG}</span><span class="sb-info">${pcd > 0 ? pcd : ''}</span>
     </button>`;
   let extraNum = 0;
   bar.innerHTML = healBtn + manaBtn + skills.map((s) => {
@@ -11019,16 +11019,63 @@ function handleEscape() {
   return false;
 }
 
+// ── Held-key movement ────────────────────────────────────────────────────────
+// Holding a WASD/arrow key should keep you running at a steady pace. We drive
+// our own repeat rather than relying on the OS key-repeat, which has an initial
+// delay and an inconsistent cadence. The most-recently-pressed direction wins,
+// so sliding from one key to another changes course without lifting the first.
+const MOVE_REPEAT_MS = 120;
+let moveTimer = null;
+const heldMoveKeys = [];
+
+function dirForKey(k) {
+  switch (k) {
+    case 'ArrowUp':    case 'w': case 'W': return [0, -1];
+    case 'ArrowDown':  case 's': case 'S': return [0, 1];
+    case 'ArrowLeft':  case 'a': case 'A': return [-1, 0];
+    case 'ArrowRight': case 'd': case 'D': return [1, 0];
+  }
+  return null;
+}
+function stepHeldMove() {
+  const k = heldMoveKeys[heldMoveKeys.length - 1];
+  const d = dirForKey(k);
+  if (d) move(d[0], d[1]);
+}
+function startMoveRepeat() {
+  if (!moveTimer) moveTimer = setInterval(stepHeldMove, MOVE_REPEAT_MS);
+}
+function stopMoveRepeat() {
+  if (moveTimer) { clearInterval(moveTimer); moveTimer = null; }
+}
+function clearHeldMove() { heldMoveKeys.length = 0; stopMoveRepeat(); }
+// If the window loses focus we never get the keyup, so drop any held keys to
+// avoid the player running off on their own when focus returns.
+window.addEventListener('blur', clearHeldMove);
+
+document.addEventListener('keyup', e => {
+  const i = heldMoveKeys.indexOf(e.key);
+  if (i !== -1) heldMoveKeys.splice(i, 1);
+  if (heldMoveKeys.length === 0) stopMoveRepeat();
+});
+
 document.addEventListener('keydown', e => {
   // Esc backs out of menus even during the mandatory class pick is NOT allowed,
   // so handle Esc only after that guard.
   const cov = document.getElementById('class-overlay');
   if (cov && cov.classList.contains('open')) return;
   if (e.key === 'Escape') { if (handleEscape()) e.preventDefault(); return; }
-  if (e.key==='ArrowUp'||e.key==='w')    move(0,-1);
-  if (e.key==='ArrowDown'||e.key==='s')  move(0,1);
-  if (e.key==='ArrowLeft'||e.key==='a')  move(-1,0);
-  if (e.key==='ArrowRight'||e.key==='d') move(1,0);
+  const moveDir = dirForKey(e.key);
+  if (moveDir) {
+    e.preventDefault(); // arrows would otherwise scroll the page
+    // Ignore the OS auto-repeat — we run our own steady cadence below.
+    if (!e.repeat) {
+      if (!heldMoveKeys.includes(e.key)) heldMoveKeys.push(e.key);
+      move(moveDir[0], moveDir[1]); // step instantly, then repeat while held
+      startMoveRepeat();
+    }
+    return;
+  }
   if (e.key===' '||e.key==='f'||e.key==='e'||e.key==='E') pickup();   // use / pick up
   if (e.key==='1')                       useHealthPotion();
   if (e.key==='2')                       useManaPotion();
