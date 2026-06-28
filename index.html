@@ -9179,22 +9179,25 @@ function draw() {
         // Spike trap — DawnLike spikes over the procedural floor, drawn to match
         // the surrounding tiles so it never reads as an out-of-place patch.
         drawFloorBase(px, py, tw, th, seed, C);
-        if (spriteReady && drawSprite('spikes', px, py, tw)) {
+        // Draw the spikes smaller and centred so they read as a compact trap on
+        // the floor rather than a full-tile patch that dominates the tile.
+        if (spriteReady && drawSpriteC('spikes', px + tw/2, py + th/2, tw*0.62)) {
           continue;
         }
-        // Procedural spikes fallback.
+        // Procedural spikes fallback — a few slim blades, centred and short.
+        const baseY = py + th*0.7, tipY = py + th*0.42;
+        ctx.fillStyle = '#9a9aac';
+        ctx.fillRect(px+tw*0.28, baseY, tw*0.44, Math.max(1, th*0.06));
         ctx.fillStyle = '#c4c4d2';
         for (let s = 0; s < 3; s++) {
-          const sx = px + tw*(0.2 + s*0.3);
+          const sx = px + tw*(0.34 + s*0.16);
           ctx.beginPath();
-          ctx.moveTo(sx, py + th*0.8);
-          ctx.lineTo(sx + tw*0.1, py + th*0.3);
-          ctx.lineTo(sx + tw*0.2, py + th*0.8);
+          ctx.moveTo(sx - tw*0.04, baseY);
+          ctx.lineTo(sx, tipY);
+          ctx.lineTo(sx + tw*0.04, baseY);
           ctx.closePath();
           ctx.fill();
         }
-        ctx.fillStyle = '#7a7a8a';
-        ctx.fillRect(px+tw*0.1, py+th*0.78, tw*0.8, Math.max(1, th*0.1));
       } else if (t === 9) {
         // Teleporter pad — DawnLike swirling portal tile.
         drawFloorBase(px, py, tw, th, seed, C);
