@@ -3190,13 +3190,22 @@ const ENEMY_POOL = [
 ];
 
 // Bosses guard every 5th floor. Each has a distinct fighting style: a movement
-// `behavior` (see BEHAVIORS) and a signature `ability` that fires during combat.
+// `behavior` (see BEHAVIORS), a passive `ability` baked into its melee (lifesteal,
+// curse procs, enrage…), and a `specials` kit of telegraphed tricks it weaves in
+// mid-fight — walls of flame, chains that yank you in, barriers, shockwaves and
+// more (dispatched by bossSpecial → tryBossAbility). The mix makes every guardian
+// a real fight instead of a damage sponge that walks at you.
 const BOSSES = [
-  { type: '👑', name: 'Rat King',      floor: 5,  behavior: 'chaser', ability: 'summon',   blurb: 'calls vermin to swarm you', size: 2 },
-  { type: '🔥', name: 'Inferno Demon', floor: 10, behavior: 'caster', ability: 'firebolt', blurb: 'hurls fire from across the room', size: 2 },
-  { type: '🐲', name: 'Elder Dragon',  floor: 15, behavior: 'brute',  ability: 'enrage',   blurb: 'flies into a rage as it bleeds', size: 3 },
-  { type: '💀', name: 'Death Knight',  floor: 20, behavior: 'chaser', ability: 'lifesteal',blurb: 'drains your life to heal itself', size: 2 },
-  { type: '👁', name: 'The All-Seer',  floor: 25, behavior: 'caster', ability: 'curse',    blurb: 'hexes you from afar', size: 3 },
+  { type: '👑', name: 'Rat King',      floor: 5,  behavior: 'chaser', ability: 'summon',    blurb: 'calls vermin, then walls you in and slams the ground', size: 2,
+    specials: ['summon','shockwave','walls'] },
+  { type: '🔥', name: 'Inferno Demon', floor: 10, behavior: 'caster', ability: 'firebolt',  blurb: 'conjures walls of flame and rains firestorms', size: 2,
+    specials: ['firewall','firestorm','blink','shield'] },
+  { type: '🐲', name: 'Elder Dragon',  floor: 15, behavior: 'brute',  ability: 'enrage',    blurb: 'breathes fire, sweeps you back and snatches you with its tail', size: 3,
+    specials: ['enrage','firestorm','shockwave','chain'] },
+  { type: '💀', name: 'Death Knight',  floor: 20, behavior: 'chaser', ability: 'lifesteal', blurb: 'chains you in, freezes you and mends its own wounds', size: 2,
+    specials: ['chain','frost','heal','summon'] },
+  { type: '👁', name: 'The All-Seer',  floor: 25, behavior: 'caster', ability: 'curse',     blurb: 'hexes from afar, walls you off and blinks away', size: 3,
+    specials: ['curseblast','walls','blink','frost','shield'] },
 ];
 
 // ── ENEMY AI BEHAVIOURS ──
@@ -7599,7 +7608,9 @@ function spawnEnemies() {
           statusChance: boss.ability === 'curse' ? 0.45 : 0.25,
           behavior: boss.behavior,
           bossAbility: boss.ability,
-          cd: 3,            // turns before the signature ability can fire again
+          specials: (boss.specials || []).slice(), // telegraphed tricks it weaves in
+          cd: 3,            // turns before the next special can fire again
+          shieldT: 0,       // remaining turns of an active protective ward
         });
         log(`⚠️ ${boss.name} ${boss.type} guards this floor — it ${boss.blurb}!`, 'important');
       } else {
