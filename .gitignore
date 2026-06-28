@@ -1,0 +1,6 @@
+# Local, machine-specific Claude Code settings (permissions etc.) — not shared.
+.claude/settings.local.json
+
+# Scratch: third-party terrain tileset candidates downloaded for evaluation.
+# These are not part of the game (the game is a single self-contained index.html).
+cand/
