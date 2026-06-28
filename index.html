@@ -285,6 +285,13 @@
   .sound-action:active { background: #2f4a6b; }
   .sound-action.muted { background: #262626; border-color: #444; color: #888; }
 
+  .slots-action {
+    background: #1f2a22;
+    border-color: #2f4a38;
+    color: #bcffd0;
+  }
+  .slots-action:active { background: #2f4a38; }
+
   .newgame-action {
     background: #2a1a1a;
     border-color: #4a2a2a;
@@ -392,6 +399,9 @@
     border-radius: 50%; font-size: 11px; line-height: 18px; text-align: center; font-weight: bold; }
   .sk-tnode.locked { opacity: .45; filter: grayscale(.6); }
   .sk-tnode.locked .badge { background: #1a1626; color: #6a647a; border: 1px solid #33304a; }
+  /* Prereqs + level met, just waiting on a skill point — reads as "ready", not hard-locked. */
+  .sk-tnode.ready { border-color: #6a57a8; background: #221b38; opacity: .9; box-shadow: 0 0 6px rgba(140,110,255,.28); }
+  .sk-tnode.ready .badge { background: var(--gold); color: #231a08; }
   .sk-tnode.avail { border-color: #8c6eff; background: #2a1f4a; box-shadow: 0 0 10px rgba(140,110,255,.55); }
   .sk-tnode.avail .badge { background: #8c6eff; color: #fff; }
   .sk-tnode.owned { border-color: var(--gold); background: #2c2440; }
@@ -407,9 +417,13 @@
   .sk-pop b { color: var(--gold); }
   .sk-pop .ty { color: #9a8fd0; font-size: 9px; margin-top: 1px; }
   .sk-pop .ds { margin-top: 3px; color: #cdc2e8; }
-  .sk-pop .rq { font-size: 9px; margin-top: 3px; }
+  .sk-pop .rq { font-size: 9px; margin-top: 3px; line-height: 1.5; }
   .sk-pop .rq.no { color: #e08a8a; }
   .sk-pop .rq.ok { color: #7ad08a; }
+  /* Per-requirement rows: green when that prereq is satisfied, red when still short. */
+  .sk-pop .rqok { color: #7ad08a; }
+  .sk-pop .rqno { color: #e08a8a; }
+  .sk-pop .rq-hint { font-size: 9px; margin-top: 3px; color: #e8c267; }
   .sk-pop .pop-buy { width: 100%; margin-top: 6px; padding: 5px; border: none; border-radius: 5px;
     background: #4a3a7a; color: #fff; font-family: inherit; font-size: 10px; font-weight: bold;
     cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
@@ -430,12 +444,16 @@
   .skillbar-btn.ready { box-shadow: 0 0 7px rgba(140,110,255,0.5); }
   .skillbar-btn.ready:active { background: #4a3a7a; }
   .skillbar-btn.disabled { background: #211c2a; border-color: #33304a; color: #6a647a; }
-  /* Health Potion pinned to the far left of the bar — red flask styling. */
+  /* Potion skills pinned to the far left of the bar — red Health flask, blue Mana flask. */
   .skillbar-btn.potion { border-color: #a03048; background: #6a1a2a; color: #ffd5dd; }
   .skillbar-btn.potion .sb-key { color: #ffb3c0; }
   .skillbar-btn.potion:active { background: #c02040; }
   .skillbar-btn.potion.empty { background: #2a1a1f; border-color: #3a2a2f; color: #6a4a52; }
   .skillbar-btn.potion.urgent { animation: healPulse 0.85s ease-in-out infinite; }
+  .skillbar-btn.potion.mana { border-color: #3050a8; background: #1a2a6a; color: #d5e0ff; }
+  .skillbar-btn.potion.mana .sb-key { color: #b3c8ff; }
+  .skillbar-btn.potion.mana:active { background: #2040c0; }
+  .skillbar-btn.potion.mana.empty { background: #1a1f2a; border-color: #2a2f3a; color: #4a5262; }
 
   #panel-content { flex: 1; overflow-y: auto; padding: 6px; }
   #panel-content::-webkit-scrollbar { width: 4px; }
@@ -566,6 +584,7 @@
   .item-type { font-size: 10px; opacity: 0.7; }
   /* Item power badge — a single gold number shown alongside an item's stats. */
   .item-power { color: #ffd24b; font-weight: bold; opacity: 0.95; margin-left: 5px; white-space: nowrap; }
+  .item-diff { font-size: 10px; margin-top: 1px; line-height: 1.3; }
 
   /* ── TOOLTIP ── */
   #tooltip {
@@ -927,6 +946,100 @@
   .class-card .cc-name { font-size: 14px; font-weight: bold; letter-spacing: 1px; }
   .class-card .cc-blurb { font-size: 10px; color: #b9a98a; line-height: 1.4; margin-bottom: 3px; }
   .class-card .cc-detail { font-size: 9px; color: #8a7d63; line-height: 1.5; }
+
+  /* ── CHARACTER NAME + LEADERBOARD + SAVE SLOTS overlays (share the class-overlay look) ── */
+  #name-overlay, #lb-overlay, #slots-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.85);
+    display: none; align-items: center; justify-content: center;
+    z-index: 410; padding: 16px;
+  }
+  #name-overlay.open, #lb-overlay.open, #slots-overlay.open { display: flex; }
+  #name-modal, #lb-modal, #slots-modal {
+    background: #16120c; border: 2px solid #9f7a3f; border-radius: 10px;
+    width: 100%; max-width: 400px; max-height: 88vh; overflow-y: auto;
+    -webkit-overflow-scrolling: touch; padding: 16px;
+    box-shadow: 0 0 30px rgba(255,200,100,0.3);
+  }
+
+  /* Save-slot rows: each holds a character summary (or "empty") plus actions. */
+  .slot-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+  .slot-row {
+    border: 1px solid var(--border); border-radius: 7px; background: #1b160f;
+    padding: 9px 10px;
+  }
+  .slot-row.active { border-color: var(--gold); background: #241d10; }
+  .slot-row.empty { opacity: 0.92; }
+  .slot-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .slot-num { font-size: 11px; font-weight: bold; color: #8a7d63; letter-spacing: 1px; flex: 0 0 auto; }
+  .slot-badge {
+    font-size: 9px; font-weight: bold; color: #16120c; background: var(--gold);
+    border-radius: 4px; padding: 1px 5px; letter-spacing: 1px; flex: 0 0 auto;
+  }
+  .slot-class { font-size: 16px; flex: 0 0 auto; }
+  .slot-name {
+    flex: 1 1 auto; color: #ffe9b0; font-weight: bold; font-size: 13px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .slot-name.muted { color: #8a7d63; font-weight: normal; font-style: italic; }
+  .slot-stats { font-size: 11px; color: #b9a98a; margin-bottom: 8px; line-height: 1.4; }
+  .slot-stats .slot-time { color: #8a7d63; }
+  .slot-actions { display: flex; gap: 6px; }
+  .slot-btn {
+    flex: 1 1 0; box-sizing: border-box; padding: 8px 6px; border: 1px solid var(--gold);
+    border-radius: 6px; background: #2a2113; color: var(--gold);
+    font-family: 'Courier New', monospace; font-size: 12px; font-weight: bold;
+    letter-spacing: 1px; cursor: pointer; -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation; text-align: center;
+  }
+  .slot-btn:active { background: #3a2e16; }
+  .slot-btn.current { opacity: 0.6; cursor: default; }
+  .slot-btn.danger { flex: 0 0 auto; border-color: #7a3a2c; color: #d98a72; background: #251512; }
+  .slot-btn.danger:active { background: #3a1e16; }
+  .slot-btn.danger.armed { background: var(--hp); color: #fff; border-color: #fff; }
+  #name-modal { max-width: 360px; }
+  .ov-title { color: #ffe9b0; font-size: 16px; font-weight: bold; text-align: center; display: block; }
+  .ov-sub { color: #b9a98a; font-size: 11px; text-align: center; margin: 6px 0 12px; line-height: 1.4; }
+  #name-input {
+    width: 100%; box-sizing: border-box; background: #221a10; border: 1px solid var(--border);
+    border-radius: 6px; color: #ffe9b0; font-family: 'Courier New', monospace;
+    font-size: 16px; text-align: center; letter-spacing: 1px; padding: 11px 12px; margin-bottom: 12px;
+  }
+  #name-input:focus { outline: none; border-color: var(--gold); }
+  .ov-btn {
+    width: 100%; box-sizing: border-box; padding: 11px; border: 1px solid var(--gold);
+    border-radius: 6px; background: #2a2113; color: var(--gold); font-family: 'Courier New', monospace;
+    font-size: 14px; font-weight: bold; letter-spacing: 1px; cursor: pointer;
+    -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  }
+  .ov-btn:active { background: #3a2e16; }
+  .ov-link {
+    display: block; text-align: center; margin-top: 11px; color: #9ab0c9;
+    font-size: 11px; cursor: pointer; text-decoration: underline;
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* Leaderboard tabs + rows */
+  .lb-tabs { display: flex; gap: 6px; margin-bottom: 9px; }
+  .lb-tab {
+    flex: 1; padding: 8px 4px; border: 1px solid var(--border); border-radius: 6px;
+    background: #1b160f; color: #b9a98a; font-family: 'Courier New', monospace;
+    font-size: 11px; font-weight: bold; cursor: pointer; text-align: center;
+    -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  }
+  .lb-tab.on { border-color: var(--gold); color: var(--gold); background: #2a2113; }
+  .lb-status { color: #8a7d63; font-size: 10px; text-align: center; margin-bottom: 8px; min-height: 12px; line-height: 1.4; }
+  .lb-list { display: flex; flex-direction: column; gap: 3px; }
+  .lb-row {
+    display: flex; align-items: center; gap: 8px; padding: 7px 9px;
+    background: #1b160f; border: 1px solid var(--border); border-radius: 6px;
+    font-size: 12px;
+  }
+  .lb-row.me { border-color: var(--gold); background: #241d10; }
+  .lb-rank { width: 26px; color: #8a7d63; font-weight: bold; text-align: right; flex: 0 0 auto; }
+  .lb-class { font-size: 14px; flex: 0 0 auto; width: 18px; text-align: center; }
+  .lb-name { flex: 1 1 auto; color: #e8d5a8; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lb-val { color: var(--gold); font-weight: bold; flex: 0 0 auto; white-space: nowrap; }
+  .lb-foot { margin-top: 12px; }
+
   .town-blurb { font-size: 11px; color: #b9a98a; margin-bottom: 8px; line-height: 1.4; }
   /* Stash vault — gold deposit/withdraw bar and section headings. */
   .stash-gold-bar { display: flex; gap: 6px; margin: 6px 0; align-items: stretch; }
@@ -1459,6 +1572,9 @@
         <button class="settings-item sound-action" onclick="toggleSound()">
           <span class="action-icon" id="sound-icon">🔊</span><span class="action-label" id="sound-label">ON</span>
         </button>
+        <button class="settings-item slots-action" onclick="openSlots()">
+          <span class="action-icon">💾</span><span class="action-label">SLOTS</span>
+        </button>
         <button class="settings-item newgame-action" onclick="confirmNewGame()">
           <span class="action-icon">↻</span><span class="action-label">NEW</span>
         </button>
@@ -1565,6 +1681,45 @@
     <span id="class-title">Choose your Hero</span>
     <div id="class-sub"></div>
     <div id="class-cards"></div>
+  </div>
+</div>
+
+<!-- New-game name entry — shown before the class pick on a fresh game. -->
+<div id="name-overlay">
+  <div id="name-modal">
+    <span class="ov-title">⚔️ Name Your Hero</span>
+    <div class="ov-sub">Enter the name that will carry your deeds onto the global leaderboards.</div>
+    <input id="name-input" maxlength="16" placeholder="Adventurer" autocomplete="off"
+           spellcheck="false" onkeydown="if(event.key==='Enter')submitName()">
+    <button class="ov-btn" onclick="submitName()">Begin Your Quest ▶</button>
+    <span class="ov-link" onclick="showLeaderboard()">🏆 View the Leaderboards</span>
+  </div>
+</div>
+
+<!-- Global leaderboards — deepest floor, highest level, most gold across all players. -->
+<div id="lb-overlay" onclick="if(event.target===this)closeLeaderboard()">
+  <div id="lb-modal">
+    <span class="ov-title">🏆 Leaderboards</span>
+    <div class="ov-sub">The deepest, strongest, and richest heroes across everyone who plays.</div>
+    <div class="lb-tabs">
+      <button class="lb-tab on" id="lb-tab-floor" onclick="setLbTab('floor')">⬇️ Furthest</button>
+      <button class="lb-tab" id="lb-tab-level" onclick="setLbTab('level')">⭐ Level</button>
+      <button class="lb-tab" id="lb-tab-gold" onclick="setLbTab('gold')">💰 Gold</button>
+    </div>
+    <div class="lb-status" id="lb-status"></div>
+    <div class="lb-list" id="lb-list"></div>
+    <div class="lb-foot"><button class="ov-btn" onclick="closeLeaderboard()">Close</button></div>
+  </div>
+</div>
+
+<!-- Save slots — keep several characters side by side; load one, start a fresh
+     hero in an empty slot, or wipe a slot. The slot you're playing is marked. -->
+<div id="slots-overlay" onclick="if(event.target===this)closeSlots()">
+  <div id="slots-modal">
+    <span class="ov-title">💾 Save Slots</span>
+    <div class="ov-sub">Keep a few heroes on the go. Load a slot to play it, or start a new adventure in an empty one — your current game is saved automatically.</div>
+    <div class="slot-list" id="slot-list"></div>
+    <div class="lb-foot"><button class="ov-btn" onclick="closeSlots()">Close</button></div>
   </div>
 </div>
 
@@ -1881,8 +2036,114 @@ function floorSpriteName(seed) { return 'floor_' + (Math.abs(seed) % 4); }
 // feature sits on real ground, not a flat colour square. Uses the procedural
 // floor colour (the base terrain is no longer drawn from the DawnLike atlas).
 function drawFloorBase(px, py, tw, th, seed, C) {
-  ctx.fillStyle = C.floor; ctx.fillRect(px, py, tw, th);
+  // Procedural floor that matches the surrounding tiles (the base terrain is no
+  // longer drawn from the DawnLike atlas).
+  ctx.fillStyle = (Math.abs(seed) % 5 === 0) ? C.floorAlt : C.floor;
+  ctx.fillRect(px, py, tw, th);
 }
+
+// Draw an animated water/lava cell. Adjacent liquid tiles merge into one
+// cohesive pool: the fill is FLAT (so neighbouring tiles share an identical
+// colour with no seam), corners round ONLY where the pool actually turns (both
+// touching sides are land) and by a randomised amount for an organic outline,
+// and the sandy/grass or molten shore is painted only on sides facing land —
+// never on the edge between two liquid tiles.
+function drawLiquid(px, py, tw, th, x, y, seed, C, kind) {
+  const t = kind === 'lava' ? 7 : 6;
+  const now = Date.now();
+  const h = Math.abs(seed);
+  const jr = (n) => (((h * 131 + n * 977) >>> 4) % 1000) / 1000; // 0..1, stable per cell
+  const same = (xx, yy) => xx >= 0 && yy >= 0 && xx < MAP_W && yy < MAP_H && mapData[yy][xx] === t;
+  const N = same(x, y-1), S = same(x, y+1), E = same(x+1, y), W = same(x-1, y);
+
+  // Ground beneath shows through rounded corners as a natural shore.
+  drawFloorBase(px, py, tw, th, seed, C);
+
+  const R = Math.min(tw, th);
+  const tl = (!N && !W) ? R * (0.28 + 0.45 * jr(1)) : 0;
+  const tr = (!N && !E) ? R * (0.28 + 0.45 * jr(2)) : 0;
+  const br = (!S && !E) ? R * (0.28 + 0.45 * jr(3)) : 0;
+  const bl = (!S && !W) ? R * (0.28 + 0.45 * jr(4)) : 0;
+  const Rx = px + tw, By = py + th;
+  const tracePath = () => {
+    ctx.beginPath();
+    ctx.moveTo(px + tl, py);
+    ctx.lineTo(Rx - tr, py); if (tr) ctx.arcTo(Rx, py, Rx, py + tr, tr);
+    ctx.lineTo(Rx, By - br);  if (br) ctx.arcTo(Rx, By, Rx - br, By, br);
+    ctx.lineTo(px + bl, By);  if (bl) ctx.arcTo(px, By, px, By - bl, bl);
+    ctx.lineTo(px, py + tl);  if (tl) ctx.arcTo(px, py, px + tl, py, tl);
+    ctx.closePath();
+  };
+
+  // Body: flat fill (identical across tiles → no seam), overflowing slightly so
+  // clipped neighbours meet with no hairline gap. Animation is keyed to absolute
+  // tile coords so the whole pool reads as one moving surface.
+  ctx.save();
+  tracePath();
+  ctx.clip();
+  if (kind === 'water') {
+    ctx.fillStyle = '#1f5c86';
+    ctx.fillRect(px - 1, py - 1, tw + 2, th + 2);
+    for (let i = 0; i < 2; i++) {
+      const ph = now / (900 + i * 320) + (x * 0.7 + y * 0.5) + i * 2;
+      const yy = py + (0.5 + 0.45 * Math.sin(ph)) * th;
+      ctx.fillStyle = `rgba(150,210,255,${0.10 + 0.08 * (0.5 + 0.5 * Math.sin(ph * 1.3))})`;
+      ctx.fillRect(px - 1, yy, tw + 2, Math.max(1, th * 0.05));
+    }
+  } else {
+    ctx.fillStyle = '#561507';
+    ctx.fillRect(px - 1, py - 1, tw + 2, th + 2);
+    for (let i = 0; i < 3; i++) {
+      const ph = now / (600 + i * 190) + (x * 0.8 + y * 0.6) + i;
+      const bx = px + (0.5 + 0.4 * Math.sin(ph)) * tw;
+      const by = py + (0.5 + 0.4 * Math.cos(ph * 0.8)) * th;
+      const br = tw * (0.16 + 0.05 * i);
+      const bright = 0.5 + 0.5 * Math.sin(ph * 1.4);
+      ctx.fillStyle = `rgba(255,${130 + Math.floor(95 * bright)},${25 + Math.floor(45 * bright)},0.85)`;
+      ctx.beginPath(); ctx.arc(bx, by, br, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  ctx.restore();
+
+  // Shore — only on land-facing sides, so two adjacent liquid tiles never get a
+  // line between them. Sand for water, glowing crust for lava.
+  ctx.save();
+  const b = Math.max(2, tw * (kind === 'water' ? 0.1 : 0.09));
+  if (kind === 'water') {
+    ctx.fillStyle = 'rgba(206,188,134,0.6)';
+  } else {
+    const cp = 0.5 + 0.5 * Math.sin(now / 320 + seed);
+    ctx.fillStyle = `rgba(255,${150 + Math.floor(80 * cp)},45,0.85)`;
+    ctx.shadowColor = '#ff8a1e';
+    ctx.shadowBlur = 6 * (tw / TILE);
+  }
+  if (!N) ctx.fillRect(px + tl, py, tw - tl - tr, b);
+  if (!S) ctx.fillRect(px + bl, By - b, tw - bl - br, b);
+  if (!W) ctx.fillRect(px, py + tl, b, th - tl - bl);
+  if (!E) ctx.fillRect(Rx - b, py + tr, b, th - tr - br);
+  ctx.restore();
+
+  // Grass tufts poke up only on water's land-facing edges (randomised).
+  if (kind === 'water') {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(95,150,70,0.9)';
+    ctx.lineWidth = Math.max(1, tw * 0.05);
+    const tuft = (cxp, cyp) => {
+      for (let k = -1; k <= 1; k++) {
+        ctx.beginPath();
+        ctx.moveTo(cxp + k * tw * 0.06, cyp);
+        ctx.lineTo(cxp + k * tw * 0.06 + tw * 0.02, cyp - th * 0.1);
+        ctx.stroke();
+      }
+    };
+    if (!N && jr(5) > 0.5) tuft(px + tw * 0.5, py + b);
+    if (!S && jr(6) > 0.5) tuft(px + tw * 0.5, By - b);
+    if (!W && jr(7) > 0.5) tuft(px + b, py + th * 0.5);
+    if (!E && jr(8) > 0.5) tuft(Rx - b, py + th * 0.5);
+    ctx.restore();
+  }
+}
+
 // Autotiled wall piece: pick the corner/edge/face that matches which of this
 // cell's 4 neighbours are open floor (vs. more wall). Map edges & cracked walls
 // (tile 10) count as wall; out-of-bounds counts as wall so borders stay solid.
@@ -2161,12 +2422,14 @@ function spentAttrPoints() {
 // floor — but there is intentionally NO hard wall: a pure exponential curve
 // would eventually outrun any possible build and make some floor mathematically
 // impossible, whereas this one stays beatable at every depth given the effort.
-//   floor 1 → 1.0x   floor 10 → ~1.9x   floor 20 → ~3.3x   floor 30 → ~4.8x
-//   floor 50 → ~8x   floor 100 → ~18x   (keeps rising, no ceiling)
+//   floor 1 → 1.0x   floor 10 → ~2.9x   floor 20 → ~5.6x   floor 30 → ~8.6x
+//   floor 50 → ~15x   floor 100 → ~34x   (keeps rising, no ceiling)
 function depthThreat(level) {
-  // 1 + (depth-1)^1.2 / 15 — gentle start, steady polynomial climb, no cap.
+  // 1 + (depth-1)^1.2 / 7.5 — gentle start, steady polynomial climb, no cap.
+  // The growth term climbs twice as fast as the original /15 curve, so every
+  // floor's threat multiplier above the floor-1 baseline is doubled.
   const d = Math.max(0, (level || 1) - 1);
-  return 1 + Math.pow(d, 1.2) / 15;
+  return 1 + Math.pow(d, 1.2) / 7.5;
 }
 
 // Total power of a single item: weighted sum of its stats + a rarity bonus.
@@ -2746,7 +3009,14 @@ function pfx(field, dflt) { return (pact && pact.fx[field] != null) ? pact.fx[fi
 // STATE
 // ══════════════════════════════════════════
 
-let player = { x: 5, y: 5, hp: 100, maxHp: 100, mp: 60, maxMp: 60, gold: 0, level: 1, xp: 0, healPotions: 2, manaPotions: 0, healthPotionsBought: 0,
+let player = { x: 5, y: 5, hp: 100, maxHp: 100, mp: 60, maxMp: 60, gold: 0, level: 1, xp: 0,
+  // Potions are no longer hoarded consumables — they're an always-available
+  // skill gated by a shared one-turn cooldown (see useHealthPotion/useManaPotion),
+  // so you can quaff at most one potion per turn. `potionCd` is that cooldown.
+  potionCd: 0,
+  // Chosen character name (null until entered on a new game) and the peak gold
+  // ever held — both feed the global leaderboards.
+  name: null, maxGold: 0,
   // Deepest dungeon floor reached — the Dungeon Gate in town lets you re-enter
   // on any floor up to this, so you can backtrack to grind levels and gear.
   maxFloor: 1,
@@ -2877,7 +3147,7 @@ function audioInit() {
 
     // SFX bus: mostly dry with a touch of reverb.
     audio.sfxGain = audio.ctx.createGain();
-    audio.sfxGain.gain.value = 0.6;
+    audio.sfxGain.gain.value = 0.4;
     audio.sfxGain.connect(audio.master);
     const sfxVerb = audio.ctx.createGain();
     sfxVerb.gain.value = 0.12;
@@ -2886,7 +3156,7 @@ function audioInit() {
 
     // Music bus: more reverb for a lush, spacious dungeon ambience.
     audio.musicGain = audio.ctx.createGain();
-    audio.musicGain.gain.value = 0.2;
+    audio.musicGain.gain.value = 0.28;
     audio.musicGain.connect(audio.master);
     const musicVerb = audio.ctx.createGain();
     musicVerb.gain.value = 0.3;
@@ -3998,7 +4268,7 @@ function maybeSpawnQuest(reach) {
   } else if (kind === 'wounded') {
     npc.emoji = '🤕';
     quest = { type: 'wounded', npc, done: false };
-    log(`🤕 ${who.name} lies wounded — reach them carrying a Health Potion to spare.`, 'important');
+    log(`🤕 ${who.name} lies wounded — reach them and share a potion to spare them.`, 'important');
   } else if (kind === 'courier') {
     quest = { type: 'courier', npc, done: false };
     log(`✉️ You're entrusted with a sealed parcel — deliver it to ${who.name} on this floor.`, 'important');
@@ -4051,10 +4321,7 @@ function handleQuestStep(nx, ny) {
       if (onNpc && !q.npc.following) { q.npc.following = true; log(`🧭 ${q.npc.name} falls in behind you — lead them to the stairs!`, 'important'); }
       break;
     case 'wounded':
-      if (onNpc) {
-        if (player.healPotions > 0) { player.healPotions--; completeQuest(`${q.npc.name} drinks your potion and recovers!`); }
-        else log(`🤕 ${q.npc.name} needs a Health Potion — return with one.`);
-      }
+      if (onNpc) completeQuest(`${q.npc.name} drinks a potion you brew and recovers!`);
       break;
     case 'fetch':
       if (!q.hasItem && q.item.x === nx && q.item.y === ny) { q.hasItem = true; log(`🏺 You recover the relic — bring it to ${q.npc.name}.`, 'loot'); }
@@ -4104,11 +4371,9 @@ function spawnMerchant() {
   } while ((mapData[my][mx] !== 0 || (mx === player.x && my === player.y) || getEnemyAt(mx,my)
             || isChokePoint(mx,my)) && tries < 100);
   if (tries >= 100) return;
-  // Build a small randomized stock: potions + a couple of gamble-priced gear pieces.
-  const stock = [
-    { kind: 'potion', name: 'Health Potion', heal: 40, price: 25 + dungeonLevel*5 },
-    { kind: 'potion', name: 'Mana Potion',   mana: 30, price: 20 + dungeonLevel*5 },
-  ];
+  // Build a small randomized stock of gamble-priced gear pieces. (Potions are no
+  // longer sold — they're a built-in skill now.)
+  const stock = [];
   const gearCount = rnd(2, 3);
   for (let i = 0; i < gearCount; i++) {
     // Merchants deal in better goods: extra rarity rolls on top of progression,
@@ -4146,13 +4411,9 @@ function spawnMystic() {
 
 let shopCurrentTab = 'buy';
 
-// Effective price of a stock entry. Health potions get pricier the more you've
-// bought, so you can't lean on them forever as a cheap heal.
+// Effective price of a stock entry, with any flash-sale discount applied.
 function stockPrice(s) {
   const sale = (merchant && merchant.sale) || 1;
-  if (s.kind === 'potion' && s.heal) {
-    return Math.max(1, Math.round((s.price + (player.healthPotionsBought || 0) * 15) * sale));
-  }
   return Math.max(1, Math.round(s.price * sale));
 }
 
@@ -4167,6 +4428,35 @@ function itemStatLine(item) {
   if (item.attrs) for (const [k, v] of Object.entries(item.attrs)) parts.push(`+${v} ${ATTRIBUTES[k].short}`);
   const body = parts.join(' · ');
   return item.slot ? `⚡${itemPower(item)}${body ? ' · ' + body : ''}` : body;
+}
+
+// Concise, colour-coded list of how an item's stats differ from whatever is
+// currently equipped in its slot — e.g. "+3 ATK  -1 DEF". Surfaces the real
+// changes at a glance (no single aggregate % to fixate on).
+function statDiffLine(item) {
+  if (!item || !item.slot) return '';
+  const cur = equipped[item.slot];
+  if (!cur) return '<span style="color:#9fd0ff">new slot</span>';
+  const num = (it, k) => {
+    let v = it.stats ? it.stats[k] : undefined;
+    if (v === undefined) v = it.attrs ? it.attrs[k] : undefined;
+    if (v === undefined) return 0;
+    if (typeof v === 'string') { const [lo, hi] = v.split('-').map(Number); return (lo + hi) / 2; }
+    return v;
+  };
+  const keys = new Set([
+    ...Object.keys(item.stats || {}), ...Object.keys(cur.stats || {}),
+    ...Object.keys(item.attrs || {}), ...Object.keys(cur.attrs || {}),
+  ]);
+  const parts = [];
+  for (const k of keys) {
+    const d = Math.round(num(item, k) - num(cur, k));
+    if (!d) continue;
+    const short = STAT_SHORT[k] || (ATTRIBUTES[k] && ATTRIBUTES[k].short) || k;
+    const c = d > 0 ? '#5ee08a' : '#e0556b';
+    parts.push(`<span style="color:${c}">${d > 0 ? '+' : ''}${d} ${short}</span>`);
+  }
+  return parts.length ? parts.join('  ') : '<span style="color:#888">no stat change</span>';
 }
 
 function openShop() {
@@ -4214,10 +4504,7 @@ function renderShop() {
       const price = stockPrice(s);
       const afford = player.gold >= price;
       let name, sub, cls = '', stats = '', isUpgrade = false;
-      if (s.kind === 'potion') {
-        name = s.name;
-        sub = s.heal ? `Restores ${s.heal} HP` : `Restores ${s.mana} MP`;
-      } else {
+      {
         name = s.item.name;
         sub = SLOTS[s.item.slot].label.replace(/^\S+\s/, '');
         cls = 'item-' + s.item.tier;
@@ -4228,20 +4515,11 @@ function renderShop() {
         const equippedHere = equipped[s.item.slot];
         const delta = ip - (equippedHere ? itemPower(equippedHere) : 0);
         isUpgrade = delta > 0;
-        let deltaTag = '';
-        if (equippedHere) {
-          const basePower = itemPower(equippedHere);
-          const c = delta > 0 ? '#5ee08a' : (delta < 0 ? '#e0556b' : '#888');
-          const arrow = delta > 0 ? '▲' : (delta < 0 ? '▼' : '=');
-          // Show the swing as a percentage so it matches the compare tooltip.
-          const pct = basePower > 0 ? Math.round(delta / basePower * 100) : 100;
-          deltaTag = ` <span style="color:${c}">${arrow}${delta>0?'+':''}${pct}%</span>`;
-        }
-        sub += ` <span class="item-power">⚡${ip}${deltaTag}</span>`;
-        if (isUpgrade) name = '<span class="up-arrow">▲</span> ' + name;
+        sub += ` <span class="item-power">⚡${ip}</span>`;
+        if (equippedHere) sub += `  ${statDiffLine(s.item)}`;
       }
-      const sicon = s.kind === 'potion' ? (s.heal ? '🧪' : '🔷') : itemIcon(s.item);
-      const scolor = s.kind === 'potion' ? null : tierColor(s.item);
+      const sicon = itemIcon(s.item);
+      const scolor = tierColor(s.item);
       return `<div class="shop-row ${isUpgrade?'upgrade':''}">
         <span class="loot-icon">${iconMarkup(sicon, scolor)}</span>
         <div class="shop-row-info ${cls}">
@@ -4287,16 +4565,10 @@ function buyItem(i) {
   if (player.gold < price) return;
   player.gold -= price;
   sfx('buy');
-  if (s.kind === 'potion') {
-    if (s.heal) { player.healPotions++; player.healthPotionsBought++; log(`Bought a ${logPotion('Health Potion')}. (${player.healPotions} held)`, 'loot'); }
-    if (s.mana) { player.manaPotions++; log(`Bought a ${logPotion('Mana Potion')}. (${player.manaPotions} held)`, 'loot'); }
-    // potions restock infinitely; gear is one-off
-  } else {
-    inventory.push(s.item);
-    recordWardrobe(s.item);
-    log(`Bought ${logItem(s.item)}!`, 'loot');
-    merchant.stock.splice(i, 1);
-  }
+  inventory.push(s.item);
+  recordWardrobe(s.item);
+  log(`Bought ${logItem(s.item)}!`, 'loot');
+  merchant.stock.splice(i, 1);
   updateBars();
   renderShop();
   renderPanel();
@@ -4496,13 +4768,11 @@ function buildTown() {
 
 function openTownService(kind) {
   if (kind === 'merchant') {
-    // A well-stocked town merchant: potions plus several gear pieces geared to
-    // the deepest floor you've reached, so shopping stays relevant.
+    // A well-stocked town merchant: several gear pieces geared to the deepest
+    // floor you've reached, so shopping stays relevant. (Potions are a built-in
+    // skill now, so the merchant only deals in gear.)
     const ilvl = Math.max(dungeonReturn, player.maxFloor || 1);
-    const stock = [
-      { kind: 'potion', name: 'Health Potion', heal: 40, price: 25 + ilvl * 5 },
-      { kind: 'potion', name: 'Mana Potion',   mana: 30, price: 20 + ilvl * 5 },
-    ];
+    const stock = [];
     const gearCount = rnd(4, 6);
     for (let i = 0; i < gearCount; i++) {
       const item = generateItem(3, ilvl + 1);
@@ -4571,7 +4841,12 @@ function openTownHub() {
        <span class="tm-icon">🌀</span>
        <span class="tm-text"><span class="tm-name">Dungeon Gate</span><span class="tm-desc">Descend to floor ${gateFloor}, or pick another</span></span>
      </button>`;
-  setTownContent(`<div class="town-blurb">A safe haven away from the dungeon. Pick a service, then take the Dungeon Gate when you're ready to delve again.</div><div class="town-menu">${tiles}${gateTile}</div>`);
+  const boardTile =
+    `<button class="town-menu-btn" onclick="showLeaderboard()">
+       <span class="tm-icon">🏆</span>
+       <span class="tm-text"><span class="tm-name">Leaderboards</span><span class="tm-desc">The deepest, strongest &amp; richest heroes</span></span>
+     </button>`;
+  setTownContent(`<div class="town-blurb">A safe haven away from the dungeon. Pick a service, then take the Dungeon Gate when you're ready to delve again.</div><div class="town-menu">${tiles}${gateTile}${boardTile}</div>`);
 }
 // Return from a service panel to the hub menu (also used by the backdrop tap).
 function townBack() {
@@ -4620,6 +4895,9 @@ const CRAFT_TIERS = ['normal', 'uncommon', 'rare', 'epic', 'legendary'];
 let forgeSlot = 'weapon';
 let forgeBase = null;   // chosen base name within the slot (drives look + name)
 let forgeTier = 'normal';
+// The Craftsman has two benches: 🔨 Forge (build gear) and ♻️ Salvage (break
+// gear back down into materials). craftMode tracks which one is showing.
+let craftMode = 'forge';
 
 // Crafted gear is geared to your deepest reached / current return depth, like
 // the town merchant's stock — so the Forge stays relevant as you descend.
@@ -4641,7 +4919,16 @@ function craftCost(tier) {
   return cost;
 }
 
-function openForge() { forgeBase = null; openTownModal('🔨 Craftsman'); renderForge(); }
+function openForge() { forgeBase = null; craftMode = 'forge'; openTownModal('🔨 Craftsman'); renderCraftsman(); }
+function craftSetMode(m) { craftMode = m; renderCraftsman(); }
+function renderCraftsman() { if (craftMode === 'salvage') renderSalvage(); else renderForge(); }
+// The two-bench picker shown at the top of either Craftsman view.
+function craftTabsHTML() {
+  return `<div class="forge-grid forge-slots" style="margin-bottom:4px">
+    <button class="forge-opt ${craftMode === 'forge' ? 'on' : ''}" onclick="craftSetMode('forge')">🔨 Forge</button>
+    <button class="forge-opt ${craftMode === 'salvage' ? 'on' : ''}" onclick="craftSetMode('salvage')">♻️ Salvage</button>
+  </div>`;
+}
 function forgeSelectSlot(slot) { forgeSlot = slot; forgeBase = null; renderForge(); }
 function forgeSelectBase(name) { forgeBase = name; renderForge(); }
 function forgeSelectTier(tier) { forgeTier = tier; renderForge(); }
@@ -4671,6 +4958,7 @@ function renderForge() {
   const caps = TIER_AFFIX_CAPS[forgeTier] || { stat: 0, attr: 0 };
 
   setTownContent(`
+    ${craftTabsHTML()}
     <div class="town-blurb">The Craftsman forges a <b>blank</b> piece at your current depth (ilvl ${craftIlvl()}) — just its base damage or defense, with empty modifier slots. Take it to the 🪄 Enchanter to fill them in. Rarity sets how many modifiers it can hold.</div>
     <div class="forge-label">Item type</div>
     <div class="forge-grid forge-slots">${slotBtns}</div>
@@ -4725,17 +5013,101 @@ function craftItem() {
   inventory.push(item);
   sfx('equip');
   log(`🔨 You forge a ${item.name} (ilvl ${item.ilvl}). Take it to the 🪄 Enchanter to add modifiers.`, 'loot');
-  updateBars(); renderPanel(); renderForge(); saveGame();
+  updateBars(); renderPanel(); renderCraftsman(); saveGame();
 }
 
-// ── HEALER — rest to full, cure ailments, stock potions ──
+// ── SALVAGE — break gear down into crafting materials ──
+// The other Craftsman bench: instead of selling gear for gold at the shop, you
+// melt it down for materials. The haul scales with the item's rarity (richer
+// tiers yield more, and unlock the higher-tier mats) with a small random spread
+// so two identical pieces don't give exactly the same. Higher item level nudges
+// the scrap count up a touch, keeping deep-floor salvage worthwhile.
+
+// What an item yields, expressed as material ranges so the UI can preview it and
+// salvageYield() can roll within it. rank: junk 0 → unique 6.
+function salvageRanges(item) {
+  const rank = Object.keys(TIERS).indexOf(item.tier);
+  const lf = 1 + (item.ilvl || 1) * 0.04;          // mild item-level scaling
+  const r = [];
+  const sLo = Math.max(1, Math.round((1 + rank) * lf));
+  const sHi = Math.max(sLo + 1, Math.round((3 + rank * 2) * lf));
+  r.push({ key: 'scrap', lo: sLo, hi: sHi });       // every piece gives scrap
+  if (rank >= 2) r.push({ key: 'glimmer', lo: 1, hi: 1 + Math.floor(rank / 2) }); // uncommon+
+  if (rank >= 3) r.push({ key: 'core',    lo: 1, hi: rank - 1 });                 // rare+
+  if (rank >= 5) r.push({ key: 'chaos',   lo: 1, hi: 2 });                        // legendary+ guaranteed
+  else if (rank >= 4) r.push({ key: 'chaos', lo: 0, hi: 1 });                     // epic: a lucky chance
+  return r;
+}
+// Roll the actual materials gained from salvaging one item.
+function salvageYield(item) {
+  const out = {};
+  for (const { key, lo, hi } of salvageRanges(item)) {
+    const n = lo + Math.floor(Math.random() * (hi - lo + 1));
+    if (n > 0) out[key] = (out[key] || 0) + n;
+  }
+  return out;
+}
+// Compact "1-3🔩  1✨" preview label for the salvage list.
+function salvageLabel(item) {
+  return salvageRanges(item).map(({ key, lo, hi }) =>
+    `${lo === hi ? lo : `${lo}-${hi}`}${CRAFT_MATERIALS[key].emoji}`).join('  ');
+}
+
+function renderSalvage() {
+  const list = inventory.map((item, i) => ({ item, i })).filter(o => o.item.slot && TIERS[o.item.tier]);
+  let body;
+  if (list.length === 0) {
+    body = '<div class="shop-empty">No gear to salvage.<br>Bring back some loot first!</div>';
+  } else {
+    const rows = list.map(({ item, i }) => `
+      <div class="shop-row">
+        <span class="loot-icon">${iconMarkup(itemIcon(item), tierColor(item))}</span>
+        <div class="shop-row-info item-${item.tier}">
+          <div class="shop-row-name">${item.name}${craftedMark(item)}</div>
+          <div class="shop-row-sub">${SLOTS[item.slot].label.replace(/^\S+\s/, '')}</div>
+          <div class="shop-row-stats">♻️ ${salvageLabel(item)}</div>
+        </div>
+        <button class="shop-sell-btn" onclick="salvageItem(${i})">SALVAGE</button>
+      </div>`).join('');
+    body = `<div class="shop-sell-all-bar">
+      <button class="shop-sell-all-btn" onclick="salvageAll()">SALVAGE ALL (${list.length})</button>
+    </div>${rows}`;
+  }
+  setTownContent(`${craftTabsHTML()}
+    <div class="town-blurb">The Craftsman breaks gear down into crafting materials — the rarer the piece, the richer the haul (with a little luck in the mix). Materials feed the 🔨 Forge and the 🪄 Enchanter.</div>${body}`);
+}
+
+function salvageItem(i) {
+  const item = inventory[i];
+  if (!item || !item.slot || !TIERS[item.tier]) return;
+  const got = salvageYield(item);
+  for (const k in got) gainMaterial(k, got[k]);
+  inventory.splice(i, 1);
+  sfx('sell');
+  log(`♻️ Salvaged ${logItem(item)} into ${costLabel(got)}.`, 'loot');
+  updateBars(); renderCraftsman(); renderPanel(); saveGame();
+}
+
+function salvageAll() {
+  const list = inventory.filter(it => it.slot && TIERS[it.tier]);
+  if (list.length === 0) return;
+  const total = {};
+  for (const item of list) {
+    const got = salvageYield(item);
+    for (const k in got) { total[k] = (total[k] || 0) + got[k]; gainMaterial(k, got[k]); }
+  }
+  inventory = inventory.filter(it => !(it.slot && TIERS[it.tier]));
+  sfx('sell');
+  log(`♻️ Salvaged ${list.length} item${list.length === 1 ? '' : 's'} into ${costLabel(total)}.`, 'loot');
+  updateBars(); renderCraftsman(); renderPanel(); saveGame();
+}
+
+// ── HEALER — rest to full HP/MP and cure ailments ──
 function openHealer() { openTownModal('⛑️ Healer'); renderHealer(); }
 function renderHealer() {
   const full = player.hp >= player.maxHp && player.mp >= player.maxMp;
-  const potHeal = 25 + (player.maxFloor || 1) * 5;
-  const potMana = 20 + (player.maxFloor || 1) * 5;
   setTownContent(`
-    <div class="town-blurb">The healer mends your wounds and sells restoratives for the road.</div>
+    <div class="town-blurb">The healer mends your wounds and cleanses any lingering curse before you head back down.</div>
     <div class="shop-row">
       <span class="loot-icon">❤️</span>
       <div class="shop-row-info"><div class="shop-row-name">Full Rest &amp; Cure</div>
@@ -4743,20 +5115,7 @@ function renderHealer() {
       <span class="shop-price">Free</span>
       <button class="shop-buy-btn" ${full ? 'disabled' : ''} onclick="restHeal()">REST</button>
     </div>
-    <div class="shop-row">
-      <span class="loot-icon">🧪</span>
-      <div class="shop-row-info"><div class="shop-row-name">Health Potion</div>
-        <div class="shop-row-sub">Restores ${Math.round(HEAL_PERCENT * 100)}% HP (you hold ${player.healPotions || 0})</div></div>
-      <span class="shop-price">${potHeal}g</span>
-      <button class="shop-buy-btn" ${player.gold >= potHeal ? '' : 'disabled'} onclick="buyTownPotion('heal',${potHeal})">BUY</button>
-    </div>
-    <div class="shop-row">
-      <span class="loot-icon">🔷</span>
-      <div class="shop-row-info"><div class="shop-row-name">Mana Potion</div>
-        <div class="shop-row-sub">Drink with E for +${MANA_AMOUNT} MP (you hold ${player.manaPotions || 0})</div></div>
-      <span class="shop-price">${potMana}g</span>
-      <button class="shop-buy-btn" ${player.gold >= potMana ? '' : 'disabled'} onclick="buyTownPotion('mana',${potMana})">BUY</button>
-    </div>`);
+    <div class="town-blurb" style="opacity:0.8">Need a quick top-up mid-fight? Quaff a Health (Q) or Mana (E) potion — they're a skill now, free to use but only one per turn.</div>`);
 }
 function restHeal() {
   if (player.hp >= player.maxHp && player.mp >= player.maxMp) return;
@@ -4764,14 +5123,6 @@ function restHeal() {
   statusEffects = statusEffects.filter(s => s.target !== 'player');
   sfx('potion');
   log('⛑️ The healer restores you to full and cleanses every ailment.', 'loot');
-  updateBars(); renderHealer(); saveGame();
-}
-function buyTownPotion(which, cost) {
-  if (player.gold < cost) return;
-  player.gold -= cost;
-  if (which === 'heal') { player.healPotions++; player.healthPotionsBought++; log(`Bought a ${logPotion('Health Potion')}. (${player.healPotions} held)`, 'loot'); }
-  else { player.manaPotions++; log(`Bought a ${logPotion('Mana Potion')}. (${player.manaPotions} held)`, 'loot'); }
-  sfx('buy');
   updateBars(); renderHealer(); saveGame();
 }
 
@@ -6532,44 +6883,31 @@ function draw() {
           ctx.restore();
         }
       } else if (t === 6) {
-        // Water — deep, impassable, gently rippling (procedural terrain).
-        ctx.fillStyle = '#0e2a40';
-        ctx.fillRect(px, py, tw, th);
-        const wp = 0.5 + 0.5*Math.sin(Date.now()/600 + seed);
-        ctx.fillStyle = `rgba(40,120,190,${0.6 + 0.2*wp})`;
-        ctx.fillRect(px+1, py+1, tw-2, th-2);
-        ctx.fillStyle = 'rgba(150,210,255,0.5)';
-        ctx.fillRect(px+tw*0.2, py+th*(0.3+0.1*wp), tw*0.35, Math.max(1, th*0.07));
-        ctx.fillRect(px+tw*0.5, py+th*(0.6-0.1*wp), tw*0.28, Math.max(1, th*0.07));
+        // Water — procedural animated liquid (terrain stays non-DawnLike).
+        drawLiquid(px, py, tw, th, x, y, seed, C, 'water');
       } else if (t === 7) {
-        // Lava — passable but it burns; molten glow pulses (procedural terrain).
-        const lp = 0.5 + 0.5*Math.sin(Date.now()/280 + seed);
-        ctx.fillStyle = '#3a0f06';
-        ctx.fillRect(px, py, tw, th);
-        ctx.fillStyle = `rgba(255,${70 + Math.floor(70*lp)},20,0.95)`;
-        ctx.fillRect(px+1, py+1, tw-2, th-2);
-        ctx.fillStyle = `rgba(255,220,90,${0.5 + 0.4*lp})`;
-        ctx.fillRect(px+tw*0.25, py+th*0.3, tw*0.18, th*0.4);
-        ctx.fillRect(px+tw*0.6, py+th*0.55, tw*0.15, th*0.25);
+        // Lava — procedural animated liquid (terrain stays non-DawnLike).
+        drawLiquid(px, py, tw, th, x, y, seed, C, 'lava');
       } else if (t === 8) {
-        // Spike trap — DawnLike spikes drawn over the procedural floor, so the
-        // spikes stay pixel-art while the ground matches the old terrain.
+        // Spike trap — DawnLike spikes over the procedural floor, drawn to match
+        // the surrounding tiles so it never reads as an out-of-place patch.
         drawFloorBase(px, py, tw, th, seed, C);
-        if (!(spriteReady && drawSprite('spikes', px, py, tw))) {
-          // Fallback: painted metal spikes.
-          ctx.fillStyle = '#c4c4d2';
-          for (let s = 0; s < 3; s++) {
-            const sx = px + tw*(0.2 + s*0.3);
-            ctx.beginPath();
-            ctx.moveTo(sx, py + th*0.8);
-            ctx.lineTo(sx + tw*0.1, py + th*0.3);
-            ctx.lineTo(sx + tw*0.2, py + th*0.8);
-            ctx.closePath();
-            ctx.fill();
-          }
-          ctx.fillStyle = '#7a7a8a';
-          ctx.fillRect(px+tw*0.1, py+th*0.78, tw*0.8, Math.max(1, th*0.1));
+        if (spriteReady && drawSprite('spikes', px, py, tw)) {
+          continue;
         }
+        // Procedural spikes fallback.
+        ctx.fillStyle = '#c4c4d2';
+        for (let s = 0; s < 3; s++) {
+          const sx = px + tw*(0.2 + s*0.3);
+          ctx.beginPath();
+          ctx.moveTo(sx, py + th*0.8);
+          ctx.lineTo(sx + tw*0.1, py + th*0.3);
+          ctx.lineTo(sx + tw*0.2, py + th*0.8);
+          ctx.closePath();
+          ctx.fill();
+        }
+        ctx.fillStyle = '#7a7a8a';
+        ctx.fillRect(px+tw*0.1, py+th*0.78, tw*0.8, Math.max(1, th*0.1));
       } else if (t === 9) {
         // Teleporter pad — DawnLike swirling portal tile.
         drawFloorBase(px, py, tw, th, seed, C);
@@ -6793,46 +7131,27 @@ function draw() {
   enemies.filter(e => !e.dead).forEach(e => {
     const px = offX + e.x * tw, py = offY + e.y * th;
     drawActorShadow(px + tw/2, py + th*0.82, tw);
-    // boss aura
-    if (e.isBoss) {
-      ctx.fillStyle = 'rgba(255,50,50,0.2)';
-      ctx.beginPath();
-      ctx.arc(px + tw/2, py + th/2, tw * 0.6, 0, Math.PI*2);
-      ctx.fill();
-    } else if (e.isElite) {
-      // golden glow marking the elite
-      const pulse = 0.18 + 0.1 * (0.5 + 0.5 * Math.sin(Date.now() / 300));
-      ctx.save();
-      ctx.shadowColor = '#ffd24b';
-      ctx.shadowBlur = 16 * scale;
-      ctx.fillStyle = `rgba(255,210,75,${pulse})`;
-      ctx.beginPath();
-      ctx.arc(px + tw/2, py + th/2, tw * 0.56, 0, Math.PI*2);
-      ctx.fill();
-      ctx.restore();
-    }
-    ctx.font = `${Math.round(tw * (e.isBoss ? 0.95 : (e.isElite ? 0.86 : 0.78)))}px serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    // Status shows in the sprite's colour instead of a floating icon:
-    // green = poisoned, gold = stunned.
+    // Status tint: green = poisoned, gold = stunned.
     const eStatus = statusEffects.filter(s => s.target === e);
     const poisoned = eStatus.some(s => s.effect === 'poison');
     const stunned = eStatus.some(s => s.effect === 'stun');
-    if (e.hitAt && Date.now() - e.hitAt < 110) {
-      ctx.filter = 'brightness(2.6) saturate(0.4)';   // white hit-flash
-    } else if (poisoned) {
-      ctx.filter = 'grayscale(1) sepia(1) saturate(6) hue-rotate(60deg) brightness(1.05)';
-    } else if (stunned) {
-      ctx.filter = 'grayscale(1) sepia(1) saturate(7) hue-rotate(-15deg) brightness(1.25)';
-    }
-    // Pixel-art creature sprite (bosses bigger), falling back to the glyph.
-    const _esz = Math.round(tw * (e.isBoss ? 1.0 : (e.isElite ? 0.9 : 0.82)));
+    ctx.save();
+    if (e.hitAt && Date.now() - e.hitAt < 110) ctx.filter = 'brightness(2.6) saturate(0.4)';   // white hit-flash
+    else if (poisoned) ctx.filter = 'grayscale(1) sepia(1) saturate(6) hue-rotate(60deg) brightness(1.05)';
+    else if (stunned) ctx.filter = 'grayscale(1) sepia(1) saturate(7) hue-rotate(-15deg) brightness(1.25)';
+    // Pop: a glowing halo — coloured for elites/bosses, dark for regular foes —
+    // so even tiny critters stand out from the environment.
+    ctx.shadowColor = e.isBoss ? 'rgba(255,70,70,0.95)' : (e.isElite ? 'rgba(255,215,90,0.95)' : 'rgba(0,0,0,0.95)');
+    ctx.shadowBlur = Math.max(2, tw * ((e.isBoss || e.isElite) ? 0.26 : 0.18));
+    // Pixel-art creature sprite (a bit bigger now), falling back to the glyph.
+    const _esz = Math.round(tw * (e.isBoss ? 1.05 : (e.isElite ? 0.96 : 0.9)));
     const _espr = enemySprite(e);
     if (!(spriteReady && _espr && drawSpriteC(_espr, px + tw/2, py + th/2 + th*0.02, _esz))) {
-      drawEmoji(e.type, px + tw/2, py + th/2 + th*0.04, Math.round(tw * (e.isBoss ? 0.95 : (e.isElite ? 0.86 : 0.78))));
+      drawEmoji(e.type, px + tw/2, py + th/2 + th*0.04, Math.round(tw * (e.isBoss ? 1.0 : (e.isElite ? 0.94 : 0.9))));
     }
-    ctx.filter = 'none';
+    ctx.restore();
 
     // Affix badge, goblin loot tag, or bounty marker, floated above — drawn from
     // DawnLike icons (target / coins / element), falling back to the emoji.
@@ -6862,17 +7181,15 @@ function draw() {
     const sp = 0.5 + 0.5*Math.sin(Date.now()/300);
     const drawMark = (mx, my, emoji, ring, sprite) => {
       const dx0 = offX + mx * tw, dy0 = offY + my * th;
-      ctx.save();
-      ctx.fillStyle = `rgba(${ring},${0.16 + 0.14*sp})`;
-      ctx.beginPath();
-      ctx.arc(dx0 + tw/2, dy0 + th/2, tw*0.5, 0, Math.PI*2);
-      ctx.fill();
-      ctx.restore();
-      ctx.font = `${Math.round(tw * 0.72)}px serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
+      // No backing circle — a soft glow halo keeps the marker readable instead.
+      ctx.save();
+      ctx.shadowColor = `rgba(${ring},${0.55 + 0.3*sp})`;
+      ctx.shadowBlur = tw * 0.3;
       if (!(sprite && spriteReady && drawSpriteC(sprite, dx0 + tw/2, dy0 + th/2 + th*0.02, Math.round(tw * 0.8))))
         drawEmoji(emoji, dx0 + tw/2, dy0 + th/2 + th*0.04, Math.round(tw * 0.72));
+      ctx.restore();
     };
     const GREEN = '80,220,120', GOLD = '255,210,80';
     if (quest.npc) {
@@ -6895,15 +7212,9 @@ function draw() {
 
   // Player
   const px = offX + player.x * tw, py = offY + player.y * th;
-  // Soft foot shadow under the hero — the same grounded ellipse the monsters and
-  // NPCs cast, so the shadow sits under the legs/feet instead of haloing the
-  // whole sprite.
+  // Soft under-the-feet contact shadow grounds the hero (no coloured backing
+  // circle — matching the de-cluttered enemies).
   drawActorShadow(px + tw/2, py + th*0.82, tw);
-  // A faint heroic aura ring so the player still reads as the centre of attention.
-  ctx.fillStyle = 'rgba(255,225,120,0.16)';
-  ctx.beginPath();
-  ctx.arc(px + tw/2, py + th/2, tw*0.46, 0, Math.PI*2);
-  ctx.fill();
   // Composite the hero — a class-specific pixel adventurer that visibly carries
   // its equipped weapon type at its side.
   drawHeroSprite(px, py, tw, th, scale);
@@ -7042,7 +7353,13 @@ function tickStatusEffects() {
         e.hp -= dmg;
         spawnFloatingText(e.x, e.y, `${dmg}`, '#44dd44');
         log(`🧪 Poison deals ${dmg} to ${e.isBoss ? e.name : e.type}!`);
-        if (e.hp <= 0) { e.dead = true; log(`${e.isBoss ? e.name : e.type} succumbed to poison!`, 'important'); }
+        if (e.hp <= 0) {
+          // Route poison kills through the normal death handler so the foe still
+          // grants XP/gold/loot AND the floor-clear check runs — otherwise a
+          // last hostile that dies to a poison tick leaves the stairs sealed.
+          log(`${e.isBoss ? e.name : e.type} succumbed to poison!`, 'important');
+          onEnemyDefeated(e);
+        }
       }
     }
     s.turns--;
@@ -7171,7 +7488,7 @@ const FLOOR_EVENTS = [
   () => { buffs.fortune = Math.max(buffs.fortune, 2); log('🍀 You pocket a lucky coin — better loot for 2 floors!', 'important'); screenFlash('#22cc66'); },
   () => { buffs.power = Math.max(buffs.power, 2); log('🔥 Battle fury surges — +50% damage for 2 floors!', 'important'); screenFlash('#ff6600'); },
   () => { buffs.power = Math.max(buffs.power, 1); log('🗡️ You hone your blade on a left-behind whetstone. +50% damage next floor.', 'loot'); },
-  () => { player.healPotions++; log(`⚗️ A dropped ${logPotion('Health Potion')} rolls to your feet! (${player.healPotions} held)`, 'loot'); },
+  () => { const heal = Math.floor(player.maxHp*0.15); const mana = Math.floor(player.maxMp*0.15); player.hp = Math.min(player.maxHp, player.hp+heal); player.mp = Math.min(player.maxMp, player.mp+mana); spawnFloatingText(player.x, player.y, `+${heal}`, '#44dd44'); log(`⚗️ You find a half-full flask and drain it — +${heal} HP, +${mana} MP.`, 'loot'); },
   // ── Small hazards ──
   () => { const dmg = Math.min(player.hp-1, rnd(5,12) + dungeonLevel); if (dmg>0){ player.hp -= dmg; spawnFloatingText(player.x, player.y, `${dmg}`, '#ff3344'); } log(`🪤 A hidden trap snaps shut — you take ${dmg} damage!`, 'important'); screenFlash('#cc0000'); },
   () => { if (Math.random()<0.5){ const h=Math.floor(player.maxHp*0.12); player.hp=Math.min(player.maxHp,player.hp+h); spawnFloatingText(player.x,player.y,`+${h}`,'#44dd44'); log(`🧪 You sip from a strange puddle — surprisingly refreshing. +${h} HP.`,'loot'); } else { const d=Math.min(player.hp-1, rnd(3,8)); if(d>0){player.hp-=d; spawnFloatingText(player.x,player.y,`${d}`,'#ff3344');} log(`🧪 You sip from a strange puddle — bad idea. -${d} HP.`); } },
@@ -7354,16 +7671,16 @@ function move(dx, dy) {
     return;
   }
 
-  // Fountain of Healing → full heal + bonus potions, then dries up.
+  // Fountain of Healing → full HP & MP restore, then dries up.
   if (tile === 3) {
     player.hp = player.maxHp;
     player.mp = player.maxMp;
-    player.healPotions += 2;
+    player.potionCd = 0; // a sip from the fountain also resets your potion cooldown
     mapData[ny][nx] = 0; // fountain is spent
     hasFountain = false;
     player.x = nx; player.y = ny;
     sfx('potion');
-    log(`⛲ The Fountain of Healing restores you fully! +2 ${logPotion('Health Potions')}.`, 'important');
+    log(`⛲ The Fountain of Healing restores you to full HP and MP!`, 'important');
     updateBars();
     saveGame();
     draw();
@@ -7650,10 +7967,14 @@ function onEnemyDefeated(e) {
     log(`${fancy ? '🎁' : '🧰'} ${label} dropped a ${fancy ? 'glittering ' : ''}chest!`, 'loot');
     collectChestLoot(luck, e.level || dungeonLevel, e.x, e.y);
   }
-  if (Math.random() < 0.20 * lootMult) {
-    player.healPotions++;
-    log(`❤️ ${label} dropped a ${logPotion('Health Potion')}! (${player.healPotions} held)`, 'loot');
-    updateBars();
+  if (Math.random() < 0.20 * lootMult && player.hp < player.maxHp) {
+    const orb = Math.min(player.maxHp - player.hp, Math.floor(player.maxHp * 0.12));
+    if (orb > 0) {
+      player.hp += orb;
+      spawnFloatingText(e.x, e.y, `+${orb}`, '#44dd44');
+      log(`❤️ ${label} dropped a healing essence — +${orb} HP!`, 'loot');
+      updateBars();
+    }
   }
   if (Math.random() < 0.06) {
     const f = pick(FOODS);
@@ -8216,6 +8537,7 @@ function runEnemyTurn() {
   // Every passed turn (move, attack, or skill) ticks down active-skill cooldowns
   // and any transient combat buffs (War Cry, Sanctuary, …).
   if (player.skillCds) for (const k in player.skillCds) if (player.skillCds[k] > 0) player.skillCds[k]--;
+  if (player.potionCd > 0) player.potionCd--;
   for (const k in combatBuffs) if (combatBuffs[k] > 0) combatBuffs[k]--;
   const serial = floorSerial;
   enemies.filter(e => !e.dead).forEach(e => {
@@ -8377,7 +8699,6 @@ function enemyAttackPlayer(e) {
   if (dmg > 0) { spawnParticles(player.x, player.y, '#d22a3a', 6, 0.07); addShake(4); }
   log(`${enemyLabel(e)} attacks ${HERO} for ${dmg}!`);
   if (player.hp <= player.maxHp * 0.25) screenFlash('#cc0000');
-  else if (dmg > 0) screenFlash('#7a0000');
   if (e.bossAbility === 'lifesteal') bossLifesteal(e, dmg);
   // Retribution (Templar passive): reflect part of a melee blow back at the foe.
   const reflect = skillBonus('reflect');
@@ -8497,7 +8818,7 @@ function handleDeath() {
   // The healer's care: revived to full and cleansed of poison & curses.
   player.hp = player.maxHp;
   player.mp = player.maxMp;
-  log(`💀 ${HERO} was slain! The healer revived you in town — lost ${lostGold}g for the trouble.`, 'important');
+  log(`💀 ${player.name || HERO} was slain! The healer revived you in town — lost ${lostGold}g for the trouble.`, 'important');
   log('⛑️ Fully restored. Take the 🌀 Dungeon Gate when you\'re ready to head back down.');
   updateBars();
   saveGame();
@@ -8526,17 +8847,14 @@ function passTurn() {
 function collectChestLoot(luck, ilvl, x, y) {
   const fancy = luck > 1;
 
-  // ~15% of chests surprise you with gold, a potion, or food instead of gear.
+  // ~15% of chests surprise you with gold or food instead of gear.
   if (Math.random() < 0.15) {
     sfx('gold');
-    const surprise = rnd(1, 3);
+    const surprise = rnd(1, 2);
     if (surprise === 1) {
       const g = rnd(15, 40) + dungeonLevel * 4;
       player.gold += g;
       log(`${fancy ? '🎁' : '🧰'} The chest was full of coins — +${g} gold!`, 'loot');
-    } else if (surprise === 2) {
-      player.healPotions++;
-      log(`${fancy ? '🎁' : '🧰'} A ${logPotion('Health Potion')} was inside! (${player.healPotions} held)`, 'loot');
     } else {
       const f = pick(FOODS);
       groundFood.push({ x, y, ...f });
@@ -8726,8 +9044,8 @@ function updateBars() {
     bagBadge.textContent = totalPts;
     bagBadge.classList.toggle('show', totalPts > 0);
   }
-  // Keep the skill bar (its far-left Health Potion + actives) in sync. The
-  // potion count / empty / urgent state is set inside renderSkillBar itself.
+  // Keep the skill bar (its far-left potion skills + class actives) in sync. The
+  // potion cooldown / ready / urgent state is set inside renderSkillBar itself.
   renderSkillBar();
 
   // Class-skill button: shows the skill icon, and its cooldown / mana cost.
@@ -8756,31 +9074,48 @@ function updateBars() {
   if (vig) vig.classList.toggle('active', player.hp > 0 && player.hp < player.maxHp * 0.25);
 }
 
-// Health potions restore a percentage of max HP, so they scale with you
-// instead of becoming useless at high levels.
+// Potions are a SKILL, not a consumable: unlimited uses, but a quaff costs a
+// turn (foes act) and both flasks share a one-turn cooldown, so you can only
+// down a single potion per turn. Health potions restore a percentage of max HP
+// so they scale with you instead of becoming useless at high levels.
 const HEAL_PERCENT = 0.30;
+const POTION_CD = 1;            // shared cooldown — one potion per turn
 function healPotionAmount() { return Math.max(1, Math.round(player.maxHp * HEAL_PERCENT)); }
+function potionReady() { return (player.potionCd || 0) === 0; }
 function useHealthPotion() {
-  if (!player.healPotions) { log('No health potions! Buy some from a merchant.'); return; }
+  if (!potionReady()) { log('⏳ Potions recharge — only one per turn.'); return; }
   if (player.hp >= player.maxHp) { log('Already at full health.'); return; }
-  player.healPotions--;
   const heal = Math.min(player.maxHp - player.hp, healPotionAmount());
   player.hp += heal;
   sfx('potion');
-  log(`❤️ Drank a ${logPotion('Health Potion')}. +${heal} HP (${player.healPotions} left)`, 'loot');
-  updateBars();
-  saveGame();
+  log(`❤️ Quaffed a ${logPotion('Health Potion')}. +${heal} HP`, 'loot');
+  spendPotionTurn();
 }
 
 const MANA_AMOUNT = 40;
 function useManaPotion() {
-  if (!player.manaPotions) { log('No mana potions! Buy some from a merchant or the healer.'); return; }
+  if (!potionReady()) { log('⏳ Potions recharge — only one per turn.'); return; }
   if (player.mp >= player.maxMp) { log('Already at full mana.'); return; }
-  player.manaPotions--;
   player.mp = Math.min(player.maxMp, player.mp + MANA_AMOUNT);
   sfx('potion');
-  log(`🔷 Drank a ${logPotion('Mana Potion')}. +${MANA_AMOUNT} MP (${player.manaPotions} left)`, 'loot');
+  log(`🔷 Quaffed a ${logPotion('Mana Potion')}. +${MANA_AMOUNT} MP`, 'loot');
+  spendPotionTurn();
+}
+
+// A potion now plays out like an active skill: outside town it passes a turn
+// (foes act, escorts trail) and then starts the shared cooldown. Setting the
+// cooldown AFTER runEnemyTurn keeps this very turn from ticking it straight back
+// to ready. In town there are no foes, so we just refresh and skip the turn.
+function spendPotionTurn() {
   updateBars();
+  if (!inTown) {
+    runEnemyTurn();
+    moveQuestEntities();
+    player.potionCd = POTION_CD;
+  }
+  updateBars();
+  renderSkillBar();
+  draw();
   saveGame();
 }
 
@@ -8822,23 +9157,16 @@ function renderPanel() {
       const equippedHere = equipable ? equipped[item.slot] : null;
       const delta = equipable ? ip - (equippedHere ? itemPower(equippedHere) : 0) : 0;
       const isUpgrade = equipable && delta > 0;
-      let deltaTag = '';
-      if (equippedHere) {
-        const basePower = itemPower(equippedHere);
-        const c = delta > 0 ? '#5ee08a' : (delta < 0 ? '#e0556b' : '#888');
-        const arrow = delta > 0 ? '▲' : (delta < 0 ? '▼' : '=');
-        // Show the swing as a percentage so it matches the compare tooltip.
-        const pct = basePower > 0 ? Math.round(delta / basePower * 100) : 100;
-        deltaTag = ` <span style="color:${c}">${arrow}${delta>0?'+':''}${pct}%</span>`;
-      }
-      const pwr = equipable ? `<span class="item-power">⚡${ip}${deltaTag}</span>` : '';
+      const pwr = equipable ? `<span class="item-power">⚡${ip}</span>` : '';
+      const diff = equipable ? `<div class="item-diff">${statDiffLine(item)}</div>` : '';
       return `
       <div class="loot-item item-${item.tier} ${selectedItem===i?'selected':''} ${isUpgrade?'upgrade':''}">
         <span class="loot-icon">${iconMarkup(itemIcon(item), tierColor(item))}</span>
         <div class="loot-info" onclick="selectItem(${i}, this)"
              onmouseenter="showTooltip(event,${i})" onmouseleave="hideTooltip()">
-          <div class="item-name">${isUpgrade?'<span class="up-arrow">▲</span> ':''}${item.name}${craftedMark(item)}</div>
+          <div class="item-name">${item.name}${craftedMark(item)}</div>
           <div class="item-type">${slotName}${pwr}</div>
+          ${diff}
         </div>
         ${equipable
           ? (canEquipItem(item)
@@ -8976,8 +9304,12 @@ function renderSkills(el) {
     const maxd = skillMaxed(n);
     const owned = rank > 0;
     const avail = canBuySkill(n);
-    const state = maxd ? 'maxed' : avail ? 'avail' : owned ? 'owned' : 'locked';
-    const badge = maxd ? '✓' : avail ? '+' : owned ? '✓' : '🔒';
+    // "ready" = prereqs + level are satisfied; you only lack a skill point. Showing
+    // this distinctly from a true prereq-lock stops the tree from looking gated when
+    // an unowned node is actually a single level-up away.
+    const ready = !owned && !avail && skillReqMet(n);
+    const state = maxd ? 'maxed' : avail ? 'avail' : owned ? 'owned' : ready ? 'ready' : 'locked';
+    const badge = maxd ? '✓' : avail ? '+' : owned ? '✓' : ready ? '☆' : '🔒';
     const pips = (n.max || 1) > 1
       ? `<div class="pips">${Array.from({ length: n.max }, (_, i) => `<span class="pip${i < rank ? ' on' : ''}"></span>`).join('')}</div>`
       : '';
@@ -8995,11 +9327,27 @@ function renderSkills(el) {
     const rank = skillRank(sn.id);
     const typeTxt = sn.type === 'active' ? `⚡ ACTIVE · ${sn.mp}MP · ${sn.cd}cd` : 'PASSIVE';
     const rankTxt = (sn.max || 1) > 1 ? ` <span style="color:#e8c267">${rank}/${sn.max}</span>` : (rank > 0 ? ' ✓' : '');
-    const bits = [];
-    if ((sn.lvl || 1) > 1) bits.push(`Lv${sn.lvl}`);
-    if (sn.req) for (const [rid, rk] of sn.req) { const rn = skillNode(rid); bits.push(`${rn ? rn.name : rid}${rk > 1 ? ` ${rk}` : ''}`); }
+    // One row per requirement, each marked met (green) or short (red), and prereq
+    // nodes show your current rank vs what's needed so "how much further?" is obvious.
+    const reqRows = [];
+    if ((sn.lvl || 1) > 1) {
+      const ok = player.level >= sn.lvl;
+      // "Hero level" (not just "Lv5") so it can't be misread as a required skill rank.
+      reqRows.push(`<span class="${ok ? 'rqok' : 'rqno'}">${ok ? '✓' : '🔒'} Hero level ${sn.lvl}${ok ? '' : ` (you're ${player.level})`}</span>`);
+    }
+    if (sn.req) for (const [rid, rk] of sn.req) {
+      const rn = skillNode(rid); const cur = skillRank(rid); const ok = cur >= rk;
+      // Only a multi-rank requirement shows a fraction; a rank-1 prereq just needs to
+      // be learned, so "Aegis" reads cleaner than a confusing "Aegis 3/1".
+      const rankTxt = rk > 1 ? ` ${cur}/${rk}` : '';
+      reqRows.push(`<span class="${ok ? 'rqok' : 'rqno'}">${ok ? '✓' : '🔒'} ${rn ? rn.name : rid}${rankTxt}</span>`);
+    }
     const reqMet = skillReqMet(sn);
-    const reqHtml = bits.length ? `<div class="rq ${reqMet ? 'ok' : 'no'}">${reqMet ? '✓ ' : '🔒 '}${bits.join(' · ')}</div>` : '';
+    let reqHtml = reqRows.length ? `<div class="rq">${reqRows.join('<br>')}</div>` : '';
+    // Prereqs met but no point banked: make it clear the node is reachable, not stuck.
+    if (reqMet && !skillMaxed(sn) && (player.skillPoints || 0) <= 0) {
+      reqHtml += `<div class="rq-hint">☆ Ready — earn a skill point by leveling up.</div>`;
+    }
     const buyBtn = skillMaxed(sn)
       ? `<button class="pop-buy maxed" disabled>✓ Maxed</button>`
       : `<button class="pop-buy" ${canBuySkill(sn) ? '' : 'disabled'} onclick="buySkill('${sn.id}')">${(sn.max || 1) > 1 ? `Learn (rank ${rank + 1}/${sn.max})` : 'Learn'}</button>`;
@@ -9063,15 +9411,22 @@ function renderSkillBar() {
   const skills = activeSkillList();
   if (!skills.length || inTown) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
   bar.style.display = 'flex';
-  // Health Potion pinned to the far left of the bar. id="heal-label" keeps it in
-  // sync with the rest of updateBars (which still reads that element).
-  const potCount = player.healPotions || 0;
-  const urgent = potCount > 0 && player.hp < player.maxHp * 0.35;
-  const potBtn = `<button class="skillbar-btn potion ${potCount ? '' : 'empty'} ${urgent ? 'urgent' : ''}" title="Drink a Health Potion (Q)" onclick="useHealthPotion()">
-      <span class="sb-key">Q</span><span class="sb-icon">${HEAL_POTION_SVG}</span><span class="sb-info" id="heal-label">${potCount}</span>
+  // Potion skills pinned to the far left of the bar: Health (Q) then Mana (E).
+  // They're unlimited but share a one-turn cooldown, so the info slot shows the
+  // remaining cooldown when recharging (blank when ready).
+  const pcd = player.potionCd || 0;
+  const potReady = pcd === 0;
+  const hpFull = player.hp >= player.maxHp;
+  const mpFull = player.mp >= player.maxMp;
+  const urgent = potReady && player.hp < player.maxHp * 0.35;
+  const healBtn = `<button class="skillbar-btn potion ${potReady && !hpFull ? '' : 'empty'} ${urgent ? 'urgent' : ''}" title="Quaff a Health Potion (Q) — one potion per turn" onclick="useHealthPotion()">
+      <span class="sb-key">Q</span><span class="sb-icon">${HEAL_POTION_SVG}</span><span class="sb-info" id="heal-label">${pcd > 0 ? pcd : ''}</span>
+    </button>`;
+  const manaBtn = `<button class="skillbar-btn potion mana ${potReady && !mpFull ? '' : 'empty'}" title="Quaff a Mana Potion (E) — one potion per turn" onclick="useManaPotion()">
+      <span class="sb-key">E</span><span class="sb-icon">${MANA_POTION_SVG}</span><span class="sb-info">${pcd > 0 ? pcd : ''}</span>
     </button>`;
   let extraNum = 0;
-  bar.innerHTML = potBtn + skills.map((s) => {
+  bar.innerHTML = healBtn + manaBtn + skills.map((s) => {
     const cd = skillCd(s.id);
     const ready = cd === 0 && player.mp >= s.mp && player.hp > 0;
     const key = s.baseline ? 'R' : String(++extraNum);
@@ -9081,13 +9436,20 @@ function renderSkillBar() {
   }).join('');
 }
 
-// The potion flask used by the skill-bar Health Potion button.
+// The potion flasks used by the skill-bar Health (red) and Mana (blue) buttons.
 const HEAL_POTION_SVG = `<svg width="18" height="20" viewBox="0 0 20 22" aria-label="health potion">
   <rect x="7.5" y="0" width="5" height="3.5" rx="1" fill="#caa15a"/>
   <rect x="8" y="3" width="4" height="4" fill="#d8d8e0"/>
   <path d="M6 7 h8 a7 7 0 1 1 -8 0 z" fill="#3a1018" stroke="#d8d8e0" stroke-width="1.2"/>
   <path d="M6.6 10 h6.8 a5.6 5.6 0 1 1 -6.8 0 z" fill="#e01030"/>
   <ellipse cx="8" cy="14" rx="1.1" ry="2" fill="#ff7a90" opacity="0.8"/>
+</svg>`;
+const MANA_POTION_SVG = `<svg width="18" height="20" viewBox="0 0 20 22" aria-label="mana potion">
+  <rect x="7.5" y="0" width="5" height="3.5" rx="1" fill="#caa15a"/>
+  <rect x="8" y="3" width="4" height="4" fill="#d8d8e0"/>
+  <path d="M6 7 h8 a7 7 0 1 1 -8 0 z" fill="#0a1838" stroke="#d8d8e0" stroke-width="1.2"/>
+  <path d="M6.6 10 h6.8 a5.6 5.6 0 1 1 -6.8 0 z" fill="#1e6cff"/>
+  <ellipse cx="8" cy="14" rx="1.1" ry="2" fill="#8fc0ff" opacity="0.8"/>
 </svg>`;
 
 // ── CLASS SELECTION ──
@@ -9098,6 +9460,8 @@ function showClassPick() {
   const sub = document.getElementById('class-sub');
   const cards = document.getElementById('class-cards');
   if (!ov) return;
+  const title = document.getElementById('class-title');
+  if (title) title.textContent = player.name ? `Choose ${player.name}'s Class` : 'Choose your Hero';
   sub.textContent = 'Pick a class — it shapes which attributes your damage scales off, the weapons you can wield, and the special skill you cast. You can retrain later at the town Trainer.';
   cards.innerHTML = CLASS_KEYS.map(k => {
     const c = CLASSES[k];
@@ -9509,6 +9873,22 @@ function pick(arr) { return arr[Math.floor(Math.random()*arr.length)]; }
 
 const SAVE_KEY = 'dungeonLoot_save_v1';
 
+// ── Save slots ──────────────────────────────────────────────────────────────
+// Several independent characters can live side by side. Slot 0 reuses the
+// original single-save key so any existing game is adopted as the first slot
+// with no migration; the rest get a suffixed key. The active slot is the one
+// that auto-saves and loads, and is remembered across reloads.
+const SLOT_COUNT = 10;
+const ACTIVE_SLOT_KEY = 'dungeonLoot_activeSlot';
+function slotKey(i) { return i === 0 ? SAVE_KEY : SAVE_KEY + '_s' + i; }
+let activeSlot = (function () {
+  try {
+    const n = parseInt(localStorage.getItem(ACTIVE_SLOT_KEY), 10);
+    if (n >= 0 && n < SLOT_COUNT) return n;
+  } catch (e) {}
+  return 0;
+})();
+
 function saveGame() {
   try {
     const data = {
@@ -9516,23 +9896,26 @@ function saveGame() {
       inTown, dungeonReturn, stash,
       ts: Date.now(),
     };
-    localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+    localStorage.setItem(slotKey(activeSlot), JSON.stringify(data));
   } catch (e) {
     // localStorage unavailable (e.g. inside artifact preview) — fail silently
   }
+  // Push this character's best stats to the global leaderboard (debounced).
+  lbScheduleSubmit();
 }
 
 function loadGame() {
   try {
-    const raw = localStorage.getItem(SAVE_KEY);
+    const raw = localStorage.getItem(slotKey(activeSlot));
     if (!raw) return false;
     const data = JSON.parse(raw);
     if (!data.player) return false;
     player = data.player;
     if (player.gold == null) player.gold = 0;
-    if (player.healPotions == null) player.healPotions = 0;
-    if (player.healthPotionsBought == null) player.healthPotionsBought = 0;
-    if (player.manaPotions == null) player.manaPotions = 0;
+    // Potions used to be hoarded consumables; they're a cooldown-gated skill now.
+    // Drop the old counters from older saves and seed the shared potion cooldown.
+    delete player.healPotions; delete player.manaPotions; delete player.healthPotionsBought;
+    if (player.potionCd == null) player.potionCd = 0;
     // Migrate saves that predate crafting materials: seed an empty wallet and
     // ensure every material key exists on partial saves.
     if (!player.materials || typeof player.materials !== 'object') player.materials = freshMaterials();
@@ -9580,6 +9963,10 @@ function loadGame() {
     }
     // Migrate saves that predate the deepest-floor tracker / town hub.
     if (player.maxFloor == null) player.maxFloor = data.dungeonLevel || 1;
+    // Migrate saves that predate character names / global leaderboards. A null
+    // name is fine — the init flow prompts for one on the next load.
+    if (player.name === undefined) player.name = null;
+    if (player.maxGold == null) player.maxGold = player.gold || 0;
     // Migrate saves that predate cleared-floor tracking.
     if (!player.clearedFloors || typeof player.clearedFloors !== 'object') player.clearedFloors = {};
     inTown = !!data.inTown;
@@ -9648,8 +10035,138 @@ function loadGame() {
 }
 
 function wipeSave() {
-  try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
+  // Clears the slot you're currently playing, then reloads into a fresh hero.
+  try { localStorage.removeItem(slotKey(activeSlot)); } catch (e) {}
   location.reload();
+}
+
+// ── Save-slot management + overlay ──────────────────────────────────────────
+// A lightweight summary of whatever character lives in a slot, or null if the
+// slot is empty / unreadable. Used to paint the slot list without loading.
+function slotSummary(i) {
+  try {
+    const raw = localStorage.getItem(slotKey(i));
+    if (!raw) return null;
+    const d = JSON.parse(raw);
+    if (!d || !d.player) return null;
+    const p = d.player;
+    return {
+      name: p.name || null,
+      cls: (p.class && CLASSES[p.class]) ? p.class : null,
+      level: p.level || 1,
+      floor: p.maxFloor || d.dungeonLevel || 1,
+      gold: p.gold || 0,
+      inTown: !!d.inTown,
+      ts: d.ts || 0,
+    };
+  } catch (e) { return null; }
+}
+
+// Human-friendly "saved ... ago" stamp for a slot's last-write time.
+function slotTimeAgo(ts) {
+  if (!ts) return '';
+  const s = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+  if (s < 60) return 'just now';
+  const m = Math.floor(s / 60);
+  if (m < 60) return m + 'm ago';
+  const h = Math.floor(m / 60);
+  if (h < 24) return h + 'h ago';
+  const dy = Math.floor(h / 24);
+  return dy + 'd ago';
+}
+
+// Persist the active slot, then reload so the game boots cleanly from it. A
+// reload is the simplest reliable reset — init() rebuilds all state from the
+// chosen slot (or starts a fresh hero if it's empty).
+function activateSlot(i) {
+  if (i < 0 || i >= SLOT_COUNT) return;
+  try { localStorage.setItem(ACTIVE_SLOT_KEY, String(i)); } catch (e) {}
+  activeSlot = i;
+  location.reload();
+}
+
+let slotDeleteArmed = -1; // which slot's DELETE is primed for the confirm tap
+function openSlots() {
+  slotDeleteArmed = -1;
+  const menu = document.getElementById('settings-menu');
+  if (menu) menu.classList.remove('open');
+  const ov = document.getElementById('slots-overlay');
+  if (!ov) return;
+  renderSlots();
+  ov.classList.add('open');
+}
+function closeSlots() {
+  slotDeleteArmed = -1;
+  const ov = document.getElementById('slots-overlay');
+  if (ov) ov.classList.remove('open');
+}
+
+function renderSlots() {
+  const list = document.getElementById('slot-list');
+  if (!list) return;
+  let html = '';
+  for (let i = 0; i < SLOT_COUNT; i++) {
+    const s = slotSummary(i);
+    const isActive = i === activeSlot;
+    const badge = isActive ? '<span class="slot-badge">PLAYING</span>' : '';
+    if (!s) {
+      // Empty slot — offer to start a fresh hero here.
+      html += `<div class="slot-row empty${isActive ? ' active' : ''}">
+        <div class="slot-head">
+          <span class="slot-num">SLOT ${i + 1}</span>${badge}
+          <span class="slot-name muted">Empty</span>
+        </div>
+        <div class="slot-actions">
+          <button class="slot-btn" onclick="newGameInSlot(${i})">＋ New Game</button>
+        </div>
+      </div>`;
+      continue;
+    }
+    const icon = s.cls ? CLASSES[s.cls].icon : '🧙';
+    const who = escapeHtml(s.name || 'Adventurer');
+    const where = s.inTown ? 'In Town' : ('Floor ' + s.floor);
+    const time = slotTimeAgo(s.ts);
+    const playBtn = isActive
+      ? `<button class="slot-btn current" disabled>● Playing</button>`
+      : `<button class="slot-btn" onclick="activateSlot(${i})">▶ Load</button>`;
+    const armed = slotDeleteArmed === i;
+    const delBtn = `<button class="slot-btn danger${armed ? ' armed' : ''}" onclick="deleteSlot(${i})">${armed ? 'Sure?' : '🗑'}</button>`;
+    html += `<div class="slot-row${isActive ? ' active' : ''}">
+      <div class="slot-head">
+        <span class="slot-num">SLOT ${i + 1}</span>${badge}
+        <span class="slot-class">${icon}</span>
+        <span class="slot-name">${who}</span>
+      </div>
+      <div class="slot-stats">Lv ${s.level} · ${where} · ${s.gold}g${time ? ` · <span class="slot-time">saved ${time}</span>` : ''}</div>
+      <div class="slot-actions">${playBtn}${delBtn}</div>
+    </div>`;
+  }
+  list.innerHTML = html;
+}
+
+// Start a brand-new hero in slot i. If the slot already holds a character it's
+// wiped first (the slot list only shows ＋ New Game on empty slots, so this
+// path is reached on empties), then we boot into it — init() shows name entry.
+function newGameInSlot(i) {
+  try { localStorage.removeItem(slotKey(i)); } catch (e) {}
+  activateSlot(i);
+}
+
+// Two-tap delete: first tap arms the slot, second confirms. Arming auto-clears
+// when you tap a different slot or after a short timeout.
+function deleteSlot(i) {
+  if (slotDeleteArmed !== i) {
+    slotDeleteArmed = i;
+    renderSlots();
+    setTimeout(() => { if (slotDeleteArmed === i) { slotDeleteArmed = -1; renderSlots(); } }, 3000);
+    return;
+  }
+  slotDeleteArmed = -1;
+  try { localStorage.removeItem(slotKey(i)); } catch (e) {}
+  // Wiping the slot you're actively playing means there's nothing to fall back
+  // on — reload starts a fresh hero in it. Otherwise just refresh the list.
+  if (i === activeSlot) { location.reload(); return; }
+  renderSlots();
 }
 
 let newGameArmed = false;
@@ -9672,6 +10189,211 @@ function confirmNewGame() {
 }
 
 // ══════════════════════════════════════════
+// GLOBAL LEADERBOARD
+// ══════════════════════════════════════════
+// Scores are shared across everyone who plays via a Supabase table. The two
+// values below are a project URL and its public "anon" key. The anon key is
+// designed to be embedded in client code — a row-level-security policy on the
+// `leaderboard` table only allows reading and submitting leaderboard rows, so
+// it is safe to ship here. Leave BOTH blank to fall back to a device-local
+// leaderboard kept in localStorage (so the feature still works offline).
+//
+// Setup: create a free project at https://supabase.com, run the SQL from the
+// pull request / README to create the `leaderboard` table + access policies,
+// then paste your Project URL and the anon (public) key below.
+const LB_SUPABASE_URL = 'https://imqhmqtpbvkomsusgzux.supabase.co'; // base URL, no trailing path
+const LB_SUPABASE_KEY = 'sb_publishable_SxnH6A4uxqZq5ZW_PqUeLQ_9ZKd4WfV'; // anon / publishable key (safe to be public)
+
+const LB_LOCAL_KEY = 'dungeonLoot_leaderboard_v1';
+// The three ranked boards: which stored column each sorts by and how to show it.
+const LB_SORTS = {
+  floor: { col: 'max_floor', fmt: v => 'Floor ' + v },
+  level: { col: 'level',     fmt: v => 'Lv ' + v },
+  gold:  { col: 'gold',      fmt: v => v + 'g' },
+};
+let lbTab = 'floor';
+let lbLastSig = '';       // last-submitted stat signature — skips no-op writes
+let lbSubmitTimer = null; // pending debounced submit, if any
+
+function lbEnabled() { return !!(LB_SUPABASE_URL && LB_SUPABASE_KEY); }
+function lbHeaders(extra) {
+  return Object.assign({
+    'apikey': LB_SUPABASE_KEY,
+    'Authorization': 'Bearer ' + LB_SUPABASE_KEY,
+    'Content-Type': 'application/json',
+  }, extra || {});
+}
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+// This character's current bests, shaped for the leaderboard table. Values are
+// taken as-is (just coerced to whole numbers for the integer columns) — every
+// submitted score is treated as real.
+function lbInt(v, lo) { v = Math.floor(Number(v)); return Number.isFinite(v) && v > lo ? v : lo; }
+function lbEntryFromPlayer() {
+  return {
+    name: String(player.name || 'Adventurer').slice(0, 16),
+    player_class: player.class || null,
+    max_floor: lbInt(player.maxFloor || 1, 1),
+    level: lbInt(player.level || 1, 1),
+    gold: lbInt(player.maxGold || player.gold || 0, 0),
+  };
+}
+
+// Debounced submit: a flurry of saves coalesces into one network write, and
+// identical stats are never re-sent.
+function lbScheduleSubmit() {
+  if (!player || !player.name) return;
+  player.maxGold = Math.max(player.maxGold || 0, player.gold || 0);
+  const sig = [player.name, player.maxFloor || 1, player.level || 1, player.maxGold || 0, player.class || ''].join('|');
+  if (sig === lbLastSig) return;
+  lbLastSig = sig;
+  if (lbSubmitTimer) return; // a write is already queued; it'll pick up the latest stats
+  lbSubmitTimer = setTimeout(() => { lbSubmitTimer = null; lbSubmit(); }, 4000);
+}
+
+// Upsert this character's row (keyed by name). Best-effort: network failures are
+// swallowed, and a local mirror is always kept so the board renders offline.
+function lbSubmit() {
+  const entry = lbEntryFromPlayer();
+  lbSubmitLocal(entry);
+  if (!lbEnabled()) return;
+  try {
+    fetch(LB_SUPABASE_URL + '/rest/v1/leaderboard?on_conflict=name', {
+      method: 'POST',
+      headers: lbHeaders({ 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
+      body: JSON.stringify(entry),
+      keepalive: true,
+    }).catch(() => {});
+  } catch (e) {}
+}
+
+// Device-local mirror of the board — keeps monotonic bests per name.
+function lbSubmitLocal(entry) {
+  try {
+    const all = JSON.parse(localStorage.getItem(LB_LOCAL_KEY) || '[]');
+    const i = all.findIndex(e => e && e.name === entry.name);
+    if (i >= 0) {
+      all[i] = {
+        name: entry.name,
+        player_class: entry.player_class,
+        max_floor: Math.max(all[i].max_floor || 1, entry.max_floor),
+        level: Math.max(all[i].level || 1, entry.level),
+        gold: Math.max(all[i].gold || 0, entry.gold),
+      };
+    } else {
+      all.push(entry);
+    }
+    localStorage.setItem(LB_LOCAL_KEY, JSON.stringify(all));
+  } catch (e) {}
+}
+function lbFetchLocal(col) {
+  let all = [];
+  try { all = JSON.parse(localStorage.getItem(LB_LOCAL_KEY) || '[]'); } catch (e) {}
+  return all.filter(Boolean).sort((a, b) => (b[col] || 0) - (a[col] || 0)).slice(0, 50);
+}
+
+// Fetch the top 50 for a board. Returns { rows, local } — local is true when no
+// backend is configured (so the UI can say the board is device-only). The
+// request is bounded by a timeout so a stalled network fails over to the local
+// mirror instead of leaving the board stuck on "Loading…".
+async function lbFetch(tab) {
+  const sort = LB_SORTS[tab] || LB_SORTS.floor;
+  if (!lbEnabled()) return { rows: lbFetchLocal(sort.col), local: true };
+  const url = LB_SUPABASE_URL +
+    '/rest/v1/leaderboard?select=name,player_class,max_floor,level,gold&order=' +
+    sort.col + '.desc&limit=50';
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 8000);
+  try {
+    const res = await fetch(url, { headers: lbHeaders(), signal: ctrl.signal });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return { rows: await res.json(), local: false };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function showLeaderboard() {
+  const ov = document.getElementById('lb-overlay');
+  if (!ov) return;
+  ov.classList.add('open');
+  setLbTab(lbTab);
+}
+function closeLeaderboard() {
+  const ov = document.getElementById('lb-overlay');
+  if (ov) ov.classList.remove('open');
+}
+function setLbTab(tab) {
+  lbTab = LB_SORTS[tab] ? tab : 'floor';
+  ['floor', 'level', 'gold'].forEach(t => {
+    const el = document.getElementById('lb-tab-' + t);
+    if (el) el.classList.toggle('on', t === lbTab);
+  });
+  renderLeaderboard();
+}
+async function renderLeaderboard() {
+  const list = document.getElementById('lb-list');
+  const status = document.getElementById('lb-status');
+  if (!list) return;
+  const sort = LB_SORTS[lbTab];
+  const myName = player && player.name;
+  status.textContent = 'Loading…';
+  list.innerHTML = '';
+  let data;
+  try {
+    data = await lbFetch(lbTab);
+  } catch (e) {
+    // Couldn't reach the global board — fall back to the local mirror.
+    data = { rows: lbFetchLocal(sort.col), local: true, errored: true };
+  }
+  // A slow fetch could resolve after the player switched tabs; ignore if so.
+  if (!document.getElementById('lb-overlay').classList.contains('open')) return;
+  const rows = data.rows || [];
+  if (data.errored) status.textContent = '⚠️ Could not reach the global board — showing scores from this device.';
+  else if (data.local) status.textContent = 'Local leaderboard (no backend configured yet).';
+  else status.textContent = rows.length ? 'Global · top ' + rows.length : 'Global leaderboard';
+  if (!rows.length) {
+    list.innerHTML = '<div class="lb-row"><span class="lb-name">No heroes yet — be the first!</span></div>';
+    return;
+  }
+  const medal = ['🥇', '🥈', '🥉'];
+  list.innerHTML = rows.map((r, i) => {
+    const cls = r.player_class && CLASSES[r.player_class] ? CLASSES[r.player_class].icon : '🧙';
+    const rank = medal[i] || (i + 1);
+    const me = myName && r.name === myName ? ' me' : '';
+    return `<div class="lb-row${me}">
+      <span class="lb-rank">${rank}</span>
+      <span class="lb-class">${cls}</span>
+      <span class="lb-name">${escapeHtml(r.name)}</span>
+      <span class="lb-val">${sort.fmt(r[sort.col] || 0)}</span>
+    </div>`;
+  }).join('');
+}
+
+// New-game name entry — shown before the class pick on a fresh game.
+function showNameEntry() {
+  const ov = document.getElementById('name-overlay');
+  if (!ov) return;
+  const input = document.getElementById('name-input');
+  if (input) input.value = player.name || '';
+  ov.classList.add('open');
+  setTimeout(() => { try { if (input) { input.focus(); input.select(); } } catch (e) {} }, 60);
+}
+function submitName() {
+  const input = document.getElementById('name-input');
+  let name = ((input && input.value) || '').trim().replace(/\s+/g, ' ').slice(0, 16);
+  if (!name) name = 'Adventurer';
+  player.name = name;
+  const ov = document.getElementById('name-overlay');
+  if (ov) ov.classList.remove('open');
+  saveGame();
+  if (!player.class) showClassPick();
+}
+
+// ══════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════
 
@@ -9682,8 +10404,11 @@ draw();
 updateBars();
 renderPanel();
 
-// New game (or a save from before classes existed) — make the player pick a class.
-if (!player.class) showClassPick();
+// New game — name your hero first, then pick a class. submitName() chains into
+// the class pick. Older saves with a class but no name keep playing; they can
+// set a name later (it defaults to "Adventurer" on the leaderboard until then).
+if (!player.name && !player.class) showNameEntry();
+else if (!player.class) showClassPick();
 
 if (hadSave) {
   log(`Welcome back, level ${player.level} adventurer.`, 'important');
@@ -9696,8 +10421,8 @@ if (hadSave) {
 }
 log('Progress auto-saves automatically as you play.');
 log('Open 🎒 BAG to view your loot; press the pad\'s USE button to grab items.');
-log(`Tap the ❤️ flask to drink a ${logPotion('Health Potion')} when you're hurt. Enemies hit hard!`);
-log('⌨️ Keys: Q drink potion · E mana · R class skill · T town · B open bag · Space/F use.');
+log(`Tap the ❤️ or 🔷 flask to quaff a ${logPotion('Potion')} — they're a skill now, free to use but only one per turn.`);
+log('⌨️ Keys: Q health potion · E mana potion · R class skill · T town · B open bag · Space/F use.');
 log('⚡ Your class grants a special skill — tap the ⚡ button (or press R) to spend mana on it.');
 log('⚡ Each item has a Power value; your total Power blends level, gear, and attributes.');
 log('💠 Level up to earn points, then raise attributes in the bag\'s HERO tab.');
@@ -9741,7 +10466,8 @@ function pulseLoop(ts) {
   const hasElite = enemies.some(e => !e.dead && e.isElite);
   const hasShrine = Object.keys(shrineData).length > 0;
   const juicing = particles.length || Date.now() < shakeUntil;
-  if ((inTown || merchant || mystic || hasFountain || hasShrine || quest || floatingTexts.length || statusEffects.length || hasElite || juicing) && ts - lastPulse > 30) { lastPulse = ts; draw(); }
+  const liquid = mapData.some(row => row && row.some(t => t === 6 || t === 7));
+  if ((inTown || merchant || mystic || hasFountain || hasShrine || quest || floatingTexts.length || statusEffects.length || hasElite || juicing || liquid) && ts - lastPulse > 30) { lastPulse = ts; draw(); }
   requestAnimationFrame(pulseLoop);
 }
 requestAnimationFrame(pulseLoop);
