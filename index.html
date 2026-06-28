@@ -350,6 +350,9 @@
   /* Greyed when on cooldown or short on mana; pulses when ready to fire. */
   .skill-btn.disabled { background: #211c2a; border-color: #33304a; color: #6a647a; }
   .skill-btn.ready { box-shadow: 0 0 8px rgba(140,110,255,0.55); }
+  /* Town gate is gated: greyed + dimmed while you can't slip away (in combat,
+     floor uncleared, or the gate is still recharging). */
+  .action-btn.disabled { opacity: 0.45; filter: grayscale(0.6); }
 
   /* ── SIDE PANEL ── */
   /* Overlays the map (absolutely positioned) so opening it doesn't resize the
@@ -1750,7 +1753,7 @@
         <button class="action-btn skill-btn" id="skill-btn" onclick="castSkill()" style="display:none" data-tip="<div class='ht-name'>⚡ Class Skill</div><div class='ht-line'>Cast your class's special skill.</div><div class='ht-sub'>press R</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
           <span class="action-icon" id="skill-icon">⚡</span><span class="action-label" id="skill-label">SKILL</span>
         </button>
-        <button class="action-btn town-action" onclick="enterTown()">
+        <button class="action-btn town-action" onclick="enterTown()" data-tip="<div class='ht-name'>🏰 Town</div><div class='ht-line'>Step through the gate to the safe hub — shops, forge, healer, stash.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
           <span class="action-icon">🏰</span><span class="action-label">TOWN</span>
         </button>
         <button class="action-btn unstuck-action" onclick="unstuck()" data-tip="<div class='ht-name'>🌀 Unstuck</div><div class='ht-line'>Warp to a random open spot elsewhere on the floor.</div><div class='ht-sub'>use if you get wedged in</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
@@ -4021,6 +4024,28 @@ let floorMod = FLOOR_MODS[0];
 // sealed until the floor's hostiles are dealt with. `floorCleared` latches true
 // once the condition is met (a late mimic popping out won't re-seal you in).
 let floorCleared = false;
+// ── TOWN GATE ACCESS ── (you can't just bail to town whenever you like)
+// You may step through the town gate only when you're (#3) not in combat,
+// (#5) either on a freshly entered floor you haven't engaged or one you've
+// cleared, and (#4) the gate has finished recharging since your last visit.
+let floorEngaged = false;        // latches true once you provoke this floor's foes
+let lastTownLeaveAt = 0;         // timestamp (ms) you last stepped out of town
+const TOWN_GATE_CD_MS = 60000;   // gate recharge between town trips
+const TOWN_COMBAT_RANGE = 6;     // a foe this close (or nearer) counts as "in combat"
+// Any living, non-fleeing foe within range is actively threatening you.
+function inCombatNearby() {
+  return (enemies || []).some(e => !e.dead && !e.isGoblin &&
+    Math.max(Math.abs(e.x - player.x), Math.abs(e.y - player.y)) <= TOWN_COMBAT_RANGE);
+}
+// Resolve whether the town gate is usable right now, with a reason if not.
+function townAccess() {
+  if (inTown) return { ok: true };
+  if (inCombatNearby()) return { ok: false, reason: "You can't slip away to town with enemies bearing down on you." };
+  if (floorEngaged && !floorCleared) return { ok: false, reason: 'Clear the floor before retreating to town.' };
+  const left = TOWN_GATE_CD_MS - (Date.now() - lastTownLeaveAt);
+  if (left > 0) return { ok: false, reason: `The town gate is still recharging — ${Math.ceil(left / 1000)}s.` };
+  return { ok: true };
+}
 // Fleeing treasure goblins don't block the exit — they're a bonus chase. Every
 // other living foe (mobs, elites, bosses, quest hordes, mimics) counts.
 function hostilesRemaining() {
@@ -4418,6 +4443,7 @@ function sfx(name) {
     case 'death':   tone(330, 0.6, t, 'sawtooth', 0.5, 55); noise(0.5, t, 0.25); break;
     case 'trap':    noise(0.3, t, 0.4); tone(140, 0.3, t, 'sawtooth', 0.4, 60); break;
     case 'click':   tone(660, 0.04, t, 'square', 0.22); break;
+    case 'denied':  tone(180, 0.12, t, 'square', 0.3); tone(120, 0.16, t + 0.1, 'square', 0.28); break;
     case 'teleport': tone(880, 0.18, t, 'sine', 0.35, 220); tone(440, 0.2, t + 0.06, 'sine', 0.28, 1320); noise(0.12, t, 0.18); break;
   }
 }
@@ -5580,6 +5606,7 @@ function generateMap() {
   // A floor you've already cleared stays open: backtracking here via the gate or
   // the up-stairs never re-imposes an unlock condition.
   floorCleared = false;
+  floorEngaged = false;
   if (player.clearedFloors && player.clearedFloors[dungeonLevel]) {
     floorCleared = true;
   } else if (hostilesRemaining() === 0) {
@@ -6182,6 +6209,8 @@ function buyPact(i, floors) {
 // (If you're already in town, this just reopens the hub menu.)
 function enterTown() {
   if (inTown) { openTownHub(); return; }
+  const acc = townAccess();
+  if (!acc.ok) { log('🏰 ' + acc.reason); sfx('denied'); return; }
   closeShop(); closeMystic(); closeTown();
   dungeonReturn = dungeonLevel;
   bossHazards = [];
@@ -6355,6 +6384,7 @@ function townBack() {
 function leaveTown() {
   if (!inTown) { closeTown(); return; }
   const f = Math.max(1, dungeonReturn || player.maxFloor || dungeonLevel || 1);
+  lastTownLeaveAt = Date.now();
   enterDungeonAt(f);
 }
 
@@ -10829,6 +10859,7 @@ function runEnemyTurn() {
   // and any transient combat buffs (War Cry, Sanctuary, …).
   if (player.skillCds) for (const k in player.skillCds) if (player.skillCds[k] > 0) player.skillCds[k]--;
   if (player.potionCd > 0) player.potionCd--;
+  if (!floorEngaged && inCombatNearby()) floorEngaged = true;
   for (const k in combatBuffs) { const b = combatBuffs[k]; if (b && b.t > 0) { b.t--; if (b.t <= 0) delete combatBuffs[k]; } }
   // Summoned minions act on the hero's turn — before foes, so they can soak and
   // strike — then count down their lifespan.
@@ -11772,6 +11803,16 @@ function updateBars() {
     } else {
       skillBtn.style.display = 'none';
     }
+  }
+
+  // Town gate: grey it out (with the reason in the tooltip) when you can't leave.
+  const townBtn = document.querySelector('.town-action');
+  if (townBtn) {
+    const acc = townAccess();
+    townBtn.classList.toggle('disabled', !acc.ok);
+    townBtn.dataset.tip = acc.ok
+      ? "<div class='ht-name'>🏰 Town</div><div class='ht-line'>Step through the gate to the safe hub — shops, forge, healer, stash.</div>"
+      : "<div class='ht-name'>🏰 Town</div><div class='ht-line'>" + acc.reason + "</div>";
   }
 
   // Red vignette warns when health is critical.
