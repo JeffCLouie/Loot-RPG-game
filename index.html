@@ -3510,7 +3510,9 @@ function buySkill(id) {
   player.hp += Math.max(0, player.maxHp - beforeHp);
   player.mp += Math.max(0, player.maxMp - beforeMp);
   sfx('levelup');
-  log(`✨ Learned ${node.icon} ${node.name}${(node.max || 1) > 1 ? ` (rank ${player.skills[id]}/${node.max})` : ''}.`, 'important');
+  const newRank = player.skills[id];
+  const summary = skillTotalSummary(node, newRank);
+  log(`✨ Learned ${node.icon} ${node.name}${(node.max || 1) > 1 ? ` (rank ${newRank}/${node.max})` : ''}${summary ? ` — now ${summary}.` : '.'}`, 'important');
   updateBars(); renderPanel(); renderSkillBar(); saveGame();
 }
 
@@ -10852,6 +10854,23 @@ function skillRankUpRows(node, rank) {
     }
   }
   return rows;
+}
+// Plain-text "new total" summary at a given rank, for the level-up log line.
+function skillTotalSummary(node, rank) {
+  if (node.type === 'passive' && node.fx) {
+    return Object.keys(node.fx)
+      .map(k => { const m = FX_LABELS[k] || [k, 'frac']; return `${m[0]} ${fmtFxVal(m[1], node.fx[k] * rank)}`; })
+      .join(', ');
+  }
+  if (node.type === 'active' && node.cast) {
+    let s = `effect power ${Math.round(rankScale(rank) * 100)}%`;
+    if (node.cast.summon) {
+      const n = Math.min(8, (node.cast.summon.count || 1) + Math.floor((rank - 1) / 4));
+      s += `, ${n} minion${n === 1 ? '' : 's'}`;
+    }
+    return s;
+  }
+  return '';
 }
 
 // Toggle the detail popover for a skill node (tap the open node again to close).
