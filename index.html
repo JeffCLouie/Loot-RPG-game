@@ -10202,12 +10202,15 @@ function checkLevelUp() {
 }
 
 // Spend one earned point to permanently raise a hero attribute.
-function spendAttr(key) {
+function spendAttr(key, ev) {
   if (!ATTRIBUTES[key]) return;
   if (!player.attrPoints || player.attrPoints <= 0) { log('No attribute points to spend.'); return; }
   if (!player.attributes) player.attributes = baseAttributes();
-  player.attributes[key] = (player.attributes[key] || 0) + 1;
-  player.attrPoints--;
+  // Shift/Ctrl-click spends 5 points at once (capped by what's available).
+  const bulk = ev && (ev.shiftKey || ev.ctrlKey || ev.metaKey);
+  const amount = Math.min(bulk ? 5 : 1, player.attrPoints);
+  player.attributes[key] = (player.attributes[key] || 0) + amount;
+  player.attrPoints -= amount;
   // Raising Vitality/Spirit immediately grants the extra HP/MP it unlocks.
   if (key === 'vitality') { const before = player.maxHp; recomputeMaxStats(); player.hp += (player.maxHp - before); }
   else if (key === 'spirit') { const before = player.maxMp; recomputeMaxStats(); player.mp += (player.maxMp - before); }
@@ -10436,7 +10439,7 @@ function renderHero(el) {
         <div class="attr-desc">${at.desc}</div>
       </div>
       <span class="attr-val">${own}${gearStr}</span>
-      <button class="attr-plus" ${pts > 0 ? '' : 'disabled'} onclick="spendAttr('${key}')">+</button>
+      <button class="attr-plus" ${pts > 0 ? '' : 'disabled'} onclick="spendAttr('${key}', event)">+</button>
     </div>`;
   }).join('');
   // Derived combat stats so the player can see what their attributes/gear produce.
