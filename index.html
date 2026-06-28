@@ -451,6 +451,13 @@
   .sk-pop b { color: var(--gold); }
   .sk-pop .ty { color: #9a8fd0; font-size: 9px; margin-top: 1px; }
   .sk-pop .ds { margin-top: 3px; color: #cdc2e8; }
+  /* "On rank up" preview: shows the concrete buff each point buys (now → next). */
+  .sk-pop .ru { margin-top: 5px; padding: 4px 6px; background: #1d1630; border: 1px solid #3a3056; border-radius: 6px; }
+  .sk-pop .ru-h { font-size: 8px; letter-spacing: 0.5px; color: #9a8fd0; text-transform: uppercase; margin-bottom: 2px; }
+  .sk-pop .ru-row { display: flex; justify-content: space-between; gap: 6px; font-size: 9.5px; line-height: 1.45; }
+  .sk-pop .ru-row .ru-k { color: #bdb2dd; }
+  .sk-pop .ru-row .ru-v { color: #cdc2e8; white-space: nowrap; }
+  .sk-pop .ru-row .ru-v b { color: #7ad08a; font-weight: bold; }
   .sk-pop .rq { font-size: 9px; margin-top: 3px; line-height: 1.5; }
   .sk-pop .rq.no { color: #e08a8a; }
   .sk-pop .rq.ok { color: #7ad08a; }
@@ -1247,7 +1254,16 @@
       grid-row: 2;
       justify-self: center;
       align-self: start;
+      gap: 7px;
     }
+    /* On PC there's plenty of room, so make the potion / spell buttons and
+       their icons noticeably larger by default for easier clicking. */
+    #skill-bar .skillbar-btn { min-width: 54px; padding: 5px 7px; }
+    #skill-bar .skillbar-btn .sb-icon { font-size: 24px; }
+    /* Potion flasks are inline SVGs with fixed px sizes — scale them up too. */
+    #skill-bar .skillbar-btn .sb-icon svg { width: 25px; height: 28px; }
+    #skill-bar .skillbar-btn .sb-key { font-size: 9px; }
+    #skill-bar .skillbar-btn .sb-info { font-size: 9px; }
     /* Map: the largest square that fits its cell, centered. */
     canvas {
       grid-column: 2;
@@ -10736,6 +10752,17 @@ function renderSkills(el) {
       const rn = byId[rid] || skillNode(rid); const ok = skillRank(rid) >= 1;
       reqRows.push(`<span class="${ok ? 'rqok' : 'rqno'}">${ok ? '✓' : '🔒'} ${rn ? rn.name : rid}</span>`);
     }
+    // "On rank up" preview — the concrete buff the next point buys.
+    let ruHtml = '';
+    if (!skillMaxed(sn)) {
+      const ruRows = skillRankUpRows(sn, rank);
+      if (ruRows.length) {
+        const head = rank > 0 ? `On rank up (${rank} → ${rank + 1})` : 'When learned';
+        ruHtml = `<div class="ru"><div class="ru-h">${head}</div>` +
+          ruRows.map(r => `<div class="ru-row"><span class="ru-k">${r[0]}</span><span class="ru-v">${r[1]}</span></div>`).join('') +
+          `</div>`;
+      }
+    }
     const reqMet = skillReqMet(sn);
     let reqHtml = reqRows.length ? `<div class="rq">${reqRows.join('<br>')}</div>` : '';
     if (reqMet && !skillMaxed(sn) && (player.skillPoints || 0) <= 0) {
@@ -10748,6 +10775,7 @@ function renderSkills(el) {
       <b>${sn.icon} ${sn.name}</b>${rankTxt}
       <div class="ty">${typeTxt}</div>
       <div class="ds">${sn.desc}</div>
+      ${ruHtml}
       ${reqHtml}
       ${buyBtn}
     </div>`;
@@ -10773,6 +10801,57 @@ function castShapeLabel(c) {
     bolt: `single${rg}`, blast: `area${rg}${r}`, line: `line${rg}`, chain: `chain×${c.chain || 3}`,
     teleport: `blink${rg}`, summon: `summon ${c.summon ? c.summon.kind : ''}`,
   })[c.shape] || c.shape;
+}
+
+// Per-fx labels + how to read each stored magnitude, used by the rank-up preview.
+//   frac    → stored as a fraction, shown as a % (0.012 → 1.2%)
+//   fracNeg → fraction shown as a reduction (− sign)
+//   pct     → already a percentage (5 → 5%)
+//   flat    → a flat number (+2 attack)
+const FX_LABELS = {
+  atkFlat:   ['attack', 'flat'],     dmgDealt:  ['damage dealt', 'frac'],
+  dmgTaken:  ['damage taken', 'fracNeg'], maxHpPct: ['max HP', 'frac'],
+  maxMpPct:  ['max MP', 'frac'],     hpRegen:   ['HP regen/turn', 'flat'],
+  mpRegen:   ['MP regen/turn', 'flat'], lifesteal: ['lifesteal', 'frac'],
+  crit:      ['crit chance', 'frac'], critDmg:  ['crit damage', 'frac'],
+  dodge:     ['dodge', 'frac'],      spell:     ['spell damage', 'frac'],
+  manaShield:['mana shield', 'frac'], zeal:     ['rage damage', 'frac'],
+  lowHpDmg:  ['vs. wounded foes', 'frac'], reflect: ['melee reflect', 'frac'],
+  pen:       ['armor pen', 'frac'],  block:     ['block chance', 'pct'],
+  dr:        ['damage reduction', 'pct'], goldFind: ['gold found', 'pct'],
+  magicFind: ['magic find', 'pct'],  xpGain:    ['XP gain', 'pct'],
+};
+// Format a single fx magnitude into a signed, human string (e.g. "+1.2%", "+2").
+function fmtFxVal(kind, v) {
+  const sign = kind === 'fracNeg' ? '−' : '+';
+  if (kind === 'flat') return `${sign}${Math.round(v * 10) / 10}`;
+  const pct = kind === 'pct' ? v : v * 100;
+  return `${sign}${Math.round(pct * 10) / 10}%`;
+}
+// Build the "On rank up" preview rows: the concrete buff each point buys, shown
+// as current total → next-rank total. Returns [] when there's nothing to preview.
+function skillRankUpRows(node, rank) {
+  const rows = [];
+  if (node.type === 'passive' && node.fx) {
+    for (const k of Object.keys(node.fx)) {
+      const meta = FX_LABELS[k] || [k, 'frac'];
+      const per = node.fx[k];
+      const cur = fmtFxVal(meta[1], per * rank);
+      const next = fmtFxVal(meta[1], per * (rank + 1));
+      rows.push([meta[0], rank > 0 ? `${cur} → <b>${next}</b>` : `<b>${next}</b>`]);
+    }
+  } else if (node.type === 'active' && node.cast) {
+    const cur = Math.round(rankScale(rank || 1) * 100);
+    const next = Math.round(rankScale(rank + 1) * 100);
+    rows.push(['effect power', rank > 0 ? `${cur}% → <b>${next}%</b>` : `<b>100%</b>`]);
+    if (node.cast.summon) {
+      const base = node.cast.summon.count || 1;
+      const curN = Math.min(8, base + Math.floor(((rank || 1) - 1) / 4));
+      const nextN = Math.min(8, base + Math.floor((rank + 1 - 1) / 4));
+      if (rank === 0 || nextN > curN) rows.push(['minions', rank > 0 ? `${curN} → <b>${nextN}</b>` : `<b>${nextN}</b>`]);
+    }
+  }
+  return rows;
 }
 
 // Toggle the detail popover for a skill node (tap the open node again to close).
