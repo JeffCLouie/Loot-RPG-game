@@ -9241,9 +9241,23 @@ function draw() {
   // townsfolk and hero stand in front of them.
   if (inTown) { drawTownBuildings(offX, offY, tw, th); drawTownNpcs(offX, offY, tw, th, scale); }
 
-  // Enemies
-  enemies.filter(e => !e.dead).forEach(e => {
+  // Group active status effects by their target once, so each actor below reads
+  // its own ailments in O(1) instead of re-filtering the whole list per draw.
+  const statusByTarget = new Map();
+  for (const s of statusEffects) {
+    let arr = statusByTarget.get(s.target);
+    if (!arr) statusByTarget.set(s.target, arr = []);
+    arr.push(s);
+  }
+  const NO_STATUS = [];
+
+  // Enemies. Skip any whose footprint sits entirely outside the visible window
+  // (with a 1-tile margin for auras/HP bars) — off-screen foes cost nothing to
+  // not draw, which keeps frame times flat when a big pack is on the floor.
+  enemies.forEach(e => {
+    if (e.dead) return;
     const S = e.size || 1;                 // multi-tile footprint span
+    if (e.x + S <= x0 - 1 || e.x >= x1 + 1 || e.y + S <= y0 - 1 || e.y >= y1 + 1) return;
     const px = offX + e.x * tw, py = offY + e.y * th;
     const cw = S * tw, ch = S * th;        // full footprint in pixels
     const cx = px + cw/2;                   // footprint centre
@@ -9251,7 +9265,7 @@ function draw() {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     // Status tint: green = poisoned, gold = stunned.
-    const eStatus = statusEffects.filter(s => s.target === e);
+    const eStatus = statusByTarget.get(e) || NO_STATUS;
     const poisoned = eStatus.some(s => s.effect === 'poison');
     const stunned = eStatus.some(s => s.effect === 'stun');
     const burning = eStatus.some(s => s.effect === 'burn');
@@ -9367,7 +9381,7 @@ function draw() {
   drawHeroSprite(px, py, tw, th, scale);
 
   // Player status effect icons — DawnLike poison potion / stun spark.
-  const pEffects = statusEffects.filter(s => s.target === 'player');
+  const pEffects = statusByTarget.get('player') || NO_STATUS;
   if (pEffects.length) {
     ctx.font = `${Math.round(tw * 0.28)}px serif`;
     ctx.textAlign = 'center';
@@ -10952,16 +10966,51 @@ function enemyTileFree(x, y) {
 
 const ENEMY_DIRS = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
 
+// A snapshot grid of every tile a foe can't enter this instant — walls, conjured
+// boss barriers, town NPCs, the player's tile, and every living enemy footprint.
+// Rebuilt once per pathfind so the flood fill below can test a cell in O(1)
+// instead of re-scanning the whole enemy list (getEnemyAt) for every neighbour —
+// the difference between smooth and sluggish when a big pack is hunting you.
+let _pfBlocked = null;
+function pathBlockedGrid() {
+  const W = MAP_W, H = MAP_H, n = W * H;
+  if (!_pfBlocked || _pfBlocked.length !== n) _pfBlocked = new Uint8Array(n);
+  const b = _pfBlocked;
+  for (let y = 0; y < H; y++) { const row = mapData[y]; const base = y * W; for (let x = 0; x < W; x++) b[base + x] = row[x] !== 0 ? 1 : 0; }
+  for (const h of bossHazards) if (h.kind === 'wall' && h.x >= 0 && h.y >= 0 && h.x < W && h.y < H) b[h.y * W + h.x] = 1;
+  for (const o of enemies) {
+    if (o.dead) continue;
+    const s = o.size || 1;
+    for (let dx = 0; dx < s; dx++) for (let dy = 0; dy < s; dy++) {
+      const cx = o.x + dx, cy = o.y + dy;
+      if (cx >= 0 && cy >= 0 && cx < W && cy < H) b[cy * W + cx] = 1;
+    }
+  }
+  if (merchant && merchant.x >= 0 && merchant.y >= 0 && merchant.x < W && merchant.y < H) b[merchant.y * W + merchant.x] = 1;
+  if (mystic && mystic.x >= 0 && mystic.y >= 0 && mystic.x < W && mystic.y < H) b[mystic.y * W + mystic.x] = 1;
+  b[player.y * W + player.x] = 1; // you path *to* the player, never through them
+  return b;
+}
+
 // Breadth-first search from an enemy to (tx,ty); returns the first [dx,dy] step
 // along a shortest path, or null if unreachable. This is what lets foes route
 // around walls instead of grinding into them.
+//
+// `came`/`seen` are reused scratch buffers stamped with a per-call generation so
+// neither needs reallocating or clearing each turn (only the rare stamp wrap
+// does), and the "is this tile free?" test reads the precomputed blocked grid.
+let _pfCame = null, _pfSeen = null, _pfGen = 0;
 function enemyPathStep(e, tx, ty) {
-  const W = MAP_W, H = MAP_H;
+  const W = MAP_W, H = MAP_H, n = W * H;
   const start = e.y * W + e.x, goal = ty * W + tx;
   if (start === goal) return null;
-  const came = new Array(W * H).fill(-2);
-  came[start] = -1;
+  const blocked = pathBlockedGrid();
+  if (!_pfCame || _pfCame.length !== n) { _pfCame = new Int32Array(n); _pfSeen = new Uint16Array(n); _pfGen = 0; }
+  const came = _pfCame, seen = _pfSeen;
+  if (++_pfGen === 0) { seen.fill(0); _pfGen = 1; } // stamp wrapped — clear once
+  const gen = _pfGen;
   const queue = [start];
+  came[start] = -1; seen[start] = gen;
   let qi = 0, found = false;
   while (qi < queue.length) {
     const cur = queue[qi++];
@@ -10971,12 +11020,12 @@ function enemyPathStep(e, tx, ty) {
       const nx = cx + dx, ny = cy + dy;
       if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
       const ni = ny * W + nx;
-      if (came[ni] !== -2) continue;
-      const isGoal = (nx === tx && ny === ty);
-      if (!isGoal && !enemyTileFree(nx, ny)) continue;
+      if (seen[ni] === gen) continue;
+      const isGoal = (ni === goal);
+      if (!isGoal && blocked[ni]) continue;
       // Don't cut diagonally through a wall corner.
       if (dx !== 0 && dy !== 0 && mapData[cy][nx] !== 0 && mapData[ny][cx] !== 0) continue;
-      came[ni] = cur;
+      came[ni] = cur; seen[ni] = gen;
       queue.push(ni);
     }
   }
