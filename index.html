@@ -7661,7 +7661,8 @@ function draw() {
 
   // ── FOLLOW CAMERA ──
   // Aim to show ~VIEW_TILES across the shorter axis, so tiles are large.
-  const VIEW_TILES = 11;
+  // Fewer tiles = bigger tiles, so the game reads well at default browser zoom.
+  const VIEW_TILES = 9;
   const tw = Math.ceil(Math.min(W, H) / VIEW_TILES);
   const th = tw;
 
