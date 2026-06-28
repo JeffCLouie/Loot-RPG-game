@@ -4281,6 +4281,68 @@ let townView = 'hub';
 let floorSerial = 0;
 
 // ══════════════════════════════════════════
+// DEBUG / AGENT INTROSPECTION
+// ══════════════════════════════════════════
+// A READ-ONLY snapshot of live game state, exposed for external tooling — e.g.
+// an AI agent driving the game through the browser console. It mutates nothing:
+// it only reads existing variables and returns a structured summary plus an
+// ASCII minimap, so a caller can identify the player, foes, chests, NPCs and
+// allies by exact coordinates and names instead of guessing from rendered
+// pixels. Has zero effect on gameplay, rendering, or saves; safe to call any
+// time. Call `gameState()` (optionally `gameState(radius)` for a wider map).
+window.gameState = function gameState(radius) {
+  const R = (typeof radius === 'number' && radius > 0) ? Math.floor(radius) : 10;
+  const live = (enemies || []).filter(e => e && !e.dead);
+  const dist = e => Math.abs(e.x - player.x) + Math.abs(e.y - player.y);
+
+  // ── ASCII overlay map centred on the player ──
+  const sym = { 0: '.', 1: '#', 2: '>', 3: 'f', 5: '*', 6: '~', 7: '^', 9: 'o', 10: '%', 11: '+', 12: '<' };
+  const cell = (x, y) => (mapData[y] && mapData[y][x] != null) ? (sym[mapData[y][x]] ?? '?') : ' ';
+  const ov = {};
+  const put = (x, y, c) => { if (x != null && y != null) ov[y + ',' + x] = c; };
+  live.forEach(e => put(e.x, e.y, 'E'));
+  (minions || []).forEach(m => put(m.x, m.y, 'a'));
+  (groundItems || []).forEach(g => put(g.x, g.y, '$'));
+  (groundGold || []).forEach(g => put(g.x, g.y, 'c'));
+  if (merchant) put(merchant.x, merchant.y, 'M');
+  if (mystic) put(mystic.x, mystic.y, '?');
+  if (quest && quest.npc) put(quest.npc.x, quest.npc.y, 'N');
+  put(player.x, player.y, '@');
+  const rows = [];
+  for (let y = player.y - R; y <= player.y + R; y++) {
+    let ln = '';
+    for (let x = player.x - R; x <= player.x + R; x++) ln += ov[y + ',' + x] || cell(x, y);
+    rows.push(ln);
+  }
+
+  return {
+    inTown: !!inTown,
+    floor: dungeonLevel,
+    player: {
+      x: player.x, y: player.y, facing: player.facing,
+      hp: player.hp, maxHp: player.maxHp, mp: player.mp, maxMp: player.maxMp,
+      level: player.level, xp: player.xp, gold: player.gold,
+      class: player.class, ascension: player.ascension,
+    },
+    enemies: live.map(e => ({
+      type: e.type, name: e.name, x: e.x, y: e.y,
+      hp: e.hp, maxHp: e.maxHp, dist: dist(e),
+      isBoss: !!e.isBoss, isElite: !!e.isElite,
+    })),
+    chests: (groundItems || []).map(g => ({ x: g.x, y: g.y })),
+    coins: (groundGold || []).map(g => ({ x: g.x, y: g.y, amount: g.amount })),
+    npcs: [
+      merchant ? { kind: 'merchant', x: merchant.x, y: merchant.y } : null,
+      mystic ? { kind: 'mystic', x: mystic.x, y: mystic.y } : null,
+      (quest && quest.npc) ? { kind: 'quest', name: quest.npc.name, x: quest.npc.x, y: quest.npc.y } : null,
+    ].filter(Boolean),
+    allies: (minions || []).map(m => ({ kind: m.kind || m.type, x: m.x, y: m.y, hp: m.hp })),
+    legend: '@ you · E enemy · a ally · $ chest · c coins · M merchant · ? mystic · N npc · > stairs down · < stairs up · # wall · . floor · ~ water · ^ lava · + door · * shrine · o teleporter · % cracked wall · f fountain',
+    map: rows.join('\n'),
+  };
+};
+
+// ══════════════════════════════════════════
 // AUDIO  (sound effects + background music)
 // ══════════════════════════════════════════
 // Everything here is synthesized live with the Web Audio API — no asset files —
