@@ -7272,11 +7272,8 @@ function draw() {
     // Pixel-art chest sprite (lucky chests get a brighter glow), with the
     // hand-drawn chest below as fallback.
     if (spriteReady && SPRITE_IDX['chest'] !== undefined) {
-      ctx.save();
-      ctx.shadowColor = lucky ? '#ffe066' : '#caa24a';
-      ctx.shadowBlur = (lucky ? 14 : 7) * scale;
+      glowUnder(cx, cy, tw * (lucky ? 0.6 : 0.46), lucky ? 'rgba(255,224,102,0.45)' : 'rgba(202,162,74,0.3)');
       drawSpriteC('chest', cx, cy, Math.round(tw * 0.72));
-      ctx.restore();
       return;
     }
     const w = tw * 0.58, h = th * 0.46;
@@ -7321,32 +7318,26 @@ function draw() {
       drawEmoji(f.emoji, px + tw/2, py + th/2, Math.round(tw * 0.6));
   });
 
-  // Coin piles — a soft golden glow so loose gold catches the eye.
+  // Coin piles — a soft circular golden glow so loose gold catches the eye.
   groundGold.forEach(g => {
     const px = offX + g.x * tw, py = offY + g.y * th;
-    ctx.save();
-    ctx.shadowColor = '#ffe066';
-    ctx.shadowBlur = 8 * scale;
     ctx.font = `${Math.round(tw * 0.52)}px serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
+    glowUnder(px + tw/2, py + th/2, tw * 0.42, 'rgba(255,224,102,0.4)');
     if (!(spriteReady && drawSpriteC('coins', px + tw/2, py + th/2, Math.round(tw * 0.6))))
       drawEmoji('🪙', px + tw/2, py + th/2, Math.round(tw * 0.52));
-    ctx.restore();
   });
 
   // Vault key — glints on the floor until grabbed.
   if (groundKey) {
     const px = offX + groundKey.x * tw, py = offY + groundKey.y * th;
-    ctx.save();
-    ctx.shadowColor = '#ffe066';
-    ctx.shadowBlur = 10 * scale;
     ctx.font = `${Math.round(tw * 0.5)}px serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
+    glowUnder(px + tw/2, py + th/2, tw * 0.42, 'rgba(255,224,102,0.4)');
     if (!(spriteReady && drawSpriteC('key', px + tw/2, py + th/2, Math.round(tw * 0.6))))
       drawEmoji('🗝️', px + tw/2, py + th/2, Math.round(tw * 0.5));
-    ctx.restore();
   }
 
   // Merchant (roaming trader in bright robes) — never the town stand-in.
@@ -7599,6 +7590,20 @@ function drawActorShadow(cx, cyFeet, w) {
   ctx.fillStyle = 'rgba(0,0,0,0.32)';
   ctx.beginPath();
   ctx.ellipse(cx, cyFeet, w * 0.34, w * 0.14, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+// A soft CIRCULAR glow behind a pickup. (Canvas shadowBlur on a square sprite
+// renders as an ugly square halo, so we paint a radial gradient instead.)
+function glowUnder(cx, cy, r, color) {
+  const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+  g.addColorStop(0, color);
+  g.addColorStop(1, 'transparent');
+  ctx.save();
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 }
