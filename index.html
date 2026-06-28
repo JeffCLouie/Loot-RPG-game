@@ -12802,6 +12802,9 @@ document.addEventListener('keyup', e => {
 });
 
 document.addEventListener('keydown', e => {
+  // Don't hijack typing — let text fields (e.g. the hero name box) get the keys.
+  const t = e.target;
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
   // Esc backs out of menus even during the mandatory class pick is NOT allowed,
   // so handle Esc only after that guard.
   const cov = document.getElementById('class-overlay');
