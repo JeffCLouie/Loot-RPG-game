@@ -79,6 +79,27 @@
   }
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
 
+  .play-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    text-decoration: none;
+    color: #1a1430;
+    background: linear-gradient(180deg, var(--gold), #c8a24b);
+    border: 1px solid var(--frame);
+    border-radius: 5px;
+    padding: 5px 12px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.3);
+    transition: filter 0.15s, transform 0.05s;
+  }
+  .play-btn:hover { filter: brightness(1.12); }
+  .play-btn:active { transform: translateY(1px); }
+
   main {
     flex: 1;
     display: flex;
@@ -145,6 +166,7 @@
   <header>
     <h1>⚔ Dungeon Loot</h1>
     <span class="live-dot">Live</span>
+    <a class="play-btn" href="./index.html">⚔ Play Game</a>
   </header>
 
   <main>

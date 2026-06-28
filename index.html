@@ -67,6 +67,22 @@
   .mp-fill  { background: linear-gradient(180deg, #7db4ff, var(--mp)); box-shadow: 0 0 7px var(--mp), inset 0 1px 0 rgba(255,255,255,0.4); }
   #gold-display { color: var(--gold); font-size: 11px; }
 
+  /* "Watch Live" link → spectator stream page (watch.html) */
+  #watch-live-link {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 11px; font-weight: bold; letter-spacing: 0.5px;
+    color: #ff3b4e; text-decoration: none; text-transform: uppercase;
+    padding: 2px 8px; border: 1px solid #ff3b4e; border-radius: 4px;
+    background: rgba(255,59,78,0.08); transition: background 0.15s;
+  }
+  #watch-live-link:hover { background: rgba(255,59,78,0.2); }
+  .watch-live-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #ff3b4e; box-shadow: 0 0 6px #ff3b4e;
+    animation: watch-live-pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes watch-live-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
   /* Header HUD chips: floor, level/XP, enemies remaining */
   .hud-item { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text); }
   .hud-item .hud-val { font-weight: bold; }
@@ -1340,6 +1356,7 @@
     #stats { font-size: 14px; gap: 16px; }
     .bar-track { width: 92px; height: 16px; }
     #gold-display { font-size: 14px; }
+    #watch-live-link { font-size: 13px; }
     .hud-item { font-size: 14px; }
     .xp-track { width: 58px; height: 7px; }
 
@@ -1745,6 +1762,7 @@
   <div class="hud-item" id="pact-hud" style="display:none" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">🔮 <span class="hud-val" id="pact-num"></span></div>
   <div class="hud-item" id="food-hud" style="display:none" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()"></div>
   <div id="gold-display" data-tip="<div class='ht-name' style='color:var(--gold)'>💰 Gold</div><div class='ht-line'>The dungeon's main currency. Spend it at the town shops, the Forge, the Enchanter, and the Stash.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">💰 <span id="gold-count">0</span>g</div>
+  <a id="watch-live-link" href="./watch.html" data-tip="<div class='ht-name' style='color:var(--live)'>📺 Watch Live</div><div class='ht-line'>Watch Claude play Dungeon Loot live on the spectator stream.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()"><span class="watch-live-dot"></span>Watch Live</a>
 </div>
 
 <!-- MAIN -->
