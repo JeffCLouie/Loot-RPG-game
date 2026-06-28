@@ -968,7 +968,7 @@
     cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation;
   }
   .town-menu-btn:active { background: #2a2113; }
-  .town-menu-btn .tm-icon { font-size: 20px; flex: 0 0 auto; width: 24px; text-align: center; }
+  .town-menu-btn .tm-icon { font-size: 24px; flex: 0 0 auto; width: 32px; text-align: center; }
   /* A DawnLike atlas tile rendered as a crisp icon inside DOM menus. */
   .dl-ic { display: inline-block; background-image: var(--dl-atlas); background-repeat: no-repeat; image-rendering: pixelated; vertical-align: middle; }
   .town-menu-btn .tm-text { display: flex; flex-direction: column; min-width: 0; }
@@ -2190,9 +2190,17 @@ function drawSprite(name, dx, dy, dsize) {
   const i = SPRITE_IDX[name];
   if (i === undefined) return false;
   const sx = (i % ATLAS_COLS) * ATLAS_TS, sy = ((i / ATLAS_COLS) | 0) * ATLAS_TS;
+  // Pixel art only stays crisp at whole-number scales. A fractional scale with
+  // nearest-neighbour doubles some source pixel rows and not others, which warps
+  // clean straight/diagonal edges into wavy stairs. Snap the requested size to
+  // the nearest multiple of the 16px tile and keep the sprite centred on its
+  // intended centre, then draw on whole-pixel boundaries.
+  const cx = dx + dsize / 2, cy = dy + dsize / 2;
+  const size = ATLAS_TS * Math.max(1, Math.round(dsize / ATLAS_TS));
+  const ox = Math.round(cx - size / 2), oy = Math.round(cy - size / 2);
   const sm = ctx.imageSmoothingEnabled;
   ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(spriteSheet, sx, sy, ATLAS_TS, ATLAS_TS, Math.round(dx), Math.round(dy), Math.round(dsize), Math.round(dsize));
+  ctx.drawImage(spriteSheet, sx, sy, ATLAS_TS, ATLAS_TS, ox, oy, size, size);
   ctx.imageSmoothingEnabled = sm;
   return true;
 }
@@ -2206,7 +2214,9 @@ function drawSpriteC(name, cx, cy, size) {
 function dlIcon(name, px) {
   const i = SPRITE_IDX[name];
   if (i === undefined || !spriteReady) return '';
-  px = px || 24;
+  // Snap to a whole-number multiple of the 16px tile so the CSS-scaled sprite
+  // stays crisp (a fractional scale warps the pixels just like on the canvas).
+  px = ATLAS_TS * Math.max(1, Math.round((px || 32) / ATLAS_TS));
   const aw = spriteSheet.naturalWidth || 256, ah = spriteSheet.naturalHeight || 144;
   const col = i % ATLAS_COLS, row = (i / ATLAS_COLS) | 0, sc = px / ATLAS_TS;
   return `<span class="dl-ic" style="width:${px}px;height:${px}px;` +
