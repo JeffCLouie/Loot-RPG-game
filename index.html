@@ -4881,7 +4881,7 @@ function generateMap() {
   spawnMerchant();
   spawnMystic();
   // Vault is built last so its chest survives spawnGroundLoot resetting the list.
-  if (Math.random() < 0.5) tryBuildVault(reach);
+  if (Math.random() < 0.2) tryBuildVault(reach);
   // A mini-quest may take over the floor (after enemies/loot are placed).
   maybeSpawnQuest(reach);
 
