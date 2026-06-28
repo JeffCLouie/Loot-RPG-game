@@ -1229,6 +1229,14 @@
       min-height: 46px;
       padding-right: 178px;
     }
+    /* On PC there's room for a bigger HUD: bump the stat / gold / chip fonts and
+       bars up so health, mana, floor, level, etc. are easier to read. */
+    #header h1 { font-size: 17px; }
+    #stats { font-size: 14px; gap: 16px; }
+    .bar-track { width: 92px; height: 16px; }
+    #gold-display { font-size: 14px; }
+    .hud-item { font-size: 14px; }
+    .xp-track { width: 58px; height: 7px; }
 
     #game-wrap {
       position: relative;
@@ -11522,6 +11530,9 @@ function loadGame() {
     // name is fine — the init flow prompts for one on the next load.
     if (player.name === undefined) player.name = null;
     if (player.maxGold == null) player.maxGold = player.gold || 0;
+    // Migrate saves that predate the play-time tracker (total ms this hero has
+    // been actively played, accumulated by the heartbeat below).
+    if (player.playMs == null) player.playMs = 0;
     // Migrate saves that predate cleared-floor tracking.
     if (!player.clearedFloors || typeof player.clearedFloors !== 'object') player.clearedFloors = {};
     inTown = !!data.inTown;
@@ -11613,6 +11624,7 @@ function slotSummary(i) {
       gold: p.gold || 0,
       inTown: !!d.inTown,
       ts: d.ts || 0,
+      playMs: p.playMs || 0,
     };
   } catch (e) { return null; }
 }
