@@ -9789,12 +9789,6 @@ function confirmNewGame() {
 const LB_SUPABASE_URL = 'https://imqhmqtpbvkomsusgzux.supabase.co'; // base URL, no trailing path
 const LB_SUPABASE_KEY = 'sb_publishable_SxnH6A4uxqZq5ZW_PqUeLQ_9ZKd4WfV'; // anon / publishable key (safe to be public)
 
-// Plausibility bounds shared by the client and the database. The matching
-// server-side CHECK constraint (see the project README / setup SQL) is the real
-// guard — it runs on Supabase, so editing the game in the browser can't bypass
-// it. Clamping here too means a legitimate run never trips that constraint.
-const LB_MAX_FLOOR = 1000, LB_MAX_LEVEL = 999, LB_MAX_GOLD = 100000000;
-
 const LB_LOCAL_KEY = 'dungeonLoot_leaderboard_v1';
 // The three ranked boards: which stored column each sorts by and how to show it.
 const LB_SORTS = {
@@ -9820,17 +9814,16 @@ function escapeHtml(s) {
 }
 
 // This character's current bests, shaped for the leaderboard table. Values are
-// clamped to the shared plausibility bounds so a legit run is never rejected by
-// the server-side anti-cheat constraint (and an obviously-tampered local save
-// can't push absurd numbers).
-function lbClamp(v, lo, hi) { v = Math.floor(Number(v) || 0); return v < lo ? lo : v > hi ? hi : v; }
+// taken as-is (just coerced to whole numbers for the integer columns) — every
+// submitted score is treated as real.
+function lbInt(v, lo) { v = Math.floor(Number(v)); return Number.isFinite(v) && v > lo ? v : lo; }
 function lbEntryFromPlayer() {
   return {
     name: String(player.name || 'Adventurer').slice(0, 16),
     player_class: player.class || null,
-    max_floor: lbClamp(player.maxFloor || 1, 1, LB_MAX_FLOOR),
-    level: lbClamp(player.level || 1, 1, LB_MAX_LEVEL),
-    gold: lbClamp(player.maxGold || player.gold || 0, 0, LB_MAX_GOLD),
+    max_floor: lbInt(player.maxFloor || 1, 1),
+    level: lbInt(player.level || 1, 1),
+    gold: lbInt(player.maxGold || player.gold || 0, 0),
   };
 }
 

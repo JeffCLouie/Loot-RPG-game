@@ -13,6 +13,9 @@ If the two config values are left blank (or the network is down), the game falls
 back to a **device-local** leaderboard stored in `localStorage`, so the feature
 always works.
 
+Every submitted score is taken at face value — there is no server-side
+validation of the numbers. Any value a player reaches is treated as real.
+
 ## Where the config lives
 
 In `index.html`, in the `GLOBAL LEADERBOARD` section:
@@ -27,9 +30,8 @@ itself.
 
 ## One-time Supabase setup
 
-### 1. Create the table + access policies
-
-In the Supabase **SQL Editor**, run:
+In the Supabase **SQL Editor**, run this once to create the table and its access
+policies:
 
 ```sql
 create table if not exists public.leaderboard (
@@ -48,55 +50,12 @@ create policy "public insert" on public.leaderboard for insert with check (true)
 create policy "public update" on public.leaderboard for update using (true) with check (true);
 ```
 
-There is intentionally **no delete policy**, so the public key can never delete
-rows.
+That's all the backend needs. Each character upserts a single row keyed by its
+name; the three boards are just that table sorted by `max_floor`, `level`, or
+`gold`.
 
-### 2. Server-side anti-cheat (recommended)
+## Rotating the key
 
-Because the whole game runs in the player's browser, anyone *can* edit their
-local state. These database-side **CHECK constraints** run on Supabase, so a
-tampered client still can't write impossible or implausible scores:
-
-```sql
--- Remove the connection-test row created while wiring things up.
-delete from public.leaderboard where name = '__connection_test__';
-
-alter table public.leaderboard
-  add constraint lb_sane check (
-    char_length(name) between 1 and 16
-    and max_floor between 1 and 1000
-    and level     between 1 and 999
-    and gold      between 0 and 100000000
-    and max_floor <= level * 5 + 20   -- can't reach deep floors at a trivial level
-  );
-```
-
-The bounds are deliberately generous so a legitimate run never trips them; the
-client clamps to the same numbers (`LB_MAX_FLOOR` / `LB_MAX_LEVEL` /
-`LB_MAX_GOLD`) so it never submits something the database would reject. Tune the
-`max_floor <= level * 5 + 20` rule if you want it looser or stricter.
-
-## How far anti-cheat can go
-
-This is the honest part: a leaderboard for a **client-side** game can be made
-*hard to cheat*, not *impossible*. All gameplay happens in the browser, so a
-determined cheater can craft an API call with any numbers that satisfy the rules
-above. The layers we ship raise the bar against casual tampering:
-
-1. **No delete policy** — nobody can wipe the board with the public key.
-2. **Server-side CHECK constraints** — absurd values (negative, billions, floor
-   9999 at level 1) are rejected by the database, not the client.
-3. **Client clamping** — the game itself never submits out-of-range values.
-
-True, unbeatable anti-cheat would require moving gameplay onto a server that
-validates every action — a much larger project and at odds with this game's
-"single shareable HTML file" design.
-
-### Optional hardening
-
-- **Block score-lowering / griefing:** add a `BEFORE UPDATE` trigger that
-  rejects an update whose `max_floor`, `level`, or `gold` is lower than the row's
-  current value, so a row can only ever go up.
-- **Rotate the key:** if the publishable key is ever abused, rotate it in the
-  Supabase dashboard and paste the new one into `index.html`.
+If the publishable key ever needs to change, rotate it in the Supabase dashboard
+and paste the new value into `LB_SUPABASE_KEY` in `index.html`.
 </content>
