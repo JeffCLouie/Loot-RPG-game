@@ -4294,6 +4294,7 @@ window.gameState = function gameState(radius) {
   const R = (typeof radius === 'number' && radius > 0) ? Math.floor(radius) : 10;
   const live = (enemies || []).filter(e => e && !e.dead);
   const dist = e => Math.abs(e.x - player.x) + Math.abs(e.y - player.y);
+  const brief = it => it ? { name: it.name, slot: it.slot, tier: it.tier, stats: it.stats } : null;
 
   // ── ASCII overlay map centred on the player ──
   const sym = { 0: '.', 1: '#', 2: '>', 3: 'f', 5: '*', 6: '~', 7: '^', 9: 'o', 10: '%', 11: '+', 12: '<' };
@@ -4337,6 +4338,26 @@ window.gameState = function gameState(radius) {
       (quest && quest.npc) ? { kind: 'quest', name: quest.npc.name, x: quest.npc.x, y: quest.npc.y } : null,
     ].filter(Boolean),
     allies: (minions || []).map(m => ({ kind: m.kind || m.type, x: m.x, y: m.y, hp: m.hp })),
+    // Menu / DOM-panel state, so an agent never has to read the bag, shop or
+    // town screen off the rendered pixels. `i` indexes into the live list.
+    menu: {
+      bagOpen: !!panelOpen,
+      tab: currentTab,
+      townView: inTown ? townView : null,
+      pointsToSpend: { attribute: player.attrPoints || 0, skill: player.skillPoints || 0 },
+      gold: player.gold,
+      equipped: Object.fromEntries(Object.entries(equipped || {}).map(([slot, it]) => [slot, brief(it)])),
+      inventory: (inventory || []).map((it, i) => Object.assign({ i }, brief(it))),
+      shop: (merchant && merchant.stock) ? merchant.stock.map((row, i) => {
+        const it = row.item || row;
+        const raw = (row.price != null) ? row.price : row.cost;
+        return {
+          i, kind: row.kind || (it && it.slot ? 'gear' : 'item'),
+          name: it && it.name, slot: it && it.slot, tier: it && it.tier,
+          price: (raw != null && merchant.sale) ? Math.round(raw * merchant.sale) : raw,
+        };
+      }) : null,
+    },
     legend: '@ you · E enemy · a ally · $ chest · c coins · M merchant · ? mystic · N npc · > stairs down · < stairs up · # wall · . floor · ~ water · ^ lava · + door · * shrine · o teleporter · % cracked wall · f fountain',
     map: rows.join('\n'),
   };
