@@ -11764,6 +11764,7 @@ log('🎨 Pixel art from the DawnLike tileset by DragonDePlatino & DawnBringer (
 // browsers won't let sound start until the player interacts, so the first
 // gesture resumes the context and kicks off the looping music.
 updateSoundButton();
+updateZoomButton();
 ['pointerdown', 'keydown', 'touchstart'].forEach(ev =>
   window.addEventListener(ev, audioUnlock, { passive: true }));
 
