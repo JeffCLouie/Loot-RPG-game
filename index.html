@@ -2911,15 +2911,55 @@ const INGREDIENT_KEYS = Object.keys(INGREDIENTS);
 
 // Secret named ramen. `ing` is the EXACT topping multiset that unlocks it; `bonus`
 // is stacked ON TOP of the toppings' own summed buffs; `bonusFloors` extends the
-// bowl's duration beyond the base 3 floors.
+// bowl's duration beyond the base 3 floors. Unlike the toppings' plain stat buffs,
+// secret-recipe bonuses can grant SPECIAL effects the formulas hook into:
+//   lifesteal — heal a fraction of damage dealt   thorns — flat damage reflected on melee
+//   xpPct     — bonus XP from kills               dropPct — richer loot / material / topping drops
+//   revive    — survive one lethal blow (consumes the bowl), rising at half health
 const RAMEN_BASE_FLOORS = 3;
 const RECIPES = [
-  { id: 'tonkotsu', emoji: '🍜', name: 'Tonkotsu Ramen',   ing: { pork: 2, egg: 1 },                           bonus: { dmgPct: 0.05, maxHpPct: 0.05 }, bonusFloors: 2 },
-  { id: 'spicymiso',emoji: '🌶️', name: 'Spicy Miso Ramen',  ing: { pork: 1, chili: 2, mushroom: 1 },            bonus: { dmgPct: 0.08, critPct: 0.04 },  bonusFloors: 2 },
-  { id: 'seafood',  emoji: '🍥', name: 'Seafood Ramen',     ing: { fishcake: 2, mushroom: 1, scallion: 1 },     bonus: { maxMpPct: 0.08, regen: 2 },      bonusFloors: 2 },
-  { id: 'buttercorn',emoji:'🌽', name: 'Butter Corn Ramen', ing: { corn: 2, egg: 1 },                           bonus: { goldPct: 0.2, magicPct: 0.2 },   bonusFloors: 2 },
-  { id: 'veggie',   emoji: '🥬', name: 'Garden Ramen',      ing: { bokchoy: 1, mushroom: 1, scallion: 1, corn: 1 }, bonus: { dodgePct: 0.04, defFlat: 8 }, bonusFloors: 2 },
-  { id: 'everything',emoji:'👑', name: 'The Everything Bowl', ing: { pork: 1, egg: 1, mushroom: 1, fishcake: 1, corn: 1, chili: 1, scallion: 1, bokchoy: 1 }, bonus: { dmgPct: 0.1, maxHpPct: 0.1, critPct: 0.03, regen: 3 }, bonusFloors: 3 },
+  // ── headliners: each centred on a special effect ──
+  { id: 'phoenix',   emoji: '🔥', name: 'Phoenix Ramen',     ing: { chili: 2, egg: 1 },                          bonus: { revive: 1, regen: 4 },                       bonusFloors: 2 },
+  { id: 'everything',emoji: '👑', name: 'The Everything Bowl',ing: { pork: 1, egg: 1, mushroom: 1, fishcake: 1, corn: 1, chili: 1, scallion: 1, bokchoy: 1 }, bonus: { revive: 1, dmgPct: 0.1, maxHpPct: 0.1, lifesteal: 0.08 }, bonusFloors: 3 },
+  { id: 'vampire',   emoji: '🧛', name: 'Vampire Ramen',     ing: { pork: 2, chili: 1 },                         bonus: { lifesteal: 0.18 },                           bonusFloors: 2 },
+  { id: 'bloodmoon', emoji: '🌑', name: 'Blood Moon Ramen',  ing: { pork: 3, chili: 1 },                         bonus: { lifesteal: 0.12, dmgPct: 0.1 },              bonusFloors: 3 },
+  { id: 'ironwall',  emoji: '🛡️', name: 'Iron Wall Ramen',   ing: { mushroom: 3 },                               bonus: { thorns: 20, defFlat: 10 },                   bonusFloors: 2 },
+  { id: 'druid',     emoji: '🌲', name: 'Druid Ramen',       ing: { mushroom: 2, scallion: 1 },                  bonus: { thorns: 14, regen: 5 },                      bonusFloors: 2 },
+  { id: 'juggernaut',emoji: '🦏', name: 'Juggernaut Ramen',  ing: { mushroom: 2, egg: 1 },                       bonus: { thorns: 10, defFlat: 16 },                   bonusFloors: 2 },
+  { id: 'scholar',   emoji: '📚', name: "Scholar's Ramen",   ing: { fishcake: 2, corn: 1 },                      bonus: { xpPct: 0.4 },                                bonusFloors: 2 },
+  { id: 'midas',     emoji: '💰', name: 'Midas Ramen',       ing: { corn: 3 },                                   bonus: { goldPct: 0.5, dropPct: 0.2 },                bonusFloors: 2 },
+  { id: 'fortune',   emoji: '🍀', name: 'Fortune Ramen',     ing: { corn: 2, scallion: 1 },                      bonus: { magicPct: 0.35, dropPct: 0.3 },              bonusFloors: 2 },
+  { id: 'alchemist', emoji: '⚗️', name: 'Alchemist Ramen',   ing: { fishcake: 1, chili: 1, corn: 1 },            bonus: { dropPct: 0.25, magicPct: 0.2 },              bonusFloors: 2 },
+  { id: 'wanderer',  emoji: '🥾', name: 'Wanderer Ramen',    ing: { corn: 1, scallion: 1, bokchoy: 1 },          bonus: { dropPct: 0.3, dodgePct: 0.04 },              bonusFloors: 2 },
+  // ── power & sustain ──
+  { id: 'tonkotsu',  emoji: '🍜', name: 'Tonkotsu Ramen',    ing: { pork: 2, egg: 1 },                           bonus: { lifesteal: 0.1, dmgPct: 0.05 },              bonusFloors: 2 },
+  { id: 'berserker', emoji: '🪓', name: 'Berserker Ramen',   ing: { pork: 3 },                                   bonus: { dmgPct: 0.2, lifesteal: 0.05 },              bonusFloors: 2 },
+  { id: 'spicymiso', emoji: '🌶️', name: 'Spicy Miso Ramen',  ing: { pork: 1, chili: 2, mushroom: 1 },            bonus: { dmgPct: 0.1, thorns: 12 },                   bonusFloors: 2 },
+  { id: 'duelist',   emoji: '🤺', name: 'Duelist Ramen',     ing: { pork: 1, chili: 1, scallion: 1 },            bonus: { dmgPct: 0.08, lifesteal: 0.08 },             bonusFloors: 2 },
+  { id: 'gladiator', emoji: '🏟️', name: 'Gladiator Ramen',   ing: { pork: 2, fishcake: 1 },                      bonus: { dmgPct: 0.08, maxMpPct: 0.06, lifesteal: 0.05 }, bonusFloors: 2 },
+  { id: 'warlord',   emoji: '⚔️', name: 'Warlord Ramen',     ing: { pork: 2, mushroom: 2 },                      bonus: { dmgPct: 0.12, defFlat: 12 },                 bonusFloors: 2 },
+  { id: 'inferno',   emoji: '🌋', name: 'Inferno Ramen',     ing: { chili: 3 },                                  bonus: { critPct: 0.1, dmgPct: 0.08 },                bonusFloors: 2 },
+  // ── crit & evasion ──
+  { id: 'assassin',  emoji: '🗡️', name: 'Assassin Ramen',    ing: { chili: 1, bokchoy: 1 },                      bonus: { critPct: 0.08, dodgePct: 0.05 },             bonusFloors: 2 },
+  { id: 'trickster', emoji: '🃏', name: 'Trickster Ramen',   ing: { bokchoy: 2, chili: 1 },                      bonus: { dodgePct: 0.08, critPct: 0.06 },             bonusFloors: 2 },
+  { id: 'monk',      emoji: '☯️', name: "Monk's Ramen",      ing: { bokchoy: 3 },                                bonus: { dodgePct: 0.1, regen: 4 },                   bonusFloors: 2 },
+  { id: 'gambler',   emoji: '🎲', name: 'Gambler Ramen',     ing: { corn: 1, chili: 1 },                         bonus: { goldPct: 0.25, critPct: 0.06 },              bonusFloors: 2 },
+  { id: 'mystic',    emoji: '🌀', name: 'Mystic Ramen',      ing: { fishcake: 2, chili: 1 },                     bonus: { maxMpPct: 0.1, critPct: 0.05, dropPct: 0.15 },bonusFloors: 2 },
+  // ── tanks & turtles ──
+  { id: 'titan',     emoji: '🗿', name: 'Titan Ramen',       ing: { egg: 3 },                                    bonus: { maxHpPct: 0.18, regen: 4 },                  bonusFloors: 2 },
+  { id: 'survivor',  emoji: '🩹', name: 'Survivor Ramen',    ing: { egg: 2, mushroom: 1 },                       bonus: { maxHpPct: 0.1, regen: 6 },                   bonusFloors: 2 },
+  { id: 'guardian',  emoji: '💗', name: 'Guardian Ramen',    ing: { mushroom: 1, egg: 1, bokchoy: 1 },           bonus: { maxHpPct: 0.08, defFlat: 10, regen: 4 },     bonusFloors: 2 },
+  { id: 'spartan',   emoji: '🪖', name: 'Spartan Ramen',     ing: { pork: 1, mushroom: 1, bokchoy: 1 },          bonus: { defFlat: 12, dodgePct: 0.04, thorns: 8 },    bonusFloors: 2 },
+  { id: 'veggie',    emoji: '🥬', name: 'Garden Ramen',      ing: { bokchoy: 1, mushroom: 1, scallion: 1, corn: 1 }, bonus: { dodgePct: 0.05, regen: 5, dropPct: 0.15 }, bonusFloors: 2 },
+  // ── mana & arcane ──
+  { id: 'ocean',     emoji: '🌊', name: 'Abyssal Ramen',     ing: { fishcake: 3 },                               bonus: { maxMpPct: 0.15, lifesteal: 0.06 },           bonusFloors: 2 },
+  { id: 'sage',      emoji: '🔮', name: 'Sage Ramen',        ing: { fishcake: 1, egg: 1, scallion: 1 },          bonus: { maxMpPct: 0.1, xpPct: 0.2 },                 bonusFloors: 2 },
+  { id: 'seafood',   emoji: '🍥', name: 'Seafood Ramen',     ing: { fishcake: 2, mushroom: 1, scallion: 1 },     bonus: { maxMpPct: 0.08, dropPct: 0.25 },             bonusFloors: 2 },
+  // ── fortune & feasts ──
+  { id: 'buttercorn',emoji: '🧈', name: 'Butter Corn Ramen', ing: { corn: 2, egg: 1 },                           bonus: { goldPct: 0.3, xpPct: 0.25 },                 bonusFloors: 2 },
+  { id: 'harvest',   emoji: '🍁', name: 'Harvest Ramen',     ing: { mushroom: 1, corn: 1, scallion: 1 },         bonus: { goldPct: 0.2, regen: 4, dropPct: 0.15 },     bonusFloors: 2 },
+  { id: 'shogun',    emoji: '🎌', name: 'Shogun Ramen',      ing: { pork: 1, egg: 1, mushroom: 1, chili: 1 },    bonus: { dmgPct: 0.1, thorns: 10, critPct: 0.04 },    bonusFloors: 3 },
+  { id: 'emperor',   emoji: '🏯', name: 'Emperor Ramen',     ing: { pork: 1, egg: 1, mushroom: 1, fishcake: 1, corn: 1 }, bonus: { dmgPct: 0.06, maxHpPct: 0.06, lifesteal: 0.06, xpPct: 0.15 }, bonusFloors: 3 },
 ];
 
 // Friendly labels for every buff effect a topping or bowl can grant.
@@ -2933,6 +2973,12 @@ const FOOD_FX_LABELS = {
   regen:    v => `+${Math.round(v)} HP Regen`,
   goldPct:  v => `+${Math.round(v * 100)}% Gold Find`,
   magicPct: v => `+${Math.round(v * 100)}% Magic Find`,
+  // special secret-recipe effects
+  lifesteal:v => `${Math.round(v * 100)}% Lifesteal`,
+  thorns:   v => `Reflect ${Math.round(v)} dmg`,
+  xpPct:    v => `+${Math.round(v * 100)}% XP`,
+  dropPct:  v => `+${Math.round(v * 100)}% Extra Loot`,
+  revive:   v => `Cheat death (once)`,
 };
 function fxDesc(fx) {
   return Object.entries(fx || {})
@@ -6174,19 +6220,25 @@ function renderCookingHTML() {
     ).join('');
   }
 
-  // Secret recipe book.
+  // Secret recipe book — discovered recipes shown in full; the rest collapsed into
+  // a single teaser so the list stays short however many recipes exist.
   const found = (player.discoveredRecipes || []).length;
   html += `<div class="cook-sec">📖 Secret Recipes (${found}/${RECIPES.length})</div>`;
-  html += RECIPES.map(r => {
-    if (!isDiscovered(r.id)) {
-      const n = Object.values(r.ing).reduce((a, c) => a + c, 0);
-      return `<div class="recipe-row locked"><span class="food-emoji">❓</span><div class="food-info"><div class="food-name">Unknown Ramen</div><div class="food-fx">Cook the right ${n}-topping combo to discover it…</div></div></div>`;
-    }
-    const need = Object.entries(r.ing).map(([k, c]) =>
-      `<span class="need ${ingCount(k) >= c ? 'ok' : 'no'}">${INGREDIENTS[k].emoji}${c}</span>`).join(' ');
-    return `<div class="recipe-row"><span class="food-emoji">${r.emoji}</span>
-      <div class="food-info"><div class="food-name">${r.name}</div><div class="food-fx">bonus: ${fxDesc(r.bonus)} · +${r.bonusFloors} floors</div><div class="recipe-need">${need}</div></div></div>`;
-  }).join('');
+  const discoveredRecipes = RECIPES.filter(r => isDiscovered(r.id));
+  if (!discoveredRecipes.length) {
+    html += `<div class="cook-empty">None discovered yet. Cook secret topping combos to unlock named ramen with powerful special effects — lifesteal, damage reflect, bonus XP, extra loot, even cheating death.</div>`;
+  } else {
+    html += discoveredRecipes.map(r => {
+      const need = Object.entries(r.ing).map(([k, c]) =>
+        `<span class="need ${ingCount(k) >= c ? 'ok' : 'no'}">${INGREDIENTS[k].emoji}${c}</span>`).join(' ');
+      return `<div class="recipe-row"><span class="food-emoji">${r.emoji}</span>
+        <div class="food-info"><div class="food-name">${r.name}</div><div class="food-fx">bonus: ${fxDesc(r.bonus)} · +${r.bonusFloors} floors</div><div class="recipe-need">${need}</div></div></div>`;
+    }).join('');
+  }
+  const remaining = RECIPES.length - found;
+  if (remaining > 0) {
+    html += `<div class="recipe-row locked"><span class="food-emoji">❓</span><div class="food-info"><div class="food-name">${remaining} secret recipe${remaining === 1 ? '' : 's'} left to discover</div><div class="food-fx">Experiment with different topping combos to find them…</div></div></div>`;
+  }
 
   return html;
 }
@@ -9396,7 +9448,7 @@ function absorbWithShield(dmg) {
 
 // Thorns (gear): reflect a flat amount back at a melee attacker after it hits you.
 function thornsReflect(e) {
-  const thorns = totalStat('THORNS') + Math.round(buffMag('thorns')); // gear + Iron Wall buff
+  const thorns = totalStat('THORNS') + Math.round(buffMag('thorns')) + Math.round(foodFx('thorns')); // gear + Iron Wall buff + ramen
   if (thorns > 0 && e && !e.dead) {
     spawnFloatingText(e.x, e.y, `${thorns}`, '#ffcc66');
     dealDamage(e, thorns, false);
@@ -9408,7 +9460,7 @@ function thornsReflect(e) {
 function lifestealHeal(amount) {
   if (amount <= 0) return;
   // Life leech: lifesteal passives + gear Life Leech % (+ any lifesteal buff).
-  const ls = skillBonus('lifesteal') + buffMag('lifestealUp') + totalStat('LEECH') / 100;
+  const ls = skillBonus('lifesteal') + buffMag('lifestealUp') + totalStat('LEECH') / 100 + foodFx('lifesteal'); // + Vampire/Tonkotsu ramen
   if (ls > 0 && player.hp < player.maxHp) {
     const got = Math.min(Math.max(1, Math.round(amount * ls)), player.maxHp - player.hp);
     if (got > 0) { player.hp += got; spawnFloatingText(player.x, player.y, `+${got}`, '#ff6688'); }
@@ -9523,7 +9575,7 @@ function onEnemyDefeated(e) {
   const label = enemyLabel(e);
   const xpMult = e.isBoss ? 5 : (e.isElite ? 2 : 1);
   const goldMult = e.isBoss ? 3 : (e.isElite ? 2 : 1);
-  const xp = Math.round(12 * dungeonLevel * xpMult * pfx('xp', 1) * (1 + (totalStat('XPGAIN') + skillBonus('xpGain')) / 100));
+  const xp = Math.round(12 * dungeonLevel * xpMult * pfx('xp', 1) * (1 + (totalStat('XPGAIN') + skillBonus('xpGain')) / 100 + foodFx('xpPct')));
   player.xp += xp;
   const gold = Math.round((rnd(2, 8) + dungeonLevel * 3) * goldMult * (floorMod.goldMult || 1) * pfx('gold', 1) * (1 + (totalStat('GOLDFIND') + skillBonus('goldFind')) / 100 + foodFx('goldPct')));
   player.gold += gold;
@@ -9545,7 +9597,7 @@ function onEnemyDefeated(e) {
   updateBars();
   // The floor modifier, an active Fortune buff, gear Magic Find, and any pact all
   // sweeten every drop roll.
-  const lootMult = (floorMod.lootMult || 1) * (buffs.fortune ? 1.5 : 1) * pfx('loot', 1) * (1 + (totalStat('MAGICFIND') + skillBonus('magicFind')) / 100 + foodFx('magicPct'));
+  const lootMult = (floorMod.lootMult || 1) * (buffs.fortune ? 1.5 : 1) * pfx('loot', 1) * (1 + (totalStat('MAGICFIND') + skillBonus('magicFind')) / 100 + foodFx('magicPct')) * (1 + foodFx('dropPct'));
   // Drop a chest — bosses and elites always drop, with richer loot. The luck
   // value is how many rarity rolls the chest makes (more rolls = better odds).
   // Enemy drops land straight in your pack — no need to walk over and open them.
@@ -10533,6 +10585,22 @@ function footDist(e) {
 // gold as the price of being patched up. You keep your level, gear, and floor
 // progress: the Dungeon Gate drops you back in on the floor where you fell.
 function handleDeath() {
+  // Phoenix / Everything ramen: a `revive` bowl lets you cheat death ONCE. The
+  // buff is burned, every ailment is cleansed, and you rise at half health/mana
+  // right where you stand — no town trip, no penalties.
+  if (player.foodBuff && player.foodBuff.fx && player.foodBuff.fx.revive) {
+    const fb = player.foodBuff;
+    player.foodBuff = null;
+    statusEffects = statusEffects.filter(s => s.target !== 'player');
+    recomputeMaxStats();
+    player.hp = Math.max(1, Math.round(player.maxHp * 0.5));
+    player.mp = Math.max(player.mp, Math.round(player.maxMp * 0.35));
+    sfx('levelup'); screenFlash('#ffd24b');
+    spawnFloatingText(player.x, player.y, 'REVIVED!', '#ffd24b');
+    log(`${fb.emoji} ${fb.name} blazes to life — you cheat death and rise from the ashes!`, 'important');
+    updateBars(); renderPanel(); saveGame(); draw();
+    return;
+  }
   // Death stings now: lose HALF your gold, all progress toward your next level,
   // get knocked back a floor, and revive only half-healed.
   const lostGold = Math.floor(player.gold / 2);
