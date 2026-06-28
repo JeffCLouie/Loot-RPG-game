@@ -413,12 +413,12 @@
   }
   .tab-btn {
     flex: 1;
-    padding: 5px 0;
+    padding: 9px 0;
     background: none;
     border: none;
     color: #666;
     font-family: 'Courier New', monospace;
-    font-size: 10px;
+    font-size: 13px;
     cursor: pointer;
     letter-spacing: 1px;
     border-bottom: 2px solid transparent;
@@ -9581,15 +9581,26 @@ function draw() {
   });
 
   // Grave marker — your dropped satchel, waiting to be reclaimed. Drawn with the
-  // DawnLike grave tile and a soft gold halo so it reads as "loot to grab".
+  // DawnLike grave tile plus a bright pulsing gold halo and an expanding ring so
+  // it visibly glows and the player knows to walk over and grab it.
   if (graveMarker) {
     const gpx = offX + graveMarker.x * tw, gpy = offY + graveMarker.y * th;
-    const gsp = 0.5 + 0.5 * Math.sin(Date.now() / 300);
+    const cx = gpx + tw / 2, cy = gpy + th / 2 + th * 0.02;
+    const t = Date.now() / 300;
+    const gsp = 0.5 + 0.5 * Math.sin(t);
     ctx.save();
-    ctx.shadowColor = `rgba(255,210,80,${0.5 + 0.35 * gsp})`;
-    ctx.shadowBlur = tw * 0.32;
-    if (!(spriteReady && drawSpriteC('feat_grave', gpx + tw / 2, gpy + th / 2 + th * 0.02, Math.round(tw * 0.8))))
-      drawEmoji('🪦', gpx + tw / 2, gpy + th / 2 + th * 0.04, Math.round(tw * 0.72));
+    // Expanding "come grab me" ring that fades as it grows.
+    const ringT = (Date.now() % 1200) / 1200;
+    ctx.strokeStyle = `rgba(255,215,90,${0.55 * (1 - ringT)})`;
+    ctx.lineWidth = Math.max(1.5, tw * 0.06);
+    ctx.beginPath();
+    ctx.arc(cx, cy, tw * (0.3 + 0.32 * ringT), 0, Math.PI * 2);
+    ctx.stroke();
+    // Bright pulsing glow behind the grave sprite.
+    ctx.shadowColor = `rgba(255,220,110,${0.7 + 0.3 * gsp})`;
+    ctx.shadowBlur = tw * (0.45 + 0.2 * gsp);
+    if (!(spriteReady && drawSpriteC('feat_grave', cx, cy, Math.round(tw * 0.8))))
+      drawEmoji('🪦', cx, gpy + th / 2 + th * 0.04, Math.round(tw * 0.72));
     ctx.restore();
   }
 
