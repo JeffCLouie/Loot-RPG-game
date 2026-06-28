@@ -227,6 +227,16 @@
   .settings-item .action-icon { font-size: 18px; }
   .settings-item .action-label { font-size: 12px; }
 
+  /* ── VERSION HISTORY POPUP ── */
+  #version-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 400; display: none; align-items: center; justify-content: center; padding: 16px; }
+  #version-overlay.open { display: flex; }
+  #version-card { background: linear-gradient(180deg, #241c38, #181226); border: 2px solid var(--frame); border-radius: 10px; max-width: 360px; width: 100%; max-height: 80vh; overflow-y: auto; padding: 14px; box-shadow: 0 6px 24px rgba(0,0,0,0.6); }
+  .version-head { display: flex; justify-content: space-between; align-items: center; color: var(--gold); font-weight: bold; letter-spacing: 1px; margin-bottom: 10px; }
+  .version-x { background: none; border: none; color: var(--text); font-size: 16px; cursor: pointer; line-height: 1; }
+  .version-entry { margin-bottom: 11px; }
+  .version-ver { color: var(--gold); font-size: 12px; font-weight: bold; margin-bottom: 2px; }
+  .version-note { font-size: 11px; color: var(--text); opacity: 0.85; line-height: 1.45; }
+
   /* Movement-pad controls tucked into the settings popup. The floating d-pad
      only exists on touch devices, so these controls are hidden unless the
      pointer is coarse (i.e. on mobile). */
@@ -1580,6 +1590,9 @@
         <button class="settings-item newgame-action" onclick="confirmNewGame()">
           <span class="action-icon">↻</span><span class="action-label">NEW</span>
         </button>
+        <button class="settings-item" onclick="showVersionHistory()">
+          <span class="action-icon">📜</span><span class="action-label">VERSION</span>
+        </button>
         <!-- Movement-pad position & opacity. Hidden on desktop (no touch d-pad);
              populated by renderDpadControls() when the menu opens. -->
         <div id="dpad-settings">
@@ -1589,6 +1602,14 @@
           <div class="settings-dpad-row" id="dpad-op-row"></div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- Version history popup, opened from the ⚙️ settings menu. -->
+  <div id="version-overlay" onclick="if(event.target===this)closeVersion()">
+    <div id="version-card">
+      <div class="version-head">📜 Version History <button class="version-x" onclick="closeVersion()">✕</button></div>
+      <div id="version-body"></div>
     </div>
   </div>
 
@@ -2605,11 +2626,11 @@ const ENEMY_POOL = [
 // Bosses guard every 5th floor. Each has a distinct fighting style: a movement
 // `behavior` (see BEHAVIORS) and a signature `ability` that fires during combat.
 const BOSSES = [
-  { type: '👑', name: 'Rat King',      floor: 5,  behavior: 'chaser', ability: 'summon',   blurb: 'calls vermin to swarm you' },
-  { type: '🔥', name: 'Inferno Demon', floor: 10, behavior: 'caster', ability: 'firebolt', blurb: 'hurls fire from across the room' },
-  { type: '🐲', name: 'Elder Dragon',  floor: 15, behavior: 'brute',  ability: 'enrage',   blurb: 'flies into a rage as it bleeds' },
-  { type: '💀', name: 'Death Knight',  floor: 20, behavior: 'chaser', ability: 'lifesteal',blurb: 'drains your life to heal itself' },
-  { type: '👁', name: 'The All-Seer',  floor: 25, behavior: 'caster', ability: 'curse',    blurb: 'hexes you from afar' },
+  { type: '👑', name: 'Rat King',      floor: 5,  behavior: 'chaser', ability: 'summon',   blurb: 'calls vermin to swarm you', size: 2 },
+  { type: '🔥', name: 'Inferno Demon', floor: 10, behavior: 'caster', ability: 'firebolt', blurb: 'hurls fire from across the room', size: 2 },
+  { type: '🐲', name: 'Elder Dragon',  floor: 15, behavior: 'brute',  ability: 'enrage',   blurb: 'flies into a rage as it bleeds', size: 3 },
+  { type: '💀', name: 'Death Knight',  floor: 20, behavior: 'chaser', ability: 'lifesteal',blurb: 'drains your life to heal itself', size: 2 },
+  { type: '👁', name: 'The All-Seer',  floor: 25, behavior: 'caster', ability: 'curse',    blurb: 'hexes you from afar', size: 3 },
 ];
 
 // ── ENEMY AI BEHAVIOURS ──
@@ -3548,6 +3569,25 @@ document.addEventListener('click', (e) => {
   if (menu.contains(e.target) || (e.target.closest && e.target.closest('.settings-action'))) return;
   menu.classList.remove('open');
 });
+
+// ── VERSION HISTORY ── newest first; short plain-English notes.
+const CHANGELOG = [
+  { v: 'Bosses & Beasts', notes: ['Some bosses are now huge 2–3 tile behemoths that cast and have reach.', 'Treasure Goblins fumble their escape far more often, so they\'re catchable.'] },
+  { v: 'Living Water & Lava', notes: ['Liquids merge into cohesive pools with organic edges, shores (sand/grass or molten crust) and animation.'] },
+  { v: 'World Reskin', notes: ['Golden Sun / FFT-style palettes, natural rock & tree walls, and many seasonal & exotic floor themes.'] },
+  { v: 'Loot Clarity', notes: ['Gear shows the real stat changes vs your equipped item instead of a single coloured %.'] },
+  { v: 'Quests & Events', notes: ['13 mini-quest types (rescue, escort, jailbreak, hunt, fetch and more) plus 25 light on-descent vignettes.'] },
+  { v: 'Quality of Life', notes: ['HUD shows floor, level/XP and foes left; Q drinks a potion; movement-pad position & opacity options.'] },
+];
+function showVersionHistory() {
+  const el = document.getElementById('version-body');
+  if (el) el.innerHTML = CHANGELOG.map(c =>
+    `<div class="version-entry"><div class="version-ver">${c.v}</div>${c.notes.map(n => `<div class="version-note">• ${n}</div>`).join('')}</div>`).join('');
+  document.getElementById('version-overlay').classList.add('open');
+  const menu = document.getElementById('settings-menu');
+  if (menu) menu.classList.remove('open');
+}
+function closeVersion() { document.getElementById('version-overlay').classList.remove('open'); }
 
 // ══════════════════════════════════════════
 // CANVAS SETUP
@@ -5930,6 +5970,22 @@ function spawnEnemies() {
       if (isBossFloor && i === 0) {
         const bossIdx = Math.min(Math.floor(dungeonLevel / 5) - 1, BOSSES.length - 1);
         const boss = BOSSES[bossIdx];
+        // Big bosses need an open N×N block; fall back to a single tile if the
+        // floor is too cramped to fit one.
+        let bsize = boss.size || 1;
+        if (bsize > 1) {
+          let found = false;
+          for (let tr = 0; tr < 200 && !found; tr++) {
+            const cx = rnd(1, MAP_W - bsize - 1), cy = rnd(1, MAP_H - bsize - 1);
+            let ok = true;
+            for (let dx = 0; dx < bsize && ok; dx++) for (let dy = 0; dy < bsize && ok; dy++) {
+              const tx = cx + dx, ty = cy + dy;
+              if (mapData[ty][tx] !== 0 || getEnemyAt(tx, ty) || (tx === player.x && ty === player.y)) ok = false;
+            }
+            if (ok) { ex = cx; ey = cy; found = true; }
+          }
+          if (!found) bsize = 1;
+        }
         // A boss is a couple of levels above its floor, and scales primarily
         // with depth (with a gentle nudge from the hero's level so it keeps
         // pace as your power climbs). Its level also sets the loot it drops.
@@ -5943,6 +5999,7 @@ function spawnEnemies() {
           type: boss.type, name: boss.name,
           level: bossLevel,
           dmg: bossDmg,
+          size: bsize,
           dead: false, isBoss: true,
           statusChance: boss.ability === 'curse' ? 0.45 : 0.25,
           behavior: boss.behavior,
@@ -7148,8 +7205,11 @@ function draw() {
 
   // Enemies
   enemies.filter(e => !e.dead).forEach(e => {
+    const S = e.size || 1;                 // multi-tile footprint span
     const px = offX + e.x * tw, py = offY + e.y * th;
-    drawActorShadow(px + tw/2, py + th*0.82, tw);
+    const cw = S * tw, ch = S * th;        // full footprint in pixels
+    const cx = px + cw/2;                   // footprint centre
+    drawActorShadow(cx, py + ch*0.82, cw);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     // Status tint: green = poisoned, gold = stunned.
@@ -7164,11 +7224,11 @@ function draw() {
     // so even tiny critters stand out from the environment.
     ctx.shadowColor = e.isBoss ? 'rgba(255,70,70,0.95)' : (e.isElite ? 'rgba(255,215,90,0.95)' : 'rgba(0,0,0,0.95)');
     ctx.shadowBlur = Math.max(2, tw * ((e.isBoss || e.isElite) ? 0.26 : 0.18));
-    // Pixel-art creature sprite (a bit bigger now), falling back to the glyph.
-    const _esz = Math.round(tw * (e.isBoss ? 1.05 : (e.isElite ? 0.96 : 0.9)));
+    // Pixel-art creature sprite (scaled to the footprint), falling back to glyph.
+    const _esz = Math.round(cw * (e.isBoss ? 1.0 : (e.isElite ? 0.96 : 0.9)));
     const _espr = enemySprite(e);
-    if (!(spriteReady && _espr && drawSpriteC(_espr, px + tw/2, py + th/2 + th*0.02, _esz))) {
-      drawEmoji(e.type, px + tw/2, py + th/2 + th*0.04, Math.round(tw * (e.isBoss ? 1.0 : (e.isElite ? 0.94 : 0.9))));
+    if (!(spriteReady && _espr && drawSpriteC(_espr, cx, py + ch/2 + th*0.02, _esz))) {
+      drawEmoji(e.type, cx, py + ch/2 + th*0.04, Math.round(cw * (e.isBoss ? 0.95 : (e.isElite ? 0.94 : 0.9))));
     }
     ctx.restore();
 
@@ -7179,13 +7239,13 @@ function draw() {
       const tagSprite = e.questTarget ? 'ic_target' : (e.isGoblin ? 'ic_money' : AFFIX_SPRITE[e.affixIcon]);
       ctx.font = `${Math.round(tw * 0.34)}px serif`;
       ctx.textAlign = 'center';
-      if (!(tagSprite && spriteReady && drawSpriteC(tagSprite, px + tw/2, py - th*0.02, Math.round(tw * 0.4))))
-        drawEmoji(tagEmoji, px + tw/2, py - th*0.02, Math.round(tw * 0.34));
+      if (!(tagSprite && spriteReady && drawSpriteC(tagSprite, cx, py - th*0.02, Math.round(tw * 0.4))))
+        drawEmoji(tagEmoji, cx, py - th*0.02, Math.round(tw * 0.34));
     }
 
-    // HP bar
+    // HP bar (spans the whole footprint)
     if (e.hp < e.maxHp) {
-      const bw = tw - 2, bh = Math.max(2, th * 0.14);
+      const bw = cw - 2, bh = Math.max(2, th * 0.14);
       ctx.fillStyle = '#000';
       ctx.fillRect(px, py, bw+2, bh+1);
       ctx.fillStyle = '#3a0000';
@@ -8626,6 +8686,17 @@ function enemyMove(e) {
   const beh = BEHAVIORS[e.behavior] || BEHAVIORS.chaser;
   const dist = Math.abs(e.x - player.x) + Math.abs(e.y - player.y);
 
+  // A multi-tile boss is a hulking fixture: it doesn't path around, but it casts
+  // / summons from range, crushes anything next to its footprint, and has reach
+  // (a breath/lunge) so it can't be trivially kited from a few tiles away.
+  if ((e.size || 1) > 1) {
+    const fd = footDist(e);
+    if (e.isBoss && bossSpecial(e, fd, beh)) return;
+    if (fd <= 1) { enemyAttackPlayer(e); return; }
+    if (fd <= (beh.range || 4) && hasLineToPlayer(e)) enemyRangedAttack(e);
+    return;
+  }
+
   // Bosses weigh their signature ability first; some abilities end the turn.
   if (e.isBoss && bossSpecial(e, dist, beh)) return;
 
@@ -8638,16 +8709,22 @@ function enemyMove(e) {
     e.roused = true;
   }
 
-  // Ranged casters strike from afar and keep their spacing.
+  // Ranged casters strike from afar but no longer kite forever.
   if (beh.ranged) {
-    if (dist <= 1) { stepAwayFromPlayer(e); return; }
+    // Cornered → stand and fight back, so closing the gap actually pays off.
+    if (dist <= 1) { enemyAttackPlayer(e); return; }
     if (dist <= beh.range && hasLineToPlayer(e) && Math.random() < (beh.castChance || 0.7)) {
       enemyRangedAttack(e);
       return;
     }
-    if (dist < beh.keepAway) { stepAwayFromPlayer(e); return; }
-    const step = enemyPathStep(e, player.x, player.y);
-    if (step) enemyStep(e, step[0], step[1]);
+    // Only occasionally reposition for spacing — most turns they hold ground, so
+    // you aren't chasing them across the whole floor.
+    if (dist < beh.keepAway && Math.random() < 0.35) { stepAwayFromPlayer(e); return; }
+    // Close in only when out of casting range; otherwise hold position.
+    if (dist > beh.range) {
+      const step = enemyPathStep(e, player.x, player.y);
+      if (step) enemyStep(e, step[0], step[1]);
+    }
     return;
   }
 
@@ -8691,8 +8768,19 @@ function stepAwayFromPlayer(e) {
   for (const o of away) if (enemyStep(e, o.mx, o.my)) return;
 }
 
-// Goblins sprint directly away and never attack.
+// Goblins flee but are clumsy cowards — they frequently fumble their escape
+// (trip and freeze, or bolt the wrong way), so catching one isn't maddening.
 function goblinFlee(e) {
+  if (Math.random() < 0.5) {
+    if (Math.random() < 0.55) return;          // trips over its loot and stays put
+    // panics in a random direction (may even scurry toward you), never attacks
+    const dirs = ENEMY_DIRS.slice().sort(() => Math.random() - 0.5);
+    for (const [mx, my] of dirs) {
+      if (e.x + mx === player.x && e.y + my === player.y) continue;
+      if (enemyStep(e, mx, my)) return;
+    }
+    return;
+  }
   const away = ENEMY_DIRS
     .map(([mx, my]) => ({ mx, my, d: Math.abs(e.x + mx - player.x) + Math.abs(e.y + my - player.y) }))
     .filter(o => o.d > 0)
@@ -8817,7 +8905,18 @@ function summonMinions(boss, n) {
   return placed;
 }
 
-function getEnemyAt(x,y) { return enemies.find(e=>!e.dead&&e.x===x&&e.y===y)||null; }
+// Footprint-aware: a multi-tile boss occupies an N×N block from (e.x,e.y), so
+// any cell inside that block counts as "the boss" for collision and attacks.
+function getEnemyAt(x,y) {
+  return enemies.find(e => { if (e.dead) return false; const s = e.size || 1; return x >= e.x && x < e.x + s && y >= e.y && y < e.y + s; }) || null;
+}
+// Smallest Manhattan distance from the player to any tile of an enemy's footprint.
+function footDist(e) {
+  const s = e.size || 1; let best = Infinity;
+  for (let dx = 0; dx < s; dx++) for (let dy = 0; dy < s; dy++)
+    best = Math.min(best, Math.abs(e.x + dx - player.x) + Math.abs(e.y + dy - player.y));
+  return best;
+}
 
 // Death now drags you back to the safe TOWN, where the healer revives you at
 // full HP/MP with every ailment cleansed — but it still costs you half your
