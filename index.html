@@ -4013,7 +4013,14 @@ function buySkill(id) {
   sfx('levelup');
   const newRank = player.skills[id];
   const summary = skillTotalSummary(node, newRank);
-  log(`✨ Learned ${node.icon} ${node.name}${(node.max || 1) > 1 ? ` (rank ${newRank}/${node.max})` : ''}${summary ? ` — now ${summary}.` : '.'}`, 'important');
+  // Surface the concrete max HP/MP a +%-HP/MP passive just granted — a small %
+  // on a big pool (and a still-full bar) otherwise reads as "nothing happened".
+  const gains = [];
+  const hpGain = player.maxHp - beforeHp, mpGain = player.maxMp - beforeMp;
+  if (hpGain > 0) gains.push(`+${hpGain} max HP`);
+  if (mpGain > 0) gains.push(`+${mpGain} max MP`);
+  const gainStr = gains.length ? ` (${gains.join(', ')})` : '';
+  log(`✨ Learned ${node.icon} ${node.name}${(node.max || 1) > 1 ? ` (rank ${newRank}/${node.max})` : ''}${summary ? ` — now ${summary}.` : '.'}${gainStr}`, 'important');
   updateBars(); renderPanel(); renderSkillBar(); saveGame();
 }
 
