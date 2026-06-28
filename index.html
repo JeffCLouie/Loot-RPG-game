@@ -10898,22 +10898,39 @@ document.querySelectorAll('.dpad-btn').forEach(btn => {
   btn.addEventListener('click', handler);
 });
 
+// Esc closes whatever menu/overlay is open (topmost first). Returns true if it
+// closed something.
+function handleEscape() {
+  const close = (id, fn) => { const el = document.getElementById(id); if (el && el.classList.contains('open')) { fn(); return true; } return false; };
+  if (close('version-overlay', closeVersion)) return true;
+  if (close('death-overlay', closeDeath)) return true;
+  if (close('settings-menu', () => document.getElementById('settings-menu').classList.remove('open'))) return true;
+  if (close('shop-overlay', shopClose)) return true;
+  if (close('mystic-overlay', mysticClose)) return true;
+  if (close('town-overlay', leaveTown)) return true;
+  if (panelOpen && !isWebLayout()) { togglePanel(); return true; }
+  return false;
+}
+
 document.addEventListener('keydown', e => {
-  // Block gameplay keys while the mandatory class-pick overlay is open.
+  // Esc backs out of menus even during the mandatory class pick is NOT allowed,
+  // so handle Esc only after that guard.
   const cov = document.getElementById('class-overlay');
   if (cov && cov.classList.contains('open')) return;
+  if (e.key === 'Escape') { if (handleEscape()) e.preventDefault(); return; }
   if (e.key==='ArrowUp'||e.key==='w')    move(0,-1);
   if (e.key==='ArrowDown'||e.key==='s')  move(0,1);
   if (e.key==='ArrowLeft'||e.key==='a')  move(-1,0);
   if (e.key==='ArrowRight'||e.key==='d') move(1,0);
-  if (e.key===' '||e.key==='f')          pickup();
-  if (e.key==='q'||e.key==='Q')          useHealthPotion();
-  if (e.key==='e'||e.key==='E')          useManaPotion();
+  if (e.key===' '||e.key==='f'||e.key==='e'||e.key==='E') pickup();   // use / pick up
+  if (e.key==='1')                       useHealthPotion();
+  if (e.key==='2')                       useManaPotion();
+  if (e.key==='q'||e.key==='Q')          useHealthPotion();           // legacy alias
   if (e.key==='r'||e.key==='R')          castSkill();
-  // Number keys 1–9 cast learned tree/path actives in skill-bar order.
-  if (e.key>='1' && e.key<='9') {
+  // Number keys 3–9 cast learned tree/path actives (1 & 2 are potions).
+  if (e.key>='3' && e.key<='9') {
     const extras = activeSkillList().filter(s => !s.baseline);
-    const sk = extras[parseInt(e.key, 10) - 1];
+    const sk = extras[parseInt(e.key, 10) - 3];
     if (sk) castSkillById(sk.id);
   }
   if (e.key==='t'||e.key==='T')          enterTown();
