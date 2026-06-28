@@ -1613,7 +1613,7 @@
         </button>
         <!-- Settings: collapses the Sound + New Game controls into one ⚙️ button
              that pops open the menu below. -->
-        <button class="action-btn settings-action" onclick="toggleSettingsMenu(event)" data-tip="<div class='ht-name'>⚙️ Settings</div><div class='ht-line'>Sound, save slots, and starting a new game.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
+        <button class="action-btn settings-action" onclick="toggleSettingsMenu(event)" data-tip="<div class='ht-name'>⚙️ Settings</div><div class='ht-line'>Sound, save slots, leaderboards, and starting a new game.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
           <span class="action-icon">⚙️</span><span class="action-label">SETTINGS</span>
         </button>
       </div>
@@ -1628,6 +1628,9 @@
         </button>
         <button class="settings-item newgame-action" onclick="confirmNewGame()">
           <span class="action-icon">↻</span><span class="action-label">NEW</span>
+        </button>
+        <button class="settings-item" onclick="showLeaderboard()">
+          <span class="action-icon">🏆</span><span class="action-label">BOARDS</span>
         </button>
         <button class="settings-item" onclick="showVersionHistory()">
           <span class="action-icon">📜</span><span class="action-label">VERSION</span>
@@ -5541,12 +5544,7 @@ function openTownHub() {
        <span class="tm-icon">🌀</span>
        <span class="tm-text"><span class="tm-name">Dungeon Gate</span><span class="tm-desc">Descend to floor ${gateFloor}, or pick another</span></span>
      </button>`;
-  const boardTile =
-    `<button class="town-menu-btn" onclick="showLeaderboard()">
-       <span class="tm-icon">🏆</span>
-       <span class="tm-text"><span class="tm-name">Leaderboards</span><span class="tm-desc">The deepest, strongest &amp; richest heroes</span></span>
-     </button>`;
-  setTownContent(`<div class="town-blurb">A safe haven away from the dungeon. Pick a service, then take the Dungeon Gate when you're ready to delve again.</div><div class="town-menu">${tiles}${gateTile}${boardTile}</div>`);
+  setTownContent(`<div class="town-blurb">A safe haven away from the dungeon. Pick a service, then take the Dungeon Gate when you're ready to delve again.</div><div class="town-menu">${tiles}${gateTile}</div>`);
 }
 // Return from a service panel to the hub menu (also used by the backdrop tap).
 function townBack() {
@@ -11383,6 +11381,9 @@ async function lbFetch(tab) {
 function showLeaderboard() {
   const ov = document.getElementById('lb-overlay');
   if (!ov) return;
+  // Opened from the ⚙️ settings popup — tuck that menu away behind the board.
+  const settings = document.getElementById('settings-menu');
+  if (settings) settings.classList.remove('open');
   ov.classList.add('open');
   setLbTab(lbTab);
 }
