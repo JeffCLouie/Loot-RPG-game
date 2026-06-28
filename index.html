@@ -5003,8 +5003,10 @@ function scheduleMusic() {
   if (!musicSectionEndTime) {
     musicSectionEndTime = musicNext + SECTION_MIN + Math.random() * (SECTION_MAX - SECTION_MIN);
   }
-  // Schedule every step that falls inside the look-ahead window.
-  while (musicNext < ctx.currentTime + 0.3) {
+  // Schedule every step that falls inside the look-ahead window. The guard stops
+  // a zero/NaN step duration (which would never advance musicNext) from spinning.
+  let _mGuard = 0;
+  while (musicNext < ctx.currentTime + 0.3 && _mGuard++ < 512) {
     const when = musicNext;
     const beat = musicStep % STEPS_PER_BAR;
 
@@ -5489,8 +5491,10 @@ function carveCorridor(x1, y1, x2, y2) {
   let x = x1, y = y1;
   mapData[y][x] = mapData[y][x] === 1 ? 0 : mapData[y][x];
   const horizFirst = Math.random() < 0.5;
-  const goX = () => { while (x !== x2) { x += Math.sign(x2 - x); if (mapData[y][x] === 1) mapData[y][x] = 0; } };
-  const goY = () => { while (y !== y2) { y += Math.sign(y2 - y); if (mapData[y][x] === 1) mapData[y][x] = 0; } };
+  // Guard each step loop: a non-finite/equal coordinate makes Math.sign return 0
+  // or NaN, which would never close the gap — break out instead of spinning.
+  const goX = () => { let g = 0; while (x !== x2 && g++ < 4096) { const s = Math.sign(x2 - x); if (!s) break; x += s; if (mapData[y][x] === 1) mapData[y][x] = 0; } };
+  const goY = () => { let g = 0; while (y !== y2 && g++ < 4096) { const s = Math.sign(y2 - y); if (!s) break; y += s; if (mapData[y][x] === 1) mapData[y][x] = 0; } };
   if (horizFirst) { goX(); goY(); } else { goY(); goX(); }
 }
 
@@ -5503,7 +5507,8 @@ function isFloorPassable(t) {
 function reachableFrom(sx, sy) {
   const seen = new Set([sy + ',' + sx]);
   const stack = [[sx, sy]];
-  while (stack.length) {
+  let guard = 0;
+  while (stack.length && guard++ < MAP_W * MAP_H * 4) {
     const [x, y] = stack.pop();
     for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
       const nx = x + dx, ny = y + dy;
@@ -5522,13 +5527,11 @@ function tunnel(x1, y1, x2, y2) {
   let x = x1, y = y1;
   const open = () => { const t = mapData[y][x]; if (t === 1 || t === 6) mapData[y][x] = 0; };
   open();
-  if (Math.random() < 0.5) {
-    while (x !== x2) { x += Math.sign(x2 - x); open(); }
-    while (y !== y2) { y += Math.sign(y2 - y); open(); }
-  } else {
-    while (y !== y2) { y += Math.sign(y2 - y); open(); }
-    while (x !== x2) { x += Math.sign(x2 - x); open(); }
-  }
+  // Each leg is iteration-capped and bails on a zero/NaN step so a bad
+  // coordinate can never wedge the loop (see carveCorridor for the same guard).
+  const legX = () => { let g = 0; while (x !== x2 && g++ < 4096) { const s = Math.sign(x2 - x); if (!s) break; x += s; open(); } };
+  const legY = () => { let g = 0; while (y !== y2 && g++ < 4096) { const s = Math.sign(y2 - y); if (!s) break; y += s; open(); } };
+  if (Math.random() < 0.5) { legX(); legY(); } else { legY(); legX(); }
 }
 
 // Guarantee every carved-out area is reachable from the start. Water pools and
@@ -5591,7 +5594,8 @@ function isWalkThrough(t) {
 function reachableOnFoot(sx, sy) {
   const seen = new Set([sy + ',' + sx]);
   const stack = [[sx, sy]];
-  while (stack.length) {
+  let guard = 0;
+  while (stack.length && guard++ < MAP_W * MAP_H * 4) {
     const [x, y] = stack.pop();
     const isStart = x === sx && y === sy;
     if (!isStart && !isWalkThrough(mapData[y][x])) continue;  // terminal tile: don't pass through
@@ -5679,7 +5683,8 @@ function isChokePoint(x, y) {
   // neighbour isn't reached, this tile is the only thing connecting them.
   const seen = new Set([opens[0][1] + ',' + opens[0][0], y + ',' + x]);
   const stack = [opens[0]];
-  while (stack.length) {
+  let guard = 0;
+  while (stack.length && guard++ < MAP_W * MAP_H * 4) {
     const [cx, cy] = stack.pop();
     if (!isWalkThrough(mapData[cy][cx])) continue;
     for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
@@ -10198,6 +10203,44 @@ function applyRegen() {
   }
 }
 
+// ══════════════════════════════════════════
+// ROBUSTNESS GUARDS — re-entrancy lock & halt switch
+// ══════════════════════════════════════════
+// The game is turn-based and single-threaded: one player action resolves the
+// hero's move, then every foe acts, all synchronously. Nothing should ever be
+// processing a second action while the first is still mid-resolve. These guards
+// make that invariant explicit so an external driver (or a stray double-fire of
+// an input) can't interleave two turns and corrupt shared state.
+//
+//  • __turnBusy  — true while a player-action entry point is resolving. Any
+//                  re-entrant call that arrives mid-turn is dropped, not queued.
+//  • gameHalted  — a kill switch: window.haltAll() flips it on and every guarded
+//                  entry point becomes a no-op, so any loop hammering the game
+//                  from outside stops affecting it at once. window.resumeAll()
+//                  clears it.
+let __turnBusy = false;
+let gameHalted = false;
+window.haltAll = function () {
+  gameHalted = true;
+  if (typeof clearHeldMove === 'function') clearHeldMove();  // drop any held d-pad repeat
+};
+window.resumeAll = function () { gameHalted = false; };
+window.gameBusy = () => __turnBusy;
+
+// Wrap a player-action entry point so it (a) no-ops while halted and (b) drops
+// any call that arrives while another action is still resolving. Only the
+// outermost user-facing entry points are wrapped — the helpers they call in turn
+// (runEnemyTurn, passTurn, tryRangedAttack, generateMap…) stay unwrapped so the
+// single turn they belong to runs to completion uninterrupted.
+function guardAction(fn) {
+  return function () {
+    if (gameHalted || __turnBusy) return undefined;
+    __turnBusy = true;
+    try { return fn.apply(this, arguments); }
+    finally { __turnBusy = false; }
+  };
+}
+
 function move(dx, dy) {
   // Town is a menu, not a walkable place — d-pad does nothing here. Reopen the
   // hub menu in case it was dismissed, so the player is never stuck staring at
@@ -11492,8 +11535,10 @@ function enemyPathStep(e, tx, ty) {
     }
   }
   if (!found) return null;
-  let cur = goal;
-  while (came[cur] !== start) { cur = came[cur]; if (cur < 0) return null; }
+  let cur = goal, hops = 0;
+  // Walk the parent chain back to the step adjacent to start. Bounded by the grid
+  // size; the guard is a backstop against a malformed chain rather than a real path.
+  while (came[cur] !== start) { cur = came[cur]; if (cur < 0 || ++hops > n) return null; }
   const cx = cur % W, cy = (cur - cx) / W;
   return [cx - e.x, cy - e.y];
 }
@@ -12220,8 +12265,8 @@ function openChest(chest) {
 // Open every chest stacked on a tile. A springing mimic halts the rest (you're
 // now in a fight). Returns the number of chests that were opened.
 function pickupChestsAt(x, y) {
-  let opened = 0;
-  while (true) {
+  let opened = 0, guard = 0;
+  while (guard++ < 1000) {
     const idx = groundItems.findIndex(g => g.x === x && g.y === y);
     if (idx === -1) break;
     const chest = groundItems.splice(idx, 1)[0];
@@ -12242,6 +12287,16 @@ function pickup() {
   saveGame();
   draw();
 }
+
+// Install the re-entrancy / halt guard around every player-action entry point.
+// Done here (after all are defined) by reassigning the binding, so both internal
+// callers and inline onclick="…" handlers route through the guarded version.
+move           = guardAction(move);
+pickup         = guardAction(pickup);
+castSkillById  = guardAction(castSkillById);
+enterTown      = guardAction(enterTown);
+enterDungeonAt = guardAction(enterDungeonAt);
+openTownService = guardAction(openTownService);
 
 // XP needed to advance FROM a given level. Quadratic, so leveling slows sharply
 // as you climb: a level is now a rare milestone, not something you trip over
