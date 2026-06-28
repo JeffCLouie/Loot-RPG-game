@@ -6216,6 +6216,14 @@ function spawnEnemies() {
             if (ok) { ex = cx; ey = cy; found = true; }
           }
           if (!found) bsize = 1;
+          // Clear a generous arena around the boss so the hulking thing has room
+          // to lumber around (knock out walls in a margin past its footprint).
+          if (found) {
+            const pad = 3;
+            for (let ay = ey - pad; ay < ey + bsize + pad; ay++)
+              for (let ax = ex - pad; ax < ex + bsize + pad; ax++)
+                if (ax > 0 && ay > 0 && ax < MAP_W - 1 && ay < MAP_H - 1 && mapData[ay][ax] === 1) mapData[ay][ax] = 0;
+          }
         }
         // A boss is a couple of levels above its floor, and scales primarily
         // with depth (with a gentle nudge from the hero's level so it keeps
@@ -8932,14 +8940,19 @@ function enemyMove(e) {
   const beh = BEHAVIORS[e.behavior] || BEHAVIORS.chaser;
   const dist = Math.abs(e.x - player.x) + Math.abs(e.y - player.y);
 
-  // A multi-tile boss is a hulking fixture: it doesn't path around, but it casts
-  // / summons from range, crushes anything next to its footprint, and has reach
-  // (a breath/lunge) so it can't be trivially kited from a few tiles away.
+  // A multi-tile boss lumbers after you through its open arena: it casts/summons
+  // from range, crushes anything next to its footprint, lurches one tile toward
+  // you when it can fit, and has reach (a breath/lunge) when it can't close.
   if ((e.size || 1) > 1) {
     const fd = footDist(e);
     if (e.isBoss && bossSpecial(e, fd, beh)) return;
     if (fd <= 1) { enemyAttackPlayer(e); return; }
-    if (fd <= (beh.range || 4) && hasLineToPlayer(e)) enemyRangedAttack(e);
+    const sx = Math.sign(player.x - e.x), sy = Math.sign(player.y - e.y);
+    const horizFirst = Math.abs(player.x - e.x) >= Math.abs(player.y - e.y);
+    const tries = horizFirst ? [[sx, 0], [0, sy]] : [[0, sy], [sx, 0]];
+    let moved = false;
+    for (const [mx, my] of tries) { if ((mx || my) && enemyStep(e, mx, my)) { moved = true; break; } }
+    if (!moved && fd <= (beh.range || 4) && hasLineToPlayer(e)) enemyRangedAttack(e);
     return;
   }
 
@@ -8990,7 +9003,17 @@ function enemyMove(e) {
 
 // Move an enemy one tile if free (with corner-cut guard). Returns true on move.
 function enemyStep(e, mx, my) {
+  const s = e.size || 1;
   const nx = e.x + mx, ny = e.y + my;
+  if (s > 1) {
+    // The whole N×N footprint must fit and be clear (its own cells don't block).
+    for (let dx = 0; dx < s; dx++) for (let dy = 0; dy < s; dy++) {
+      const cx = nx + dx, cy = ny + dy;
+      if (!enemyTileFree(cx, cy) && getEnemyAt(cx, cy) !== e) return false;
+    }
+    e.x = nx; e.y = ny;
+    return true;
+  }
   if (!enemyTileFree(nx, ny)) return false;
   if (mx !== 0 && my !== 0 && mapData[e.y][e.x + mx] !== 0 && mapData[e.y + my][e.x] !== 0) return false;
   e.x = nx; e.y = ny;
