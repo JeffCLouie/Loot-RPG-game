@@ -2300,16 +2300,20 @@ function drawSpriteC(name, cx, cy, size) {
 // Build an HTML <span> showing a DawnLike atlas tile as a CSS background, for DOM
 // menus (the canvas blitter can't reach the DOM). Returns '' until the atlas has
 // loaded so callers fall back to their emoji.
-function dlIcon(name, px) {
+// Build a DawnLike atlas icon span at an EXACT pixel size (used when the icon
+// should fit a specific surrounding context rather than snap to a whole tile).
+function dlIconAt(name, px) {
   const i = SPRITE_IDX[name];
   if (i === undefined || !spriteReady) return '';
-  // Snap to a whole-number multiple of the 16px tile so the CSS-scaled sprite
-  // stays crisp (a fractional scale warps the pixels just like on the canvas).
-  px = ATLAS_TS * Math.max(1, Math.round((px || 32) / ATLAS_TS));
   const aw = spriteSheet.naturalWidth || 256, ah = spriteSheet.naturalHeight || 144;
   const col = i % ATLAS_COLS, row = (i / ATLAS_COLS) | 0, sc = px / ATLAS_TS;
   return `<span class="dl-ic" style="width:${px}px;height:${px}px;` +
     `background-size:${aw * sc}px ${ah * sc}px;background-position:-${col * px}px -${row * px}px"></span>`;
+}
+function dlIcon(name, px) {
+  // Snap to a whole-number multiple of the 16px tile so the CSS-scaled sprite
+  // stays crisp (a fractional scale warps the pixels just like on the canvas).
+  return dlIconAt(name, ATLAS_TS * Math.max(1, Math.round((px || 32) / ATLAS_TS)));
 }
 // Each game enemy glyph maps to a DawnLike creature sprite. Bosses & the mimic
 // resolve here too. The emoji stays the saved `type`, so old saves keep working
@@ -8053,12 +8057,25 @@ function stripEmoji(s) { return typeof s === 'string' ? s.replace(EMOJI_RE, '').
 // render (logs, panels, HUD, tooltips) emoji-free. The replacement output never
 // contains emoji, so it never re-triggers itself.
 const _SKIP_TAGS = { SCRIPT: 1, STYLE: 1, TEXTAREA: 1, CANVAS: 1, NOSCRIPT: 1 };
+// Size an auto-replaced emoji icon to its surroundings: scale it with the
+// container's own font-size so it fills whatever context it sits in (a skill
+// button, a skill-tree node, a menu row, a HUD chip), never dropping below the
+// 16px that reads well in plain inline text. Reading the *computed* font-size
+// means the icon also tracks responsive sizes set by media queries for free.
+function _ctxIconPx(parent) {
+  let fs = 16;
+  if (parent && parent.nodeType === 1) {
+    try { fs = parseFloat(getComputedStyle(parent).fontSize) || 16; } catch (e) {}
+  }
+  return Math.max(16, Math.round(fs * 1.2));
+}
 function _iconifyTextNode(node) {
   const text = node.nodeValue;
   if (!text) return;
   EMOJI_RE.lastIndex = 0;
   if (!EMOJI_RE.test(text)) return;
   EMOJI_RE.lastIndex = 0;
+  const px = _ctxIconPx(node.parentNode);
   const frag = document.createDocumentFragment();
   let last = 0, m;
   while ((m = EMOJI_RE.exec(text))) {
@@ -8066,7 +8083,7 @@ function _iconifyTextNode(node) {
     const sp = emojiSprite(m[0]);
     if (sp && spriteReady) {
       const tmp = document.createElement('span');
-      tmp.innerHTML = dlIcon(sp, 16);
+      tmp.innerHTML = dlIconAt(sp, px);
       if (tmp.firstChild) frag.appendChild(tmp.firstChild);
     } // unmapped emoji → dropped
     last = EMOJI_RE.lastIndex;
