@@ -3835,9 +3835,9 @@ let musicSectionIdx = 0;      // style whose timbre/feel is currently playing
 let musicStructIdx = 0;       // style whose scale/chords/groove drive the notes
 let musicTrans = null;        // active crossfade: { fromIdx, toIdx, start, end }
 let musicSectionEndTime = 0;  // ctx time at which the current section drifts on
-const SECTION_MIN = 78;       // shortest a style holds before drifting (sec)
-const SECTION_MAX = 135;      // longest a style holds before drifting (sec)
-const SECTION_FADE = 14;      // how long the crossfade between styles lasts (sec)
+const SECTION_MIN = 110;      // shortest a style holds before drifting (sec)
+const SECTION_MAX = 130;      // longest a style holds before drifting (sec) — ~2 min
+const SECTION_FADE = 12;      // how long the crossfade between styles lasts (sec)
 const STEPS_PER_BAR = 8;      // eighth-notes per 4/4 bar
 const A2 = 110;               // reference pitch in Hz
 // Semitone offset from A2 → Hz.
@@ -3938,7 +3938,97 @@ const MUSIC_SECTIONS = [
       bassPat: [{d:'r',l:3.0}, null, null, {d:'5',l:1.0}, null, null, {d:'r',l:1.5}, null],
       kickPat: ['main', null, null, null, 'mid', null, 'mid', null],
       hatPat:  [0,1,0,1,0,1,0,1] } },
+
+  // Epic, marching A minor — driving saw brass, four-on-the-floor heroism.
+  { name: 'March',   tempo: 0.22,
+    scale: [0, 2, 3, 5, 7, 8, 10, 12, 14, 15, 17, 19, 24],
+    progs: [
+      [[0,3,7],[7,10,14],[8,12,15],[0,3,7]],       // Am  Em  F   Am
+      [[0,3,7],[8,12,15],[10,14,17],[7,10,14]],     // Am  F   G   Em
+    ],
+    bass: { type: 'sawtooth', cutoff: 700,  q: 3, detune: 5, vol: 0.30 },
+    pad:  { type: 'sawtooth', cutoff: 1700, q: 1, detune: 6, vol: 0.12 },
+    lead: { type: 'sawtooth', cutoff: 3200, q: 1, detune: 6, vol: 0.18 },
+    leadDensity: 0.7, arpDensity: 0.4,
+    kickVol: 1.1, kickMidVol: 0.9, hatVol: 0.06,
+    groove: { swing: 0.0, leadOct: 12, arpOct: 0, arpEvery: 2, leadLong: 0.3, leadRest: 0.1,
+      bassPat: [{d:'r',l:1.6}, null, {d:'r',l:1.6}, null, {d:'5',l:1.6}, null, {d:'r',l:1.6}, null],
+      kickPat: ['main', null, 'mid', null, 'main', null, 'mid', null],
+      hatPat:  [0,1,0,1,0,1,0,1] } },
+
+  // Bright, hopeful C major — uplifting bells over a gentle pulse.
+  { name: 'Bloom',   tempo: 0.24,
+    scale: [3, 5, 7, 8, 10, 12, 14, 15, 17, 19, 20, 22, 24],
+    progs: [
+      [[3,7,10],[10,14,17],[12,15,19],[8,12,15]],   // C   G   Am  F
+      [[3,7,10],[8,12,15],[10,14,17],[3,7,10]],      // C   F   G   C
+    ],
+    bass: { type: 'triangle', cutoff: 800,  q: 2, detune: 3, vol: 0.24 },
+    pad:  { type: 'sine',     cutoff: 2400, q: 1, detune: 5, vol: 0.13 },
+    lead: { type: 'sine',     cutoff: 4800, q: 1, detune: 3, vol: 0.17 },
+    leadDensity: 0.55, arpDensity: 0.6,
+    kickVol: 0.6, kickMidVol: 0.45, hatVol: 0.05,
+    groove: { swing: 0.08, leadOct: 24, arpOct: 12, arpEvery: 1, leadLong: 0.45, leadRest: 0.16,
+      bassPat: [{d:'r',l:2.2}, null, null, null, {d:'5',l:2.2}, null, null, null],
+      kickPat: ['mid', null, null, null, 'mid', null, null, null],
+      hatPat:  [0,0,1,0,0,0,1,0] } },
+
+  // Eerie, dissonant whole-tone — a creeping, weightless dread, no drums.
+  { name: 'Veil',    tempo: 0.29,
+    scale: [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24],
+    progs: [
+      [[0,4,8],[2,6,10],[0,4,8],[6,10,14]],         // aug shifts
+      [[0,4,8],[6,10,14],[4,8,12],[2,6,10]],
+    ],
+    bass: { type: 'sine',     cutoff: 420,  q: 1, detune: 4, vol: 0.28 },
+    pad:  { type: 'triangle', cutoff: 1300, q: 1, detune: 7, vol: 0.14 },
+    lead: { type: 'sine',     cutoff: 2200, q: 1, detune: 4, vol: 0.15 },
+    leadDensity: 0.4, arpDensity: 0.25,
+    kickVol: 0.0, kickMidVol: 0.0, hatVol: 0.0,
+    groove: { swing: 0.0, leadOct: 24, arpOct: 12, arpEvery: 4, leadLong: 0.6, leadRest: 0.3,
+      bassPat: [{d:'r',l:6.0}, null, null, null, {d:'3',l:4.0}, null, null, null],
+      kickPat: [null, null, null, null, null, null, null, null],
+      hatPat:  [0,0,0,0,0,0,0,0] } },
+
+  // Laid-back lo-fi D Dorian — heavy swing, mellow late-night groove.
+  { name: 'Tide',    tempo: 0.275,
+    scale: [5, 7, 8, 10, 12, 14, 15, 17, 19, 20, 22, 24, 26],
+    progs: [
+      [[5,8,12],[10,14,17],[7,10,14],[5,8,12]],     // Dm  G   Em  Dm
+      [[5,8,12],[3,7,10],[10,14,17],[7,10,14]],      // Dm  C   G   Em
+    ],
+    bass: { type: 'sine',     cutoff: 600,  q: 2, detune: 4, vol: 0.28 },
+    pad:  { type: 'triangle', cutoff: 1600, q: 1, detune: 6, vol: 0.12 },
+    lead: { type: 'triangle', cutoff: 2600, q: 1, detune: 5, vol: 0.18 },
+    leadDensity: 0.5, arpDensity: 0.4,
+    kickVol: 0.7, kickMidVol: 0.5, hatVol: 0.06,
+    groove: { swing: 0.38, leadOct: 12, arpOct: 0, arpEvery: 2, leadLong: 0.4, leadRest: 0.2,
+      bassPat: [{d:'r',l:3.0}, null, null, {d:'5',l:1.2}, null, null, {d:'3',l:1.5}, null],
+      kickPat: ['main', null, null, null, 'mid', null, null, null],
+      hatPat:  [0,1,0,1,0,1,0,1] } },
+
+  // BOSS — only plays during boss fights. Fast, menacing A Phrygian-dominant
+  // with a pounding kick and a driving square lead. Kept LAST so the normal
+  // drift never randomly selects it (see scheduleMusic / startMusic).
+  { name: 'Boss',    tempo: 0.16,
+    scale: [0, 1, 4, 5, 7, 8, 10, 12, 13, 16, 17, 19, 20],
+    progs: [
+      [[0,4,7],[1,5,8],[0,4,7],[7,10,13]],          // A  Bb  A  E(ish) — menacing
+      [[0,4,7],[8,12,15],[1,5,8],[0,4,7]],
+    ],
+    bass: { type: 'square',   cutoff: 560,  q: 5, detune: 7, vol: 0.30 },
+    pad:  { type: 'sawtooth', cutoff: 1400, q: 2, detune: 5, vol: 0.12 },
+    lead: { type: 'square',   cutoff: 2800, q: 1, detune: 6, vol: 0.18 },
+    leadDensity: 0.9, arpDensity: 0.55,
+    kickVol: 1.25, kickMidVol: 1.0, hatVol: 0.09,
+    groove: { swing: 0.0, leadOct: 0, arpOct: 0, arpEvery: 1, leadLong: 0.15, leadRest: 0.06,
+      bassPat: [{d:'r',l:0.9}, {d:'r',l:0.9}, {d:'5',l:0.9}, {d:'r',l:0.9}, {d:'r',l:0.9}, {d:'r',l:0.9}, {d:'3',l:0.9}, {d:'r',l:0.9}],
+      kickPat: ['main', 'mid', 'main', 'mid', 'main', 'mid', 'main', 'mid'],
+      hatPat:  [1,1,1,1,1,1,1,1] } },
 ];
+// The Boss track is the last entry; the normal drift excludes it.
+const BOSS_IDX = MUSIC_SECTIONS.length - 1;
+const NORMAL_SECTIONS = BOSS_IDX; // count of drift-eligible styles
 
 // The crossfade state at a given playhead time: which two palettes are in play
 // and how far blended (t: 0 = all `from`, 1 = all `to`). Outside a transition
@@ -4038,11 +4128,25 @@ function scheduleMusic() {
     if (musicTrans && when >= musicTrans.end) {
       musicSectionIdx = musicTrans.toIdx;
       musicTrans = null;
-      musicSectionEndTime = when + SECTION_MIN + Math.random() * (SECTION_MAX - SECTION_MIN);
+      // The Boss track holds until the boss dies; normal styles drift on a timer.
+      musicSectionEndTime = (musicSectionIdx === BOSS_IDX)
+        ? Infinity
+        : when + SECTION_MIN + Math.random() * (SECTION_MAX - SECTION_MIN);
     }
-    if (!musicTrans && beat === 0 && musicStep > 0 && when >= musicSectionEndTime) {
-      let next = Math.floor(Math.random() * MUSIC_SECTIONS.length);
-      if (next === musicSectionIdx) next = (next + 1) % MUSIC_SECTIONS.length;
+    // Boss fights hijack the music: swap to the intense Boss track while a boss
+    // lives, then drift back to a normal style once the floor is clear.
+    const bossNow = typeof enemies !== 'undefined' && enemies.some(en => !en.dead && en.isBoss);
+    if (!musicTrans && beat === 0 && musicStep > 0) {
+      if (bossNow && musicSectionIdx !== BOSS_IDX) {
+        musicTrans = { fromIdx: musicSectionIdx, toIdx: BOSS_IDX, start: when, end: when + 5 };
+      } else if (!bossNow && musicSectionIdx === BOSS_IDX) {
+        let next = Math.floor(Math.random() * NORMAL_SECTIONS);
+        musicTrans = { fromIdx: BOSS_IDX, toIdx: next, start: when, end: when + SECTION_FADE };
+      }
+    }
+    if (!musicTrans && beat === 0 && musicStep > 0 && when >= musicSectionEndTime && !bossNow) {
+      let next = Math.floor(Math.random() * NORMAL_SECTIONS);
+      if (next === musicSectionIdx) next = (next + 1) % NORMAL_SECTIONS;
       musicTrans = { fromIdx: musicSectionIdx, toIdx: next, start: when, end: when + SECTION_FADE };
     }
 
@@ -4122,8 +4226,8 @@ function startMusic() {
   if (!ctx) return;
   musicNext = ctx.currentTime + 0.1;
   musicStep = 0; musicBarCount = 0; musicArpIdx = 0; musicLeadIdx = 4;
-  // Start on a random style so reloads don't always open the same way.
-  musicSectionIdx = Math.floor(Math.random() * MUSIC_SECTIONS.length);
+  // Start on a random *normal* style (never the Boss track) so reloads vary.
+  musicSectionIdx = Math.floor(Math.random() * NORMAL_SECTIONS);
   musicStructIdx = musicSectionIdx;
   musicProg = null;
   musicTrans = null;
@@ -4168,6 +4272,8 @@ document.addEventListener('click', (e) => {
 
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
+  { v: 'Diverse music & boss themes', by: 'Jeff Louie', notes: ['More distinct styles (March, Bloom, Veil, Tide) that drift about every 2 minutes.', 'Boss fights hijack the soundtrack with a fast, menacing Boss track until the floor is cleared.'] },
+  { v: 'PC hotkeys', by: 'Jeff Louie', notes: ['1 heal, 2 mana, E use (with Space), Esc closes menus; skills moved to 3-9.'] },
   { v: 'Death: lose your bag', by: 'Jeff Louie', notes: ['Dying also takes your whole bag and one random equipped piece — never your weapon.'] },
   { v: 'Death screen', by: 'Jeff Louie', notes: ['A loud YOU DIED screen lists every penalty at once.'] },
   { v: 'Harsher deaths', by: 'Jeff Louie', notes: ['Lose half your gold and all progress toward your next level, revive at half health/mana, knocked back a floor.'] },
