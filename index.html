@@ -4793,6 +4793,9 @@ const CRAFT_TIERS = ['normal', 'uncommon', 'rare', 'epic', 'legendary'];
 let forgeSlot = 'weapon';
 let forgeBase = null;   // chosen base name within the slot (drives look + name)
 let forgeTier = 'normal';
+// The Craftsman has two benches: 🔨 Forge (build gear) and ♻️ Salvage (break
+// gear back down into materials). craftMode tracks which one is showing.
+let craftMode = 'forge';
 
 // Crafted gear is geared to your deepest reached / current return depth, like
 // the town merchant's stock — so the Forge stays relevant as you descend.
@@ -4814,7 +4817,16 @@ function craftCost(tier) {
   return cost;
 }
 
-function openForge() { forgeBase = null; openTownModal('🔨 Craftsman'); renderForge(); }
+function openForge() { forgeBase = null; craftMode = 'forge'; openTownModal('🔨 Craftsman'); renderCraftsman(); }
+function craftSetMode(m) { craftMode = m; renderCraftsman(); }
+function renderCraftsman() { if (craftMode === 'salvage') renderSalvage(); else renderForge(); }
+// The two-bench picker shown at the top of either Craftsman view.
+function craftTabsHTML() {
+  return `<div class="forge-grid forge-slots" style="margin-bottom:4px">
+    <button class="forge-opt ${craftMode === 'forge' ? 'on' : ''}" onclick="craftSetMode('forge')">🔨 Forge</button>
+    <button class="forge-opt ${craftMode === 'salvage' ? 'on' : ''}" onclick="craftSetMode('salvage')">♻️ Salvage</button>
+  </div>`;
+}
 function forgeSelectSlot(slot) { forgeSlot = slot; forgeBase = null; renderForge(); }
 function forgeSelectBase(name) { forgeBase = name; renderForge(); }
 function forgeSelectTier(tier) { forgeTier = tier; renderForge(); }
@@ -4844,6 +4856,7 @@ function renderForge() {
   const caps = TIER_AFFIX_CAPS[forgeTier] || { stat: 0, attr: 0 };
 
   setTownContent(`
+    ${craftTabsHTML()}
     <div class="town-blurb">The Craftsman forges a <b>blank</b> piece at your current depth (ilvl ${craftIlvl()}) — just its base damage or defense, with empty modifier slots. Take it to the 🪄 Enchanter to fill them in. Rarity sets how many modifiers it can hold.</div>
     <div class="forge-label">Item type</div>
     <div class="forge-grid forge-slots">${slotBtns}</div>
@@ -4898,7 +4911,93 @@ function craftItem() {
   inventory.push(item);
   sfx('equip');
   log(`🔨 You forge a ${item.name} (ilvl ${item.ilvl}). Take it to the 🪄 Enchanter to add modifiers.`, 'loot');
-  updateBars(); renderPanel(); renderForge(); saveGame();
+  updateBars(); renderPanel(); renderCraftsman(); saveGame();
+}
+
+// ── SALVAGE — break gear down into crafting materials ──
+// The other Craftsman bench: instead of selling gear for gold at the shop, you
+// melt it down for materials. The haul scales with the item's rarity (richer
+// tiers yield more, and unlock the higher-tier mats) with a small random spread
+// so two identical pieces don't give exactly the same. Higher item level nudges
+// the scrap count up a touch, keeping deep-floor salvage worthwhile.
+
+// What an item yields, expressed as material ranges so the UI can preview it and
+// salvageYield() can roll within it. rank: junk 0 → unique 6.
+function salvageRanges(item) {
+  const rank = Object.keys(TIERS).indexOf(item.tier);
+  const lf = 1 + (item.ilvl || 1) * 0.04;          // mild item-level scaling
+  const r = [];
+  const sLo = Math.max(1, Math.round((1 + rank) * lf));
+  const sHi = Math.max(sLo + 1, Math.round((3 + rank * 2) * lf));
+  r.push({ key: 'scrap', lo: sLo, hi: sHi });       // every piece gives scrap
+  if (rank >= 2) r.push({ key: 'glimmer', lo: 1, hi: 1 + Math.floor(rank / 2) }); // uncommon+
+  if (rank >= 3) r.push({ key: 'core',    lo: 1, hi: rank - 1 });                 // rare+
+  if (rank >= 5) r.push({ key: 'chaos',   lo: 1, hi: 2 });                        // legendary+ guaranteed
+  else if (rank >= 4) r.push({ key: 'chaos', lo: 0, hi: 1 });                     // epic: a lucky chance
+  return r;
+}
+// Roll the actual materials gained from salvaging one item.
+function salvageYield(item) {
+  const out = {};
+  for (const { key, lo, hi } of salvageRanges(item)) {
+    const n = lo + Math.floor(Math.random() * (hi - lo + 1));
+    if (n > 0) out[key] = (out[key] || 0) + n;
+  }
+  return out;
+}
+// Compact "1-3🔩  1✨" preview label for the salvage list.
+function salvageLabel(item) {
+  return salvageRanges(item).map(({ key, lo, hi }) =>
+    `${lo === hi ? lo : `${lo}-${hi}`}${CRAFT_MATERIALS[key].emoji}`).join('  ');
+}
+
+function renderSalvage() {
+  const list = inventory.map((item, i) => ({ item, i })).filter(o => o.item.slot && TIERS[o.item.tier]);
+  let body;
+  if (list.length === 0) {
+    body = '<div class="shop-empty">No gear to salvage.<br>Bring back some loot first!</div>';
+  } else {
+    const rows = list.map(({ item, i }) => `
+      <div class="shop-row">
+        <span class="loot-icon">${iconMarkup(itemIcon(item), tierColor(item))}</span>
+        <div class="shop-row-info item-${item.tier}">
+          <div class="shop-row-name">${item.name}${craftedMark(item)}</div>
+          <div class="shop-row-sub">${SLOTS[item.slot].label.replace(/^\S+\s/, '')}</div>
+          <div class="shop-row-stats">♻️ ${salvageLabel(item)}</div>
+        </div>
+        <button class="shop-sell-btn" onclick="salvageItem(${i})">SALVAGE</button>
+      </div>`).join('');
+    body = `<div class="shop-sell-all-bar">
+      <button class="shop-sell-all-btn" onclick="salvageAll()">SALVAGE ALL (${list.length})</button>
+    </div>${rows}`;
+  }
+  setTownContent(`${craftTabsHTML()}
+    <div class="town-blurb">The Craftsman breaks gear down into crafting materials — the rarer the piece, the richer the haul (with a little luck in the mix). Materials feed the 🔨 Forge and the 🪄 Enchanter.</div>${body}`);
+}
+
+function salvageItem(i) {
+  const item = inventory[i];
+  if (!item || !item.slot || !TIERS[item.tier]) return;
+  const got = salvageYield(item);
+  for (const k in got) gainMaterial(k, got[k]);
+  inventory.splice(i, 1);
+  sfx('sell');
+  log(`♻️ Salvaged ${logItem(item)} into ${costLabel(got)}.`, 'loot');
+  updateBars(); renderCraftsman(); renderPanel(); saveGame();
+}
+
+function salvageAll() {
+  const list = inventory.filter(it => it.slot && TIERS[it.tier]);
+  if (list.length === 0) return;
+  const total = {};
+  for (const item of list) {
+    const got = salvageYield(item);
+    for (const k in got) { total[k] = (total[k] || 0) + got[k]; gainMaterial(k, got[k]); }
+  }
+  inventory = inventory.filter(it => !(it.slot && TIERS[it.tier]));
+  sfx('sell');
+  log(`♻️ Salvaged ${list.length} item${list.length === 1 ? '' : 's'} into ${costLabel(total)}.`, 'loot');
+  updateBars(); renderCraftsman(); renderPanel(); saveGame();
 }
 
 // ── HEALER — rest to full HP/MP and cure ailments ──
