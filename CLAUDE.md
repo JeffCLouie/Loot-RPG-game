@@ -36,6 +36,22 @@ at the site's root URL.
   background tiles), which is deliberately drawn procedurally rather than from
   DawnLike. If a fitting DawnLike tile genuinely doesn't exist for an asset, say
   so rather than silently falling back to an emoji.
+  - **This applies in menus and the HUD too, not just the canvas.** Consumables,
+    ingredients, food, currencies, buff/status indicators and any other item
+    imagery shown in DOM panels (the bag, the town shops, the HUD bar, the log)
+    must use a DawnLike atlas tile rendered with `dlIcon(spriteKey, px)` (it
+    returns an inline `<span class="dl-ic">` backed by the atlas), **not** an
+    emoji. Emoji are acceptable only as plain section-header punctuation, never
+    as the icon that represents a game thing.
+  - **How to add tiles to the atlas.** The atlas is a single base64 PNG assigned
+    to `spriteSheet.src`, indexed by `SPRITE_IDX` (`name → tile index`, 16 tiles
+    per row). To add art: pull the source tile from the DawnLike download
+    (Items/, Objects/, Characters/ …), composite it into a free atlas slot with
+    a Chromium/canvas script (load the current atlas, `drawImage` the DawnLike
+    tile into the next free index, growing the PNG height by a 16px row if
+    needed, then `toDataURL`), replace the `spriteSheet.src` string, and add the
+    new `SPRITE_IDX` entries. Pick indices AFTER the current maximum so you never
+    collide with tiles another change already claimed.
 
 ## Workflow Claude should follow
 
