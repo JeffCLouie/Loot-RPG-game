@@ -11919,7 +11919,11 @@ function handleEscape() {
 // delay and an inconsistent cadence. The most-recently-pressed direction wins,
 // so sliding from one key to another changes course without lifting the first.
 const MOVE_REPEAT_MS = 120;
+// Wait a beat after the key goes down before the steady run kicks in, so a
+// quick tap is a single step and you don't sprint off by accident.
+const SPRINT_DELAY_MS = 250;
 let moveTimer = null;
+let sprintDelayTimer = null;
 const heldMoveKeys = [];
 
 function dirForKey(k) {
@@ -11937,9 +11941,15 @@ function stepHeldMove() {
   if (d) move(d[0], d[1]);
 }
 function startMoveRepeat() {
-  if (!moveTimer) moveTimer = setInterval(stepHeldMove, MOVE_REPEAT_MS);
+  if (moveTimer || sprintDelayTimer) return;
+  // Hold the key down for SPRINT_DELAY_MS before the steady cadence begins.
+  sprintDelayTimer = setTimeout(() => {
+    sprintDelayTimer = null;
+    moveTimer = setInterval(stepHeldMove, MOVE_REPEAT_MS);
+  }, SPRINT_DELAY_MS);
 }
 function stopMoveRepeat() {
+  if (sprintDelayTimer) { clearTimeout(sprintDelayTimer); sprintDelayTimer = null; }
   if (moveTimer) { clearInterval(moveTimer); moveTimer = null; }
 }
 function clearHeldMove() { heldMoveKeys.length = 0; stopMoveRepeat(); }
