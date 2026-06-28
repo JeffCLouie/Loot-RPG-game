@@ -9203,6 +9203,17 @@ function handleDeath() {
   player.gold -= lostGold;
   const lostXp = Math.min(player.xp, xpForLevel(player.level));
   player.xp = Math.max(0, player.xp - lostXp);
+  // Lose everything in your bag, and one random equipped piece — but never your
+  // weapon, so you can always still fight your way back.
+  const lostBag = inventory.length;
+  inventory = [];
+  let lostGear = null;
+  const gearSlots = SLOT_KEYS.filter(s => s !== 'weapon' && equipped[s]);
+  if (gearSlots.length) {
+    const slot = pick(gearSlots);
+    lostGear = equipped[slot];
+    equipped[slot] = null;
+  }
   statusEffects = statusEffects.filter(s => s.target !== 'player');
   player.skillCds = {}; combatBuffs = {};
   sfx('death');
@@ -9216,20 +9227,24 @@ function handleDeath() {
   // Revived in town but WEAKENED — only half health and mana, not a full heal.
   player.hp = Math.max(1, Math.round(player.maxHp * 0.5));
   player.mp = Math.round(player.maxMp * 0.5);
-  showDeathScreen(lostGold, lostXp, dungeonReturn);
-  log(`💀 ${player.name || HERO} was SLAIN on floor ${fellOn}! Lost ${lostGold}g${lostXp ? ` and ${lostXp} XP` : ''}, revived weakened in town.`, 'important');
+  showDeathScreen(lostGold, lostXp, dungeonReturn, lostBag, lostGear);
+  log(`💀 ${player.name || HERO} was SLAIN on floor ${fellOn}! Lost ${lostGold}g${lostXp ? ` and ${lostXp} XP` : ''}${lostBag ? `, your bag (${lostBag})` : ''}${lostGear ? ` and your ${lostGear.name}` : ''} — revived weakened in town.`, 'important');
+  recomputeMaxStats();
   updateBars();
+  renderPanel();
   saveGame();
   draw();
 }
 
 // A hard, unmistakable death screen that spells out every penalty.
-function showDeathScreen(lostGold, lostXp, returnFloor) {
+function showDeathScreen(lostGold, lostXp, returnFloor, lostBag, lostGear) {
   const el = document.getElementById('death-penalties');
   if (el) {
     const lines = [
       `💰 Lost ${lostGold} gold (half your purse)`,
       lostXp ? `✦ Lost ${lostXp} XP — back to the start of level ${player.level}` : null,
+      lostBag ? `🎒 Lost your whole bag (${lostBag} item${lostBag === 1 ? '' : 's'})` : null,
+      lostGear ? `🩹 A foe tore off your ${lostGear.name}` : null,
       `❤️ Revived at half health & mana`,
       `⬇️ Knocked back — re-enter at floor ${returnFloor}`,
     ].filter(Boolean);
