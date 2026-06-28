@@ -1558,7 +1558,7 @@
       <div id="action-buttons">
         <!-- The Health Potion now lives at the far left of the skill bar
              (rendered by renderSkillBar), so it's dropped from this nav row. -->
-        <button class="action-btn skill-btn" id="skill-btn" onclick="castSkill()" style="display:none" title="Cast your class skill (R)">
+        <button class="action-btn skill-btn" id="skill-btn" onclick="castSkill()" style="display:none" data-tip="<div class='ht-name'>⚡ Class Skill</div><div class='ht-line'>Cast your class's special skill.</div><div class='ht-sub'>press R</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
           <span class="action-icon" id="skill-icon">⚡</span><span class="action-label" id="skill-label">SKILL</span>
         </button>
         <button class="action-btn town-action" onclick="enterTown()">
@@ -1581,7 +1581,7 @@
         </button>
         <!-- Settings: collapses the Sound + New Game controls into one ⚙️ button
              that pops open the menu below. -->
-        <button class="action-btn settings-action" onclick="toggleSettingsMenu(event)" title="Settings">
+        <button class="action-btn settings-action" onclick="toggleSettingsMenu(event)" data-tip="<div class='ht-name'>⚙️ Settings</div><div class='ht-line'>Sound, save slots, and starting a new game.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
           <span class="action-icon">⚙️</span><span class="action-label">SETTINGS</span>
         </button>
       </div>
@@ -1647,9 +1647,9 @@
   <div id="shop-overlay" onclick="if(event.target===this)closeShop()">
     <div id="shop-modal">
       <div id="shop-header">
-        <button id="shop-back" onclick="shopBack()" style="display:none" title="Back to town menu">←</button>
+        <button id="shop-back" onclick="shopBack()" style="display:none" data-tip="<div class='ht-name'>← Back</div><div class='ht-line'>Return to the town menu.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">←</button>
         <span id="shop-title">🧙‍♂️ Wandering Merchant</span>
-        <button id="shop-close" onclick="shopClose()" title="Close">✕</button>
+        <button id="shop-close" onclick="shopClose()" data-tip="<div class='ht-name'>✕ Close</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">✕</button>
       </div>
       <div id="shop-gold">Your gold: <span id="shop-gold-count">0</span>g</div>
       <div id="shop-tabs">
@@ -1663,9 +1663,9 @@
   <div id="mystic-overlay" onclick="if(event.target===this)closeMystic()">
     <div id="mystic-modal">
       <div id="mystic-header">
-        <button id="mystic-back" onclick="mysticBack()" style="display:none" title="Back to town menu">←</button>
+        <button id="mystic-back" onclick="mysticBack()" style="display:none" data-tip="<div class='ht-name'>← Back</div><div class='ht-line'>Return to the town menu.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">←</button>
         <span id="mystic-title">🔮 Wandering Mystic</span>
-        <button id="mystic-close" onclick="mysticClose()" title="Close">✕</button>
+        <button id="mystic-close" onclick="mysticClose()" data-tip="<div class='ht-name'>✕ Close</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">✕</button>
       </div>
       <div id="mystic-gold">Your gold: <span id="mystic-gold-count">0</span>g</div>
       <div id="mystic-active" style="display:none"></div>
@@ -1676,9 +1676,9 @@
   <div id="town-overlay" onclick="if(event.target===this)townBack()">
     <div id="town-modal">
       <div id="town-header">
-        <button id="town-back" onclick="townBack()" style="display:none" title="Back to town menu">←</button>
+        <button id="town-back" onclick="townBack()" style="display:none" data-tip="<div class='ht-name'>← Back</div><div class='ht-line'>Return to the town menu.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">←</button>
         <span id="town-title">Town</span>
-        <button id="town-close" onclick="leaveTown()" title="Leave town for the dungeon">✕</button>
+        <button id="town-close" onclick="leaveTown()" data-tip="<div class='ht-name'>✕ Leave Town</div><div class='ht-line'>Head back down into the dungeon.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">✕</button>
       </div>
       <div id="town-gold">Your gold: <span id="town-gold-count">0</span>g</div>
       <div id="town-mats"></div>
@@ -9384,7 +9384,7 @@ function updateBars() {
       const cd = skillCd(sk.id);
       const ready = cd === 0 && player.mp >= sk.mp && !inTown;
       if (label) label.textContent = cd > 0 ? `${cd}` : `${sk.mp}MP`;
-      skillBtn.title = `${sk.name} — ${sk.desc} (${sk.mp} MP, ${sk.cd}-turn cooldown) · press R`;
+      skillBtn.dataset.tip = `<div class='ht-name' style='color:#e6c34a'>${sk.icon} ${sk.name}</div><div class='ht-line'>${sk.desc}</div><div class='ht-sub'>${sk.mp} MP · ${sk.cd}-turn cooldown · press R</div>`;
       skillBtn.classList.toggle('disabled', !ready);
       skillBtn.classList.toggle('ready', ready && player.hp > 0);
     } else {
@@ -9495,7 +9495,7 @@ function renderPanel() {
         ${equipable
           ? (canEquipItem(item)
               ? `<button class="row-btn equip-row-btn ${isUpgrade?'upgrade-btn':''}" onclick="quickEquip(${i})">${equippedHere && isUpgrade?'SWAP':'EQUIP'}</button>`
-              : `<button class="row-btn locked-row-btn" title="Your class can't wield this weapon" onclick="quickEquip(${i})">🔒</button>`)
+              : `<button class="row-btn locked-row-btn" ${hoverTip(`<div class='ht-name'>🔒 Can't Wield</div><div class='ht-line'>Your class can't wield this weapon.</div>`)} onclick="quickEquip(${i})">🔒</button>`)
           : ''}
       </div>`;
     }).join('');
@@ -9743,10 +9743,12 @@ function renderSkillBar() {
   const hpFull = player.hp >= player.maxHp;
   const mpFull = player.mp >= player.maxMp;
   const urgent = potReady && player.hp < player.maxHp * 0.35;
-  const healBtn = `<button class="skillbar-btn potion ${potReady && !hpFull ? '' : 'empty'} ${urgent ? 'urgent' : ''}" title="Quaff a Health Potion (Q) — 3-turn cooldown" onclick="useHealthPotion()">
+  const healTip = `<div class='ht-name' style='color:var(--hp)'>❤️ Health Potion</div><div class='ht-line'>Quaff to restore a burst of health.</div><div class='ht-sub'>press Q · 3-turn cooldown</div>`;
+  const manaTip = `<div class='ht-name' style='color:var(--mp)'>🔷 Mana Potion</div><div class='ht-line'>Quaff to restore a burst of mana.</div><div class='ht-sub'>press E · 3-turn cooldown</div>`;
+  const healBtn = `<button class="skillbar-btn potion ${potReady && !hpFull ? '' : 'empty'} ${urgent ? 'urgent' : ''}" ${hoverTip(healTip)} onclick="useHealthPotion()">
       <span class="sb-key">Q</span><span class="sb-icon">${HEAL_POTION_SVG}</span><span class="sb-info" id="heal-label">${pcd > 0 ? pcd : ''}</span>
     </button>`;
-  const manaBtn = `<button class="skillbar-btn potion mana ${potReady && !mpFull ? '' : 'empty'}" title="Quaff a Mana Potion (E) — 3-turn cooldown" onclick="useManaPotion()">
+  const manaBtn = `<button class="skillbar-btn potion mana ${potReady && !mpFull ? '' : 'empty'}" ${hoverTip(manaTip)} onclick="useManaPotion()">
       <span class="sb-key">E</span><span class="sb-icon">${MANA_POTION_SVG}</span><span class="sb-info">${pcd > 0 ? pcd : ''}</span>
     </button>`;
   let extraNum = 0;
@@ -9754,7 +9756,8 @@ function renderSkillBar() {
     const cd = skillCd(s.id);
     const ready = cd === 0 && player.mp >= s.mp && player.hp > 0;
     const key = s.baseline ? 'R' : String(++extraNum);
-    return `<button class="skillbar-btn ${s.baseline ? 'baseline ' : ''}${ready ? 'ready' : 'disabled'}" title="${s.name} — ${s.desc} (${s.mp} MP, ${s.cd}-turn cooldown) · press ${key}" onclick="castSkillById('${s.id}')">
+    const tip = `<div class='ht-name' style='color:#e6c34a'>${s.icon} ${s.name}</div><div class='ht-line'>${s.desc}</div><div class='ht-sub'>${s.mp} MP · ${s.cd}-turn cooldown · press ${key}</div>`;
+    return `<button class="skillbar-btn ${s.baseline ? 'baseline ' : ''}${ready ? 'ready' : 'disabled'}" ${hoverTip(tip)} onclick="castSkillById('${s.id}')">
       <span class="sb-key">${key}</span><span class="sb-icon">${s.icon}</span><span class="sb-info">${cd > 0 ? cd : s.mp + 'MP'}</span>
     </button>`;
   }).join('');
@@ -9878,11 +9881,11 @@ function renderCosmetics() {
     const shown = visualIcon(slot);
     // "Match gear" chip (clears any override) is always offered first.
     let chips = `<button class="cos-chip gear ${override ? '' : 'sel'}"
-        title="Match your equipped gear" onclick="pickCosmetic('${slot}','')">GEAR</button>`;
+        ${hoverTip(`<div class='ht-name'>Match Gear</div><div class='ht-line'>Show your equipped gear's own look.</div>`)} onclick="pickCosmetic('${slot}','')">GEAR</button>`;
     // One tappable chip per discovered look.
     chips += looks.map(l =>
       `<button class="cos-chip ${override === l.icon ? 'sel' : ''}"
-         title="${(l.name || '').replace(/"/g,'')}" onclick="pickCosmetic('${slot}','${l.icon}')">${iconMarkup(l.icon, '#dddde6', false)}</button>`
+         ${hoverTip(`<div class='ht-name'>${(l.name || 'Look').replace(/'/g,'&#39;')}</div>`)} onclick="pickCosmetic('${slot}','${l.icon}')">${iconMarkup(l.icon, '#dddde6', false)}</button>`
     ).join('');
     const empty = looks.length ? '' :
       `<div class="cos-empty">Find ${COS_LABELS[slot].replace(/^\S+\s/, '').toLowerCase()} loot to unlock looks.</div>`;
@@ -10124,6 +10127,13 @@ function showHoverTip(e, el) {
   hoverTipEl.style.top = top + 'px';
 }
 function hideHoverTip() { hoverTipEl.style.display = 'none'; }
+
+// Build the data-tip + handlers for a styled hover popup (the gear-card look),
+// so JS-rendered buttons share the same hover UI as everything else instead of
+// the native browser title box. Pass inner HTML built from ht-name/ht-line/ht-sub.
+function hoverTip(html) {
+  return `data-tip="${html.replace(/"/g, '&quot;')}" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()"`;
+}
 
 // Dismiss the tooltip when tapping anywhere (the tooltip, the map, the log, etc.),
 // except when tapping a loot item or gear slot (those manage it themselves).
