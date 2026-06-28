@@ -3032,8 +3032,8 @@ function pfx(field, dflt) { return (pact && pact.fx[field] != null) ? pact.fx[fi
 
 let player = { x: 5, y: 5, hp: 100, maxHp: 100, mp: 60, maxMp: 60, gold: 0, level: 1, xp: 0,
   // Potions are no longer hoarded consumables — they're an always-available
-  // skill gated by a shared one-turn cooldown (see useHealthPotion/useManaPotion),
-  // so you can quaff at most one potion per turn. `potionCd` is that cooldown.
+  // skill gated by a shared 3-turn cooldown (see useHealthPotion/useManaPotion),
+  // so you can't spam potions back-to-back. `potionCd` is that cooldown.
   potionCd: 0,
   // Chosen character name (null until entered on a new game) and the peak gold
   // ever held — both feed the global leaderboards.
@@ -5155,7 +5155,7 @@ function renderHealer() {
       <span class="shop-price">Free</span>
       <button class="shop-buy-btn" ${full ? 'disabled' : ''} onclick="restHeal()">REST</button>
     </div>
-    <div class="town-blurb" style="opacity:0.8">Need a quick top-up mid-fight? Quaff a Health (Q) or Mana (E) potion — they're a skill now, free to use but only one per turn.</div>`);
+    <div class="town-blurb" style="opacity:0.8">Need a quick top-up mid-fight? Quaff a Health (Q) or Mana (E) potion — they're a skill now, free to use but share a 3-turn cooldown.</div>`);
 }
 function restHeal() {
   if (player.hp >= player.maxHp && player.mp >= player.maxMp) return;
@@ -9174,15 +9174,16 @@ function updateBars() {
 }
 
 // Potions are a SKILL, not a consumable: unlimited uses, but a quaff costs a
-// turn (foes act) and both flasks share a one-turn cooldown, so you can only
-// down a single potion per turn. Health potions restore a percentage of max HP
-// so they scale with you instead of becoming useless at high levels.
+// turn (foes act) and both flasks share a cooldown, so you can't spam them —
+// after a sip both flasks recharge over a few turns. Health potions restore a
+// percentage of max HP so they scale with you instead of becoming useless at
+// high levels.
 const HEAL_PERCENT = 0.30;
-const POTION_CD = 1;            // shared cooldown — one potion per turn
+const POTION_CD = 3;            // shared cooldown — recharges over 3 turns
 function healPotionAmount() { return Math.max(1, Math.round(player.maxHp * HEAL_PERCENT)); }
 function potionReady() { return (player.potionCd || 0) === 0; }
 function useHealthPotion() {
-  if (!potionReady()) { log('⏳ Potions recharge — only one per turn.'); return; }
+  if (!potionReady()) { log(`⏳ Potions recharge — ${player.potionCd} turn${player.potionCd === 1 ? '' : 's'} left.`); return; }
   if (player.hp >= player.maxHp) { log('Already at full health.'); return; }
   const heal = Math.min(player.maxHp - player.hp, healPotionAmount());
   player.hp += heal;
@@ -9193,7 +9194,7 @@ function useHealthPotion() {
 
 const MANA_AMOUNT = 40;
 function useManaPotion() {
-  if (!potionReady()) { log('⏳ Potions recharge — only one per turn.'); return; }
+  if (!potionReady()) { log(`⏳ Potions recharge — ${player.potionCd} turn${player.potionCd === 1 ? '' : 's'} left.`); return; }
   if (player.mp >= player.maxMp) { log('Already at full mana.'); return; }
   player.mp = Math.min(player.maxMp, player.mp + MANA_AMOUNT);
   sfx('potion');
@@ -9518,10 +9519,10 @@ function renderSkillBar() {
   const hpFull = player.hp >= player.maxHp;
   const mpFull = player.mp >= player.maxMp;
   const urgent = potReady && player.hp < player.maxHp * 0.35;
-  const healBtn = `<button class="skillbar-btn potion ${potReady && !hpFull ? '' : 'empty'} ${urgent ? 'urgent' : ''}" title="Quaff a Health Potion (Q) — one potion per turn" onclick="useHealthPotion()">
+  const healBtn = `<button class="skillbar-btn potion ${potReady && !hpFull ? '' : 'empty'} ${urgent ? 'urgent' : ''}" title="Quaff a Health Potion (Q) — 3-turn cooldown" onclick="useHealthPotion()">
       <span class="sb-key">Q</span><span class="sb-icon">${HEAL_POTION_SVG}</span><span class="sb-info" id="heal-label">${pcd > 0 ? pcd : ''}</span>
     </button>`;
-  const manaBtn = `<button class="skillbar-btn potion mana ${potReady && !mpFull ? '' : 'empty'}" title="Quaff a Mana Potion (E) — one potion per turn" onclick="useManaPotion()">
+  const manaBtn = `<button class="skillbar-btn potion mana ${potReady && !mpFull ? '' : 'empty'}" title="Quaff a Mana Potion (E) — 3-turn cooldown" onclick="useManaPotion()">
       <span class="sb-key">E</span><span class="sb-icon">${MANA_POTION_SVG}</span><span class="sb-info">${pcd > 0 ? pcd : ''}</span>
     </button>`;
   let extraNum = 0;
@@ -10520,7 +10521,7 @@ if (hadSave) {
 }
 log('Progress auto-saves automatically as you play.');
 log('Open 🎒 BAG to view your loot; press the pad\'s USE button to grab items.');
-log(`Tap the ❤️ or 🔷 flask to quaff a ${logPotion('Potion')} — they're a skill now, free to use but only one per turn.`);
+log(`Tap the ❤️ or 🔷 flask to quaff a ${logPotion('Potion')} — they're a skill now, free to use but share a 3-turn cooldown.`);
 log('⌨️ Keys: Q health potion · E mana potion · R class skill · T town · B open bag · Space/F use.');
 log('⚡ Your class grants a special skill — tap the ⚡ button (or press R) to spend mana on it.');
 log('⚡ Each item has a Power value; your total Power blends level, gear, and attributes.');
