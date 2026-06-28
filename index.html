@@ -1691,6 +1691,9 @@
         <button class="action-btn town-action" onclick="enterTown()">
           <span class="action-icon">🏰</span><span class="action-label">TOWN</span>
         </button>
+        <button class="action-btn unstuck-action" onclick="unstuck()" data-tip="<div class='ht-name'>🌀 Unstuck</div><div class='ht-line'>Warp to a random open spot elsewhere on the floor.</div><div class='ht-sub'>use if you get wedged in</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
+          <span class="action-icon">🌀</span><span class="action-label">UNSTUCK</span>
+        </button>
         <button class="action-btn bag-btn" onclick="togglePanel()">
           <span class="action-icon">
             <svg width="20" height="20" viewBox="0 0 20 20" aria-label="bag">
@@ -2732,7 +2735,7 @@ const ATTR_FX = {
   defPerVit:     0.5,    // Vitality → Defense
   hpRegenPerVit: 0.16,   // Vitality → HP regen / turn
   mpPerSpr:      6,      // Spirit → max MP
-  mpRegenPerSpr: 0.16,   // Spirit → MP regen / turn
+  mpRegenPerSpr: 0.10,   // Spirit → MP regen / turn
   spellPerSpr:   3,      // Spirit → spell skill power (Firebolt/Mend)
   dodgePerAgi:   0.0072, // Agility → dodge chance
   critPerLuck:   0.009,  // Luck → crit chance
@@ -2901,7 +2904,10 @@ function hpRegenPerTurn() {
   return r;
 }
 function mpRegenPerTurn() {
-  return 1 + Math.floor(totalAttr('spirit') * ATTR_FX.mpRegenPerSpr) + skillBonus('mpRegen');
+  // A slow trickle on purpose: mana should run dry in sustained fights so mana
+  // pots stay worth quaffing. Kept fractional (applyRegen accumulates it) so
+  // sub-1 regen is possible while the MP readout stays a clean integer.
+  return 0.5 + totalAttr('spirit') * ATTR_FX.mpRegenPerSpr + skillBonus('mpRegen');
 }
 
 const FOODS = [
@@ -3982,6 +3988,10 @@ function applyBuff(id, turns, mag) {
 let minions = [];
 let floatingTexts = [];
 let statusEffects = [];
+// Transient tiles a boss conjures mid-fight: walls of flame that burn, arcane
+// barriers that block movement. Each { x, y, kind:'fire'|'wall', turns, dmg }.
+// Never saved — cleared on floor change / town / death like other combat state.
+let bossHazards = [];
 let groundFood = [];
 let groundGold = []; // scattered coin piles: { x, y, amount } — grabbed by walking over
 let floorTint = null; // optional atmospheric colour overlay for the current floor
@@ -4211,6 +4221,7 @@ function sfx(name) {
     case 'death':   tone(330, 0.6, t, 'sawtooth', 0.5, 55); noise(0.5, t, 0.25); break;
     case 'trap':    noise(0.3, t, 0.4); tone(140, 0.3, t, 'sawtooth', 0.4, 60); break;
     case 'click':   tone(660, 0.04, t, 'square', 0.22); break;
+    case 'teleport': tone(880, 0.18, t, 'sine', 0.35, 220); tone(440, 0.2, t + 0.06, 'sine', 0.28, 1320); noise(0.12, t, 0.18); break;
   }
 }
 
@@ -5216,6 +5227,7 @@ function generateMap() {
   groundKey = null;
   hasKey = false;
   quest = null;
+  bossHazards = [];
 
   // Start as solid rock; rooms and passages are carved out of it.
   mapData = [];
@@ -9357,10 +9369,17 @@ function applyRegen() {
     updateBars();
   }
   // Mana trickles back each turn (faster with Spirit) so staff bolts stay usable.
+  // Regen can be less than 1/turn, so bank it in a fractional accumulator and
+  // only ever add whole points to player.mp (keeps the MP readout an integer).
   const mr = mpRegenPerTurn();
-  if (player.hp > 0 && player.mp < player.maxMp) {
-    player.mp = Math.min(player.maxMp, player.mp + mr);
-    updateBars();
+  if (player.hp > 0 && player.mp < player.maxMp && mr > 0) {
+    player._mpAcc = (player._mpAcc || 0) + mr;
+    const whole = Math.floor(player._mpAcc);
+    if (whole > 0) {
+      player._mpAcc -= whole;
+      player.mp = Math.min(player.maxMp, player.mp + whole);
+      updateBars();
+    }
   }
 }
 
@@ -9581,6 +9600,38 @@ function move(dx, dy) {
   runEnemyTurn();
   moveQuestEntities();
 
+  checkPickupProximity();
+  draw();
+}
+
+// ── UNSTUCK ──
+// Escape hatch for when the player is wedged in (a buggy pocket, surrounded by
+// foes, or just wants out): warp to a random open floor tile elsewhere on the
+// map. Prefers a tile far from the current spot and clear of enemies so it
+// actually feels like a relocation. Only valid while exploring a dungeon floor.
+function unstuck() {
+  if (inTown) { log('🌀 Nothing to escape in town.'); return; }
+  // Gather every plain-floor tile that isn't the player's own and has no foe.
+  const spots = [];
+  for (let y = 1; y < MAP_H - 1; y++) {
+    for (let x = 1; x < MAP_W - 1; x++) {
+      if (mapData[y][x] !== 0) continue;            // plain floor only
+      if (x === player.x && y === player.y) continue;
+      if (getEnemyAt(x, y)) continue;
+      const d = Math.abs(x - player.x) + Math.abs(y - player.y);
+      spots.push({ x, y, d });
+    }
+  }
+  if (!spots.length) { log('🌀 Nowhere to warp to.'); return; }
+  // Bias toward the farther half of candidates so you don't land next door.
+  spots.sort((a, b) => b.d - a.d);
+  const pool = spots.slice(0, Math.max(1, Math.ceil(spots.length / 2)));
+  const dest = pool[Math.floor(Math.random() * pool.length)];
+  player.x = dest.x;
+  player.y = dest.y;
+  sfx('teleport');
+  spawnFloatingText(player.x, player.y, '🌀', '#bb88ff');
+  log('🌀 You wrench yourself free and reappear elsewhere on the floor.', 'important');
   checkPickupProximity();
   draw();
 }
