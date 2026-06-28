@@ -1798,9 +1798,6 @@
         <button class="action-btn town-action" onclick="enterTown()" data-tip="<div class='ht-name'>🏰 Town</div><div class='ht-line'>Step through the gate to the safe hub — shops, forge, healer, stash.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
           <span class="action-icon">🏰</span><span class="action-label">TOWN</span>
         </button>
-        <button class="action-btn unstuck-action" onclick="unstuck()" data-tip="<div class='ht-name'>🌀 Unstuck</div><div class='ht-line'>Warp to a random open spot elsewhere on the floor.</div><div class='ht-sub'>use if you get wedged in</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
-          <span class="action-icon">🌀</span><span class="action-label">UNSTUCK</span>
-        </button>
         <button class="action-btn bag-btn" onclick="togglePanel()">
           <span class="action-icon">
             <svg width="20" height="20" viewBox="0 0 20 20" aria-label="bag">
@@ -1833,6 +1830,9 @@
         </button>
         <button class="settings-item zoom-action" onclick="toggleZoom()">
           <span class="action-icon" id="zoom-icon">🔍</span><span class="action-label" id="zoom-label">WIDE</span>
+        </button>
+        <button class="settings-item unstuck-action" onclick="unstuck()" data-tip="<div class='ht-name'>🌀 Unstuck</div><div class='ht-line'>Warp to a random open spot elsewhere on the floor.</div><div class='ht-sub'>use if you get wedged in</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
+          <span class="action-icon">🌀</span><span class="action-label">UNSTUCK</span>
         </button>
         <button class="settings-item slots-action" onclick="openSlots()">
           <span class="action-icon">💾</span><span class="action-label">SLOTS</span>
