@@ -25,6 +25,17 @@ at the site's root URL.
   options, or wait for approval. Make reasonable decisions, implement them, and
   push to `main`. Only stop to ask if a request is genuinely impossible or
   self-contradictory.
+- **Always pull new visual assets from DawnLike.** Every new on-screen game
+  asset — heroes, enemies, bosses, NPCs, summoned minions/allies, items,
+  pickups, projectiles, status icons, and world objects — must be drawn from the
+  DawnLike tileset (DragonDePlatino & DawnBringer, CC-BY 4.0) via the sprite
+  atlas, not as a raw emoji or hand-drawn shape. Add the needed tile to the
+  sprite atlas and render it with `drawSpriteC`, keeping an emoji `drawEmoji`
+  fallback only for when the atlas image hasn't loaded yet. The lone intentional
+  exception is **procedural terrain** (walls, floors, water, lava and similar
+  background tiles), which is deliberately drawn procedurally rather than from
+  DawnLike. If a fitting DawnLike tile genuinely doesn't exist for an asset, say
+  so rather than silently falling back to an emoji.
 
 ## Workflow Claude should follow
 
