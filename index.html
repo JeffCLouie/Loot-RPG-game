@@ -4164,13 +4164,26 @@ document.addEventListener('click', (e) => {
 
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
-  { v: 'Shifting Soundtrack', notes: ['Music now drifts between distinct styles — each with its own scale, chord progressions, groove and instruments (brooding Cavern, bright Crystal, dark Forge, airy Mist, bluesy Hollow).', 'Styles slowly crossfade into one another instead of just changing tempo.'] },
-  { v: 'Bosses & Beasts', notes: ['Some bosses are now huge 2–3 tile behemoths that cast and have reach.', 'Treasure Goblins fumble their escape far more often, so they\'re catchable.'] },
-  { v: 'Living Water & Lava', notes: ['Liquids merge into cohesive pools with organic edges, shores (sand/grass or molten crust) and animation.'] },
-  { v: 'World Reskin', notes: ['Golden Sun / FFT-style palettes, natural rock & tree walls, and many seasonal & exotic floor themes.'] },
-  { v: 'Loot Clarity', notes: ['Gear shows the real stat changes vs your equipped item instead of a single coloured %.'] },
-  { v: 'Quests & Events', notes: ['13 mini-quest types (rescue, escort, jailbreak, hunt, fetch and more) plus 25 light on-descent vignettes.'] },
-  { v: 'Quality of Life', notes: ['HUD shows floor, level/XP and foes left; Q drinks a potion; movement-pad position & opacity options.'] },
+  { v: 'Harsher Deaths', notes: ['Dying now also costs your whole bag and one random equipped piece (never your weapon).', 'A loud YOU DIED screen spells out every penalty: half gold, lost level progress, half-health revive, knocked back a floor.'] },
+  { v: 'Mobile Tooltips', notes: ['Hover tooltips no longer pop open at random when you tap on a touchscreen.'] },
+  { v: 'Roaming Behemoths', notes: ['Big bosses now lumber after you and spawn inside a cleared, roomy arena so they have space to move.'] },
+  { v: 'Cleaner Pickups', notes: ['Removed the square glow boxes under coins, keys and chests — replaced with a soft round glow.'] },
+  { v: 'Anti-Farm', notes: ['Boss-summoned minions drop no XP, gold or loot, and a boss can summon at most 10, so they can\'t be farmed.'] },
+  { v: 'Affix Auras', notes: ['Tough / Fierce / Venomous foes now show a coloured glow (steel / red / purple) instead of an icon over their head.'] },
+  { v: 'Smarter Enemies', notes: ['Ranged foes stop kiting you forever — they hold ground and fight back when cornered.', 'Treasure Goblins fumble their escape about half the time.'] },
+  { v: 'Shifting Soundtrack', notes: ['Music drifts between distinct styles (Cavern, Crystal, Forge, Mist, Hollow), each with its own scale, chords, groove and instruments.'] },
+  { v: 'Giant Bosses', notes: ['Some bosses are now huge 2–3 tile behemoths that cast, summon and have reach.'] },
+  { v: 'Living Water & Lava', notes: ['Liquids merge into cohesive pools with organic edges, shores (sand + grass / molten crust) and flowing animation.'] },
+  { v: 'Exotic Biomes', notes: ['Added seasonal & exotic themes: Winter Frostwood, Wildflower Meadow, Lavender Fields, Mushroom Hollow, Crystal Cavern, Coral Lagoon, Obsidian Wastes and more.'] },
+  { v: 'Natural Walls', notes: ['Walls are now varied rock cliffs and leafy/pine trees instead of a repeating brick grid; floors use organic texture, not a checkerboard.'] },
+  { v: 'World Reskin', notes: ['Golden Sun / FFT-style palettes, painterly depth shading and gold-framed JRPG menus.'] },
+  { v: 'Loot Clarity', notes: ['Gear shows the real stat changes vs your equipped item (e.g. +3 ATK −1 DEF) instead of a single coloured %.'] },
+  { v: 'More Mini-Quests', notes: ['Added hunt, cleanse, fetch, lost pet, tribute, forage, grave-robbing, wounded, beacons and courier quests.'] },
+  { v: 'Mini-Quests', notes: ['Floors can host rescue, escort and jailbreak quests with rewards.'] },
+  { v: 'Spontaneity', notes: ['10 randomness systems: Treasure Goblins, gold piles, merchant sales, chest surprises, enemy affixes, descent events, super-drops and floor tints.', '25 light on-descent flavour vignettes.'] },
+  { v: 'Quality of Life', notes: ['HUD shows floor, level/XP and foes remaining; Q drinks a potion, B opens the bag; pulsing stairs and a low-HP warning.'] },
+  { v: 'Combat Feel', notes: ['Enemies pop with shadows and glow halos; crits and the low-HP flash are tuned so the screen no longer flashes on every hit.', 'Enemies take at least 4 hits to kill (crits and buffs still break through).'] },
+  { v: 'Bars & Log', notes: ['HP/MP bars are brighter with numbers and a visible empty track; loot names in the log show their rarity colour, potions their own colour.'] },
 ];
 function showVersionHistory() {
   const el = document.getElementById('version-body');
