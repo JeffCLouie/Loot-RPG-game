@@ -8690,16 +8690,22 @@ function enemyMove(e) {
     e.roused = true;
   }
 
-  // Ranged casters strike from afar and keep their spacing.
+  // Ranged casters strike from afar but no longer kite forever.
   if (beh.ranged) {
-    if (dist <= 1) { stepAwayFromPlayer(e); return; }
+    // Cornered → stand and fight back, so closing the gap actually pays off.
+    if (dist <= 1) { enemyAttackPlayer(e); return; }
     if (dist <= beh.range && hasLineToPlayer(e) && Math.random() < (beh.castChance || 0.7)) {
       enemyRangedAttack(e);
       return;
     }
-    if (dist < beh.keepAway) { stepAwayFromPlayer(e); return; }
-    const step = enemyPathStep(e, player.x, player.y);
-    if (step) enemyStep(e, step[0], step[1]);
+    // Only occasionally reposition for spacing — most turns they hold ground, so
+    // you aren't chasing them across the whole floor.
+    if (dist < beh.keepAway && Math.random() < 0.35) { stepAwayFromPlayer(e); return; }
+    // Close in only when out of casting range; otherwise hold position.
+    if (dist > beh.range) {
+      const step = enemyPathStep(e, player.x, player.y);
+      if (step) enemyStep(e, step[0], step[1]);
+    }
     return;
   }
 
