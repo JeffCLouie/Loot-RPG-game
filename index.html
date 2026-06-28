@@ -227,6 +227,17 @@
   .settings-item .action-icon { font-size: 18px; }
   .settings-item .action-label { font-size: 12px; }
 
+  /* ── DEATH SCREEN ── */
+  #death-overlay { position: fixed; inset: 0; background: rgba(40,0,0,0.78); z-index: 500; display: none; align-items: center; justify-content: center; padding: 20px; }
+  #death-overlay.open { display: flex; animation: deathFade 0.35s ease; }
+  @keyframes deathFade { from { opacity: 0; } to { opacity: 1; } }
+  #death-card { background: linear-gradient(180deg, #2a1014, #160809); border: 2px solid #b3303a; border-radius: 12px; max-width: 320px; width: 100%; padding: 22px 18px; text-align: center; box-shadow: 0 0 40px rgba(200,0,30,0.5); }
+  .death-title { color: #ff4452; font-size: 26px; font-weight: bold; letter-spacing: 3px; text-shadow: 0 0 12px rgba(255,60,80,0.7); margin-bottom: 14px; }
+  #death-penalties { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+  .death-pen { font-size: 12px; color: #f0d8da; }
+  .death-btn { background: #b3303a; border: 1px solid #ff6472; color: #fff; font-family: 'Courier New', monospace; font-size: 13px; letter-spacing: 1px; padding: 9px 22px; border-radius: 8px; cursor: pointer; }
+  .death-btn:active { background: #ff4452; }
+
   /* ── VERSION HISTORY POPUP ── */
   #version-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 400; display: none; align-items: center; justify-content: center; padding: 16px; }
   #version-overlay.open { display: flex; }
@@ -1602,6 +1613,15 @@
           <div class="settings-dpad-row" id="dpad-op-row"></div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- Death screen — a hard, unmistakable stop with the penalties spelled out. -->
+  <div id="death-overlay">
+    <div id="death-card">
+      <div class="death-title">💀 YOU DIED</div>
+      <div id="death-penalties"></div>
+      <button class="death-btn" onclick="closeDeath()">Continue</button>
     </div>
   </div>
 
@@ -9154,25 +9174,48 @@ function footDist(e) {
 // gold as the price of being patched up. You keep your level, gear, and floor
 // progress: the Dungeon Gate drops you back in on the floor where you fell.
 function handleDeath() {
+  // Death stings now: lose HALF your gold, all progress toward your next level,
+  // get knocked back a floor, and revive only half-healed.
   const lostGold = Math.floor(player.gold / 2);
   player.gold -= lostGold;
+  const lostXp = Math.min(player.xp, xpForLevel(player.level));
+  player.xp = Math.max(0, player.xp - lostXp);
   statusEffects = statusEffects.filter(s => s.target !== 'player');
-  player.skillCds = {}; combatBuffs = {}; // revived fresh — skills ready again
+  player.skillCds = {}; combatBuffs = {};
   sfx('death');
-  // Remember where you fell so the Dungeon Gate can return you there.
-  dungeonReturn = dungeonLevel;
+  screenFlash('#cc0000');
+  // Knocked back: the Dungeon Gate returns you a floor shallower than you fell.
+  const fellOn = dungeonLevel;
+  dungeonReturn = Math.max(1, dungeonLevel - 1);
   closeShop(); closeMystic(); closeTown();
   buildTown();     // clears inTown=false → true and resets town state
   openTownHub();   // drop the player into the town menu
-  // The healer's care: revived to full and cleansed of poison & curses.
-  player.hp = player.maxHp;
-  player.mp = player.maxMp;
-  log(`💀 ${player.name || HERO} was slain! The healer revived you in town — lost ${lostGold}g for the trouble.`, 'important');
-  log('⛑️ Fully restored. Take the 🌀 Dungeon Gate when you\'re ready to head back down.');
+  // Revived in town but WEAKENED — only half health and mana, not a full heal.
+  player.hp = Math.max(1, Math.round(player.maxHp * 0.5));
+  player.mp = Math.round(player.maxMp * 0.5);
+  showDeathScreen(lostGold, lostXp, dungeonReturn);
+  log(`💀 ${player.name || HERO} was SLAIN on floor ${fellOn}! Lost ${lostGold}g${lostXp ? ` and ${lostXp} XP` : ''}, revived weakened in town.`, 'important');
   updateBars();
   saveGame();
   draw();
 }
+
+// A hard, unmistakable death screen that spells out every penalty.
+function showDeathScreen(lostGold, lostXp, returnFloor) {
+  const el = document.getElementById('death-penalties');
+  if (el) {
+    const lines = [
+      `💰 Lost ${lostGold} gold (half your purse)`,
+      lostXp ? `✦ Lost ${lostXp} XP — back to the start of level ${player.level}` : null,
+      `❤️ Revived at half health & mana`,
+      `⬇️ Knocked back — re-enter at floor ${returnFloor}`,
+    ].filter(Boolean);
+    el.innerHTML = lines.map(t => `<div class="death-pen">${t}</div>`).join('');
+  }
+  const ov = document.getElementById('death-overlay');
+  if (ov) ov.classList.add('open');
+}
+function closeDeath() { const ov = document.getElementById('death-overlay'); if (ov) ov.classList.remove('open'); }
 
 function checkPickupProximity() {
   // Loot underfoot is shown on the map; no need to nag about it.
