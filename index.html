@@ -1578,6 +1578,19 @@
     color: rgba(232, 194, 103, 0.85);
     border-color: rgba(232, 194, 103, 0.6);
   }
+  /* ── Movement-pad shapes (chosen in ⚙️ settings → SHAPE) ──
+     'soft' is the default rounded-square look above; these override the
+     corner radius / fill for the other three options. */
+  #touch-dpad.dp-round .dpad-btn  { border-radius: 50%; }
+  #touch-dpad.dp-square .dpad-btn { border-radius: 3px; }
+  #touch-dpad.dp-ghost .dpad-btn {
+    background: rgba(20, 16, 32, 0.12);
+    border-color: rgba(232, 194, 103, 0.7);
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  #touch-dpad.dp-ghost .dpad-btn:active { background: rgba(232, 194, 103, 0.4); }
 
   /* One-time hint that teaches the movement pad after the d-pad's removal.
      Floats just above the bottom bar and fades itself out. */
@@ -1853,6 +1866,8 @@
           <div class="settings-dpad-row" id="dpad-pos-row"></div>
           <div class="settings-dpad-label">OPACITY</div>
           <div class="settings-dpad-row" id="dpad-op-row"></div>
+          <div class="settings-dpad-label">SHAPE</div>
+          <div class="settings-dpad-row" id="dpad-style-row"></div>
         </div>
       </div>
     </div>
@@ -5294,7 +5309,9 @@ canvas.addEventListener('pointerup', e => {
 const touchDpad = document.getElementById('touch-dpad');
 // Movement-pad preferences: corner to dock it in, and its opacity (0 = hidden).
 const DPAD_KEY = 'dpadCfg';
-let dpadCfg = { pos: 'left', opacity: 1 };
+let dpadCfg = { pos: 'left', opacity: 1, style: 'soft' };
+// The shapes the movement pad can take, applied as a `dp-<id>` class on #touch-dpad.
+const DPAD_STYLES = ['soft', 'round', 'square', 'ghost'];
 try { const s = JSON.parse(localStorage.getItem(DPAD_KEY)); if (s) dpadCfg = Object.assign(dpadCfg, s); } catch (e) {}
 
 function saveDpadCfg() { try { localStorage.setItem(DPAD_KEY, JSON.stringify(dpadCfg)); } catch (e) {} }
@@ -5320,6 +5337,9 @@ function applyDpadSettings() {
     const hidden = dpadCfg.opacity <= 0;
     touchDpad.style.opacity = hidden ? '0' : String(dpadCfg.opacity);
     touchDpad.style.pointerEvents = hidden ? 'none' : 'auto';
+    // Swap the shape class (dp-soft / dp-round / dp-square / dp-ghost).
+    const style = DPAD_STYLES.includes(dpadCfg.style) ? dpadCfg.style : 'soft';
+    DPAD_STYLES.forEach(s => touchDpad.classList.toggle('dp-' + s, s === style));
   }
   positionTouchDpad();
 }
@@ -6558,17 +6578,22 @@ function openTownService(kind) {
 // so the selected button reflects the new choice.
 function setDpadPos(p) { dpadCfg.pos = p; saveDpadCfg(); applyDpadSettings(); renderDpadControls(); }
 function setDpadOpacity(v) { dpadCfg.opacity = v; saveDpadCfg(); applyDpadSettings(); renderDpadControls(); }
+function setDpadStyle(s) { dpadCfg.style = s; saveDpadCfg(); applyDpadSettings(); renderDpadControls(); }
 function renderDpadControls() {
   const posRow = document.getElementById('dpad-pos-row');
   const opRow  = document.getElementById('dpad-op-row');
+  const styRow = document.getElementById('dpad-style-row');
   if (!posRow || !opRow) return;
-  const pos = dpadCfg.pos, op = dpadCfg.opacity;
+  const pos = dpadCfg.pos, op = dpadCfg.opacity, sty = dpadCfg.style;
   const posBtn = (val, label) =>
     `<button class="dpad-cfg-btn ${pos === val ? 'sel' : ''}" onclick="setDpadPos('${val}')">${label}</button>`;
   const opBtn = (val, label) =>
     `<button class="dpad-cfg-btn ${Math.abs(op - val) < 0.001 ? 'sel' : ''}" onclick="setDpadOpacity(${val})">${label}</button>`;
+  const styBtn = (val, label) =>
+    `<button class="dpad-cfg-btn ${sty === val ? 'sel' : ''}" onclick="setDpadStyle('${val}')">${label}</button>`;
   posRow.innerHTML = posBtn('left', 'Left') + posBtn('center', 'Centre') + posBtn('right', 'Right');
   opRow.innerHTML  = opBtn(1, 'Full') + opBtn(0.66, '66%') + opBtn(0.33, '33%') + opBtn(0, 'Off');
+  if (styRow) styRow.innerHTML = styBtn('soft', 'Soft') + styBtn('round', 'Round') + styBtn('square', 'Square') + styBtn('ghost', 'Ghost');
 }
 
 // ── TOWN HUB MENU — the town itself is a menu of services ──
