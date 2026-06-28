@@ -75,6 +75,7 @@
   #level-hud { color: var(--gold); }
   #power-hud { color: #ffd24b; }
   #pact-hud { color: #7fe0d0; }
+  #food-hud { color: #ffb870; }
   .xp-track { width: 46px; height: 6px; background: #45455e; border: 1px solid #000; border-radius: 3px; overflow: hidden; }
   .xp-fill { height: 100%; background: linear-gradient(180deg, #ffe9a0, var(--gold)); box-shadow: 0 0 5px var(--gold); transition: width 0.2s; }
 
@@ -1589,6 +1590,45 @@
     80%  { opacity: 1; transform: translateX(-50%) translateY(0); }
     100% { opacity: 0; transform: translateX(-50%) translateY(8px); }
   }
+
+  /* ── Ramen House / cooking UI ── */
+  .cook-blurb { font-size: 10px; color: #b9ad8f; line-height: 1.45; margin: 4px 2px 8px; }
+  .cook-sec { font-size: 11px; color: var(--gold); letter-spacing: 1px; margin: 12px 2px 5px; border-bottom: 1px solid var(--border); padding-bottom: 3px; }
+  .cook-empty { font-size: 10px; color: #6a6480; font-style: italic; padding: 4px 2px; }
+  .cook-active { display: flex; align-items: center; gap: 9px; background: linear-gradient(90deg, #3a2516, #241a2e); border: 1px solid #ffb870; border-radius: 7px; padding: 8px 10px; margin: 2px; }
+  .cook-active-emoji { font-size: 26px; }
+  .cook-active-name { color: #ffb870; font-weight: bold; font-size: 13px; }
+  .cook-active-fx { color: #e8e0c8; font-size: 10px; margin-top: 1px; }
+  .cook-active-floors { color: #b9ad8f; font-size: 9px; margin-top: 1px; }
+  .ing-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+  .ing-chip { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; cursor: pointer; text-align: left; position: relative; color: var(--text); }
+  .ing-chip:active { background: #2a2240; }
+  .ing-chip:disabled { opacity: 0.4; cursor: default; }
+  .ing-emoji { font-size: 18px; }
+  .ing-name { font-size: 10px; color: #ece2cc; font-weight: bold; }
+  .ing-fx { font-size: 9px; color: #8fd06a; }
+  .ing-have { position: absolute; top: 5px; right: 7px; font-size: 10px; color: var(--gold); }
+  .pot-list { display: flex; flex-wrap: wrap; gap: 4px; margin: 2px; }
+  .pot-chip { background: #2a1f3a; border: 1px solid #6a4d8a; border-radius: 12px; color: #e8d8ff; font-size: 10px; padding: 3px 8px; cursor: pointer; }
+  .pot-chip .pot-x { color: #ff8080; margin-left: 2px; }
+  .pot-preview { font-size: 10px; color: #cdbf9a; margin: 6px 2px 2px; }
+  .pot-preview b { color: #ffe09a; }
+  .pot-secret { color: #ffd24b; font-size: 10px; margin-top: 2px; }
+  .cook-actions { display: flex; gap: 6px; margin: 8px 2px 2px; }
+  .cook-btn { flex: 1; background: linear-gradient(180deg, #d2622a, #a8401a); border: 1px solid #ffae6a; color: #fff; font-family: 'Courier New', monospace; font-weight: bold; font-size: 12px; letter-spacing: 1px; padding: 8px 0; border-radius: 6px; cursor: pointer; }
+  .cook-btn:active { filter: brightness(0.9); }
+  .cook-btn.ghost { background: #2a2240; border-color: var(--border); color: #b9ad8f; flex: 0 0 70px; }
+  .food-row, .recipe-row { display: flex; align-items: center; gap: 8px; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; margin: 4px 2px; }
+  .recipe-row.locked { opacity: 0.7; }
+  .food-emoji { font-size: 20px; width: 24px; text-align: center; }
+  .food-info { flex: 1; min-width: 0; }
+  .food-name { font-size: 11px; color: #ece2cc; font-weight: bold; }
+  .food-fx { font-size: 9px; color: #8fd06a; }
+  .recipe-need { font-size: 10px; margin-top: 2px; }
+  .recipe-need .need.ok { color: #8fd06a; }
+  .recipe-need .need.no { color: #a06868; }
+  .eat-btn { background: #2e7d32; border-color: #5bbf60; color: #fff; }
+  .eat-btn:active { background: #256528; }
 </style>
 </head>
 <body>
@@ -1614,6 +1654,7 @@
   <div class="hud-item" id="enemies-hud" data-tip="<div class='ht-name'>⚔️ Foes Remaining</div><div class='ht-line'>How many enemies are still alive on this floor. The stairs down stay sealed (🔒) until every foe is cleared (🔓).</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">⚔️ <span class="hud-val" id="enemies-num">0</span> <span id="clear-status">🔒</span></div>
   <div class="hud-item" id="power-hud" data-tip="<div class='ht-name'>⚡ Power</div><div class='ht-line'>A rough measure of your overall strength, combining your level, equipped gear, spent attributes and skills.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">⚡ <span class="hud-val" id="power-num">0</span></div>
   <div class="hud-item" id="pact-hud" style="display:none" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">🔮 <span class="hud-val" id="pact-num"></span></div>
+  <div class="hud-item" id="food-hud" style="display:none" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">🍜 <span class="hud-val" id="food-num"></span></div>
   <div id="gold-display" data-tip="<div class='ht-name' style='color:var(--gold)'>💰 Gold</div><div class='ht-line'>The dungeon's main currency. Spend it at the town shops, the Forge, the Enchanter, and the Stash.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">💰 <span id="gold-count">0</span>g</div>
 </div>
 
@@ -1750,6 +1791,7 @@
       <button class="tab-btn" id="tab-equip" onclick="switchTab('equip')">GEAR</button>
       <button class="tab-btn" id="tab-hero" onclick="switchTab('hero')">HERO</button>
       <button class="tab-btn" id="tab-skills" onclick="switchTab('skills')">SKILLS</button>
+      <button class="tab-btn" id="tab-cook" onclick="switchTab('cook')">COOK</button>
     </div>
     <div id="panel-content"></div>
   </div>
@@ -2772,19 +2814,19 @@ function playerPower() {
 function baseMaxHp() {
   let hp = player.level*8 + totalAttr('vitality') * ATTR_FX.hpPerVit + totalStat('HP');
   if (player.class === 'templar') hp = hp * 1.20; // Templar: hardier body
-  hp = hp * (1 + skillBonus('maxHpPct')); // Toughness / Divine Vigor / capstones
+  hp = hp * (1 + skillBonus('maxHpPct') + foodFx('maxHpPct')); // skills + a hearty bowl of ramen
   return Math.max(1, Math.round(hp));
 }
 function baseMaxMp() {
   let mp = player.level*4 + totalAttr('spirit') * ATTR_FX.mpPerSpr + totalStat('MP');
   if (player.class === 'mage') mp = mp * 1.30; // Mage: deeper mana pool
-  mp = mp * (1 + skillBonus('maxMpPct')); // Arcane Mind / Attunement / Ward Flesh
+  mp = mp * (1 + skillBonus('maxMpPct') + foodFx('maxMpPct')); // skills + ramen
   return Math.max(0, Math.round(mp));
 }
 
 // Total Defense: gear DEF plus a contribution from Vitality.
 function playerDefense() {
-  return totalStat('DEF') + totalAttr('vitality') * ATTR_FX.defPerVit;
+  return totalStat('DEF') + totalAttr('vitality') * ATTR_FX.defPerVit + foodFx('defFlat');
 }
 
 // Crit chance — driven by Luck (and gear CRIT/LCK). Crit chance only ever ranges
@@ -2793,7 +2835,7 @@ function playerDefense() {
 // negative (no stat should ever read below 0).
 function playerCritChance() {
   const rogueCrit = player.class === 'rogue' ? 0.08 : 0;
-  return Math.max(0, Math.min(0.6, 0.04 + rogueCrit + skillBonus('crit') + buffMag('critUp')
+  return Math.max(0, Math.min(0.6, 0.04 + rogueCrit + skillBonus('crit') + buffMag('critUp') + foodFx('critPct')
     + (totalStat('CRIT') + totalStat('LCK')) * 0.01
     + totalAttr('luck') * ATTR_FX.critPerLuck));
 }
@@ -2802,7 +2844,7 @@ function playerCritChance() {
 // Capped so you can never become untouchable — depth threat still outpaces it.
 function playerDodge() {
   const base = totalAttr('agility') * ATTR_FX.dodgePerAgi + totalStat('SPD') * 0.006
-    + totalStat('DODGE') / 100 + skillBonus('dodge') + buffMag('dodgeUp');
+    + totalStat('DODGE') / 100 + skillBonus('dodge') + buffMag('dodgeUp') + foodFx('dodgePct');
   // Rogues are slipperier: a flat dodge bump and a slightly higher ceiling.
   if (player.class === 'rogue') return Math.min(0.6, base + 0.08);
   return Math.min(0.5, base);
@@ -2821,6 +2863,7 @@ function hpRegenPerTurn() {
   if (player.class === 'templar') r += 2; // Templar mends faster between fights
   r += skillBonus('hpRegen'); // Recovery / Divine Vigor passives
   r += Math.round(buffMag('regen')); // Redeemer / Bastion regen buffs
+  r += Math.round(foodFx('regen')); // a warm bowl of ramen mends you between fights
   return r;
 }
 function mpRegenPerTurn() {
@@ -2845,6 +2888,102 @@ const FOODS = [
   { emoji: '🥓', name: 'Bacon',       heal: 16 },
   { emoji: '🍤', name: 'Fried Shrimp',heal: 13 },
 ];
+
+// ── COOKING: RAMEN ──
+// Monsters drop ramen toppings. Drop ANY mix of them into the pot and cook a
+// bowl — every topping in the bowl stacks its own little static buff onto the
+// finished dish (two slices of pork = double the damage bonus). Hit an exact
+// SECRET combo (see RECIPES) and the bowl unlocks a named ramen with an extra
+// bonus stacked on top. A cooked bowl is eaten to grant its buff for a number
+// of floors. Buff effect keys understood by the formulas: dmgPct, maxHpPct,
+// maxMpPct, defFlat, critPct, dodgePct, regen, goldPct, magicPct.
+const INGREDIENTS = {
+  pork:     { emoji: '🥩', name: 'Chashu Pork', color: '#e87a8a', weight: 18, fx: { dmgPct: 0.05 } },
+  egg:      { emoji: '🥚', name: 'Egg',         color: '#f0e4c0', weight: 16, fx: { maxHpPct: 0.04 } },
+  mushroom: { emoji: '🍄', name: 'Mushroom',    color: '#d98a6a', weight: 18, fx: { defFlat: 6 } },
+  fishcake: { emoji: '🍥', name: 'Fishcake',    color: '#7fc0e0', weight: 12, fx: { maxMpPct: 0.05 } },
+  corn:     { emoji: '🌽', name: 'Corn',        color: '#ffd24b', weight: 9,  fx: { goldPct: 0.12, magicPct: 0.12 } },
+  chili:    { emoji: '🌶️', name: 'Chili Oil',   color: '#ff5a4b', weight: 9,  fx: { critPct: 0.03 } },
+  scallion: { emoji: '🌿', name: 'Scallion',    color: '#7fd06a', weight: 20, fx: { regen: 2 } },
+  bokchoy:  { emoji: '🥬', name: 'Bok Choy',    color: '#9bd06a', weight: 12, fx: { dodgePct: 0.03 } },
+};
+const INGREDIENT_KEYS = Object.keys(INGREDIENTS);
+
+// Secret named ramen. `ing` is the EXACT topping multiset that unlocks it; `bonus`
+// is stacked ON TOP of the toppings' own summed buffs; `bonusFloors` extends the
+// bowl's duration beyond the base 3 floors.
+const RAMEN_BASE_FLOORS = 3;
+const RECIPES = [
+  { id: 'tonkotsu', emoji: '🍜', name: 'Tonkotsu Ramen',   ing: { pork: 2, egg: 1 },                           bonus: { dmgPct: 0.05, maxHpPct: 0.05 }, bonusFloors: 2 },
+  { id: 'spicymiso',emoji: '🌶️', name: 'Spicy Miso Ramen',  ing: { pork: 1, chili: 2, mushroom: 1 },            bonus: { dmgPct: 0.08, critPct: 0.04 },  bonusFloors: 2 },
+  { id: 'seafood',  emoji: '🍥', name: 'Seafood Ramen',     ing: { fishcake: 2, mushroom: 1, scallion: 1 },     bonus: { maxMpPct: 0.08, regen: 2 },      bonusFloors: 2 },
+  { id: 'buttercorn',emoji:'🌽', name: 'Butter Corn Ramen', ing: { corn: 2, egg: 1 },                           bonus: { goldPct: 0.2, magicPct: 0.2 },   bonusFloors: 2 },
+  { id: 'veggie',   emoji: '🥬', name: 'Garden Ramen',      ing: { bokchoy: 1, mushroom: 1, scallion: 1, corn: 1 }, bonus: { dodgePct: 0.04, defFlat: 8 }, bonusFloors: 2 },
+  { id: 'everything',emoji:'👑', name: 'The Everything Bowl', ing: { pork: 1, egg: 1, mushroom: 1, fishcake: 1, corn: 1, chili: 1, scallion: 1, bokchoy: 1 }, bonus: { dmgPct: 0.1, maxHpPct: 0.1, critPct: 0.03, regen: 3 }, bonusFloors: 3 },
+];
+
+// Friendly labels for every buff effect a topping or bowl can grant.
+const FOOD_FX_LABELS = {
+  dmgPct:   v => `+${Math.round(v * 100)}% Damage`,
+  maxHpPct: v => `+${Math.round(v * 100)}% Max HP`,
+  maxMpPct: v => `+${Math.round(v * 100)}% Max MP`,
+  defFlat:  v => `+${Math.round(v)} Defense`,
+  critPct:  v => `+${Math.round(v * 100)}% Crit`,
+  dodgePct: v => `+${Math.round(v * 100)}% Dodge`,
+  regen:    v => `+${Math.round(v)} HP Regen`,
+  goldPct:  v => `+${Math.round(v * 100)}% Gold Find`,
+  magicPct: v => `+${Math.round(v * 100)}% Magic Find`,
+};
+function fxDesc(fx) {
+  return Object.entries(fx || {})
+    .filter(([k, v]) => FOOD_FX_LABELS[k] && v)
+    .map(([k, v]) => FOOD_FX_LABELS[k](v))
+    .join(', ');
+}
+function round3(x) { return Math.round(x * 1000) / 1000; }
+
+// ── cooking state & helpers ──
+let cookPot = {};        // the ramen pot being built: ingredientKey -> count
+let cookMount = 'town';  // where the kitchen UI is showing: 'town' | 'panel'
+
+function gainIngredient(k, n) {
+  if (!player.ingredients) player.ingredients = {};
+  player.ingredients[k] = (player.ingredients[k] || 0) + n;
+}
+function ingCount(k) { return (player.ingredients && player.ingredients[k]) || 0; }
+function recipeById(id) { return RECIPES.find(r => r.id === id); }
+function isDiscovered(id) { return (player.discoveredRecipes || []).includes(id); }
+function haveIngredientsFor(r) { return Object.entries(r.ing).every(([k, n]) => ingCount(k) >= n); }
+// Does an exact topping multiset match a secret recipe? Returns the recipe or null.
+function matchRecipe(pot) {
+  const keys = Object.keys(pot).filter(k => pot[k] > 0);
+  return RECIPES.find(r => {
+    const rk = Object.keys(r.ing);
+    return rk.length === keys.length && rk.every(k => r.ing[k] === pot[k]);
+  }) || null;
+}
+// Build the finished-bowl description from a pot: summed topping buffs, plus any
+// secret-recipe bonus, with name/emoji/duration.
+function bowlFromPot(pot) {
+  const fx = {};
+  for (const [k, c] of Object.entries(pot)) {
+    if (!c || !INGREDIENTS[k]) continue;
+    for (const [stat, v] of Object.entries(INGREDIENTS[k].fx)) fx[stat] = round3((fx[stat] || 0) + v * c);
+  }
+  const r = matchRecipe(pot);
+  let name = 'Bowl of Ramen', emoji = '🍜', floors = RAMEN_BASE_FLOORS, recipe = null;
+  if (r) {
+    for (const [stat, v] of Object.entries(r.bonus)) fx[stat] = round3((fx[stat] || 0) + v);
+    name = r.name; emoji = r.emoji; floors = RAMEN_BASE_FLOORS + (r.bonusFloors || 0); recipe = r.id;
+  }
+  return { fx, name, emoji, floors, recipe, match: r };
+}
+// Active food-buff effect value for a stat key (0 when no/expired buff).
+function foodFx(key) {
+  const b = player.foodBuff;
+  if (!b || !(b.floors > 0) || !b.fx) return 0;
+  return b.fx[key] || 0;
+}
 
 // Enemy rosters by depth band. Each floor draws a few types from one band so
 // floors feel varied but enemies stay around the same power level.
@@ -3706,7 +3845,11 @@ let player = { x: 5, y: 5, facing: 'left', hp: 100, maxHp: 100, mp: 60, maxMp: 6
   wardrobe: { head: [], chest: [], weapon: [] },
   // Crafting materials — a second currency dropped by foes, spent at the
   // Craftsman (Scrap/Core) and Enchanter (Glimmer), with Chaos Orbs for the top end.
-  materials: { scrap: 0, core: 0, glimmer: 0, chaos: 0 } };
+  materials: { scrap: 0, core: 0, glimmer: 0, chaos: 0 },
+  // Cooking — ramen toppings dropped by foes (ingredients), cooked bowls waiting
+  // to be eaten (pantry), the secret recipes found so far, and the single active
+  // food buff (set when a bowl is eaten, counts down per floor in tickBuffs).
+  ingredients: {}, pantry: [], discoveredRecipes: [], foodBuff: null };
 let inventory = [];
 // The town STASH — a safe vault, completely separate from your character. Gold
 // and gear kept here are never spent at merchants and never lost on death; the
@@ -5817,6 +5960,7 @@ function openTownService(kind) {
   if (kind === 'gambler') { openGambler(); return; }
   if (kind === 'enchanter') { openEnchanter(); return; }
   if (kind === 'stash')   { openStash();   return; }
+  if (kind === 'ramen')   { openRamen();   return; }
   if (kind === 'gate')    { openGate();    return; }
 }
 
@@ -5854,6 +5998,7 @@ const TOWN_MENU = [
   { kind: 'enchanter', icon: '🪄', dl: 'town_enchanter', name: 'Enchanter',   desc: 'Add & reroll affixes' },
   { kind: 'stash',     icon: '🏦', dl: 'town_vault',     name: 'Stash Vault', desc: 'Store gold & gear safe' },
   { kind: 'gambler',   icon: '🎲', dl: 'npc_gambler',    name: 'Gambler',     desc: 'Wager gold for loot' },
+  { kind: 'ramen',     icon: '🍜', dl: null,             name: 'Ramen House', desc: 'Cook toppings into buffs' },
 ];
 function openTownHub() {
   townView = 'hub';
@@ -5904,6 +6049,146 @@ function setTownContent(html) {
   const mt = document.getElementById('town-mats');
   if (mt) mt.innerHTML = matStripHTML();
   document.getElementById('town-content').innerHTML = html;
+}
+
+// ══════════════════════════════════════════
+// RAMEN HOUSE (cooking)
+// ══════════════════════════════════════════
+// The kitchen UI lives in one render function so it can mount in two places: the
+// town Ramen House overlay, and a COOK tab in the bag so you can cook & eat mid-
+// run. Building the pot, cooking, and eating all re-render whichever mount is
+// showing via refreshCooking().
+
+function openRamen() { cookMount = 'town'; openTownModal('🍜 Ramen House'); refreshCooking(); }
+
+function refreshCooking() {
+  const html = renderCookingHTML();
+  if (cookMount === 'town') { setTownContent(html); }
+  else { const el = document.getElementById('panel-content'); if (el) el.innerHTML = html; }
+}
+
+// Pot building — clamp adds to what you actually own (minus what's already in).
+function potAdd(k) {
+  if (ingCount(k) - (cookPot[k] || 0) <= 0) return;
+  cookPot[k] = (cookPot[k] || 0) + 1;
+  sfx('click');
+  refreshCooking();
+}
+function potRemove(k) {
+  if (!cookPot[k]) return;
+  cookPot[k]--; if (cookPot[k] <= 0) delete cookPot[k];
+  refreshCooking();
+}
+function potClear() { cookPot = {}; refreshCooking(); }
+
+// Cook the pot into a bowl: stack every topping's buff, add any secret-recipe
+// bonus, consume the toppings, and stock the finished bowl in the pantry.
+function cookPotNow() {
+  const total = Object.values(cookPot).reduce((a, c) => a + c, 0);
+  if (total === 0) { log('🍜 Drop some toppings in the pot first.'); return; }
+  const bowl = bowlFromPot(cookPot);
+  if (bowl.match && !isDiscovered(bowl.match.id)) {
+    if (!Array.isArray(player.discoveredRecipes)) player.discoveredRecipes = [];
+    player.discoveredRecipes.push(bowl.match.id);
+    log(`📖 Secret recipe discovered: ${bowl.emoji} ${bowl.name}! It carries a bonus on top of its toppings.`, 'important');
+    screenFlash('#ffd24b');
+  }
+  for (const [k, c] of Object.entries(cookPot)) player.ingredients[k] = Math.max(0, ingCount(k) - c);
+  cookPot = {};
+  if (!Array.isArray(player.pantry)) player.pantry = [];
+  player.pantry.push({ name: bowl.name, emoji: bowl.emoji, fx: bowl.fx, floors: bowl.floors, recipe: bowl.recipe });
+  log(`🍜 You cook up ${bowl.emoji} ${bowl.name}${fxDesc(bowl.fx) ? ' — ' + fxDesc(bowl.fx) : ''}.`, 'loot');
+  sfx('shrine');
+  updateBars(); saveGame(); refreshCooking();
+}
+
+// Eat a bowl from the pantry: it becomes your one active food buff for its floors.
+function eatBowl(idx) {
+  const bowl = (player.pantry || [])[idx];
+  if (!bowl) return;
+  player.pantry.splice(idx, 1);
+  player.foodBuff = { name: bowl.name, emoji: bowl.emoji, fx: bowl.fx, floors: bowl.floors };
+  recomputeMaxStats();
+  if (player.hp > player.maxHp) player.hp = player.maxHp;
+  if (player.mp > player.maxMp) player.mp = player.maxMp;
+  log(`${bowl.emoji} You slurp down ${bowl.name} — ${fxDesc(bowl.fx)} for ${bowl.floors} floors!`, 'important');
+  screenFlash('#66dd66'); sfx('potion');
+  updateBars(); saveGame(); refreshCooking();
+}
+
+function renderCookingHTML() {
+  let html = '';
+  const fb = player.foodBuff;
+  if (fb && fb.floors > 0) {
+    html += `<div class="cook-active"><span class="cook-active-emoji">${fb.emoji}</span><div><div class="cook-active-name">${fb.name}</div><div class="cook-active-fx">${fxDesc(fb.fx)}</div><div class="cook-active-floors">${fb.floors} floor${fb.floors === 1 ? '' : 's'} left</div></div></div>`;
+  }
+  html += `<div class="cook-blurb">Monsters drop ramen toppings. Drop any mix into the pot and cook — every topping stacks its own buff into the bowl. Hit a secret combo and the bowl gains an extra bonus. Eat a bowl to gain its buff for a few floors.</div>`;
+
+  // Toppings you own (the static-buff legend doubles as the "add" tray).
+  html += `<div class="cook-sec">🧺 Toppings</div>`;
+  const owned = INGREDIENT_KEYS.filter(k => ingCount(k) > 0);
+  if (!owned.length) {
+    html += `<div class="cook-empty">No toppings yet — slay monsters to gather them.</div>`;
+  } else {
+    html += `<div class="ing-grid">` + INGREDIENT_KEYS.map(k => {
+      if (!ingCount(k)) return '';
+      const avail = ingCount(k) - (cookPot[k] || 0);
+      return `<button class="ing-chip" ${avail <= 0 ? 'disabled' : ''} onclick="potAdd('${k}')">
+        <span class="ing-emoji">${INGREDIENTS[k].emoji}</span>
+        <span class="ing-name">${INGREDIENTS[k].name}</span>
+        <span class="ing-fx">${fxDesc(INGREDIENTS[k].fx)}</span>
+        <span class="ing-have">×${avail}</span>
+      </button>`;
+    }).join('') + `</div>`;
+  }
+
+  // The pot + live preview of the bowl it would make.
+  html += `<div class="cook-sec">🍲 The Pot</div>`;
+  const potTotal = Object.values(cookPot).reduce((a, c) => a + c, 0);
+  if (potTotal === 0) {
+    html += `<div class="cook-empty">Empty. Tap toppings above to add them.</div>`;
+  } else {
+    html += `<div class="pot-list">` + Object.keys(cookPot).map(k =>
+      `<button class="pot-chip" onclick="potRemove('${k}')">${INGREDIENTS[k].emoji} ${INGREDIENTS[k].name} ×${cookPot[k]} <span class="pot-x">✕</span></button>`
+    ).join('') + `</div>`;
+    const preview = bowlFromPot(cookPot);
+    const secret = preview.match
+      ? (isDiscovered(preview.match.id)
+          ? `<div class="pot-secret">${preview.emoji} ${preview.name} (secret recipe!)</div>`
+          : `<div class="pot-secret">✨ This looks like a secret recipe…</div>`)
+      : '';
+    html += `<div class="pot-preview">Bowl: <b>${fxDesc(preview.fx) || 'no effect'}</b> · ${preview.floors} floors${secret}</div>`;
+    html += `<div class="cook-actions"><button class="cook-btn" onclick="cookPotNow()">🔥 Cook</button><button class="cook-btn ghost" onclick="potClear()">Clear</button></div>`;
+  }
+
+  // Pantry — cooked bowls waiting to be eaten.
+  html += `<div class="cook-sec">🍽️ Pantry</div>`;
+  const pantry = player.pantry || [];
+  if (!pantry.length) {
+    html += `<div class="cook-empty">No bowls cooked. Make one above.</div>`;
+  } else {
+    html += pantry.map((b, i) =>
+      `<div class="food-row"><span class="food-emoji">${b.emoji}</span>
+        <div class="food-info"><div class="food-name">${b.name}</div><div class="food-fx">${fxDesc(b.fx) || 'no effect'} · ${b.floors} floors</div></div>
+        <button class="row-btn eat-btn" onclick="eatBowl(${i})">EAT</button></div>`
+    ).join('');
+  }
+
+  // Secret recipe book.
+  const found = (player.discoveredRecipes || []).length;
+  html += `<div class="cook-sec">📖 Secret Recipes (${found}/${RECIPES.length})</div>`;
+  html += RECIPES.map(r => {
+    if (!isDiscovered(r.id)) {
+      const n = Object.values(r.ing).reduce((a, c) => a + c, 0);
+      return `<div class="recipe-row locked"><span class="food-emoji">❓</span><div class="food-info"><div class="food-name">Unknown Ramen</div><div class="food-fx">Cook the right ${n}-topping combo to discover it…</div></div></div>`;
+    }
+    const need = Object.entries(r.ing).map(([k, c]) =>
+      `<span class="need ${ingCount(k) >= c ? 'ok' : 'no'}">${INGREDIENTS[k].emoji}${c}</span>`).join(' ');
+    return `<div class="recipe-row"><span class="food-emoji">${r.emoji}</span>
+      <div class="food-info"><div class="food-name">${r.name}</div><div class="food-fx">bonus: ${fxDesc(r.bonus)} · +${r.bonusFloors} floors</div><div class="recipe-need">${need}</div></div></div>`;
+  }).join('');
+
+  return html;
 }
 
 // ── CRAFTSMAN (Forge) — craft blank gear from scratch using materials ──
@@ -8785,6 +9070,17 @@ function maybeFloorEvent() {
 // Count active shrine buffs down by one floor (called on descent).
 function tickBuffs() {
   for (const k of Object.keys(buffs)) if (buffs[k] > 0) buffs[k]--;
+  // Ramen food buffs are temporary — each fades one floor at a time.
+  if (player.foodBuff && player.foodBuff.floors > 0) {
+    player.foodBuff.floors--;
+    if (player.foodBuff.floors <= 0) {
+      log(`${player.foodBuff.emoji} The warmth of your ${player.foodBuff.name} fades away.`, 'important');
+      player.foodBuff = null;
+      recomputeMaxStats();
+      if (player.hp > player.maxHp) player.hp = player.maxHp;
+      if (player.mp > player.maxMp) player.mp = player.maxMp;
+    }
+  }
 }
 
 // Consume one floor from the active pact. Called after a new floor is generated
@@ -9167,6 +9463,7 @@ function rollPlayerHit(e) {
   const hitCap = Math.max(1, Math.floor(e.maxHp / hitDivisor));
   if (dmg > hitCap) dmg = Math.max(1, Math.round(hitCap * (rnd(80, 100) / 100)));
   if (buffs.power) dmg = Math.round(dmg * 1.5);
+  if (foodFx('dmgPct')) dmg = Math.round(dmg * (1 + foodFx('dmgPct'))); // ramen damage buff
   dmg = Math.round(dmg * classDmgDealtMult()); // Warrior + damage passives
   const dmgUp = buffMag('dmgUp'); // War Cry / Frenzy / Avatar self-buffs
   if (dmgUp > 0) dmg = Math.round(dmg * (1 + dmgUp));
@@ -9228,7 +9525,7 @@ function onEnemyDefeated(e) {
   const goldMult = e.isBoss ? 3 : (e.isElite ? 2 : 1);
   const xp = Math.round(12 * dungeonLevel * xpMult * pfx('xp', 1) * (1 + (totalStat('XPGAIN') + skillBonus('xpGain')) / 100));
   player.xp += xp;
-  const gold = Math.round((rnd(2, 8) + dungeonLevel * 3) * goldMult * (floorMod.goldMult || 1) * pfx('gold', 1) * (1 + (totalStat('GOLDFIND') + skillBonus('goldFind')) / 100));
+  const gold = Math.round((rnd(2, 8) + dungeonLevel * 3) * goldMult * (floorMod.goldMult || 1) * pfx('gold', 1) * (1 + (totalStat('GOLDFIND') + skillBonus('goldFind')) / 100 + foodFx('goldPct')));
   player.gold += gold;
   spawnFloatingText(e.x + 0.35, e.y, `+${gold}g`, '#ffd24b');
   log(`${label} defeated! +${xp} XP, +${gold}g`, 'important');
@@ -9248,7 +9545,7 @@ function onEnemyDefeated(e) {
   updateBars();
   // The floor modifier, an active Fortune buff, gear Magic Find, and any pact all
   // sweeten every drop roll.
-  const lootMult = (floorMod.lootMult || 1) * (buffs.fortune ? 1.5 : 1) * pfx('loot', 1) * (1 + (totalStat('MAGICFIND') + skillBonus('magicFind')) / 100);
+  const lootMult = (floorMod.lootMult || 1) * (buffs.fortune ? 1.5 : 1) * pfx('loot', 1) * (1 + (totalStat('MAGICFIND') + skillBonus('magicFind')) / 100 + foodFx('magicPct'));
   // Drop a chest — bosses and elites always drop, with richer loot. The luck
   // value is how many rarity rolls the chest makes (more rolls = better odds).
   // Enemy drops land straight in your pack — no need to walk over and open them.
@@ -9291,6 +9588,26 @@ function onEnemyDefeated(e) {
       for (const k of keys) gainMaterial(k, gained[k]);
       spawnFloatingText(e.x - 0.35, e.y - 0.3, keys.map(k => `+${gained[k]}${CRAFT_MATERIALS[k].emoji}`).join(' '), '#cfe8ff');
       log(`🧰 ${label} dropped ${keys.map(k => `${gained[k]} ${CRAFT_MATERIALS[k].name}`).join(', ')}.`, 'loot');
+      updateBars();
+    }
+  }
+  // ── Cooking ingredients ── ramen toppings to cook into buff bowls at the Ramen
+  // House in town. Elites and bosses cough up a few; ordinary foes share now and
+  // then. The mix is weighted so common toppings drop more than the rare ones.
+  {
+    const drops = e.isBoss ? rnd(2, 3) : (e.isElite ? rnd(1, 2) : (Math.random() < 0.4 * lootMult ? 1 : 0));
+    if (drops > 0) {
+      const got = {};
+      const totalW = INGREDIENT_KEYS.reduce((s, k) => s + INGREDIENTS[k].weight, 0);
+      for (let n = 0; n < drops; n++) {
+        let roll = Math.random() * totalW, k = INGREDIENT_KEYS[0];
+        for (const key of INGREDIENT_KEYS) { roll -= INGREDIENTS[key].weight; if (roll <= 0) { k = key; break; } }
+        got[k] = (got[k] || 0) + 1;
+        gainIngredient(k, 1);
+      }
+      const keys = Object.keys(got);
+      spawnFloatingText(e.x + 0.35, e.y - 0.3, keys.map(k => `+${got[k]}${INGREDIENTS[k].emoji}`).join(' '), '#cfe6b0');
+      log(`🍴 ${label} dropped ${keys.map(k => `${got[k]} ${INGREDIENTS[k].name}`).join(', ')}.`, 'loot');
       updateBars();
     }
   }
@@ -9533,6 +9850,7 @@ function skillBackstab() {
   let dmg = getWeaponDamage() + player.level * 2 + totalStat('ATK') + attrDamage();
   dmg = Math.round(dmg * 3.0 * classDmgDealtMult());
   if (buffs.power) dmg = Math.round(dmg * 1.5);
+  if (foodFx('dmgPct')) dmg = Math.round(dmg * (1 + foodFx('dmgPct'))); // ramen damage buff
   dmg = Math.max(1, Math.min(dmg, Math.ceil(e.maxHp * 0.6))); // big, but no instant boss delete
   sfx('crit');
   dealDamage(e, dmg, true);
@@ -9550,6 +9868,7 @@ function skillFirebolt() {
   const e = inRange[0];
   let dmg = (16 + player.level * 3 + totalAttr('spirit') * ATTR_FX.spellPerSpr) * spellPowerMult();
   if (buffs.power) dmg = Math.round(dmg * 1.5);
+  if (foodFx('dmgPct')) dmg = Math.round(dmg * (1 + foodFx('dmgPct'))); // ramen damage buff
   dmg = Math.max(1, Math.round(dmg));
   sfx('attack');
   spawnFloatingText(player.x, player.y, '🔥', '#ff8844');
@@ -9621,6 +9940,7 @@ function skillWeaponBase() {
 // zeal, execute, crit, enemy armor / pen). Returns the modified float.
 function applyOffenseMods(dmg, e, forceCrit, isSpell) {
   if (buffs.power) dmg *= 1.5;
+  if (foodFx('dmgPct')) dmg *= (1 + foodFx('dmgPct')); // ramen damage buff
   if (!isSpell) dmg *= classDmgDealtMult();
   const du = buffMag('dmgUp'); if (du) dmg *= (1 + du);
   const idmg = totalStat('IDMG'); if (idmg && !isSpell) dmg *= (1 + idmg / 100);
@@ -10490,6 +10810,20 @@ function updateBars() {
     }
   }
 
+  // Active ramen food buff indicator (hidden when no bowl is in effect).
+  const foodHud = document.getElementById('food-hud');
+  if (foodHud) {
+    const fb = player.foodBuff;
+    if (fb && fb.floors > 0) {
+      foodHud.style.display = '';
+      foodHud.firstChild.textContent = fb.emoji + ' ';
+      setText('food-num', fb.floors);
+      foodHud.dataset.tip = `<div class='ht-name' style='color:#ffb870'>${fb.emoji} ${fb.name}</div><div class='ht-line'>${fxDesc(fb.fx)}</div><div class='ht-line'>${fb.floors} floor${fb.floors === 1 ? '' : 's'} of buff left.</div>`;
+    } else {
+      foodHud.style.display = 'none';
+    }
+  }
+
   // Nudge the HERO / SKILLS tabs when there are unspent points to spend.
   const pts = player.attrPoints || 0;
   const sPts = player.skillPoints || 0;
@@ -10594,6 +10928,8 @@ function switchTab(tab) {
   document.getElementById('tab-hero').classList.toggle('active', tab==='hero');
   const st = document.getElementById('tab-skills');
   if (st) st.classList.toggle('active', tab==='skills');
+  const ct = document.getElementById('tab-cook');
+  if (ct) ct.classList.toggle('active', tab==='cook');
   renderPanel();
 }
 
@@ -10648,6 +10984,9 @@ function renderPanel() {
       `<div style="margin-top:8px;font-size:10px;color:#555">Tap EQUIP on any loot<br>item to gear up.</div>`;
   } else if (currentTab === 'skills') {
     renderSkills(el);
+  } else if (currentTab === 'cook') {
+    cookMount = 'panel';
+    el.innerHTML = renderCookingHTML();
   } else {
     renderHero(el);
   }
@@ -11594,6 +11933,12 @@ function loadGame() {
     // ensure every material key exists on partial saves.
     if (!player.materials || typeof player.materials !== 'object') player.materials = freshMaterials();
     for (const k of CRAFT_MAT_KEYS) if (player.materials[k] == null) player.materials[k] = 0;
+    // Migrate saves that predate cooking: seed the ingredient pouch, pantry, the
+    // discovered-recipe list, and clear any malformed food buff.
+    if (!player.ingredients || typeof player.ingredients !== 'object') player.ingredients = {};
+    if (!Array.isArray(player.pantry)) player.pantry = [];
+    if (!Array.isArray(player.discoveredRecipes)) player.discoveredRecipes = [];
+    if (player.foodBuff && (typeof player.foodBuff !== 'object' || !player.foodBuff.fx || !(player.foodBuff.floors > 0))) player.foodBuff = null;
     // Migrate saves that predate hero attributes.
     if (!player.attributes) player.attributes = baseAttributes();
     if (player.attrPoints == null) player.attrPoints = 0;
