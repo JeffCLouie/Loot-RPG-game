@@ -1121,13 +1121,13 @@
   .class-card .cc-detail { font-size: 9px; color: #8a7d63; line-height: 1.5; }
 
   /* ── CHARACTER NAME + LEADERBOARD + SAVE SLOTS overlays (share the class-overlay look) ── */
-  #name-overlay, #lb-overlay, #slots-overlay {
+  #name-overlay, #lb-overlay, #slots-overlay, #account-overlay {
     position: fixed; inset: 0; background: rgba(0,0,0,0.85);
     display: none; align-items: center; justify-content: center;
     z-index: 410; padding: 16px;
   }
-  #name-overlay.open, #lb-overlay.open, #slots-overlay.open { display: flex; }
-  #name-modal, #lb-modal, #slots-modal {
+  #name-overlay.open, #lb-overlay.open, #slots-overlay.open, #account-overlay.open { display: flex; }
+  #name-modal, #lb-modal, #slots-modal, #account-modal {
     background: #16120c; border: 2px solid #9f7a3f; border-radius: 10px;
     width: 100%; max-width: 400px; max-height: 88vh; overflow-y: auto;
     -webkit-overflow-scrolling: touch; padding: 16px;
@@ -1190,6 +1190,35 @@
     font-size: 11px; cursor: pointer; text-decoration: underline;
     -webkit-tap-highlight-color: transparent;
   }
+
+  /* ── CLOUD SAVE / ACCOUNT overlay ──
+     Optional email+password login (Supabase Auth) that links a player's save
+     slots to their account so progress carries across devices. Reuses the
+     shared overlay/modal chrome above; these rules cover its inputs and rows. */
+  #account-modal { max-width: 360px; }
+  .acct-field { display: block; margin-bottom: 10px; }
+  .acct-field-label { display: block; font-size: 10px; color: #8a7d63; letter-spacing: 1px; margin-bottom: 4px; }
+  .acct-input {
+    width: 100%; box-sizing: border-box; background: #221a10; border: 1px solid var(--border);
+    border-radius: 6px; color: #ffe9b0; font-family: 'Courier New', monospace;
+    font-size: 16px; letter-spacing: 1px; padding: 10px 11px;
+  }
+  .acct-input:focus { outline: none; border-color: var(--gold); }
+  .acct-row { display: flex; gap: 8px; margin-top: 4px; }
+  .acct-row .ov-btn { margin: 0; }
+  .acct-btn-alt { background: #1d2733; border-color: #3a5572; color: #9ab0c9; }
+  .acct-btn-alt:active { background: #243243; }
+  .acct-status { font-size: 11px; text-align: center; min-height: 15px; margin: 10px 0 2px; line-height: 1.4; }
+  .acct-status.err { color: #d98a72; }
+  .acct-status.ok { color: #7fc08a; }
+  .acct-status.busy { color: #b9a98a; }
+  .acct-who { text-align: center; color: #ffe9b0; font-size: 14px; font-weight: bold; word-break: break-all; margin-bottom: 2px; }
+  .acct-who .acct-email { color: #7fc08a; }
+  /* Landing-page sign-in callout: a quiet one-liner under the title buttons. */
+  #title-cloud { margin-top: 8px; font-size: 11px; color: #9ab0c9; cursor: pointer;
+    text-align: center; line-height: 1.4; -webkit-tap-highlight-color: transparent; }
+  #title-cloud .tc-ic { margin-right: 4px; }
+  #title-cloud .tc-link { text-decoration: underline; color: #b9d0ea; }
 
   /* ── TITLE SCREEN / LANDING PAGE ──
      The first thing players see on load: the game's name, a PLAY/CONTINUE
@@ -1899,6 +1928,9 @@
         <button class="settings-item slots-action" onclick="openSlots()">
           <span class="action-icon">💾</span><span class="action-label">SLOTS</span>
         </button>
+        <button class="settings-item cloud-action" onclick="openAccount()">
+          <span class="action-icon" id="cloud-icon">☁️</span><span class="action-label" id="cloud-label">CLOUD</span>
+        </button>
         <button class="settings-item" onclick="showLeaderboard()">
           <span class="action-icon">🏆</span><span class="action-label">BOARDS</span>
         </button>
@@ -2064,11 +2096,14 @@
     <div id="title-settings">
       <button class="title-set-btn" onclick="titleSound()"><span class="tsb-ic" id="t-sound-ic">🔊</span><span class="tsb-lbl" id="t-sound-lbl">Sound: On</span></button>
       <button class="title-set-btn" onclick="titleZoom()"><span class="tsb-ic">🔍</span><span class="tsb-lbl" id="t-zoom-lbl">Zoom</span></button>
+      <button class="title-set-btn" onclick="openAccount()"><span class="tsb-ic">☁️</span><span class="tsb-lbl">Cloud Save</span></button>
       <button class="title-set-btn" onclick="openSlots()"><span class="tsb-ic">💾</span><span class="tsb-lbl">Save Slots</span></button>
       <button class="title-set-btn" onclick="showLeaderboard()"><span class="tsb-ic">🏆</span><span class="tsb-lbl">Leaderboards</span></button>
       <button class="title-set-btn" onclick="showVersionHistory()"><span class="tsb-ic">📜</span><span class="tsb-lbl">Version</span></button>
       <button class="title-set-btn" onclick="showPlayTime()"><span class="tsb-ic">⏱️</span><span class="tsb-lbl">Time Played</span></button>
     </div>
+    <!-- Optional sign-in callout — updated by refreshAccountUi() to reflect login state. -->
+    <div id="title-cloud" onclick="openAccount()"></div>
     <div id="title-credit">Pixel art from the DawnLike tileset by DragonDePlatino &amp; DawnBringer (CC-BY 4.0).</div>
   </div>
 </div>
@@ -2117,6 +2152,19 @@
     <div class="ov-sub">Keep a few heroes on the go. Load a slot to play it, or start a new adventure in an empty one — your current game is saved automatically.</div>
     <div class="slot-list" id="slot-list"></div>
     <div class="lb-foot"><button class="ov-btn" onclick="closeSlots()">Close</button></div>
+  </div>
+</div>
+
+<!-- Cloud Save / account — optional email+password login (Supabase Auth) that
+     links your save slots to an account so progress carries across devices.
+     Body is rendered by renderAccount(): a sign-in form when logged out, or the
+     signed-in summary + Log Out when logged in. -->
+<div id="account-overlay" onclick="if(event.target===this)closeAccount()">
+  <div id="account-modal">
+    <span class="ov-title">☁️ Cloud Save</span>
+    <div class="ov-sub">Optional. Sign in to link your save slots to your account so you can carry your heroes across devices. Your progress still saves on this device either way.</div>
+    <div id="account-body"></div>
+    <div class="lb-foot"><button class="ov-btn" onclick="closeAccount()">Close</button></div>
   </div>
 </div>
 
@@ -13557,6 +13605,8 @@ function saveGame() {
   }
   // Push this character's best stats to the global leaderboard (debounced).
   lbScheduleSubmit();
+  // Mirror this slot to the cloud account, if the player is signed in (debounced).
+  cloudScheduleSave(activeSlot);
 }
 
 function loadGame() {
@@ -13707,12 +13757,15 @@ function loadGame() {
   }
 }
 
-function wipeSave() {
+async function wipeSave() {
   // Clears the slot you're currently playing, then reloads into a fresh hero.
   // Latch _wipingSave first so the pagehide/visibilitychange autosaves that fire
   // during reload can't re-write the slot we're about to clear.
   _wipingSave = true;
   try { localStorage.removeItem(slotKey(activeSlot)); } catch (e) {}
+  // Drop the cloud row too (awaited) so the boot reconcile can't pull the wiped
+  // hero back. Resolves instantly when signed out.
+  await cloudDeleteSlot(activeSlot);
   location.reload();
 }
 
@@ -13741,12 +13794,12 @@ setInterval(playTimeBeat, 1000);
 // and flush the accumulated time before the page goes away.
 if (typeof document !== 'undefined') {
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) { try { saveGame(); } catch (e) {} }
+    if (document.hidden) { try { saveGame(); } catch (e) {} try { cloudFlush(); } catch (e) {} }
     _ptLastBeat = Date.now();
   });
 }
 if (typeof window !== 'undefined') {
-  window.addEventListener('pagehide', () => { try { saveGame(); } catch (e) {} });
+  window.addEventListener('pagehide', () => { try { saveGame(); } catch (e) {} try { cloudFlush(); } catch (e) {} });
 }
 
 // Format a millisecond span as a compact human play-time string: "3h 12m",
@@ -13880,8 +13933,9 @@ function renderSlots() {
 // Start a brand-new hero in slot i. If the slot already holds a character it's
 // wiped first (the slot list only shows ＋ New Game on empty slots, so this
 // path is reached on empties), then we boot into it — init() shows name entry.
-function newGameInSlot(i) {
+async function newGameInSlot(i) {
   try { localStorage.removeItem(slotKey(i)); } catch (e) {}
+  await cloudDeleteSlot(i); // clear any cloud row first so the boot sync won't restore it
   activateSlot(i);
 }
 
@@ -13897,8 +13951,11 @@ function deleteSlot(i) {
   slotDeleteArmed = -1;
   try { localStorage.removeItem(slotKey(i)); } catch (e) {}
   // Wiping the slot you're actively playing means there's nothing to fall back
-  // on — reload starts a fresh hero in it. Otherwise just refresh the list.
-  if (i === activeSlot) { location.reload(); return; }
+  // on — reload starts a fresh hero in it. Otherwise just refresh the list. In
+  // both cases drop the cloud row so a signed-in player's delete sticks across
+  // devices and the boot sync can't pull the deleted hero back.
+  if (i === activeSlot) { cloudDeleteSlot(i).then(() => location.reload()); return; }
+  cloudDeleteSlot(i);
   renderSlots();
 }
 
@@ -14109,6 +14166,326 @@ async function renderLeaderboard() {
   }).join('');
 }
 
+// ══════════════════════════════════════════
+// CLOUD SAVES / ACCOUNT
+// ══════════════════════════════════════════
+// Optional email+password login that links a player's save slots to a Supabase
+// Auth account so progress carries across devices. It reuses the SAME Supabase
+// project as the leaderboard (LB_SUPABASE_URL / LB_SUPABASE_KEY), talking to the
+// GoTrue auth REST API and a `saves` table over the publishable key — no SDK, so
+// the game stays a single file. Sign-in is entirely optional: when logged out
+// (or when no backend is configured) the game behaves exactly as before, saving
+// only to localStorage. When logged in, localStorage stays the fast local cache
+// and each write is mirrored to the cloud; on boot / login we reconcile the two
+// per slot by last-write-wins using the save's own `ts` stamp.
+//
+// One-time backend setup (Supabase SQL editor) — see CLOUD_SAVES.md:
+//   create table public.saves ( user_id uuid, slot int, data jsonb,
+//     updated_at timestamptz default now(), primary key (user_id, slot) );
+//   + row-level-security policies scoping every row to auth.uid().
+// and enable Email auth (ideally with "Confirm email" off for instant sign-up).
+
+const CLOUD_SESSION_KEY = 'dungeonLoot_session_v1';
+const CLOUD_BOOT_RELOADED = 'dungeonLoot_cloudBooted'; // one-shot reload guard (sessionStorage)
+
+// Current auth session, hydrated from localStorage so a login survives reloads.
+let authState = { user: null, accessToken: null, refreshToken: null, expiresAt: 0 };
+(function loadSession() {
+  try {
+    const j = JSON.parse(localStorage.getItem(CLOUD_SESSION_KEY) || 'null');
+    if (j && j.user && j.refreshToken) authState = j;
+  } catch (e) {}
+})();
+
+function cloudEnabled() { return lbEnabled(); }     // same project as the leaderboard
+function persistSession() { try { localStorage.setItem(CLOUD_SESSION_KEY, JSON.stringify(authState)); } catch (e) {} }
+function clearSession() {
+  authState = { user: null, accessToken: null, refreshToken: null, expiresAt: 0 };
+  try { localStorage.removeItem(CLOUD_SESSION_KEY); } catch (e) {}
+  refreshAccountUi();
+}
+// Adopt a GoTrue token response ({ access_token, refresh_token, expires_in, user }).
+function applySession(j) {
+  authState = {
+    user: j.user ? { id: j.user.id, email: j.user.email } : authState.user,
+    accessToken: j.access_token || null,
+    refreshToken: j.refresh_token || authState.refreshToken,
+    expiresAt: Date.now() + ((j.expires_in || 3600) * 1000),
+  };
+  persistSession();
+  refreshAccountUi();
+}
+
+// REST headers carrying the user's bearer token (falls back to the anon key).
+function cloudRestHeaders(extra) {
+  return Object.assign({
+    'apikey': LB_SUPABASE_KEY,
+    'Authorization': 'Bearer ' + (authState.accessToken || LB_SUPABASE_KEY),
+    'Content-Type': 'application/json',
+  }, extra || {});
+}
+
+// Refresh the access token if it's within 2 min of expiry. Returns true when we
+// hold a usable token afterwards; a hard 400/401 means the refresh token is dead,
+// so we sign out cleanly rather than spin.
+async function ensureToken() {
+  if (!authState.user) return false;
+  if (authState.accessToken && authState.expiresAt - Date.now() > 120000) return true;
+  if (!authState.refreshToken) return false;
+  try {
+    const res = await fetch(LB_SUPABASE_URL + '/auth/v1/token?grant_type=refresh_token', {
+      method: 'POST',
+      headers: { 'apikey': LB_SUPABASE_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: authState.refreshToken }),
+    });
+    if (!res.ok) { if (res.status === 400 || res.status === 401) clearSession(); return false; }
+    applySession(await res.json());
+    return true;
+  } catch (e) { return false; }
+}
+
+// ── Per-slot cloud read/write ───────────────────────────────────────────────
+let cloudSaveTimers = {}; // slot → pending debounced push timer
+// Debounced mirror of one slot to the cloud (coalesces a flurry of saves).
+function cloudScheduleSave(slot) {
+  if (!cloudEnabled() || !authState.user) return;
+  if (cloudSaveTimers[slot]) return;
+  cloudSaveTimers[slot] = setTimeout(() => { cloudSaveTimers[slot] = null; cloudPushSlot(slot); }, 3500);
+}
+// Upsert a slot's stored JSON into the cloud, keyed by (user_id, slot). Reads the
+// current localStorage copy so it always ships the latest. Best-effort.
+async function cloudPushSlot(slot, opts) {
+  opts = opts || {};
+  if (!cloudEnabled() || !authState.user) return false;
+  let raw; try { raw = localStorage.getItem(slotKey(slot)); } catch (e) {}
+  if (!raw) return false;
+  let data; try { data = JSON.parse(raw); } catch (e) { return false; }
+  if (!opts.keepalive) await ensureToken();
+  try {
+    const res = await fetch(LB_SUPABASE_URL + '/rest/v1/saves?on_conflict=user_id,slot', {
+      method: 'POST',
+      headers: cloudRestHeaders({ 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
+      body: JSON.stringify({
+        user_id: authState.user.id, slot: slot, data: data,
+        updated_at: new Date(data.ts || Date.now()).toISOString(),
+      }),
+      keepalive: !!opts.keepalive,
+    });
+    return res.ok;
+  } catch (e) { return false; }
+}
+// Remove a slot's cloud row. Awaited by the wipe/new-game paths so a row can't
+// resurrect itself on the next boot reconcile.
+async function cloudDeleteSlot(slot) {
+  if (!cloudEnabled() || !authState.user) return;
+  await ensureToken();
+  try {
+    await fetch(LB_SUPABASE_URL + '/rest/v1/saves?user_id=eq.' + authState.user.id + '&slot=eq.' + slot, {
+      method: 'DELETE', headers: cloudRestHeaders({ 'Prefer': 'return=minimal' }),
+    });
+  } catch (e) {}
+}
+// Synchronous best-effort flush of the active slot on tab-hide / unload.
+function cloudFlush() {
+  if (cloudEnabled() && authState.user) { try { cloudPushSlot(activeSlot, { keepalive: true }); } catch (e) {} }
+}
+
+// ── Reconcile (sync) ────────────────────────────────────────────────────────
+// Pull every cloud slot, then per slot take whichever side has the newer save
+// (by the save's own `ts`): cloud-newer is written into the local cache, and
+// local-newer (or cloud-missing) is pushed up. Returns { activeChanged } so the
+// caller can reload into a freshly-pulled active slot.
+async function cloudReconcile() {
+  const result = { activeChanged: false };
+  if (!cloudEnabled() || !authState.user) return result;
+  if (!await ensureToken()) return result;
+  let rows;
+  try {
+    const res = await fetch(LB_SUPABASE_URL + '/rest/v1/saves?select=slot,data', { headers: cloudRestHeaders() });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    rows = await res.json();
+  } catch (e) { return result; }
+  const cloud = {};
+  (rows || []).forEach(r => { if (r && typeof r.slot === 'number' && r.data) cloud[r.slot] = r.data; });
+  const uploads = [];
+  for (let i = 0; i < SLOT_COUNT; i++) {
+    let local = null;
+    try { const raw = localStorage.getItem(slotKey(i)); if (raw) local = JSON.parse(raw); } catch (e) {}
+    const c = cloud[i];
+    const cts = (c && c.ts) || 0;
+    const lts = (local && local.ts) || 0;
+    if (c && cts > lts) {
+      // Cloud holds a newer save — pull it into the local cache.
+      try { localStorage.setItem(slotKey(i), JSON.stringify(c)); if (i === activeSlot) result.activeChanged = true; } catch (e) {}
+    } else if (local && lts > cts) {
+      // Local is newer (or the slot is cloud-only-missing) — push it up.
+      uploads.push(cloudPushSlot(i));
+    }
+  }
+  try { await Promise.all(uploads); } catch (e) {}
+  return result;
+}
+
+// Boot-time reconcile for an already-signed-in player. If the active slot gets a
+// newer copy from the cloud, reload once so the game re-loads from it (guarded by
+// a one-shot flag so it can never loop).
+async function cloudBootSync() {
+  if (!cloudEnabled() || !authState.user) return;
+  const r = await cloudReconcile();
+  let alreadyReloaded = false;
+  try { alreadyReloaded = sessionStorage.getItem(CLOUD_BOOT_RELOADED) === '1'; } catch (e) {}
+  if (r.activeChanged && !alreadyReloaded) {
+    try { sessionStorage.setItem(CLOUD_BOOT_RELOADED, '1'); } catch (e) {}
+    location.reload();
+  }
+}
+
+// ── Account overlay UI ──────────────────────────────────────────────────────
+function openAccount() {
+  const menu = document.getElementById('settings-menu');
+  if (menu) menu.classList.remove('open');
+  const ov = document.getElementById('account-overlay');
+  if (!ov) return;
+  renderAccount();
+  ov.classList.add('open');
+}
+function closeAccount() {
+  const ov = document.getElementById('account-overlay');
+  if (ov) ov.classList.remove('open');
+}
+function acctStatus(msg, kind) {
+  const el = document.getElementById('account-status');
+  if (!el) return;
+  el.textContent = msg || '';
+  el.className = 'acct-status' + (kind ? ' ' + kind : '');
+}
+function acctReadCreds() {
+  const e = (document.getElementById('acct-email') || {}).value || '';
+  const p = (document.getElementById('acct-pw') || {}).value || '';
+  return { email: e.trim(), pw: p };
+}
+function acctValid(email, pw) {
+  if (!/.+@.+\..+/.test(email)) { acctStatus('Enter a valid email address.', 'err'); return false; }
+  if (pw.length < 6) { acctStatus('Password must be at least 6 characters.', 'err'); return false; }
+  return true;
+}
+function renderAccount() {
+  const body = document.getElementById('account-body');
+  if (!body) return;
+  if (!cloudEnabled()) {
+    body.innerHTML = '<div class="acct-status err">Cloud save isn\'t configured for this game build.</div>';
+    return;
+  }
+  if (authState.user) {
+    body.innerHTML =
+      '<div class="acct-who">Signed in as<br><span class="acct-email">' + escapeHtml(authState.user.email || 'your account') + '</span></div>' +
+      '<div class="acct-status ok">Your save slots sync to this account automatically — load the game on any device, sign in, and pick up where you left off.</div>' +
+      '<div class="acct-row">' +
+        '<button class="ov-btn" onclick="doSyncNow()">⟳ Sync Now</button>' +
+        '<button class="ov-btn acct-btn-alt" onclick="doLogout()">Log Out</button>' +
+      '</div>' +
+      '<div class="acct-status" id="account-status"></div>';
+  } else {
+    body.innerHTML =
+      '<label class="acct-field"><span class="acct-field-label">EMAIL</span>' +
+        '<input class="acct-input" id="acct-email" type="email" autocomplete="email" inputmode="email" spellcheck="false" placeholder="you@example.com"></label>' +
+      '<label class="acct-field"><span class="acct-field-label">PASSWORD</span>' +
+        '<input class="acct-input" id="acct-pw" type="password" autocomplete="current-password" placeholder="at least 6 characters" onkeydown="if(event.key===\'Enter\')doLogin()"></label>' +
+      '<div class="acct-row">' +
+        '<button class="ov-btn" onclick="doLogin()">Log In</button>' +
+        '<button class="ov-btn acct-btn-alt" onclick="doSignup()">Create Account</button>' +
+      '</div>' +
+      '<div class="acct-status" id="account-status"></div>';
+  }
+}
+// Keep the landing-page callout and settings label in step with login state, and
+// re-render the overlay if it's open.
+function refreshAccountUi() {
+  const tc = document.getElementById('title-cloud');
+  if (tc) {
+    if (!cloudEnabled()) { tc.style.display = 'none'; }
+    else {
+      tc.style.display = '';
+      tc.innerHTML = authState.user
+        ? '<span class="tc-ic">☁️</span>Signed in as <b>' + escapeHtml(authState.user.email || 'your account') + '</b> — your save carries across devices.'
+        : '<span class="tc-ic">☁️</span><span class="tc-link">Sign in</span> to carry your save across devices <i>(optional)</i>.';
+    }
+  }
+  const cl = document.getElementById('cloud-label');
+  if (cl) cl.textContent = authState.user ? 'SYNCED' : 'CLOUD';
+  const ov = document.getElementById('account-overlay');
+  if (ov && ov.classList.contains('open')) renderAccount();
+}
+
+// Shared GoTrue POST helper → { res, j }.
+async function authRequest(path, body) {
+  const res = await fetch(LB_SUPABASE_URL + path, {
+    method: 'POST',
+    headers: { 'apikey': LB_SUPABASE_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  let j = {}; try { j = await res.json(); } catch (e) {}
+  return { res, j };
+}
+function authErr(j, fallback) {
+  return (j && (j.error_description || j.msg || j.message || j.error)) || fallback;
+}
+
+async function doLogin() {
+  const { email, pw } = acctReadCreds();
+  if (!acctValid(email, pw)) return;
+  acctStatus('Signing in…', 'busy');
+  try {
+    const { res, j } = await authRequest('/auth/v1/token?grant_type=password', { email, password: pw });
+    if (!res.ok || !j.access_token) { acctStatus(authErr(j, 'Could not sign in — check your email and password.'), 'err'); return; }
+    applySession(j);
+    acctStatus('Signed in ✓ Syncing your saves…', 'ok');
+    try { saveGame(); } catch (e) {}   // persist the current local game before merging
+    await cloudReconcile();
+    location.reload();
+  } catch (e) { acctStatus('Network error — please try again.', 'err'); }
+}
+
+async function doSignup() {
+  const { email, pw } = acctReadCreds();
+  if (!acctValid(email, pw)) return;
+  acctStatus('Creating your account…', 'busy');
+  try {
+    const { res, j } = await authRequest('/auth/v1/signup', { email, password: pw });
+    if (!res.ok) { acctStatus(authErr(j, 'Could not create the account.'), 'err'); return; }
+    if (j.access_token) {
+      // Email confirmation is disabled — we're signed in immediately.
+      applySession(j);
+      acctStatus('Account created ✓ Syncing your saves…', 'ok');
+      try { saveGame(); } catch (e) {}
+      await cloudReconcile();
+      location.reload();
+    } else {
+      // Confirmation required — the player must verify by email, then log in.
+      acctStatus('Account created — check your email to confirm it, then Log In.', 'ok');
+    }
+  } catch (e) { acctStatus('Network error — please try again.', 'err'); }
+}
+
+function doLogout() {
+  try {
+    if (authState.accessToken) {
+      fetch(LB_SUPABASE_URL + '/auth/v1/logout', { method: 'POST', headers: cloudRestHeaders(), keepalive: true }).catch(() => {});
+    }
+  } catch (e) {}
+  clearSession();
+  renderAccount();
+  acctStatus('Signed out. Your saves stay on this device.', 'ok');
+}
+
+async function doSyncNow() {
+  acctStatus('Syncing…', 'busy');
+  try { saveGame(); } catch (e) {}
+  const r = await cloudReconcile();
+  if (r.activeChanged) { location.reload(); return; }
+  acctStatus('Synced ✓ Everything is up to date.', 'ok');
+}
+
 // New-game name entry — shown before the class pick on a fresh game.
 function showNameEntry() {
   const ov = document.getElementById('name-overlay');
@@ -14185,6 +14562,12 @@ renderPanel();
 // it; titlePlay() dismisses the title and runs onboarding (name then class) for
 // a brand-new or class-less hero. Returning heroes just resume on CONTINUE.
 showTitle();
+
+// Paint the optional cloud-save callout, then — if already signed in — reconcile
+// this device's slots with the account in the background (may reload into a
+// newer save pulled from the cloud).
+refreshAccountUi();
+cloudBootSync();
 
 if (hadSave) {
   log(`Welcome back, level ${player.level} adventurer.`, 'important');
