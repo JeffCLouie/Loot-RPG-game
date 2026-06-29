@@ -7305,7 +7305,12 @@ function itemStatLine(item) {
 function statDiffLine(item) {
   if (!item || !item.slot) return '';
   const cur = equipped[item.slot];
-  if (!cur) return '<span class="first-equip">★ FIRST EQUIP</span>';
+  if (!cur) {
+    // A two-hander occupies both hands, so the off-hand slot is unavailable
+    // (unless Titan's Grip). Don't dangle a "first equip" the player can't act on.
+    if (item.slot === 'offhand' && isTwoHander(equipped.weapon) && !skillFlag('titangrip')) return '';
+    return '<span class="first-equip">★ FIRST EQUIP</span>';
+  }
   const num = (it, k) => {
     let v = it.stats ? it.stats[k] : undefined;
     if (v === undefined) v = it.attrs ? it.attrs[k] : undefined;
@@ -10220,9 +10225,9 @@ function draw() {
         drawWall(px, py, tw, th, x, y, seed, C, false);
       } else if (t === 2) {
         // Stairs down — DawnLike pixel staircase (the ▼ arrow is baked into the
-        // tile, so no arrow badge or glow ring is layered on). While the floor is
-        // uncleared the exit is sealed: a red wash plus a locked-door icon over
-        // the stairs; once cleared it's just the bare staircase.
+        // tile). While the floor is uncleared the exit is sealed: a red wash plus
+        // a locked-door icon. Once cleared, a pulsing gold ring marks it as the
+        // way DEEPER, so it's obvious you descend here and not via the up-stairs.
         const sealed = !floorCleared;
         if (!(spriteReady && drawSprite('stairs_down', px, py, tw))) {
           // Legacy fallback: dark pit with descending steps.
@@ -10240,6 +10245,18 @@ function draw() {
           ctx.save(); ctx.globalAlpha = 0.28; ctx.fillStyle = '#cc3322'; ctx.fillRect(px, py, tw, th); ctx.restore();
           if (!(spriteReady && drawSpriteC('feat_door', px + tw/2, py + th*0.5, Math.round(tw*0.5))))
             drawEmoji('🔒', px + tw/2, py + th*0.5, Math.round(tw*0.4));
+        } else {
+          // Cleared → highlight the way deeper with a pulsing gold ring so the
+          // descent stair is unmistakable next to the (plain) up-stairs.
+          const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 320);
+          const lw = Math.max(2, tw * 0.09), o = lw / 2 + 1;
+          ctx.save();
+          ctx.lineWidth = lw;
+          ctx.strokeStyle = `rgba(255,207,90,${0.5 + 0.45 * pulse})`;
+          ctx.shadowColor = 'rgba(255,200,80,0.9)';
+          ctx.shadowBlur = tw * (0.18 + 0.22 * pulse);
+          ctx.strokeRect(px + o, py + o, tw - o * 2, th - o * 2);
+          ctx.restore();
         }
       } else if (t === 12) {
         // Stairs up — DawnLike pixel staircase (the ▲ arrow is baked into the
