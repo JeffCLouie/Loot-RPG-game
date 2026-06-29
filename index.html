@@ -2319,7 +2319,6 @@
     <h1 id="title-logo">DUNGEON<span class="title-sub-word">LOOT</span></h1>
     <div id="title-tag">
       Delve a pixel dungeon for ever-better loot.<br>
-      Grey
       <span class="tier" style="background:#9aa0a6"></span>
       <span class="tier" style="background:#e8e8e8"></span>
       <span class="tier" style="background:#4caf50"></span>
@@ -2327,18 +2326,17 @@
       <span class="tier" style="background:#a45cd6"></span>
       <span class="tier" style="background:#e08a2e"></span>
       <span class="tier" style="background:#d6453a"></span>
-      Mythic
     </div>
     <button class="title-play" id="title-play" onclick="titlePlay()">⚔️ ENTER THE DUNGEON</button>
     <button class="title-play secondary" id="title-newrun" style="display:none" onclick="titleNewRun()">↻ Start a New Run</button>
     <div id="title-settings">
       <button class="title-set-btn" onclick="titleSound()"><span class="tsb-ic" id="t-sound-ic">🔊</span><span class="tsb-lbl" id="t-sound-lbl">Sound</span></button>
       <button class="title-set-btn" onclick="titleZoom()"><span class="tsb-ic">🔍</span><span class="tsb-lbl" id="t-zoom-lbl">Zoom</span></button>
-      <button class="title-set-btn" onclick="openAccount()"><span class="tsb-ic">☁️</span><span class="tsb-lbl">Cloud Save</span></button>
+      <button class="title-set-btn" onclick="openAccount()"><span class="tsb-ic"><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg></span><span class="tsb-lbl">Cloud Save</span></button>
       <button class="title-set-btn" onclick="openSlots()"><span class="tsb-ic">💾</span><span class="tsb-lbl">Save Slots</span></button>
       <button class="title-set-btn" onclick="showLeaderboard()"><span class="tsb-ic">🏆</span><span class="tsb-lbl">Leaderboards</span></button>
       <button class="title-set-btn" onclick="showVersionHistory()"><span class="tsb-ic">📜</span><span class="tsb-lbl">Version</span></button>
-      <button class="title-set-btn" onclick="showPlayTime()"><span class="tsb-ic">⏱️</span><span class="tsb-lbl">Time Played</span></button>
+      <button class="title-set-btn" onclick="showPlayTime()"><span class="tsb-ic"><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 1.8"/></svg></span><span class="tsb-lbl">Time Played</span></button>
     </div>
     <!-- Optional sign-in callout — updated by refreshAccountUi() to reflect login state. -->
     <div id="title-cloud" onclick="openAccount()"></div>
