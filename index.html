@@ -1504,27 +1504,36 @@
       /* Log column also grows with the viewport so the left-hand slack beside
          the centered map is filled too. The map ('1fr') keeps the remainder. */
       grid-template-columns: clamp(250px, 24vw, 480px) 1fr;
-      /* Second row holds the skill bar directly beneath the map. */
-      grid-template-rows: 1fr auto;
+      /* Single map row — the skill bar overlays the bottom of the map (see
+         below) rather than taking its own row, so it never shrinks the map. */
+      grid-template-rows: 1fr;
     }
     /* Log: full-height left column, spanning both rows. */
     #bottom-row {
       grid-column: 1;
-      grid-row: 1 / span 2;
+      grid-row: 1;
       flex: none;
       max-height: none;
       min-height: 0;
       border-top: none;
       border-right: 1px solid var(--border);
     }
-    /* Skill bar: centered in the map column, just under the map. */
+    /* Skill bar: overlaid across the bottom of the map column rather than
+       taking its own grid row, so it renders over the bottom of the map
+       instead of pushing it up and shrinking it. #game-wrap is positioned,
+       so this anchors to the map column (left edge starts after the log). */
     #skill-bar {
-      grid-column: 2;
-      grid-row: 2;
-      justify-self: center;
-      align-self: start;
+      position: absolute;
+      left: clamp(250px, 24vw, 480px);
+      right: 0;
+      bottom: 10px;
+      z-index: 50;
       gap: 7px;
+      pointer-events: none;
     }
+    /* Only the buttons themselves capture clicks — the transparent gaps let
+       map interaction through. */
+    #skill-bar .skillbar-btn { pointer-events: auto; }
     /* On PC there's plenty of room, so make the potion / spell buttons and
        their icons noticeably larger by default for easier clicking. */
     #skill-bar .skillbar-btn { min-width: 54px; padding: 5px 7px; }
