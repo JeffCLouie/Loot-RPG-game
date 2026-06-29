@@ -117,6 +117,23 @@ waiting for manual review:
 - The Diablo 2-style loot tiers (grey → white → green → blue → purple → orange →
   red) communicate rarity by **color only** — do not re-add text rarity labels.
 
+## Layout: no "loners" (orphans & widows)
+
+The user strongly dislikes stranded single elements — a lone tile sitting by
+itself in the corner of an otherwise-full grid, a single word wrapping onto its
+own line, one item alone in a row, etc. It looks unfinished. Whenever you add or
+change UI, check the result for these and fix them:
+
+- **Grids:** if a row would hold a single trailing tile, centre it (or add
+  another genuinely useful tile to balance the row — never filler). The title
+  settings grid already does this via
+  `#title-settings .title-set-btn:last-child:nth-child(3n+1) { grid-column: 2; }`;
+  reuse that pattern for other fixed-column grids.
+- **Text:** avoid one-word last lines in headings/labels/blurbs — tighten the
+  wording, or use a non-breaking space (`&nbsp;`) between the last two words so
+  they wrap together.
+- Apply this proactively on every UI change, not just when asked.
+
 ## Good first prompts for collaborators
 
 - "Pull main and add a minimap."

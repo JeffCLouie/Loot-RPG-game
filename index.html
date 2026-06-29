@@ -281,11 +281,30 @@
   #version-card { background: linear-gradient(180deg, #241c38, #181226); border: 2px solid var(--frame); border-radius: 10px; max-width: 360px; width: 100%; max-height: 80vh; overflow-y: auto; padding: 14px; box-shadow: 0 6px 24px rgba(0,0,0,0.6); }
   .version-head { display: flex; justify-content: space-between; align-items: center; color: var(--gold); font-weight: bold; letter-spacing: 1px; margin-bottom: 10px; }
   .version-x { background: none; border: none; color: var(--text); font-size: 16px; cursor: pointer; line-height: 1; }
+  /* Date section header — sticks to the top of the scroll card so the current
+     group's date stays visible as you scroll the changelog. */
+  .version-date {
+    position: sticky; top: -14px; z-index: 2;
+    background: #211934; color: #c8acff;
+    font-size: 11px; font-weight: bold; letter-spacing: 1px; text-transform: uppercase;
+    padding: 7px 9px; margin: 4px 0 9px;
+    border: 1px solid rgba(160,130,230,0.32); border-radius: 6px;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.45);
+  }
+  .version-date:first-child { margin-top: 0; }
   .version-entry { margin-bottom: 11px; }
   .version-ver { color: var(--gold); font-size: 12px; font-weight: bold; margin-bottom: 2px; }
   .version-by { font-size: 9px; font-weight: bold; letter-spacing: 0.5px; padding: 1px 4px; border-radius: 4px; vertical-align: middle; }
   .version-by.jl { color: #d8e9ff; background: rgba(70, 130, 220, 0.32); }
   .version-by.as { color: #ffe3c4; background: rgba(220, 140, 60, 0.32); }
+  /* Scope badge: small / medium / big — a quick visual sense of each change's size. */
+  .version-size {
+    font-size: 9px; font-weight: bold; letter-spacing: 0.5px; text-transform: uppercase;
+    padding: 1px 5px; border-radius: 4px; vertical-align: middle;
+  }
+  .version-size.sz-small  { color: #c4ccd6; background: rgba(150, 165, 185, 0.22); }
+  .version-size.sz-medium { color: #9fd2a8; background: rgba(70, 180, 95, 0.24); }
+  .version-size.sz-big    { color: #ffd27a; background: rgba(230, 165, 50, 0.30); }
   .version-note { font-size: 11px; color: var(--text); opacity: 0.85; line-height: 1.45; }
 
   /* Time-played popup — reuses the version overlay's framing. */
@@ -1453,6 +1472,9 @@
     display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
     margin-top: 18px; padding-top: 16px; border-top: 1px solid #2a2113;
   }
+  /* No "loner" tiles: if the final tile would sit alone in its last row,
+     centre it rather than stranding it in the left column. */
+  #title-settings .title-set-btn:last-child:nth-child(3n + 1) { grid-column: 2; }
   .title-set-btn {
     display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 4px;
     padding: 11px 6px; border: 1px solid var(--border); border-radius: 8px;
@@ -2308,7 +2330,6 @@
     <h1 id="title-logo">DUNGEON<span class="title-sub-word">LOOT</span></h1>
     <div id="title-tag">
       Delve a pixel dungeon for ever-better loot.<br>
-      Grey
       <span class="tier" style="background:#9aa0a6"></span>
       <span class="tier" style="background:#e8e8e8"></span>
       <span class="tier" style="background:#4caf50"></span>
@@ -2316,22 +2337,21 @@
       <span class="tier" style="background:#a45cd6"></span>
       <span class="tier" style="background:#e08a2e"></span>
       <span class="tier" style="background:#d6453a"></span>
-      Mythic
     </div>
     <button class="title-play" id="title-play" onclick="titlePlay()">⚔️ ENTER THE DUNGEON</button>
     <button class="title-play secondary" id="title-newrun" style="display:none" onclick="titleNewRun()">↻ Start a New Run</button>
     <div id="title-settings">
       <button class="title-set-btn" onclick="titleSound()"><span class="tsb-ic" id="t-sound-ic">🔊</span><span class="tsb-lbl" id="t-sound-lbl">Sound</span></button>
       <button class="title-set-btn" onclick="titleZoom()"><span class="tsb-ic">🔍</span><span class="tsb-lbl" id="t-zoom-lbl">Zoom</span></button>
-      <button class="title-set-btn" onclick="openAccount()"><span class="tsb-ic">☁️</span><span class="tsb-lbl">Cloud Save</span></button>
+      <button class="title-set-btn" onclick="openAccount()"><span class="tsb-ic"><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg></span><span class="tsb-lbl">Cloud Save</span></button>
       <button class="title-set-btn" onclick="openSlots()"><span class="tsb-ic">💾</span><span class="tsb-lbl">Save Slots</span></button>
       <button class="title-set-btn" onclick="showLeaderboard()"><span class="tsb-ic">🏆</span><span class="tsb-lbl">Leaderboards</span></button>
       <button class="title-set-btn" onclick="showVersionHistory()"><span class="tsb-ic">📜</span><span class="tsb-lbl">Version</span></button>
-      <button class="title-set-btn" onclick="showPlayTime()"><span class="tsb-ic">⏱️</span><span class="tsb-lbl">Time Played</span></button>
+      <button class="title-set-btn" onclick="showPlayTime()"><span class="tsb-ic"><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 1.8"/></svg></span><span class="tsb-lbl">Time Played</span></button>
     </div>
     <!-- Optional sign-in callout — updated by refreshAccountUi() to reflect login state. -->
     <div id="title-cloud" onclick="openAccount()"></div>
-    <div id="title-credit">Pixel art from the DawnLike tileset by DragonDePlatino &amp; DawnBringer (CC-BY 4.0).</div>
+    <div id="title-credit">Pixel art from the DawnLike tileset by DragonDePlatino &amp; DawnBringer (CC-BY&nbsp;4.0).<br>Terrain tiles from &ldquo;[LPC] Terrains&rdquo; by bluecarrot16 &amp; LPC contributors (CC-BY-SA&nbsp;4.0).</div>
   </div>
 </div>
 
@@ -2364,6 +2384,7 @@
       <button class="lb-tab on" id="lb-tab-floor" onclick="setLbTab('floor')">⬇️ Furthest</button>
       <button class="lb-tab" id="lb-tab-level" onclick="setLbTab('level')">⭐ Level</button>
       <button class="lb-tab" id="lb-tab-gold" onclick="setLbTab('gold')">💰 Gold</button>
+      <button class="lb-tab" id="lb-tab-power" onclick="setLbTab('power')"><span data-spr="ui_power"></span> Power</button>
     </div>
     <div class="lb-status" id="lb-status"></div>
     <div class="lb-list" id="lb-list"></div>
@@ -4802,8 +4823,8 @@ let player = { x: 5, y: 5, facing: 'left', hp: 100, maxHp: 100, mp: 60, maxMp: 6
   // so you can't spam potions back-to-back. `potionCd` is that cooldown.
   potionCd: 0,
   // Chosen character name (null until entered on a new game) and the peak gold
-  // ever held — both feed the global leaderboards.
-  name: null, maxGold: 0,
+  // and Power ever reached — all feed the global leaderboards.
+  name: null, maxGold: 0, maxPower: 0,
   // Deepest dungeon floor reached — the Dungeon Gate in town lets you re-enter
   // on any floor up to this, so you can backtrack to grind levels and gear.
   maxFloor: 1,
@@ -5726,78 +5747,104 @@ document.addEventListener('click', (e) => {
 
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
-  { v: 'Start with a skill point', by: 'Claude', notes: ['The always-on baseline class skill (Cleave / Backstab / Firebolt / Mend) is gone — it just duplicated the first node of each class’s skill tree.', 'Instead every hero now starts with one skill point, so you pick your first active yourself. R and the ⚡ button cast your first-learned active.', 'Existing characters keep their builds and are granted the extra starting point retroactively.'] },
-  { v: 'Boss battle abilities', by: 'Jeff Louie', notes: ['Every 5th-floor guardian now fights with a kit of telegraphed tricks instead of just walking at you.', 'Walls of flame and firestorms leave burning ground; chains yank you into melee; shockwaves hurl you back; barriers of force pen you in.', 'Bosses also blink to close gaps, freeze you solid, raise damage-halving wards, and mend their wounds when cornered.'] },
-  { v: 'Slower mana regen', by: 'Jeff Louie', notes: ['Mana now trickles back about half as fast, so it actually runs dry in long fights and mana potions are worth carrying again.'] },
-  { v: 'Time played counter', by: 'Jeff Louie', notes: ['New ⏱️ TIME button in Settings shows your grand total play time across every character, plus a per-hero breakdown.', 'Each save slot now lists how long that character has been played.'] },
-  { v: 'Diverse music & boss themes', by: 'Jeff Louie', notes: ['More distinct styles (March, Bloom, Veil, Tide) that drift about every 2 minutes.', 'Boss fights hijack the soundtrack with a fast, menacing Boss track until the floor is cleared.'] },
-  { v: 'PC hotkeys', by: 'Jeff Louie', notes: ['1 heal, 2 mana, E use (with Space), Esc closes menus; skills moved to 3-9.'] },
-  { v: 'Death: lose your bag', by: 'Jeff Louie', notes: ['Dying also takes your whole bag and one random equipped piece — never your weapon.'] },
-  { v: 'Death screen', by: 'Jeff Louie', notes: ['A loud YOU DIED screen lists every penalty at once.'] },
-  { v: 'Harsher deaths', by: 'Jeff Louie', notes: ['Lose half your gold and all progress toward your next level, revive at half health/mana, knocked back a floor.'] },
-  { v: 'Skill-tree overhaul', by: 'Claude', notes: ['Passive & active skill trees, ascensions, and summonable minions.'] },
-  { v: 'Mobile tooltip fix', by: 'Jeff Louie', notes: ['Hover tooltips no longer pop open at random when you tap on a touchscreen.'] },
-  { v: 'Roaming behemoths', by: 'Jeff Louie', notes: ['Big bosses lumber after you and spawn in a cleared, roomy arena.'] },
-  { v: 'Native stats & curse lock', by: 'ASuiter89', notes: ['Gear marks its native stats; curse penalties can no longer be rerolled away.'] },
-  { v: 'Styled hover popups', by: 'ASuiter89', notes: ['Native browser title tooltips replaced with styled hover cards.'] },
-  { v: 'Cleaner pickups', by: 'Jeff Louie', notes: ['Square glow boxes under coins, keys and chests replaced with a soft round glow.'] },
-  { v: 'Summon anti-farm', by: 'Jeff Louie', notes: ['Boss-summoned minions drop no rewards, and a boss can summon at most 10.'] },
-  { v: 'Affix auras', by: 'Jeff Louie', notes: ['Tough / Fierce / Venomous foes show a steel / red / purple glow instead of an icon.'] },
-  { v: 'Weapon bases & reach', by: 'ASuiter89', notes: ['Item bases shape stats, classes filter usable weapons, and weapons have reach on the grid.'] },
-  { v: 'Musical styles', by: 'ASuiter89', notes: ['Distinct musical styles that crossfade into one another.'] },
-  { v: 'No more kiting', by: 'Jeff Louie', notes: ['Ranged foes hold ground and fight back when cornered instead of fleeing.'] },
-  { v: 'Goblin fumble', by: 'Jeff Louie', notes: ['Treasure Goblins trip or bolt the wrong way about half the time.'] },
-  { v: 'Giant bosses', by: 'Jeff Louie', notes: ['Some bosses are huge 2–3 tile behemoths with footprint-wide health bars.'] },
-  { v: 'Living water & lava', by: 'Jeff Louie', notes: ['Liquids merge into cohesive pools with organic edges, shores and flowing animation.'] },
-  { v: 'Pixel-asset rework', by: 'ASuiter89 & Claude', notes: ['DawnLike sprites for heroes, NPCs, objects and procedural terrain.'] },
-  { v: 'Salvage & save slots', by: 'ASuiter89', notes: ['Salvage gear into materials at the Craftsman; up to 10 save slots.'] },
-  { v: 'Potion cooldown', by: 'ASuiter89', notes: ['Potions are a cooldown-gated skill — one per turn, 3-turn cooldown.'] },
-  { v: 'Names & leaderboards', by: 'ASuiter89', notes: ['Name your character; global leaderboards.'] },
-  { v: 'Tile blend fix', by: 'Jeff Louie', notes: ['Spikes and other special tiles match the floor they sit on.'] },
-  { v: 'Exotic biomes', by: 'Jeff Louie', notes: ['Mushroom Hollow, Crystal Cavern, Coral Lagoon, Lavender Fields, Obsidian Wastes.'] },
-  { v: 'Seasonal biomes', by: 'Jeff Louie', notes: ['Winter Frostwood, Wildflower Meadow, Golden Savanna, Harvest Vineyard.'] },
-  { v: 'Nature themes', by: 'Jeff Louie', notes: ['Sunlit Forest, Cherry Blossom Grove, Autumn Woods, Pine Highlands, Emerald Jungle.'] },
-  { v: 'Natural walls & floors', by: 'Jeff Louie', notes: ['Rock cliffs and trees instead of a brick grid; organic floors, no checkerboard.'] },
-  { v: 'World reskin', by: 'Jeff Louie', notes: ['Golden Sun / FFT palettes, depth shading, vignette and gold-framed menus.'] },
-  { v: 'Loot clarity', by: 'Jeff Louie', notes: ['Gear shows real stat changes vs equipped (e.g. +3 ATK −1 DEF).'] },
-  { v: 'Mini-quests', by: 'Jeff Louie', notes: ['13 types: rescue, escort, jailbreak, hunt, fetch, forage, tribute, grave, courier and more.'] },
-  { v: 'Flavour vignettes', by: 'Jeff Louie', notes: ['25 light on-descent events: coin caches, traps, whispers, ghostly merchants.'] },
-  { v: 'Randomness pass', by: 'Jeff Louie', notes: ['Treasure Goblins, gold piles, flash sales, chest surprises, super-drops, floor modifiers & tints.'] },
-  { v: 'Combat rework & 21 stats', by: 'ASuiter89', notes: ['Percentage armor, dozens of new gear stats, 5-stat/1-attr items, hero-tab redo.'] },
-  { v: 'Enchanter & affixes', by: 'ASuiter89', notes: ['Reroll affix values/types with ranges and pool hints; widened, fully-rerollable pools.'] },
-  { v: 'Attributes & Luck', by: 'ASuiter89', notes: ['Attribute-driven stats, a Luck attribute, and slotted affixes.'] },
-  { v: 'Crafting & materials', by: 'ASuiter89', notes: ['Craftsman replaces the blacksmith; forge gear from material currencies.'] },
-  { v: 'Town stash & gambler', by: 'ASuiter89', notes: ['Safe vault for gold & gear; wager gold for random loot (can target a type).'] },
-  { v: 'Town as a menu', by: 'ASuiter89', notes: ['Town is a service menu with real buildings rather than a walkable map.'] },
-  { v: 'Class system', by: 'ASuiter89', notes: ['Warrior / Rogue / Mage / Templar with per-class skill trees and a node graph.'] },
-  { v: 'QoL HUD & cues', by: 'Jeff Louie', notes: ['Floor, level/XP and foes in the header; Q potion, B bag; pulsing stairs, low-HP vignette, +gold popups.'] },
-  { v: 'Enemy pop & status colour', by: 'Jeff Louie', notes: ['Bigger sprites with shadows/halos; poison glows green, stun gold.'] },
-  { v: 'Damage floor & calmer screen', by: 'Jeff Louie', notes: ['Foes take 4+ hits (crits/buffs break through); no flash on every hit.'] },
-  { v: 'Bars & log', by: 'Jeff Louie', notes: ['Brighter HP/MP bars with numbers; loot/potions log in their rarity colours.'] },
-  { v: 'Movement pad options', by: 'Jeff Louie', notes: ['Floating d-pad defaults left; position & opacity adjustable.'] },
-  { v: 'Mobile controls', by: 'ASuiter89', notes: ['Bottom nav bar, tap/swipe to move, floating d-pad, forced portrait, settings wheel.'] },
-  { v: 'Generative audio', by: 'ASuiter89', notes: ['Richer synth sound effects and non-repeating drifting music.'] },
-  { v: 'Endless difficulty', by: 'ASuiter89', notes: ['Polynomial depth scaling with anti-grind, so the dungeon never walls out.'] },
-  { v: 'Up-stairs & reachability', by: 'ASuiter89', notes: ['Backtrack via up-stairs; orphaned sections and sealed vaults always connect.'] },
-  { v: 'Item icons', by: 'ASuiter89', notes: ['Multi-tone vector item icons with rarity shown as a frame.'] },
-  { v: 'Wandering Mystic', by: 'ASuiter89', notes: ['A vendor who sells floor-spanning pacts.'] },
-  { v: 'Town & smarter AI', by: 'Claude', notes: ['Town hub, weapon styles, smarter enemy AI and deadlier turns.'] },
-  { v: 'Death → healer', by: 'Claude', notes: ['Death sends you to the town healer instead of a game over.'] },
-  { v: 'Power & attributes', by: 'Claude', notes: ['Item power values, player power, attributes and upgrade flags.'] },
-  { v: 'Floors & hazards', by: 'Jeff Louie', notes: ['Rooms, corridors, water, lava, spikes, teleporters, breakable walls and a locked vault.'] },
-  { v: 'Floor modifiers & shrines', by: 'Claude', notes: ['Floor modifiers, shrine buffs, crits, mimics and cursed items.'] },
-  { v: 'Sound', by: 'ASuiter89', notes: ['First pass of sound effects and background music.'] },
-  { v: 'Sprite gear & cosmetics', by: 'ASuiter89', notes: ['The hero wears its equipped gear; pick-able cosmetics.'] },
-  { v: 'Bosses & status', by: 'Jeff Louie', notes: ['A guardian boss every 5th floor, plus poison/stun status effects.'] },
-  { v: 'Openable chests', by: 'Jeff Louie', notes: ['Ground loot became openable chests; varied enemies, elites and per-depth themes.'] },
-  { v: 'Foundations', by: 'Jeff Louie', notes: ['Colour-coded loot tiers, a shop, floating damage numbers, and browser auto-save.'] },
+  { date: '2026-06-29', size: 'small', v: 'Healer charges a fee', by: 'Claude', notes: ['A full rest & cure at the town healer is no longer free — it now costs gold that climbs steeply (about 28% per level) the stronger you get: a few coins early, a brutal gold sink at high levels, capped at 100k.', 'The free, cooldown-gated Health and Mana potions are unchanged, so you can still recover mid-run without paying.'] },
+  { date: '2026-06-29', size: 'medium', v: 'Power leaderboard', by: 'Claude', notes: ['The global leaderboards now have a fourth board ranking heroes by their highest Power ever reached, alongside Furthest floor, Level and Gold.'] },
+  { date: '2026-06-29', size: 'big', v: 'Paper-doll gear screen', by: 'Jeff Louie', notes: ['The GEAR tab is now a Diablo-2-style equipment doll: each slot is a framed cell laid out around a faint hero body, with worn pieces ringed in their rarity colour. Tap a slot for its tooltip, ✕ to unequip.'] },
+  { date: '2026-06-29', size: 'small', v: 'Monochrome UI symbols', by: 'Jeff Louie', notes: ['Menu and HUD emoji that aren’t game icons now render as flat single-colour symbols instead of colourful emoji (and the title-screen setting icons no longer vanish). The colourful pixel-art game icons are unchanged.'] },
+  { date: '2026-06-29', size: 'small', v: 'Rarer, smarter loot', by: 'Jeff Louie', notes: ['Lower gear drop rates so each find feels earned.', 'Weapon drops now favour types your class can actually wield, so far fewer unusable weapons turn up.'] },
+  { date: '2026-06-29', size: 'small', v: 'Lost-loot grave beacon', by: 'Jeff Louie', notes: ['Your dropped-bag grave now glows with a pulsing halo, expanding rings and a bobbing pointer so it’s easy to spot and reclaim.'] },
+  { date: '2026-06-29', size: 'small', v: 'Control & list fixes', by: 'Jeff Louie', notes: ['A right-click no longer leaves a movement key stuck.', 'The LOOT tab now shows your bag’s item count.'] },
+  { date: '2026-06-28', size: 'medium', v: 'Start with a skill point', by: 'Claude', notes: ['The always-on baseline class skill (Cleave / Backstab / Firebolt / Mend) is gone — it just duplicated the first node of each class’s skill tree.', 'Instead every hero now starts with one skill point, so you pick your first active yourself. R and the ⚡ button cast your first-learned active.', 'Existing characters keep their builds and are granted the extra starting point retroactively.'] },
+  { date: '2026-06-28', size: 'big', v: 'Boss battle abilities', by: 'Jeff Louie', notes: ['Every 5th-floor guardian now fights with a kit of telegraphed tricks instead of just walking at you.', 'Walls of flame and firestorms leave burning ground; chains yank you into melee; shockwaves hurl you back; barriers of force pen you in.', 'Bosses also blink to close gaps, freeze you solid, raise damage-halving wards, and mend their wounds when cornered.'] },
+  { date: '2026-06-28', size: 'small', v: 'Slower mana regen', by: 'Jeff Louie', notes: ['Mana now trickles back about half as fast, so it actually runs dry in long fights and mana potions are worth carrying again.'] },
+  { date: '2026-06-28', size: 'medium', v: 'Time played counter', by: 'Jeff Louie', notes: ['New ⏱️ TIME button in Settings shows your grand total play time across every character, plus a per-hero breakdown.', 'Each save slot now lists how long that character has been played.'] },
+  { date: '2026-06-27', size: 'medium', v: 'Diverse music & boss themes', by: 'Jeff Louie', notes: ['More distinct styles (March, Bloom, Veil, Tide) that drift about every 2 minutes.', 'Boss fights hijack the soundtrack with a fast, menacing Boss track until the floor is cleared.'] },
+  { date: '2026-06-27', size: 'small', v: 'PC hotkeys', by: 'Jeff Louie', notes: ['1 heal, 2 mana, E use (with Space), Esc closes menus; skills moved to 3-9.'] },
+  { date: '2026-06-27', size: 'medium', v: 'Death: lose your bag', by: 'Jeff Louie', notes: ['Dying also takes your whole bag and one random equipped piece — never your weapon.'] },
+  { date: '2026-06-27', size: 'small', v: 'Death screen', by: 'Jeff Louie', notes: ['A loud YOU DIED screen lists every penalty at once.'] },
+  { date: '2026-06-27', size: 'medium', v: 'Harsher deaths', by: 'Jeff Louie', notes: ['Lose half your gold and all progress toward your next level, revive at half health/mana, knocked back a floor.'] },
+  { date: '2026-06-27', size: 'big', v: 'Skill-tree overhaul', by: 'Claude', notes: ['Passive & active skill trees, ascensions, and summonable minions.'] },
+  { date: '2026-06-27', size: 'small', v: 'Mobile tooltip fix', by: 'Jeff Louie', notes: ['Hover tooltips no longer pop open at random when you tap on a touchscreen.'] },
+  { date: '2026-06-27', size: 'small', v: 'Roaming behemoths', by: 'Jeff Louie', notes: ['Big bosses lumber after you and spawn in a cleared, roomy arena.'] },
+  { date: '2026-06-27', size: 'small', v: 'Native stats & curse lock', by: 'ASuiter89', notes: ['Gear marks its native stats; curse penalties can no longer be rerolled away.'] },
+  { date: '2026-06-27', size: 'small', v: 'Styled hover popups', by: 'ASuiter89', notes: ['Native browser title tooltips replaced with styled hover cards.'] },
+  { date: '2026-06-27', size: 'small', v: 'Cleaner pickups', by: 'Jeff Louie', notes: ['Square glow boxes under coins, keys and chests replaced with a soft round glow.'] },
+  { date: '2026-06-27', size: 'small', v: 'Summon anti-farm', by: 'Jeff Louie', notes: ['Boss-summoned minions drop no rewards, and a boss can summon at most 10.'] },
+  { date: '2026-06-27', size: 'small', v: 'Affix auras', by: 'Jeff Louie', notes: ['Tough / Fierce / Venomous foes show a steel / red / purple glow instead of an icon.'] },
+  { date: '2026-06-27', size: 'medium', v: 'Weapon bases & reach', by: 'ASuiter89', notes: ['Item bases shape stats, classes filter usable weapons, and weapons have reach on the grid.'] },
+  { date: '2026-06-27', size: 'small', v: 'Musical styles', by: 'ASuiter89', notes: ['Distinct musical styles that crossfade into one another.'] },
+  { date: '2026-06-27', size: 'small', v: 'No more kiting', by: 'Jeff Louie', notes: ['Ranged foes hold ground and fight back when cornered instead of fleeing.'] },
+  { date: '2026-06-27', size: 'small', v: 'Goblin fumble', by: 'Jeff Louie', notes: ['Treasure Goblins trip or bolt the wrong way about half the time.'] },
+  { date: '2026-06-27', size: 'medium', v: 'Giant bosses', by: 'Jeff Louie', notes: ['Some bosses are huge 2–3 tile behemoths with footprint-wide health bars.'] },
+  { date: '2026-06-27', size: 'medium', v: 'Living water & lava', by: 'Jeff Louie', notes: ['Liquids merge into cohesive pools with organic edges, shores and flowing animation.'] },
+  { date: '2026-06-27', size: 'big', v: 'Pixel-asset rework', by: 'ASuiter89 & Claude', notes: ['DawnLike sprites for heroes, NPCs, objects and procedural terrain.'] },
+  { date: '2026-06-27', size: 'medium', v: 'Salvage & save slots', by: 'ASuiter89', notes: ['Salvage gear into materials at the Craftsman; up to 10 save slots.'] },
+  { date: '2026-06-27', size: 'small', v: 'Potion cooldown', by: 'ASuiter89', notes: ['Potions are a cooldown-gated skill — one per turn, 3-turn cooldown.'] },
+  { date: '2026-06-27', size: 'medium', v: 'Names & leaderboards', by: 'ASuiter89', notes: ['Name your character; global leaderboards.'] },
+  { date: '2026-06-27', size: 'small', v: 'Tile blend fix', by: 'Jeff Louie', notes: ['Spikes and other special tiles match the floor they sit on.'] },
+  { date: '2026-06-27', size: 'medium', v: 'Exotic biomes', by: 'Jeff Louie', notes: ['Mushroom Hollow, Crystal Cavern, Coral Lagoon, Lavender Fields, Obsidian Wastes.'] },
+  { date: '2026-06-27', size: 'medium', v: 'Seasonal biomes', by: 'Jeff Louie', notes: ['Winter Frostwood, Wildflower Meadow, Golden Savanna, Harvest Vineyard.'] },
+  { date: '2026-06-27', size: 'medium', v: 'Nature themes', by: 'Jeff Louie', notes: ['Sunlit Forest, Cherry Blossom Grove, Autumn Woods, Pine Highlands, Emerald Jungle.'] },
+  { date: '2026-06-27', size: 'medium', v: 'Natural walls & floors', by: 'Jeff Louie', notes: ['Rock cliffs and trees instead of a brick grid; organic floors, no checkerboard.'] },
+  { date: '2026-06-27', size: 'big', v: 'World reskin', by: 'Jeff Louie', notes: ['Golden Sun / FFT palettes, depth shading, vignette and gold-framed menus.'] },
+  { date: '2026-06-27', size: 'small', v: 'Loot clarity', by: 'Jeff Louie', notes: ['Gear shows real stat changes vs equipped (e.g. +3 ATK −1 DEF).'] },
+  { date: '2026-06-27', size: 'big', v: 'Mini-quests', by: 'Jeff Louie', notes: ['13 types: rescue, escort, jailbreak, hunt, fetch, forage, tribute, grave, courier and more.'] },
+  { date: '2026-06-27', size: 'medium', v: 'Flavour vignettes', by: 'Jeff Louie', notes: ['25 light on-descent events: coin caches, traps, whispers, ghostly merchants.'] },
+  { date: '2026-06-27', size: 'medium', v: 'Randomness pass', by: 'Jeff Louie', notes: ['Treasure Goblins, gold piles, flash sales, chest surprises, super-drops, floor modifiers & tints.'] },
+  { date: '2026-06-27', size: 'big', v: 'Combat rework & 21 stats', by: 'ASuiter89', notes: ['Percentage armor, dozens of new gear stats, 5-stat/1-attr items, hero-tab redo.'] },
+  { date: '2026-06-27', size: 'big', v: 'Enchanter & affixes', by: 'ASuiter89', notes: ['Reroll affix values/types with ranges and pool hints; widened, fully-rerollable pools.'] },
+  { date: '2026-06-27', size: 'medium', v: 'Attributes & Luck', by: 'ASuiter89', notes: ['Attribute-driven stats, a Luck attribute, and slotted affixes.'] },
+  { date: '2026-06-27', size: 'big', v: 'Crafting & materials', by: 'ASuiter89', notes: ['Craftsman replaces the blacksmith; forge gear from material currencies.'] },
+  { date: '2026-06-27', size: 'medium', v: 'Town stash & gambler', by: 'ASuiter89', notes: ['Safe vault for gold & gear; wager gold for random loot (can target a type).'] },
+  { date: '2026-06-27', size: 'medium', v: 'Town as a menu', by: 'ASuiter89', notes: ['Town is a service menu with real buildings rather than a walkable map.'] },
+  { date: '2026-06-27', size: 'big', v: 'Class system', by: 'ASuiter89', notes: ['Warrior / Rogue / Mage / Templar with per-class skill trees and a node graph.'] },
+  { date: '2026-06-27', size: 'medium', v: 'QoL HUD & cues', by: 'Jeff Louie', notes: ['Floor, level/XP and foes in the header; Q potion, B bag; pulsing stairs, low-HP vignette, +gold popups.'] },
+  { date: '2026-06-27', size: 'small', v: 'Enemy pop & status colour', by: 'Jeff Louie', notes: ['Bigger sprites with shadows/halos; poison glows green, stun gold.'] },
+  { date: '2026-06-27', size: 'small', v: 'Damage floor & calmer screen', by: 'Jeff Louie', notes: ['Foes take 4+ hits (crits/buffs break through); no flash on every hit.'] },
+  { date: '2026-06-27', size: 'small', v: 'Bars & log', by: 'Jeff Louie', notes: ['Brighter HP/MP bars with numbers; loot/potions log in their rarity colours.'] },
+  { date: '2026-06-27', size: 'small', v: 'Movement pad options', by: 'Jeff Louie', notes: ['Floating d-pad defaults left; position & opacity adjustable.'] },
+  { date: '2026-06-27', size: 'big', v: 'Mobile controls', by: 'ASuiter89', notes: ['Bottom nav bar, tap/swipe to move, floating d-pad, forced portrait, settings wheel.'] },
+  { date: '2026-06-27', size: 'medium', v: 'Generative audio', by: 'ASuiter89', notes: ['Richer synth sound effects and non-repeating drifting music.'] },
+  { date: '2026-06-27', size: 'medium', v: 'Endless difficulty', by: 'ASuiter89', notes: ['Polynomial depth scaling with anti-grind, so the dungeon never walls out.'] },
+  { date: '2026-06-27', size: 'medium', v: 'Up-stairs & reachability', by: 'ASuiter89', notes: ['Backtrack via up-stairs; orphaned sections and sealed vaults always connect.'] },
+  { date: '2026-06-27', size: 'medium', v: 'Item icons', by: 'ASuiter89', notes: ['Multi-tone vector item icons with rarity shown as a frame.'] },
+  { date: '2026-06-27', size: 'small', v: 'Wandering Mystic', by: 'ASuiter89', notes: ['A vendor who sells floor-spanning pacts.'] },
+  { date: '2026-06-27', size: 'big', v: 'Town & smarter AI', by: 'Claude', notes: ['Town hub, weapon styles, smarter enemy AI and deadlier turns.'] },
+  { date: '2026-06-27', size: 'small', v: 'Death → healer', by: 'Claude', notes: ['Death sends you to the town healer instead of a game over.'] },
+  { date: '2026-06-27', size: 'medium', v: 'Power & attributes', by: 'Claude', notes: ['Item power values, player power, attributes and upgrade flags.'] },
+  { date: '2026-06-27', size: 'big', v: 'Floors & hazards', by: 'Jeff Louie', notes: ['Rooms, corridors, water, lava, spikes, teleporters, breakable walls and a locked vault.'] },
+  { date: '2026-06-27', size: 'medium', v: 'Floor modifiers & shrines', by: 'Claude', notes: ['Floor modifiers, shrine buffs, crits, mimics and cursed items.'] },
+  { date: '2026-06-27', size: 'medium', v: 'Sound', by: 'ASuiter89', notes: ['First pass of sound effects and background music.'] },
+  { date: '2026-06-27', size: 'medium', v: 'Sprite gear & cosmetics', by: 'ASuiter89', notes: ['The hero wears its equipped gear; pick-able cosmetics.'] },
+  { date: '2026-06-27', size: 'big', v: 'Bosses & status', by: 'Jeff Louie', notes: ['A guardian boss every 5th floor, plus poison/stun status effects.'] },
+  { date: '2026-06-27', size: 'medium', v: 'Openable chests', by: 'Jeff Louie', notes: ['Ground loot became openable chests; varied enemies, elites and per-depth themes.'] },
+  { date: '2026-06-27', size: 'big', v: 'Foundations', by: 'Jeff Louie', notes: ['Colour-coded loot tiers, a shop, floating damage numbers, and browser auto-save.'] },
 ];
+// Pretty-print a changelog YYYY-MM-DD date as a section header (e.g. "June 29,
+// 2026"); undated legacy entries fall under an "Earlier" header.
+const _CL_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+function fmtChangelogDate(d) {
+  if (!d || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return 'Earlier';
+  const [y, m, day] = d.split('-').map(Number);
+  return `${_CL_MONTHS[m - 1]} ${day}, ${y}`;
+}
 function showVersionHistory() {
   const el = document.getElementById('version-body');
   // Contributor initials: Jeff Louie → JL, everyone else (ASuiter89, Claude) → AS.
   const initials = (by) => by === 'Jeff Louie' ? 'JL' : 'AS';
-  if (el) el.innerHTML = CHANGELOG.map(c =>
-    `<div class="version-entry"><div class="version-ver">${c.v}${c.by ? ` <span class="version-by ${initials(c.by) === 'JL' ? 'jl' : 'as'}">${initials(c.by)}</span>` : ''}</div>${c.notes.map(n => `<div class="version-note">• ${n}</div>`).join('')}</div>`).join('');
+  // Each feature is tagged by rough scope (small / medium / big) shown as a
+  // coloured badge so you can see at a glance how big a change each release was.
+  const sizeBadge = (s) => s ? ` <span class="version-size sz-${s}">${s}</span>` : '';
+  // The list is newest-first; emit a sticky date header whenever the date changes
+  // so releases are grouped by day as you scroll.
+  if (el) {
+    let html = '', lastDate;
+    for (const c of CHANGELOG) {
+      if (c.date !== lastDate) { html += `<div class="version-date">${fmtChangelogDate(c.date)}</div>`; lastDate = c.date; }
+      html += `<div class="version-entry"><div class="version-ver">${c.v}${sizeBadge(c.size)}${c.by ? ` <span class="version-by ${initials(c.by) === 'JL' ? 'jl' : 'as'}">${initials(c.by)}</span>` : ''}</div>${c.notes.map(n => `<div class="version-note">• ${n}</div>`).join('')}</div>`;
+    }
+    el.innerHTML = html;
+  }
   document.getElementById('version-overlay').classList.add('open');
   const menu = document.getElementById('settings-menu');
   if (menu) menu.classList.remove('open');
@@ -7794,26 +7841,42 @@ function toggleLockCraft(i) {
 }
 
 // ── HEALER — rest to full HP/MP and cure ailments ──
+// A full rest is no longer free: the healer charges a fee that climbs
+// exponentially with the hero's level (~28% per level), so it's pocket change
+// while you're weak but a steep gold sink once you're powerful. The fee is
+// capped at 100k so it never becomes absurd (the cap is reached around level
+// 39). The free, cooldown-gated Health/Mana potions remain the cheap mid-fight
+// option.
+function healCost() {
+  const lvl = player.level || 1;
+  return Math.min(100000, Math.round(10 * Math.pow(1.28, lvl - 1)));
+}
 function openHealer() { openTownModal('⛑️ Healer'); renderHealer(); }
 function renderHealer() {
   const full = player.hp >= player.maxHp && player.mp >= player.maxMp;
+  const cost = healCost();
+  const afford = player.gold >= cost;
   setTownContent(`
-    <div class="town-blurb">The healer mends your wounds and cleanses any lingering curse before you head back down.</div>
+    <div class="town-blurb">The healer mends your wounds and cleanses any lingering curse before you head back down — for a fee that grows with your legend.</div>
     <div class="shop-row">
       <span class="loot-icon">❤️</span>
       <div class="shop-row-info"><div class="shop-row-name">Full Rest &amp; Cure</div>
         <div class="shop-row-sub">Restore all HP/MP and clear poison &amp; curses</div></div>
-      <span class="shop-price">Free</span>
-      <button class="shop-buy-btn" ${full ? 'disabled' : ''} onclick="restHeal()">REST</button>
+      <span class="shop-price">${cost}g</span>
+      <button class="shop-buy-btn" ${(full || !afford) ? 'disabled' : ''} onclick="restHeal()">REST</button>
     </div>
+    ${(!full && !afford) ? `<div class="town-blurb" style="color:var(--hp)">You can't cover the ${cost}g fee — earn more gold, or quaff a free potion instead.</div>` : ''}
     <div class="town-blurb" style="opacity:0.8">Need a quick top-up mid-fight? Quaff a Health (Q) or Mana (E) potion — they're a skill now, free to use but share a 3-turn cooldown.</div>`);
 }
 function restHeal() {
   if (player.hp >= player.maxHp && player.mp >= player.maxMp) return;
+  const cost = healCost();
+  if (player.gold < cost) { log(`Not enough gold — the healer charges ${cost}g for a full rest.`); return; }
+  player.gold -= cost;
   player.hp = player.maxHp; player.mp = player.maxMp;
   statusEffects = statusEffects.filter(s => s.target !== 'player');
   sfx('potion');
-  log('⛑️ The healer restores you to full and cleanses every ailment.', 'loot');
+  log(`⛑️ The healer restores you to full and cleanses every ailment for ${cost}g.`, 'loot');
   updateBars(); renderHealer(); saveGame();
 }
 
@@ -8635,6 +8698,9 @@ function spawnEnemies() {
   // Some floor modifiers crowd the level with extra foes.
   if (!isBossFloor && floorMod.enemyMult) count = Math.round(count * floorMod.enemyMult);
   if (!isBossFloor && pfx('enemy', 1) !== 1) count = Math.max(1, Math.round(count * pfx('enemy', 1)));
+  // The opening floors used to be a faceroll — pack one extra foe onto floors 1-3
+  // so even the first dive makes you fight for it.
+  if (!isBossFloor && dungeonLevel <= 3) count += 1;
 
   // Pick 2-3 enemy types for this floor from the depth-appropriate band, so
   // each floor has variety while every monster stays around the same level.
@@ -8659,6 +8725,12 @@ function spawnEnemies() {
   // end (deep floors just demand a lot more grinding to get over).
   const lvlGap = Math.max(0, player.level - dungeonLevel);
   const threatScale = Math.min(2, 1 + lvlGap * 0.06);
+
+  // Early-game bite: the first few floors are deliberately punchy so wins feel
+  // earned, not handed out — your bare-knuckle scraps actually hurt. Strongest on
+  // floor 1 and fading to nothing by floor 5 (deeper floors already bite hard via
+  // depthThreat, so this only lifts the soft opening).
+  const earlyBite = dungeonLevel <= 4 ? 1 + (5 - dungeonLevel) * 0.13 : 1;
 
   for (let i = 0; i < count; i++) {
     let ex, ey;
@@ -8728,7 +8800,7 @@ function spawnEnemies() {
         // main's anti-grind nudge on top (out-leveling a floor toughens its foes).
         const threat = depthThreat(mobLevel);
         const baseHp = Math.max(1, Math.round((10 + mobLevel * 8) * threat * (floorMod.hpMult || 1) * pfx('hp', 1) * threatScale));
-        const baseDmg = Math.max(1, Math.round((3.5 + mobLevel * 1.9 + bandIdx) * threat * (floorMod.dmgMult || 1) * pfx('dmg', 1) * threatScale));
+        const baseDmg = Math.max(1, Math.round((3.5 + mobLevel * 1.9 + bandIdx) * threat * (floorMod.dmgMult || 1) * pfx('dmg', 1) * threatScale * earlyBite));
         if (i === eliteIndex) {
           const eHp = Math.round(baseHp * 2.2);
           const eName = pick(ELITE_NAMES);
@@ -14695,6 +14767,8 @@ function loadGame() {
     // name is fine — the init flow prompts for one on the next load.
     if (player.name === undefined) player.name = null;
     if (player.maxGold == null) player.maxGold = player.gold || 0;
+    // Migrate saves that predate the peak-Power tracker (feeds the Power board).
+    if (player.maxPower == null) player.maxPower = 0;
     // Migrate saves that predate the play-time tracker (total ms this hero has
     // been actively played, accumulated by the heartbeat below).
     if (player.playMs == null) player.playMs = 0;
@@ -15044,6 +15118,7 @@ const LB_SORTS = {
   floor: { col: 'max_floor', fmt: v => 'Floor ' + v },
   level: { col: 'level',     fmt: v => 'Lv ' + v },
   gold:  { col: 'gold',      fmt: v => v + 'g' },
+  power: { col: 'power',     fmt: v => '⚡' + v },
 };
 let lbTab = 'floor';
 let lbLastSig = '';       // last-submitted stat signature — skips no-op writes
@@ -15073,6 +15148,7 @@ function lbEntryFromPlayer() {
     max_floor: lbInt(player.maxFloor || 1, 1),
     level: lbInt(player.level || 1, 1),
     gold: lbInt(player.maxGold || player.gold || 0, 0),
+    power: lbInt(player.maxPower || playerPower() || 1, 1),
   };
 }
 
@@ -15081,7 +15157,8 @@ function lbEntryFromPlayer() {
 function lbScheduleSubmit() {
   if (!player || !player.name) return;
   player.maxGold = Math.max(player.maxGold || 0, player.gold || 0);
-  const sig = [player.name, player.maxFloor || 1, player.level || 1, player.maxGold || 0, player.class || ''].join('|');
+  player.maxPower = Math.max(player.maxPower || 0, playerPower() || 0);
+  const sig = [player.name, player.maxFloor || 1, player.level || 1, player.maxGold || 0, player.maxPower || 0, player.class || ''].join('|');
   if (sig === lbLastSig) return;
   lbLastSig = sig;
   if (lbSubmitTimer) return; // a write is already queued; it'll pick up the latest stats
@@ -15116,6 +15193,7 @@ function lbSubmitLocal(entry) {
         max_floor: Math.max(all[i].max_floor || 1, entry.max_floor),
         level: Math.max(all[i].level || 1, entry.level),
         gold: Math.max(all[i].gold || 0, entry.gold),
+        power: Math.max(all[i].power || 1, entry.power),
       };
     } else {
       all.push(entry);
@@ -15137,7 +15215,7 @@ async function lbFetch(tab) {
   const sort = LB_SORTS[tab] || LB_SORTS.floor;
   if (!lbEnabled()) return { rows: lbFetchLocal(sort.col), local: true };
   const url = LB_SUPABASE_URL +
-    '/rest/v1/leaderboard?select=name,player_class,max_floor,level,gold&order=' +
+    '/rest/v1/leaderboard?select=name,player_class,max_floor,level,gold,power&order=' +
     sort.col + '.desc&limit=50';
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 8000);
@@ -15165,7 +15243,7 @@ function closeLeaderboard() {
 }
 function setLbTab(tab) {
   lbTab = LB_SORTS[tab] ? tab : 'floor';
-  ['floor', 'level', 'gold'].forEach(t => {
+  ['floor', 'level', 'gold', 'power'].forEach(t => {
     const el = document.getElementById('lb-tab-' + t);
     if (el) el.classList.toggle('on', t === lbTab);
   });
