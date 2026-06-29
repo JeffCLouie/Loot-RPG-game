@@ -333,6 +333,8 @@
   .version-size.sz-medium { color: #9fd2a8; background: rgba(70, 180, 95, 0.24); }
   .version-size.sz-big    { color: #ffd27a; background: rgba(230, 165, 50, 0.30); }
   .version-note { font-size: 11px; color: var(--text); opacity: 0.85; line-height: 1.45; }
+  /* Art attributions tucked at the foot of the version popup. */
+  .version-credits { margin-top: 14px; padding-top: 10px; border-top: 1px solid #2a2113; font-size: 9px; color: #6b5f47; line-height: 1.5; }
 
   /* Time-played popup — reuses the version overlay's framing. */
   #playtime-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 400; display: none; align-items: center; justify-content: center; padding: 16px; }
@@ -887,6 +889,23 @@
     justify-content: center; gap: 4px;
   }
   .loot-bulk-btn:active { background: #2a2444; }
+  /* Auto-Loot entry button on the LOOT tab (full-width, with inline on/off state). */
+  .loot-auto-bar { margin: 0 2px 6px; }
+  .loot-auto-btn {
+    width: 100%; background: #1a1726; color: #b6aed0; font-family: 'Courier New', monospace;
+    font-size: 10px; font-weight: bold; letter-spacing: 0.5px; padding: 7px 8px;
+    border: 1px solid var(--border); border-radius: 5px; cursor: pointer;
+    -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .loot-auto-btn:active { background: #2a2444; }
+  /* Lit up when any rarity rule is active, so "on" reads at a glance. */
+  .loot-auto-btn.on { color: #e8c267; border-color: #6a5a2a; background: #221d12; }
+  .loot-auto-btn .la-status {
+    font-size: 9px; letter-spacing: 0.5px; text-transform: uppercase; color: #6f6786;
+    border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px;
+  }
+  .loot-auto-btn.on .la-status { color: #e8c267; border-color: #6a5a2a; }
 
   /* ── LOOT GLOSSARY ── collapsible key to the short stat codes on loot rows. */
   .loot-glossary {
@@ -1082,6 +1101,10 @@
   }
   .pd-cap { font-size: 9px; color: #777; text-align: center; letter-spacing: 0.5px; max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .pd-cell.is-empty .pd-cap { color: #555; }
+  /* Bottom row (hands + legs): two tiles centred across the 3-column grid, each
+     sized to match a single column so they line up with the rows above. */
+  .pd-bottom { grid-column: 1 / -1; display: flex; justify-content: center; gap: 8px; }
+  .pd-bottom .pd-cell { flex: 0 0 calc((100% - 16px) / 3); }
   .pd-hint { grid-column: 1 / -1; margin-top: 8px; font-size: 10px; color: #555; text-align: center; }
 
   /* ── LOG ── */
@@ -2248,9 +2271,6 @@
         <button class="settings-item zoom-action" onclick="toggleZoom()">
           <span class="action-icon" id="zoom-icon">🔍</span><span class="action-label" id="zoom-label">WIDE</span>
         </button>
-        <button class="settings-item autoloot-action" onclick="openAutoLoot()" data-tip="<div class='ht-name'>♻️ Auto-Loot</div><div class='ht-line'>Auto-scrap or auto-sell loot of chosen rarities on pickup.</div><div class='ht-sub'>off by default</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
-          <span class="action-icon">♻️</span><span class="action-label">AUTO-LOOT</span>
-        </button>
         <button class="settings-item unstuck-action" onclick="unstuck()" data-tip="<div class='ht-name'>🌀 Unstuck</div><div class='ht-line'>Warp to a random open spot elsewhere on the floor.</div><div class='ht-sub'>use if you get wedged in</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
           <span class="action-icon">🌀</span><span class="action-label">UNSTUCK</span>
         </button>
@@ -2443,8 +2463,6 @@
     <button class="title-play" id="title-play" onclick="titlePlay()">⚔️ ENTER THE DUNGEON</button>
     <button class="title-play secondary" id="title-newrun" style="display:none" onclick="titleNewRun()">↻ Start a New Run</button>
     <div id="title-settings">
-      <button class="title-set-btn" onclick="titleSound()"><span class="tsb-ic" id="t-sound-ic">🔊</span><span class="tsb-lbl" id="t-sound-lbl">Sound</span></button>
-      <button class="title-set-btn" onclick="titleZoom()"><span class="tsb-ic">🔍</span><span class="tsb-lbl" id="t-zoom-lbl">Zoom</span></button>
       <button class="title-set-btn" onclick="openAccount()"><span class="tsb-ic"><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg></span><span class="tsb-lbl">Cloud Save</span></button>
       <button class="title-set-btn" onclick="openSlots()"><span class="tsb-ic">💾</span><span class="tsb-lbl">Save Slots</span></button>
       <button class="title-set-btn" onclick="showLeaderboard()"><span class="tsb-ic">🏆</span><span class="tsb-lbl">Leaderboards</span></button>
@@ -2453,7 +2471,7 @@
     </div>
     <!-- Optional sign-in callout — updated by refreshAccountUi() to reflect login state. -->
     <div id="title-cloud" onclick="openAccount()"></div>
-    <div id="title-credit">Pixel art from the DawnLike tileset by DragonDePlatino &amp; DawnBringer (CC-BY&nbsp;4.0).<br>Terrain tiles from &ldquo;[LPC] Terrains&rdquo; by bluecarrot16 &amp; LPC contributors (CC-BY-SA&nbsp;4.0).</div>
+    <div id="title-credit">Built by JL &amp; AS</div>
   </div>
 </div>
 
@@ -3425,6 +3443,18 @@ function autoLootConfig() {
   if (!player.autoLoot || typeof player.autoLoot !== 'object') player.autoLoot = defaultAutoLoot();
   for (const t of Object.keys(TIERS)) if (!AUTO_LOOT_ACTIONS.includes(player.autoLoot[t])) player.autoLoot[t] = 'keep';
   return player.autoLoot;
+}
+// Short status for the LOOT-tab Auto-Loot button: 'off' when every rarity is kept,
+// otherwise a compact "N scrap · M sell" tally so its state reads at a glance.
+function autoLootSummary() {
+  const cfg = autoLootConfig();
+  let scrap = 0, sell = 0;
+  for (const t of Object.keys(TIERS)) { if (cfg[t] === 'scrap') scrap++; else if (cfg[t] === 'sell') sell++; }
+  if (!scrap && !sell) return 'off';
+  const parts = [];
+  if (scrap) parts.push(`${scrap} scrap`);
+  if (sell) parts.push(`${sell} sell`);
+  return parts.join(' · ');
 }
 
 // ── CRAFTING MATERIALS ──
@@ -5082,6 +5112,9 @@ let player = { x: 5, y: 5, facing: 'left', hp: 100, maxHp: 100, mp: 60, maxMp: 6
   // Last Stand — a clutch survival that, once per floor, turns a killing blow
   // into 1 HP instead of death. Refreshed each new floor in generateMap().
   lastStandReady: true,
+  // Comeback relief anchor: the floor you revived toward after a death. While you
+  // climb the few floors above it, foes go easier (see spawnEnemies); null = none.
+  reliefFloor: null,
   // Skill tree — 1 skill point earned per level (separate from attribute points),
   // spent on the class's passive/active/path nodes. `skills` maps node id → rank;
   // `skillCds` holds each active skill's independent cooldown.
@@ -6000,6 +6033,7 @@ document.addEventListener('click', (e) => {
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
   { date: '2026-06-29', size: 'small', v: 'Tidier Settings menu', by: 'Claude', notes: ['The ⚙️ Settings menu is now one consistent style — every row shares the same neutral tile instead of the old jumble of red, blue and green buttons.', 'Sound, Zoom and Time gained icons, and every row’s icon now sits in the same fixed cell so the labels line up cleanly.', 'Only meaningful states still colour: New Run flashes red when armed to wipe, and Sound dims when muted.'] },
+  { date: '2026-06-29', size: 'small', v: 'Auto-Loot on the LOOT tab', by: 'ASuiter89', notes: ['The ♻️ Auto-Loot picker moved out of the ⚙️ settings menu onto the LOOT tab, where it belongs — a button right above your loot shows its on/off state at a glance and opens the per-rarity Keep / Scrap / Sell picker.'] },
   { date: '2026-06-29', size: 'medium', v: 'Shared stash', by: 'Claude', notes: ['The town Vault is now shared across all of your save slots — gold or gear banked by one hero can be withdrawn by any other, so it doubles as account-wide storage you can pass loot between characters with.', 'Signed in? The shared stash also syncs to your account and follows you across devices.', 'Anything your existing heroes had banked is merged into the shared pool automatically, so nothing is lost.'] },
   { date: '2026-06-29', size: 'big', v: 'Auto-loot & bag selling', by: 'ASuiter89', notes: ['New ♻️ AUTO-LOOT setting (off by default): pick, per rarity, whether dropped gear is kept, auto-scrapped into materials, or auto-sold for gold — so the loot drawer stops clogging with junk.', 'Sell and Scrap now live on the bag itself: tap any loot item for per-piece Sell/Scrap buttons, or use the Sell all / Scrap all bar at the top of the LOOT drawer — no need to visit a vendor.', 'The Merchant is now buy-only and the Craftsman is forge-only; selling and salvaging moved onto the bag.', 'On top of the new difficulty gating, rarer crafting materials drop a little less often from kills — scrapping unwanted loot is a steady way to stock the high end.'] },
   { date: '2026-06-29', size: 'big', v: 'Dungeon difficulties', by: 'Claude', notes: ['Conquer the floor-25 guardian to unlock the next, deadlier difficulty at the town Dungeon Gate: Normal → Hardened → Brutal → Endless, each the same 25 floors but more powerful and bathed in deepening red.', 'Endless mode restarts at floor 1 (as deep as floor 76), rolls random bosses, has no floor cap and ramps ever harder.', 'Death penalties grow per tier — gentle on Normal, ruinous in Endless — and each difficulty conquered leaves a permanent stat scar.', 'Rarer crafting materials are gated by tier: Glimmer (Hardened), Core (Brutal), Chaos Orbs (Endless only).', 'The leaderboard now shows the difficulty with the floor and ranks harder runs above easier ones.'] },
@@ -6099,6 +6133,12 @@ function showVersionHistory() {
       if (c.date !== lastDate) { html += `<div class="version-date">${fmtChangelogDate(c.date)}</div>`; lastDate = c.date; }
       html += `<div class="version-entry"><div class="version-ver">${c.v}${sizeBadge(c.size)}${c.by ? ` <span class="version-by ${initials(c.by) === 'JL' ? 'jl' : 'as'}">${initials(c.by)}</span>` : ''}</div>${c.notes.map(n => `<div class="version-note">• ${n}</div>`).join('')}</div>`;
     }
+    // Art attributions (moved off the title screen). CC-BY requires the credit
+    // stay visible somewhere — this popup is its home.
+    html += `<div class="version-credits">` +
+      `Pixel art from the DawnLike tileset by DragonDePlatino &amp; DawnBringer (CC-BY&nbsp;4.0).<br>` +
+      `Terrain tiles from &ldquo;[LPC] Terrains&rdquo; by bluecarrot16 &amp; LPC contributors (CC-BY-SA&nbsp;4.0).` +
+      `</div>`;
     el.innerHTML = html;
   }
   document.getElementById('version-overlay').classList.add('open');
@@ -6108,14 +6148,12 @@ function showVersionHistory() {
 function closeVersion() { document.getElementById('version-overlay').classList.remove('open'); }
 
 // ── AUTO-LOOT SETTINGS ── per-rarity Keep / Scrap / Sell picker, opened from the
-// ⚙️ settings menu. Choices live on player.autoLoot and apply the moment loot
-// drops (see acquireLoot). All-Keep means the feature is off.
+// ♻️ Auto-Loot button on the LOOT tab. Choices live on player.autoLoot and apply
+// the moment loot drops (see acquireLoot). All-Keep means the feature is off.
 const AUTO_LOOT_LABELS = { keep: 'Keep', scrap: 'Scrap', sell: 'Sell' };
 function openAutoLoot() {
   renderAutoLoot();
   document.getElementById('autoloot-overlay').classList.add('open');
-  const menu = document.getElementById('settings-menu');
-  if (menu) menu.classList.remove('open');
 }
 function closeAutoLoot() { document.getElementById('autoloot-overlay').classList.remove('open'); }
 function renderAutoLoot() {
@@ -6147,6 +6185,7 @@ function setAutoLoot(tier, action) {
   autoLootConfig()[tier] = action;
   sfx('click');
   renderAutoLoot();
+  renderPanel();   // refresh the LOOT-tab button's on/off status behind the overlay
   saveGame();
 }
 function setAutoLootAll(action) {
@@ -6155,6 +6194,7 @@ function setAutoLootAll(action) {
   for (const t of Object.keys(TIERS)) cfg[t] = action;
   sfx('click');
   renderAutoLoot();
+  renderPanel();   // refresh the LOOT-tab button's on/off status behind the overlay
   saveGame();
 }
 
@@ -7100,10 +7140,13 @@ function maybeSpawnQuest(reach) {
   }
 
   // ── NPC-at-a-spot quests: rescue, escort, lostpet, wounded, courier ──
+  // A quest NPC stands on (and blocks) its tile, so never park it on a one-tile
+  // chokepoint or it could wall the player out of part of the floor.
   let spot = null, bestD = -1;
   const wantFar = (kind === 'rescue');
   for (let i = 0; i < 50; i++) {
     const c = randomFloorTile(reach); if (!c) break;
+    if (isChokePoint(c.x, c.y)) continue;
     const d = Math.abs(c.x - player.x) + Math.abs(c.y - player.y);
     if (wantFar) { if (d > bestD) { bestD = d; spot = c; } }
     else { if (d >= 2 && d <= 8) { spot = c; break; } if (!spot) spot = c; }
@@ -7299,7 +7342,12 @@ function itemStatLine(item) {
 function statDiffLine(item) {
   if (!item || !item.slot) return '';
   const cur = equipped[item.slot];
-  if (!cur) return '<span class="first-equip">★ FIRST EQUIP</span>';
+  if (!cur) {
+    // A two-hander occupies both hands, so the off-hand slot is unavailable
+    // (unless Titan's Grip). Don't dangle a "first equip" the player can't act on.
+    if (item.slot === 'offhand' && isTwoHander(equipped.weapon) && !skillFlag('titangrip')) return '';
+    return '<span class="first-equip">★ FIRST EQUIP</span>';
+  }
   const num = (it, k) => {
     let v = it.stats ? it.stats[k] : undefined;
     if (v === undefined) v = it.attrs ? it.attrs[k] : undefined;
@@ -9066,6 +9114,19 @@ function spawnEnemies() {
   // hard via depthThreat, so this only lifts the soft opening).
   const earlyBite = dungeonLevel <= 4 ? 1 + (5 - dungeonLevel) * 0.05 : 1;
 
+  // Comeback relief: for a few floors after a death, foes pull their punches so a
+  // stumble doesn't spiral into an unbreakable death loop. It's anchored to the
+  // floor you revive toward and fades as you climb back to where you fell, so it's
+  // recomputed from your current depth each floor (no counter to desync on reload
+  // or when backtracking). Cleared once you've recovered past the ramp.
+  let reliefEase = 1;
+  if (player.reliefFloor != null) {
+    const into = dungeonLevel - player.reliefFloor; // 0 on the floor you re-enter
+    const ramp = [0.7, 0.8, 0.88];                  // −30% / −20% / −12%, then gone
+    if (into >= 0 && into < ramp.length) reliefEase = ramp[into];
+    else if (into >= ramp.length) player.reliefFloor = null; // recovered — clear it
+  }
+
   for (let i = 0; i < count; i++) {
     let ex, ey;
     let tries = 0;
@@ -9137,8 +9198,8 @@ function spawnEnemies() {
         // depthThreat compounds with depth (deep is deadly); threatScale layers
         // main's anti-grind nudge on top (out-leveling a floor toughens its foes).
         const threat = depthThreat(mobLevel);
-        const baseHp = Math.max(1, Math.round((10 + mobLevel * 8) * threat * (floorMod.hpMult || 1) * pfx('hp', 1) * threatScale));
-        const baseDmg = Math.max(1, Math.round((3.5 + mobLevel * 1.9 + bandIdx) * threat * (floorMod.dmgMult || 1) * pfx('dmg', 1) * threatScale * earlyBite));
+        const baseHp = Math.max(1, Math.round((10 + mobLevel * 8) * threat * (floorMod.hpMult || 1) * pfx('hp', 1) * threatScale * reliefEase));
+        const baseDmg = Math.max(1, Math.round((3.5 + mobLevel * 1.9 + bandIdx) * threat * (floorMod.dmgMult || 1) * pfx('dmg', 1) * threatScale * earlyBite * reliefEase));
         if (i === eliteIndex) {
           const eHp = Math.round(baseHp * 2.2);
           const eName = pick(ELITE_NAMES);
@@ -10201,9 +10262,9 @@ function draw() {
         drawWall(px, py, tw, th, x, y, seed, C, false);
       } else if (t === 2) {
         // Stairs down — DawnLike pixel staircase (the ▼ arrow is baked into the
-        // tile, so no arrow badge or glow ring is layered on). While the floor is
-        // uncleared the exit is sealed: a red wash plus a locked-door icon over
-        // the stairs; once cleared it's just the bare staircase.
+        // tile). While the floor is uncleared the exit is sealed: a red wash plus
+        // a locked-door icon. Once cleared, a pulsing gold ring marks it as the
+        // way DEEPER, so it's obvious you descend here and not via the up-stairs.
         const sealed = !floorCleared;
         if (!(spriteReady && drawSprite('stairs_down', px, py, tw))) {
           // Legacy fallback: dark pit with descending steps.
@@ -10221,6 +10282,18 @@ function draw() {
           ctx.save(); ctx.globalAlpha = 0.28; ctx.fillStyle = '#cc3322'; ctx.fillRect(px, py, tw, th); ctx.restore();
           if (!(spriteReady && drawSpriteC('feat_door', px + tw/2, py + th*0.5, Math.round(tw*0.5))))
             drawEmoji('🔒', px + tw/2, py + th*0.5, Math.round(tw*0.4));
+        } else {
+          // Cleared → highlight the way deeper with a pulsing gold ring so the
+          // descent stair is unmistakable next to the (plain) up-stairs.
+          const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 320);
+          const lw = Math.max(2, tw * 0.09), o = lw / 2 + 1;
+          ctx.save();
+          ctx.lineWidth = lw;
+          ctx.strokeStyle = `rgba(255,207,90,${0.5 + 0.45 * pulse})`;
+          ctx.shadowColor = 'rgba(255,200,80,0.9)';
+          ctx.shadowBlur = tw * (0.18 + 0.22 * pulse);
+          ctx.strokeRect(px + o, py + o, tw - o * 2, th - o * 2);
+          ctx.restore();
         }
       } else if (t === 12) {
         // Stairs up — DawnLike pixel staircase (the ▲ arrow is baked into the
@@ -13270,6 +13343,9 @@ function handleDeath() {
   const fellOn = dungeonLevel;
   const tierBase = (dTier - 1) * FLOORS_PER_DIFF + 1;
   dungeonReturn = Math.max(tierBase, dungeonLevel - KNOCK);
+  // Comeback relief: the next few floors of your recovery run go a little easier
+  // (see spawnEnemies) so a death doesn't trap you in an unwinnable spiral.
+  player.reliefFloor = dungeonReturn;
   closeShop(); closeMystic(); closeTown();
   buildTown();     // clears inTown=false → true and resets town state
   revivedInTown = true;  // flag so the town hub spells out how to get back to questing
@@ -13278,7 +13354,7 @@ function handleDeath() {
   player.hp = Math.max(1, Math.round(player.maxHp * 0.5));
   player.mp = Math.round(player.maxMp * 0.5);
   showDeathScreen(lostGold, lostXp, dungeonReturn, lostBag, (graveSite ? fellOn : 0));
-  log(`💀 ${player.name || HERO} was SLAIN on ${floorLabel(fellOn)}! Lost ${lostGold}g${lostXp ? ` and ${lostXp} XP` : ''}${lostBag ? `, and dropped your bag (${lostBag}) — reclaim it on ${floorLabel(fellOn)}` : ''} — revived weakened in town.`, 'important');
+  log(`💀 ${player.name || HERO} was SLAIN on ${floorLabel(fellOn)}! Lost ${lostGold}g${lostXp ? ` and ${lostXp} XP` : ''}${lostBag ? `, and dropped your bag (${lostBag}) — reclaim it on ${floorLabel(fellOn)}` : ''} — revived weakened in town. The dungeon eases up while you find your feet.`, 'important');
   recomputeMaxStats();
   updateBars();
   renderPanel();
@@ -13791,12 +13867,18 @@ function renderPanel() {
       <button class="loot-bulk-btn" onclick="bagBulk('sell')">${mMoney} Sell all · ${bulkGold}g</button>
       ${bulkScrapN ? `<button class="loot-bulk-btn" onclick="bagBulk('scrap')">${mScrap} Scrap all · ${bulkScrapN}</button>` : ''}
     </div>` : '';
+    // Auto-Loot entry point — lives here on the LOOT tab (not in settings) since it
+    // governs how loot is handled. Always shown, with its on/off state inline.
+    const alSum = autoLootSummary();
+    const autoBar = `<div class="loot-auto-bar">
+      <button class="loot-auto-btn${alSum === 'off' ? '' : ' on'}" onclick="openAutoLoot()" ${hoverTip(`<div class='ht-name'>♻️ Auto-Loot</div><div class='ht-line'>Auto-scrap or auto-sell loot of chosen rarities the moment it drops.</div>`)}>♻️ Auto-Loot <span class="la-status">${alSum}</span></button>
+    </div>`;
     if (rows.length === 0) {
-      el.innerHTML = strip + subtabs + bulkBar + lootGlossaryHTML() + '<div id="empty-panel">' +
+      el.innerHTML = strip + subtabs + autoBar + bulkBar + lootGlossaryHTML() + '<div id="empty-panel">' +
         (inventory.length === 0 ? 'No items yet.<br>Explore!' : 'Nothing here.') + '</div>';
       return;
     }
-    el.innerHTML = strip + subtabs + bulkBar + lootGlossaryHTML() + rows.map(({ item, i }) => {
+    el.innerHTML = strip + subtabs + autoBar + bulkBar + lootGlossaryHTML() + rows.map(({ item, i }) => {
       const equipable = !!item.slot;
       const slotName = item.slot ? SLOTS[item.slot].label.replace(/^\S+\s/, '') : 'potion';
       // Compare this item's power to whatever currently fills its slot, so we can
@@ -14481,14 +14563,17 @@ function renderPaperdoll() {
   const heroKey = (player.class && SPRITE_IDX['hero_' + player.class] !== undefined) ? 'hero_' + player.class : 'hero';
   const body = dlIcon(heroKey, 132);
   const bodyHTML = body ? `<div class="pd-body">${body}</div>` : '';
-  // Grid laid out like a body: weapon|head|amulet / hands|chest|ring / -|legs|-.
-  const blank = '<div class="pd-cell"></div>';
+  // Laid out like a body: jewellery flanks the head, the weapons flank the
+  // chest, and the lower armour (hands + legs) shares a centred bottom row.
+  //   amulet | head  | ring
+  //   weapon | chest | off-hand
+  //        hands | legs   (centred)
   const cells = [
-    renderDollSlot('weapon'),  renderDollSlot('head'),  renderDollSlot('amulet'),
-    renderDollSlot('hands'),   renderDollSlot('chest'), renderDollSlot('ring'),
-    renderDollSlot('offhand'), renderDollSlot('legs'),  blank,
+    renderDollSlot('amulet'), renderDollSlot('head'),  renderDollSlot('ring'),
+    renderDollSlot('weapon'), renderDollSlot('chest'), renderDollSlot('offhand'),
   ].join('');
-  return `<div class="paperdoll">${bodyHTML}${cells}
+  const bottom = `<div class="pd-bottom">${renderDollSlot('hands')}${renderDollSlot('legs')}</div>`;
+  return `<div class="paperdoll">${bodyHTML}${cells}${bottom}
     <div class="pd-hint">Tap a slot for details · ✕ to unequip · EQUIP loot from the LOOT tab</div>
   </div>`;
 }
@@ -16426,7 +16511,7 @@ log('💠 Level up to earn points, then raise attributes in the bag\'s HERO tab.
 log('🗡️ Every weapon fights differently — axes cleave, daggers flurry, bows & staves strike at range, maces stun, scythes drain. Try them all!');
 log('🏰 Tap TOWN (or press T) to warp to the safe hub: craftsman, healer, trainer, enchanter, and a gate to re-enter any floor you\'ve reached.');
 log('🧰 Foes drop crafting materials — 🔩 Scrap, 🔆 Core, ✨ Glimmer, 🌀 Chaos Orb. The 🔨 Craftsman forges blank gear; the 🪄 Enchanter fills in its modifiers.');
-log('♻️ Tap any loot in your 🎒 BAG to Sell it for gold or Scrap it into materials — any time, no vendor needed. Set ⚙️ AUTO-LOOT to do it automatically by rarity on pickup.');
+log('♻️ Tap any loot in your 🎒 BAG to Sell it for gold or Scrap it into materials — any time, no vendor needed. Use the ♻️ Auto-Loot button on the LOOT tab to do it automatically by rarity on pickup.');
 log('⚔️ Each move OR attack passes a turn — get surrounded and every foe piles on, so don\'t let them encircle you.');
 log('🎨 Pixel art from the DawnLike tileset by DragonDePlatino & DawnBringer (CC-BY 4.0).');
 log('🌍 Terrain tiles from "[LPC] Terrains" by bluecarrot16 & LPC contributors (CC-BY-SA 4.0).');
@@ -16467,7 +16552,7 @@ function pulseLoop(ts) {
   const hasShrine = Object.keys(shrineData).length > 0;
   const juicing = particles.length || tracers.length || Date.now() < shakeUntil;
   const liquid = mapData.some(row => row && row.some(t => t === 6 || t === 7));
-  if ((inTown || merchant || mystic || hasFountain || hasShrine || quest || graveMarker || floatingTexts.length || statusEffects.length || hasElite || juicing || liquid) && ts - lastPulse > 30) { lastPulse = ts; draw(); }
+  if ((inTown || merchant || mystic || hasFountain || hasShrine || quest || graveMarker || floatingTexts.length || statusEffects.length || hasElite || juicing || liquid || floorCleared) && ts - lastPulse > 30) { lastPulse = ts; draw(); }
   // Animate the danger halo every frame — it's a DOM overlay, so it must keep
   // pulsing even when the canvas is idle (e.g. standing still at low HP).
   updateHaloVignette();
