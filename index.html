@@ -2093,7 +2093,6 @@
       <button class="tab-btn" id="tab-equip" onclick="switchTab('equip')">GEAR</button>
       <button class="tab-btn" id="tab-hero" onclick="switchTab('hero')">HERO</button>
       <button class="tab-btn" id="tab-skills" onclick="switchTab('skills')">SKILLS</button>
-      <button class="tab-btn" id="tab-cook" onclick="switchTab('cook')">COOK</button>
     </div>
     <div id="panel-content"></div>
   </div>
@@ -3467,7 +3466,6 @@ function round3(x) { return Math.round(x * 1000) / 1000; }
 
 // ── cooking state & helpers ──
 let cookPot = {};        // the ramen pot being built: ingredientKey -> count
-let cookMount = 'town';  // where the kitchen UI is showing: 'town' | 'panel'
 
 function gainIngredient(k, n) {
   if (!player.ingredients) player.ingredients = {};
@@ -6992,12 +6990,10 @@ function setTownContent(html) {
 // run. Building the pot, cooking, and eating all re-render whichever mount is
 // showing via refreshCooking().
 
-function openRamen() { cookMount = 'town'; openTownModal('🍜 Ramen House'); refreshCooking(); }
+function openRamen() { openTownModal('🍜 Ramen House'); refreshCooking(); }
 
 function refreshCooking() {
-  const html = renderCookingHTML();
-  if (cookMount === 'town') { setTownContent(html); }
-  else { const el = document.getElementById('panel-content'); if (el) el.innerHTML = html; }
+  setTownContent(renderCookingHTML());
 }
 
 // Every bowl of ramen takes EXACTLY this many toppings — no more, no less.
@@ -12708,8 +12704,6 @@ function switchTab(tab) {
   document.getElementById('tab-hero').classList.toggle('active', tab==='hero');
   const st = document.getElementById('tab-skills');
   if (st) st.classList.toggle('active', tab==='skills');
-  const ct = document.getElementById('tab-cook');
-  if (ct) ct.classList.toggle('active', tab==='cook');
   renderPanel();
 }
 
@@ -12802,9 +12796,6 @@ function renderPanel() {
       `<div style="margin-top:8px;font-size:10px;color:#555">Tap EQUIP on any loot<br>item to gear up.</div>`;
   } else if (currentTab === 'skills') {
     renderSkills(el);
-  } else if (currentTab === 'cook') {
-    cookMount = 'panel';
-    el.innerHTML = renderCookingHTML();
   } else {
     renderHero(el);
   }
