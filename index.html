@@ -1346,6 +1346,18 @@
   }
   .lb-row.me { border-color: var(--gold); background: #241d10; }
   .lb-rank { width: 26px; color: #8a7d63; font-weight: bold; text-align: right; flex: 0 0 auto; }
+  /* Top-3 medal discs: gold / silver / bronze circles with a bold rank number
+     inside, set apart in colour from the muted plain numbers below them. */
+  .lb-medal {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 20px; height: 20px; border-radius: 50%;
+    font-size: 11px; font-weight: bold; line-height: 1;
+    color: #2a1d08; text-shadow: 0 1px 0 rgba(255,255,255,0.25);
+    box-shadow: inset 0 1px 1px rgba(255,255,255,0.45), inset 0 -2px 2px rgba(0,0,0,0.3);
+  }
+  .lb-medal-1 { background: radial-gradient(circle at 35% 30%, #ffe98a, #d8a614 70%); border: 1px solid #a8780a; }
+  .lb-medal-2 { background: radial-gradient(circle at 35% 30%, #f4f4f6, #a6a8b2 70%); border: 1px solid #80828c; color: #2a2a30; }
+  .lb-medal-3 { background: radial-gradient(circle at 35% 30%, #f0b27e, #aa5f29 70%); border: 1px solid #84481d; color: #2e1a08; }
   .lb-class { font-size: 14px; flex: 0 0 auto; width: 18px; text-align: center; }
   .lb-name { flex: 1 1 auto; color: #e8d5a8; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .lb-val { color: var(--gold); font-weight: bold; flex: 0 0 auto; white-space: nowrap; }
@@ -1896,8 +1908,8 @@
   <div class="hud-item" id="level-hud" data-tip="<div class='ht-name'>⭐ Hero Level</div><div class='ht-line'>Fill the XP bar by slaying foes to level up. Each level boosts your stats and grants an attribute point.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">Lv <span class="hud-val" id="level-num">1</span>
     <div class="xp-track"><div class="xp-fill" id="xp-bar" style="width:0%"></div></div>
   </div>
-  <div class="hud-item" id="enemies-hud" data-tip="<div class='ht-name'>⚔️ Foes Remaining</div><div class='ht-line'>How many enemies are still alive on this floor. The stairs down stay sealed (🔒) until every foe is cleared (🔓).</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()"><span data-spr="ui_foes"></span> <span class="hud-val" id="enemies-num">0</span> <span id="clear-status">🔒</span></div>
-  <div class="hud-item" id="power-hud" data-tip="<div class='ht-name'>⚡ Power</div><div class='ht-line'>A rough measure of your overall strength, combining your level, equipped gear, spent attributes and skills.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()"><span data-spr="ui_power"></span> <span class="hud-val" id="power-num">0</span></div>
+  <div class="hud-item" id="enemies-hud" data-tip="<div class='ht-name'><span data-spr='ui_foes'></span> Foes Remaining</div><div class='ht-line'>How many enemies are still alive on this floor. The stairs down stay sealed (🔒) until every foe is cleared (🔓).</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()"><span data-spr="ui_foes"></span> <span class="hud-val" id="enemies-num">0</span> <span id="clear-status">🔒</span></div>
+  <div class="hud-item" id="power-hud" data-tip="<div class='ht-name'><span data-spr='ui_power'></span> Power</div><div class='ht-line'>A rough measure of your overall strength, combining your level, equipped gear, spent attributes and skills.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()"><span data-spr="ui_power"></span> <span class="hud-val" id="power-num">0</span></div>
   <div class="hud-item" id="pact-hud" style="display:none" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">🔮 <span class="hud-val" id="pact-num"></span></div>
   <div class="hud-item" id="food-hud" style="display:none" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()"></div>
   <div id="gold-display" data-tip="<div class='ht-name' style='color:var(--gold)'>💰 Gold</div><div class='ht-line'>The dungeon's main currency. Spend it at the town shops, the Forge, the Enchanter, and the Stash.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">💰 <span id="gold-count">0</span>g</div>
@@ -12658,34 +12670,38 @@ function renderHero(el) {
   }).join('');
   // Derived combat stats so the player can see what their attributes/gear produce.
   const stat = (label, val) => `<div class="hc-line" style="display:flex;justify-content:space-between"><span style="opacity:0.8">${label}</span><b>${val}</b></div>`;
+  // Dedicated DawnLike icon for a stat row (painted from the atlas via data-spr).
+  const sIc = k => `<span data-spr="${k}"></span> `;
   // Extended gear stats (leech, thorns, find, caster %s, …): every one the hero
   // currently carries from gear is listed so nothing stays hidden. Zero-value
   // stats are skipped to keep the panel readable.
+  // [statKey, DawnLike sprite key, label]. Each stat gets its own dedicated
+  // atlas tile (rendered via data-spr) so nothing relies on a shared emoji.
   const EXT = [
-    ['IDMG','💢 Increased dmg'], ['BOSSDMG','👑 Dmg vs bosses'], ['EXEC','🗡 Execute'],
-    ['PEN','🩹 Armor pen'], ['CLEAVE','🪓 Cleave'], ['DBLSTRIKE','⚡ Double strike'],
-    ['LEECH','🩸 Life leech'], ['MPLEECH','🔹 Mana leech'], ['HPKILL','❤️ Life on kill'],
-    ['MPKILL','🔷 Mana on kill'], ['THORNS','🌵 Thorns'], ['DR','🛡 Dmg reduction'],
-    ['BLOCK','🟦 Block'], ['SPELLPWR','🔮 Spell power'], ['CDR','⏳ Cooldown reduc'],
-    ['MCR','💧 Mana cost reduc'], ['GOLDFIND','💰 Gold find'], ['XPGAIN','📘 XP gain'],
-    ['MAGICFIND','🍀 Magic find'], ['MATFIND','🧰 Material find'],
+    ['IDMG','ic_stun','Increased dmg'], ['BOSSDMG','ui_level','Dmg vs bosses'], ['EXEC','w_dagger','Execute'],
+    ['PEN','w_spear','Armor pen'], ['CLEAVE','w_axe','Cleave'], ['DBLSTRIKE','w_scythe','Double strike'],
+    ['LEECH','ic_heart','Life leech'], ['MPLEECH','ic_orb','Mana leech'], ['HPKILL','ic_heart','Life on kill'],
+    ['MPKILL','ic_orb','Mana on kill'], ['THORNS','spikes_up','Thorns'], ['DR','a_shield','Dmg reduction'],
+    ['BLOCK','a_shield','Block'], ['SPELLPWR','ic_orb','Spell power'], ['CDR','ic_wand','Cooldown reduc'],
+    ['MCR','ui_mp','Mana cost reduc'], ['GOLDFIND','ic_money','Gold find'], ['XPGAIN','scroll','XP gain'],
+    ['MAGICFIND','chest','Magic find'], ['MATFIND','mat_scrap','Material find'],
   ];
-  const extRows = EXT.map(([k, lbl]) => {
+  const extRows = EXT.map(([k, sp, name]) => {
     const t = totalStat(k);
     if (!t) return '';
-    return stat(lbl, '+' + t + (PCT_STATS.has(k) ? '%' : ''));
+    return stat(sIc(sp) + name, '+' + t + (PCT_STATS.has(k) ? '%' : ''));
   }).join('');
   const derived = `<div class="hero-class" style="border-color:#445">
       <div class="hc-head"><span class="hc-name">📊 Stats</span></div>
-      ${stat('⚔️ Attack power', Math.round(totalStat('ATK') + attrDamage()))}
-      ${stat('🛡 Defense', Math.round(playerDefense()))}
-      ${stat('❤️ Max HP', player.maxHp)}
-      ${stat('✨ Max MP', player.maxMp)}
-      ${stat('💚 HP regen', '+' + hpRegenPerTurn() + '/turn')}
-      ${stat('🔷 MP regen', '+' + mpRegenPerTurn() + '/turn')}
-      ${stat('🎯 Crit chance', Math.round(playerCritChance()*100) + '%')}
-      ${stat('💥 Crit damage', Math.round(critDamageMult()*100) + '%')}
-      ${stat('💨 Dodge', Math.round(playerDodge()*100) + '%')}
+      ${stat(sIc('w_sword') + 'Attack power', Math.round(totalStat('ATK') + attrDamage()))}
+      ${stat(sIc('a_shield') + 'Defense', Math.round(playerDefense()))}
+      ${stat(sIc('ic_heart') + 'Max HP', player.maxHp)}
+      ${stat(sIc('ui_mp') + 'Max MP', player.maxMp)}
+      ${stat(sIc('ic_heart') + 'HP regen', '+' + hpRegenPerTurn() + '/turn')}
+      ${stat(sIc('ui_mp') + 'MP regen', '+' + mpRegenPerTurn() + '/turn')}
+      ${stat(sIc('ic_target') + 'Crit chance', Math.round(playerCritChance()*100) + '%')}
+      ${stat(sIc('ic_fire') + 'Crit damage', Math.round(critDamageMult()*100) + '%')}
+      ${stat(sIc('ui_agility') + 'Dodge', Math.round(playerDodge()*100) + '%')}
       ${extRows ? `<div class="hc-line" style="opacity:0.5;margin-top:4px">— from gear —</div>${extRows}` : ''}
     </div>`;
   const cls = playerClass();
@@ -14154,10 +14170,14 @@ async function renderLeaderboard() {
     list.innerHTML = '<div class="lb-row"><span class="lb-name">No heroes yet — be the first!</span></div>';
     return;
   }
-  const medal = ['🥇', '🥈', '🥉'];
   list.innerHTML = rows.map((r, i) => {
     const cls = r.player_class && CLASSES[r.player_class] ? CLASSES[r.player_class].icon : '🧙';
-    const rank = medal[i] || (i + 1);
+    // Top three get a gold/silver/bronze medal disc with the rank number
+    // inside (DawnLike has no number tiles, so these are styled text badges);
+    // everyone else gets a plain muted number.
+    const rank = i < 3
+      ? `<span class="lb-medal lb-medal-${i + 1}">${i + 1}</span>`
+      : (i + 1);
     const me = myName && r.name === myName ? ' me' : '';
     return `<div class="lb-row${me}">
       <span class="lb-rank">${rank}</span>
