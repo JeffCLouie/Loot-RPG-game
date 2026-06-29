@@ -9588,14 +9588,15 @@ function draw() {
     ctx.restore();
   });
 
-  // Ground food
+  // Ground food — drawn large so a rare bowl is easy to spot on the map.
   groundFood.forEach(f => {
     const px = offX + f.x * tw, py = offY + f.y * th;
-    ctx.font = `${Math.round(tw * 0.6)}px serif`;
+    const foodSize = Math.round(tw * 0.95);
+    ctx.font = `${foodSize}px serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    if (!(spriteReady && drawSpriteC('food', px + tw/2, py + th/2, Math.round(tw * 0.6))))
-      drawEmoji(f.emoji, px + tw/2, py + th/2, Math.round(tw * 0.6));
+    if (!(spriteReady && drawSpriteC('food', px + tw/2, py + th/2, foodSize)))
+      drawEmoji(f.emoji, px + tw/2, py + th/2, foodSize);
   });
 
   // Coin piles — a soft circular golden glow so loose gold catches the eye.
@@ -9624,11 +9625,14 @@ function draw() {
   if (merchant && !inTown) {
     const px = offX + merchant.x * tw, py = offY + merchant.y * th;
     drawActorShadow(px + tw/2, py + th*0.82, tw);
-    // Soft rainbow glow that fades out from behind them (the same radial style
-    // as pickup glows), instead of a hard-edged circle.
-    const t = (Date.now() % 2000) / 2000;
-    const hue = Math.floor(t * 360);
-    glowUnder(px + tw/2, py + th/2, tw*0.6, `hsla(${hue},90%,62%,0.5)`);
+    // Heavy gold glow that pulses and fades out from behind them (the same radial
+    // style as pickup glows). Two layered radial fades — a broad halo plus a
+    // brighter core — read as a thicker, weightier glow than a single pass.
+    const t = (Date.now() % 1800) / 1800;
+    const pulse = 0.5 + 0.5 * Math.sin(t * Math.PI * 2);
+    const gcx = px + tw/2, gcy = py + th/2;
+    glowUnder(gcx, gcy, tw * (0.92 + 0.14 * pulse), `rgba(255,198,66,${0.34 + 0.24 * pulse})`);
+    glowUnder(gcx, gcy, tw * (0.54 + 0.10 * pulse), `rgba(255,226,138,${0.45 + 0.28 * pulse})`);
     // merchant sprite on top (a full DawnLike townsfolk sprite, so no procedural
     // robe blob behind it any more)
     ctx.font = `${Math.round(tw * 0.74)}px serif`;
@@ -9636,32 +9640,26 @@ function draw() {
     ctx.textBaseline = 'middle';
     if (!(spriteReady && drawSpriteC('npc_shop', px + tw/2, py + th/2 + th*0.02, Math.round(tw * 0.82))))
       drawEmoji('🧙‍♂️', px + tw/2, py + th/2 + th*0.02, Math.round(tw * 0.74));
-    // little coins tag above
-    ctx.fillStyle = '#ffd24b';
-    ctx.font = `bold ${Math.round(tw*0.34)}px serif`;
-    if (!(spriteReady && drawSpriteC('ic_money', px + tw/2, py - th*0.02, Math.round(tw*0.4))))
-      drawEmoji('💰', px + tw/2, py - th*0.02, Math.round(tw*0.34));
   }
 
-  // Wandering Mystic (hooded pact-vendor with a teal mystical aura)
+  // Wandering Mystic (hooded pact-vendor with a purple mystical aura)
   if (mystic && !inTown) {
     const px = offX + mystic.x * tw, py = offY + mystic.y * th;
     drawActorShadow(px + tw/2, py + th*0.82, tw);
-    // Slow breathing teal glow so they read as arcane, distinct from the
-    // merchant — a soft radial fade, not a hard-edged circle.
+    // Heavy purple glow that pulses and fades — same layered radial style as the
+    // merchant's, so the two roaming vendors read as a matched pair (gold vs
+    // purple) and stand out boldly from the floor.
     const t = (Date.now() % 2600) / 2600;
-    const pulse = 0.34 + 0.22 * (0.5 + 0.5 * Math.sin(t * Math.PI * 2));
-    glowUnder(px + tw/2, py + th/2, tw*0.6, `rgba(70,225,210,${pulse})`);
+    const pulse = 0.5 + 0.5 * Math.sin(t * Math.PI * 2);
+    const gcx = px + tw/2, gcy = py + th/2;
+    glowUnder(gcx, gcy, tw * (0.92 + 0.14 * pulse), `rgba(150,78,255,${0.34 + 0.24 * pulse})`);
+    glowUnder(gcx, gcy, tw * (0.54 + 0.10 * pulse), `rgba(196,134,255,${0.45 + 0.28 * pulse})`);
     // mystic sprite on top (full DawnLike hooded sprite — no procedural robe blob)
     ctx.font = `${Math.round(tw * 0.74)}px serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     if (!(spriteReady && drawSpriteC('npc_mage', px + tw/2, py + th/2 + th*0.02, Math.round(tw * 0.82))))
       drawEmoji('🧙', px + tw/2, py + th/2 + th*0.02, Math.round(tw * 0.74));
-    // crystal-ball tag above
-    ctx.font = `bold ${Math.round(tw*0.34)}px serif`;
-    if (!(spriteReady && drawSpriteC('ic_orb', px + tw/2, py - th*0.02, Math.round(tw*0.4))))
-      drawEmoji('🔮', px + tw/2, py - th*0.02, Math.round(tw*0.34));
   }
 
   // Town buildings + NPCs (only present in the safe hub). Buildings first so the
