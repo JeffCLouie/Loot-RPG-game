@@ -641,6 +641,14 @@
   .sk-tnode.maxed .badge { background: #3a6a3a; color: #dfffe0; }
   .sk-tnode.act { box-shadow: 0 0 7px rgba(140,110,255,.45); }
   .sk-tnode.sel { outline: 2px solid var(--gold); outline-offset: 2px; z-index: 6; }
+  /* Keystones are the build-defining commit points: an octagonal, gold-rimmed
+     frame sets them apart from ordinary stat nodes at a glance. */
+  .sk-tnode.keystone { border-width: 2px; border-color: #e8c267;
+    clip-path: polygon(30% 0, 70% 0, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0 70%, 0 30%);
+    box-shadow: 0 0 8px rgba(232,194,103,.4); }
+  .sk-tnode.keystone .ic { border-radius: 0; }
+  .sk-tnode.keystone.owned, .sk-tnode.keystone.maxed { box-shadow: 0 0 12px rgba(232,194,103,.7); }
+  .sk-tnode.keystone.locked { box-shadow: none; }
   /* Tap a node → this popover with its full detail + a Learn button. */
   .sk-pop { position: absolute; z-index: 20; width: 168px; background: #15101f; border: 1px solid #8c6eff;
     border-radius: 8px; padding: 8px 9px; font-size: 10px; line-height: 1.5; color: #e8def8;
@@ -648,6 +656,14 @@
   .sk-pop b { color: var(--gold); }
   .sk-pop .ty { color: #9a8fd0; font-size: 9px; margin-top: 1px; }
   .sk-pop .ds { margin-top: 3px; color: #cdc2e8; }
+  /* Mechanics readout: one tagged chip per engine piece (charge, trigger,
+     synergy, transform, detonate…) so a node reads how it actually plays. */
+  .sk-pop .mech { margin-top: 5px; display: flex; flex-direction: column; gap: 3px; }
+  .sk-pop .mech-row { display: flex; gap: 5px; align-items: baseline; font-size: 9px; line-height: 1.4; }
+  .sk-pop .mech-t { flex: 0 0 auto; font-size: 7.5px; font-weight: 700; letter-spacing: 0.4px;
+    text-transform: uppercase; padding: 1px 5px; border-radius: 4px; white-space: nowrap; }
+  .sk-pop .mech-d { color: #cdc2e8; }
+  .sk-pop .mech-d b { color: #e8def8; font-weight: 700; }
   /* "On rank up" preview: shows the concrete buff each point buys (now → next). */
   .sk-pop .ru { margin-top: 5px; padding: 4px 6px; background: #1d1630; border: 1px solid #3a3056; border-radius: 6px; }
   .sk-pop .ru-h { font-size: 8px; letter-spacing: 0.5px; color: #9a8fd0; text-transform: uppercase; margin-bottom: 2px; }
@@ -14810,7 +14826,7 @@ function renderSkills(el) {
     const barHidden = n.type === 'active' && owned && isSkillHidden(n.id);
     const badge = barHidden ? '🚫' : maxd ? '✓' : avail ? '+' : owned ? rank : ready ? '☆' : '🔒';
     const pips = `<div class="pips">${Array.from({ length: 10 }, (_, i) => `<span class="pip${i < rank ? ' on' : ''}"></span>`).join('')}</div>`;
-    return `<button class="sk-tnode ${state}${n.type === 'active' ? ' act' : ''}${barHidden ? ' barhid' : ''}${selectedSkillId === n.id ? ' sel' : ''}" id="sknode-${n.id}"
+    return `<button class="sk-tnode ${state}${n.keystone ? ' keystone' : ''}${n.type === 'active' ? ' act' : ''}${barHidden ? ' barhid' : ''}${selectedSkillId === n.id ? ' sel' : ''}" id="sknode-${n.id}"
         style="left:${(p[0] * 100).toFixed(2)}%;top:${(p[1] * 100).toFixed(2)}%" onclick="selectSkill('${n.id}')" ondblclick="buySkill('${n.id}')"
         data-tip="${skillTipHtml(n)}" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
       <span class="ic">${dlIconFill(n.icon)}</span><span class="nm">${n.name}</span><span class="badge">${badge}</span>
@@ -14876,6 +14892,7 @@ function renderSkills(el) {
       <b>${dlIcon(sn.icon,18)||''} ${sn.name}</b>${rankTxt}
       <div class="ty">${typeTxt}</div>
       <div class="ds">${sn.desc}</div>
+      ${skillMechHtml(sn)}
       ${ruHtml}
       ${reqHtml}
       ${buyBtn}
@@ -14909,6 +14926,9 @@ function skillTipHtml(n) {
   let h = `<div class='ht-name'>${esc(n.name)} <span style='color:#e8c267'>${rank}/${n.max}${pips ? ' ' + pips : ''}</span></div>`;
   h += `<div class='ht-line' style='color:#9a8fd0'>${typeTxt}</div>`;
   h += `<div class='ht-line'>${esc(n.desc)}</div>`;
+  // The engine mechanics (charges, triggers, synergies, transforms…) as plain
+  // coloured lines — the chip styling lives only in the click popover.
+  for (const m of skillMechList(n)) h += `<div class='ht-line' style='margin-top:2px'><span style='color:${m.color};font-weight:700'>${m.tag}:</span> ${m.desc}</div>`;
   if (!skillMaxed(n)) {
     const rows = skillRankUpRows(n, rank);
     if (rows.length) {
@@ -14990,6 +15010,102 @@ function condLabel(c) {
   if (c.indexOf('style:') === 0) return `with ${c.slice(6)} weapons`;
   if (c.indexOf('cat:') === 0) return `with a ${c.slice(4)}`;
   return c;
+}
+// ----- Mechanics readout -----------------------------------------------------
+// The engine pieces (charges, triggers, synergies, transforms, detonations) are
+// what make a node build-defining; a flat stat line hides them. Surface each as
+// a tagged one-liner so the popover reads how the node actually plays. Pure text
+// + colour, reusing the existing palette — no new art.
+const TRIG_LABEL = {
+  kill: 'On kill', crit: 'On crit', dodge: 'On dodge', block: 'On block',
+  hit: 'On hit', lowhp: 'When wounded', cast: 'On cast',
+};
+const BUFF_LABEL = {
+  dmgUp: 'damage', defUp: 'defense', critUp: 'crit', dodgeUp: 'dodge',
+  spellUp: 'spell power', regen: 'regen', shield: 'shield', thorns: 'thorns',
+  lifestealUp: 'lifesteal',
+};
+const turnsTxt = d => `${d} turn${d === 1 ? '' : 's'}`;
+// fx object → compact per-rank one-liner ("+1.5% crit, +3 attack"), for charges.
+function fxOneLine(fx) {
+  return Object.keys(fx).map(k => {
+    const m = FX_LABELS[k] || [k, 'frac'];
+    return `${fmtFxVal(m[1], fx[k])} ${m[0]}`;
+  }).join(', ');
+}
+function trigEffectLabel(e) {
+  const p = [];
+  if (e.charge) p.push(`gain ${e.amt && e.amt > 1 ? e.amt + ' ' : ''}<b>${e.charge}</b>`);
+  if (e.buff) p.push(`+${Math.round((e.buff.mag || 0) * 100)}% ${BUFF_LABEL[e.buff.id] || e.buff.id} (${turnsTxt(e.buff.dur)})`);
+  if (typeof e.heal === 'number') p.push(`heal ${Math.round(e.heal * 100)}% HP`);
+  if (typeof e.mana === 'number') p.push(`restore ${Math.round(e.mana * 100)}% MP`);
+  if (e.nextCrit) p.push('next hit crits');
+  if (e.damage) p.push('retaliate for damage');
+  let s = p.join(', ') || 'react';
+  if (e.chance != null && e.chance < 1) s += ` (${Math.round(e.chance * 100)}% chance)`;
+  return s + '.';
+}
+function modLabel(m) {
+  const p = [];
+  if (m.radius) p.push(`+${m.radius} radius`);
+  if (m.range) p.push(`+${m.range} range`);
+  if (m.chain) p.push(`+${m.chain} chain`);
+  if (m.repeat) p.push(`+${m.repeat} repeat`);
+  if (m.knockback) p.push(`+${m.knockback} knockback`);
+  if (m.wpn) p.push(`+${Math.round(m.wpn * 100)}% weapon dmg`);
+  if (m.spell) p.push(`+${Math.round(m.spell * 100)}% spell dmg`);
+  if (m.lifesteal) p.push(`+${Math.round(m.lifesteal * 100)}% lifesteal`);
+  if (m.execute) p.push(`+${Math.round(m.execute * 100)}% execute`);
+  if (m.crit) p.push('always crits');
+  if (m.pull) p.push('pulls foes in');
+  if (m.toLine) p.push('hits in a line');
+  if (m.status) p.push(`inflicts ${m.status.effect}`);
+  return p.join(', ');
+}
+// The structured mechanics of a node as {tag, color, desc} rows — rendered as
+// styled chips in the click popover and as plain lines in the hover card.
+function skillMechList(n) {
+  const rows = [];
+  const add = (tag, color, desc) => rows.push({ tag, color, desc });
+  if (n.charge) add('Charge', '#e8c267', `Stack up to ${n.charge.max} <b>${n.charge.id}</b> — each grants ${fxOneLine(n.charge.fx)}.`);
+  if (n.trigger) add(TRIG_LABEL[n.trigger.on] || n.trigger.on, '#6fb7d9', trigEffectLabel(n.trigger.effect));
+  if (n.mod && n.mod.skill) {
+    const tn = skillNode(n.mod.skill);
+    const ml = modLabel(n.mod);
+    add('Transforms', '#b08ad8', `<b>${tn ? tn.name : n.mod.skill}</b>${ml ? ' — ' + ml : ''}.`);
+  }
+  if (n.syn) {
+    const arr = Array.isArray(n.syn) ? n.syn : [n.syn];
+    for (const s of arr) {
+      const sn = skillNode(s.skill);
+      add('Synergy', '#7ad08a', `+${Math.round(s.per * 100)}% effect per rank of <b>${sn ? sn.name : s.skill}</b>.`);
+    }
+  }
+  if (n.cast) {
+    const c = n.cast;
+    if (c.status) add('Status', '#d98a6f', `Inflicts ${c.status.effect} (${turnsTxt(c.status.dur)}).`);
+    if (c.detonate) add('Detonate', '#e07a3a', `Explodes vuln-marked foes for ${Math.round(c.detonate * 100)}% damage.`);
+    if (c.summon) add('Summon', '#7ad08a', `Calls ${c.summon.count > 1 ? c.summon.count + ' ' : ''}${c.summon.kind}${c.summon.count > 1 ? 's' : ''} for ${turnsTxt(c.summon.ttl)}.`);
+    if (Array.isArray(c.buff)) for (const b of c.buff) add('Buff', '#6fb7d9', `+${Math.round((b.mag || 0) * 100)}% ${BUFF_LABEL[b.id] || b.id} (${turnsTxt(b.dur)}).`);
+    if (c.heal) {
+      const parts = [];
+      if (c.heal.flat) parts.push(`${c.heal.flat} HP`);
+      if (c.heal.perLevel) parts.push(`${c.heal.perLevel}/level`);
+      if (c.heal.pctDmg) parts.push(`${Math.round(c.heal.pctDmg * 100)}% of damage`);
+      if (parts.length) add('Heal', '#7ad08a', parts.join(' + ') + '.');
+    }
+  }
+  // Cross-cutting keystone rule that a stat line can't show.
+  if (n.kflag === 'bloodpact') add('Keystone', '#e8c267', 'Active skills cost life instead of mana.');
+  return rows;
+}
+// Styled-chip version for the click popover.
+function skillMechHtml(n) {
+  const rows = skillMechList(n);
+  if (!rows.length) return '';
+  return `<div class="mech">` + rows.map(r =>
+    `<div class="mech-row"><span class="mech-t" style="background:${r.color}22;color:${r.color}">${r.tag}</span><span class="mech-d">${r.desc}</span></div>`
+  ).join('') + `</div>`;
 }
 // Build the "On rank up" preview rows: the concrete buff each point buys, shown
 // as current total → next-rank total. Returns [] when there's nothing to preview.
