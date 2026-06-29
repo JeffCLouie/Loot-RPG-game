@@ -361,15 +361,21 @@
   }
   .dp-sw.sel { border-color: #fff; background: rgba(255, 255, 255, 0.06); }
   .dp-sw-face {
-    width: 42px; height: 42px;
+    width: 40px; height: 40px;
     display: flex; align-items: center; justify-content: center;
+    font-size: 24px; line-height: 1;
   }
-  .dp-sw-name {
-    font-size: 8px; line-height: 1;
-    font-family: 'Courier New', monospace;
-    color: #9a8fb0; white-space: nowrap;
+  /* Colour picker: a wrapping row of round swatches, ring on the chosen one. */
+  #dpad-color-row { flex-wrap: wrap; gap: 7px; }
+  .dp-color-sw {
+    flex: 0 0 auto;
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
   }
-  .dp-sw.sel .dp-sw-name { color: #fff; }
+  .dp-color-sw.sel { border-color: #fff; box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.45); }
 
   .heal-btn {
     background: #6a1a2a;
@@ -1785,42 +1791,35 @@
   #touch-dpad .dpad-btn[data-dir="down"]   { grid-area: 3 / 2; }
   #touch-dpad .dpad-btn,
   #dpad .dpad-btn { display: flex; align-items: center; justify-content: center; }
-  /* The whole look is driven by CSS variables so a theme (see DPAD_THEMES) only
-     has to supply one rightward arrow glyph + a colour/shape palette. */
+  /* Clean floating arrows: no borders, just a faint backdrop and the tinted
+     glyph. STYLE picks the glyph (--dp-glyph), COLOUR tints it (--dp-arrow). */
   #touch-dpad .dpad-btn {
-    background: var(--dp-bg, rgba(20, 16, 32, 0.34));
-    border: var(--dp-border, 1px solid rgba(232, 194, 103, 0.45));
-    border-radius: var(--dp-radius, 11px);
-    clip-path: var(--dp-clip, none);
-    color: var(--dp-arrow, rgba(255, 246, 224, 0.85));
-    font-size: var(--dp-fs, 20px);
-    font-family: var(--dp-font, inherit);
-    box-shadow: var(--dp-shadow, 0 1px 4px rgba(0, 0, 0, 0.35));
+    background: rgba(20, 16, 32, 0.30);
+    border: none;
+    border-radius: 11px;
+    color: var(--dp-arrow, #e8c267);
+    font-size: 22px;
     backdrop-filter: blur(1px);
     -webkit-backdrop-filter: blur(1px);
   }
-  /* One glyph, rotated per direction — keeps every theme to a single arrow. */
+  /* One glyph, rotated per direction. */
   #touch-dpad .dpad-btn[data-dir]:not(.dpad-center)::before,
   #dpad .dpad-btn[data-dir]:not(.dpad-center)::before {
     content: var(--dp-glyph, '\25B6');
     display: block; line-height: 1;
     transform: rotate(var(--dp-rot, 0deg));
-    text-shadow: var(--dp-tshadow, none);
   }
   .dpad-btn[data-dir="up"]    { --dp-rot: -90deg; }
   .dpad-btn[data-dir="down"]  { --dp-rot: 90deg; }
   .dpad-btn[data-dir="left"]  { --dp-rot: 180deg; }
   .dpad-btn[data-dir="right"] { --dp-rot: 0deg; }
   #touch-dpad .dpad-btn:active {
-    background: var(--dp-active-bg, rgba(232, 194, 103, 0.5));
-    color: var(--dp-active-arrow, #fff);
+    background: rgba(255, 255, 255, 0.14);
   }
   #touch-dpad .dpad-center {
-    clip-path: none;
     font-size: 10px;
     letter-spacing: 1px;
-    color: var(--dp-use, rgba(232, 194, 103, 0.85));
-    border-color: var(--dp-use-border, rgba(232, 194, 103, 0.6));
+    color: var(--dp-arrow, #e8c267);
   }
 
   /* One-time hint that teaches the movement pad after the d-pad's removal.
@@ -2106,6 +2105,8 @@
           <div class="settings-dpad-row" id="dpad-op-row"></div>
           <div class="settings-dpad-label">STYLE</div>
           <div class="settings-dpad-row" id="dpad-style-row"></div>
+          <div class="settings-dpad-label">COLOUR</div>
+          <div class="settings-dpad-row" id="dpad-color-row"></div>
         </div>
       </div>
     </div>
@@ -5593,41 +5594,35 @@ canvas.addEventListener('pointerup', e => {
 const touchDpad = document.getElementById('touch-dpad');
 // Movement-pad preferences: corner to dock it in, and its opacity (0 = hidden).
 const DPAD_KEY = 'dpadCfg';
-let dpadCfg = { pos: 'left', opacity: 0.33, style: 'gilded' };
-// 20 movement-pad themes for the STYLE picker. Each supplies one rightward arrow
-// glyph (CSS rotates it per direction) plus a colour/shape palette, applied as
-// inline CSS variables on #touch-dpad by applyDpadTheme(). DP_DEF fills any gaps.
-const DP_DEF = {
-  bg: 'rgba(20,16,32,0.34)', border: '1px solid rgba(232,194,103,0.45)',
-  radius: '11px', clip: 'none', shadow: '0 1px 4px rgba(0,0,0,0.35)',
-  arrow: 'rgba(255,246,224,0.88)', fs: '20px', font: 'inherit', tshadow: 'none',
-  use: 'rgba(232,194,103,0.85)', useBorder: 'rgba(232,194,103,0.6)',
-  activeBg: 'rgba(232,194,103,0.5)', activeArrow: '#fff'
-};
-const DP_HEX = 'polygon(25% 0%,75% 0%,100% 50%,75% 100%,25% 100%,0% 50%)';
-const DP_DIA = 'polygon(50% 0%,100% 50%,50% 100%,0% 50%)';
-const DPAD_THEMES = [
-  { key:'gilded',    name:'Gilded',    glyph:'▶', css:{ arrow:'#f5e6c0', tshadow:'0 1px 2px rgba(0,0,0,0.6)', use:'#e8c267' } },
-  { key:'obsidian',  name:'Obsidian',  glyph:'➤', css:{ radius:'50%', bg:'linear-gradient(145deg,#1c1c26,#000)', border:'1px solid rgba(255,255,255,0.22)', arrow:'#ffffff', tshadow:'0 0 6px rgba(255,255,255,0.5)', shadow:'0 2px 8px rgba(0,0,0,0.6), inset 0 1px 2px rgba(255,255,255,0.18)', use:'#cfcfe0', useBorder:'rgba(255,255,255,0.3)' } },
-  { key:'runestone', name:'Runestone', glyph:'⯈', css:{ radius:'4px', bg:'#46423a', border:'3px double #857a55', arrow:'#d8cdb0', font:'Georgia, serif', tshadow:'1px 1px 0 #2a2620, -1px -1px 0 #6e685c', shadow:'inset 0 0 6px rgba(0,0,0,0.5)', use:'#d8cdb0', useBorder:'#857a55' } },
-  { key:'emerald',   name:'Emerald',   glyph:'➤', css:{ clip:DP_HEX, bg:'radial-gradient(circle,#0d2c20,#04140d)', border:'1px solid rgba(80,255,170,0.45)', arrow:'#6effb0', tshadow:'0 0 8px rgba(80,255,170,0.8)', use:'#6effb0', useBorder:'rgba(80,255,170,0.5)' } },
-  { key:'crimson',   name:'Crimson',   glyph:'➤', css:{ clip:DP_DIA, bg:'linear-gradient(145deg,#3a0a0a,#180404)', border:'1px solid rgba(255,90,60,0.55)', arrow:'#ff6a40', tshadow:'0 0 7px rgba(255,80,40,0.7)', use:'#ff8a60', useBorder:'rgba(255,90,60,0.5)' } },
-  { key:'parchment', name:'Parchment', glyph:'➔', css:{ radius:'6px', bg:'linear-gradient(145deg,#e3d3ad,#cdb98c)', border:'1px dashed #7a5230', arrow:'#5a3a1c', font:'Georgia, serif', tshadow:'0 1px 0 rgba(255,250,235,0.5)', shadow:'inset 0 0 10px rgba(120,90,50,0.35)', use:'#5a3a1c', useBorder:'#7a5230' } },
-  { key:'frost',     name:'Frostbite', glyph:'⇒', css:{ radius:'12px', bg:'linear-gradient(145deg,#0f2a45,#04121f)', border:'1px solid rgba(150,220,255,0.55)', arrow:'#bfe9ff', tshadow:'0 0 9px rgba(150,220,255,0.9)', use:'#bfe9ff', useBorder:'rgba(150,220,255,0.5)' } },
-  { key:'royal',     name:'Royal',     glyph:'➤', css:{ bg:'linear-gradient(145deg,#2a1148,#120524)', border:'2px solid rgba(200,160,255,0.5)', arrow:'#e6c4ff', tshadow:'0 0 7px rgba(190,130,255,0.7)', use:'#e8c267' } },
-  { key:'bone',      name:'Bone',      glyph:'➤', css:{ radius:'8px', bg:'#e8e2d0', border:'2px dotted #9a8f70', arrow:'#5a4d30', font:'Georgia, serif', shadow:'inset 0 0 6px rgba(150,140,110,0.4)', use:'#5a4d30', useBorder:'#9a8f70' } },
-  { key:'neon',      name:'Neon',      glyph:'➜', css:{ radius:'6px', bg:'#07070f', border:'1px solid #00e5ff', arrow:'#00e5ff', font:"'Courier New', monospace", tshadow:'0 0 10px #00e5ff', shadow:'0 0 8px rgba(0,229,255,0.5)', use:'#ff2bd0', useBorder:'#ff2bd0', activeBg:'rgba(0,229,255,0.3)' } },
-  { key:'volcanic',  name:'Volcanic',  glyph:'➤', css:{ radius:'10px', bg:'radial-gradient(circle at 50% 130%,#4a1a02,#0a0402)', border:'1px solid rgba(255,120,30,0.55)', arrow:'#ff8a2a', tshadow:'0 0 11px rgba(255,90,0,0.9)', use:'#ffb24a', useBorder:'rgba(255,120,30,0.5)' } },
-  { key:'iron',      name:'Ironclad',  glyph:'▶', css:{ radius:'4px', bg:'linear-gradient(145deg,#60646c,#2c2f35)', border:'2px solid #15171b', arrow:'#dde1e8', tshadow:'0 1px 1px rgba(0,0,0,0.6)', shadow:'inset 0 1px 2px rgba(255,255,255,0.3), 0 2px 4px rgba(0,0,0,0.5)', use:'#dde1e8', useBorder:'#15171b' } },
-  { key:'celestial', name:'Celestial', glyph:'➤', css:{ radius:'50%', bg:'radial-gradient(circle,#121a3e,#040815)', border:'1px solid rgba(180,200,255,0.5)', arrow:'#cfe0ff', tshadow:'0 0 11px rgba(150,180,255,1)', use:'#ffe9a0', useBorder:'rgba(255,233,160,0.5)' } },
-  { key:'forest',    name:'Forest',    glyph:'➣', css:{ radius:'9px', bg:'linear-gradient(145deg,#1f3c1b,#0c1a0a)', border:'1px solid rgba(140,200,90,0.5)', arrow:'#a8e060', tshadow:'0 0 6px rgba(120,200,60,0.6)', use:'#c8e89a', useBorder:'rgba(140,200,90,0.5)' } },
-  { key:'pharaoh',   name:'Pharaoh',   glyph:'➤', css:{ clip:DP_HEX, bg:'linear-gradient(145deg,#143f72,#071d38)', border:'1px solid rgba(232,194,103,0.65)', arrow:'#f0cf78', tshadow:'0 1px 2px rgba(0,0,0,0.7)', use:'#f0cf78' } },
-  { key:'bloodrune', name:'Bloodrune', glyph:'⇾', css:{ radius:'4px', bg:'#160404', border:'1px solid rgba(180,20,20,0.65)', arrow:'#e02020', font:'Georgia, serif', tshadow:'0 3px 6px rgba(160,0,0,0.8)', use:'#e02020', useBorder:'rgba(180,20,20,0.6)' } },
-  { key:'chevron',   name:'Chevron',   glyph:'❯', css:{ radius:'0', bg:'rgba(15,15,25,0.45)', border:'none', arrow:'#e8c267', fs:'26px', tshadow:'0 0 5px rgba(232,194,103,0.6)', shadow:'none', use:'#e8c267', useBorder:'rgba(232,194,103,0.5)' } },
-  { key:'verdigris', name:'Verdigris', glyph:'➢', css:{ radius:'6px', bg:'linear-gradient(145deg,#1d4c46,#0a2420)', border:'2px solid rgba(120,200,180,0.45)', arrow:'#7fd8c0', tshadow:'0 0 6px rgba(100,200,170,0.6)', use:'#c8a860', useBorder:'rgba(200,168,96,0.5)' } },
-  { key:'mystic',    name:'Mystic',    glyph:'➤', css:{ clip:DP_HEX, bg:'radial-gradient(circle,#1c0a30,#080414)', border:'1px solid rgba(190,120,255,0.55)', arrow:'#c98aff', tshadow:'0 0 11px rgba(180,90,255,0.9)', use:'#c98aff', useBorder:'rgba(190,120,255,0.5)' } },
-  { key:'sandstone', name:'Sandstone', glyph:'➤', css:{ radius:'6px', bg:'linear-gradient(145deg,#cdad6f,#9a7a44)', border:'2px solid #6a4f28', arrow:'#3a2810', font:'Georgia, serif', tshadow:'0 1px 0 rgba(255,235,185,0.5)', use:'#3a2810', useBorder:'#6a4f28' } },
-  { key:'abyssal',   name:'Abyssal',   glyph:'➜', css:{ radius:'50%', bg:'radial-gradient(circle,#06222a,#020a0d)', border:'1px solid rgba(60,220,210,0.5)', arrow:'#4fe6d8', tshadow:'0 0 12px rgba(60,220,210,0.9)', use:'#4fe6d8', useBorder:'rgba(60,220,210,0.5)' } },
+let dpadCfg = { pos: 'left', opacity: 0.33, style: 'triangle', color: '#e8c267' };
+// The STYLE picker is just a set of arrow glyphs (CSS rotates the one rightward
+// glyph per direction); the COLOUR picker tints them. No per-option backgrounds
+// or borders — the pad stays a clean set of floating arrows.
+const DPAD_ARROWS = [
+  { key:'triangle',  name:'Triangle',  glyph:'▶' },
+  { key:'solid',     name:'Solid',     glyph:'➤' },
+  { key:'chevron',   name:'Chevron',   glyph:'❯' },
+  { key:'heavy',     name:'Heavy',     glyph:'➜' },
+  { key:'double',    name:'Double',    glyph:'⇒' },
+  { key:'simple',    name:'Simple',    glyph:'➔' },
+  { key:'small',     name:'Small',     glyph:'▸' },
+  { key:'block',     name:'Block',     glyph:'►' },
+  { key:'angle',     name:'Angle',     glyph:'⟩' },
+  { key:'guillemet', name:'Guillemet', glyph:'»' },
+  { key:'barbed',    name:'Barbed',    glyph:'➣' },
+  { key:'long',      name:'Long',      glyph:'⟶' },
+];
+// Arrow tints for the COLOUR picker. dpadCfg.color stores the chosen hex.
+const DPAD_COLORS = [
+  { name:'Gold',    color:'#e8c267' },
+  { name:'White',   color:'#f4f0e6' },
+  { name:'Crimson', color:'#ff5a48' },
+  { name:'Emerald', color:'#5fe39a' },
+  { name:'Azure',   color:'#5bb8ff' },
+  { name:'Violet',  color:'#c98aff' },
+  { name:'Cyan',    color:'#4fe6d8' },
+  { name:'Amber',   color:'#ff9a3a' },
+  { name:'Rose',    color:'#ff7ec0' },
 ];
 try { const s = JSON.parse(localStorage.getItem(DPAD_KEY)); if (s) dpadCfg = Object.assign(dpadCfg, s); } catch (e) {}
 
@@ -5648,26 +5643,13 @@ function positionTouchDpad() {
   touchDpad.style.bottom = Math.max(10, window.innerHeight - r.bottom + 12) + 'px';
 }
 
-// Paint the selected theme onto the pad as inline CSS variables.
+// Paint the chosen arrow glyph + tint onto the pad as inline CSS variables.
 function applyDpadTheme(key) {
   if (!touchDpad) return;
-  const t = DPAD_THEMES.find(x => x.key === key) || DPAD_THEMES[0];
-  const c = Object.assign({}, DP_DEF, t.css);
+  const a = DPAD_ARROWS.find(x => x.key === key) || DPAD_ARROWS[0];
   const s = touchDpad.style;
-  s.setProperty('--dp-bg', c.bg);
-  s.setProperty('--dp-border', c.border);
-  s.setProperty('--dp-radius', c.radius);
-  s.setProperty('--dp-clip', c.clip);
-  s.setProperty('--dp-shadow', c.shadow);
-  s.setProperty('--dp-arrow', c.arrow);
-  s.setProperty('--dp-fs', c.fs);
-  s.setProperty('--dp-font', c.font);
-  s.setProperty('--dp-tshadow', c.tshadow);
-  s.setProperty('--dp-use', c.use);
-  s.setProperty('--dp-use-border', c.useBorder);
-  s.setProperty('--dp-active-bg', c.activeBg);
-  s.setProperty('--dp-active-arrow', c.activeArrow);
-  s.setProperty('--dp-glyph', "'" + t.glyph + "'");
+  s.setProperty('--dp-glyph', "'" + a.glyph + "'");
+  s.setProperty('--dp-arrow', dpadCfg.color || '#e8c267');
 }
 
 // Apply opacity / hidden state and the chosen theme, then re-place the pad.
@@ -6964,12 +6946,14 @@ function openTownService(kind) {
 function setDpadPos(p) { dpadCfg.pos = p; saveDpadCfg(); applyDpadSettings(); renderDpadControls(); }
 function setDpadOpacity(v) { dpadCfg.opacity = v; saveDpadCfg(); applyDpadSettings(); renderDpadControls(); }
 function setDpadStyle(s) { dpadCfg.style = s; saveDpadCfg(); applyDpadSettings(); renderDpadControls(); }
+function setDpadColor(c) { dpadCfg.color = c; saveDpadCfg(); applyDpadSettings(); renderDpadControls(); }
 function renderDpadControls() {
   const posRow = document.getElementById('dpad-pos-row');
   const opRow  = document.getElementById('dpad-op-row');
   const styRow = document.getElementById('dpad-style-row');
+  const colRow = document.getElementById('dpad-color-row');
   if (!posRow || !opRow) return;
-  const pos = dpadCfg.pos, op = dpadCfg.opacity, sty = dpadCfg.style;
+  const pos = dpadCfg.pos, op = dpadCfg.opacity, sty = dpadCfg.style, col = dpadCfg.color;
   const posBtn = (val, label) =>
     `<button class="dpad-cfg-btn ${pos === val ? 'sel' : ''}" onclick="setDpadPos('${val}')">${label}</button>`;
   const opBtn = (val, label) =>
@@ -6977,16 +6961,14 @@ function renderDpadControls() {
   posRow.innerHTML = posBtn('left', 'Left') + posBtn('center', 'Centre') + posBtn('right', 'Right');
   opRow.innerHTML  = opBtn(0.33, 'Low') + opBtn(0.66, 'Med') + opBtn(1, 'High') + opBtn(0, 'Off');
   if (styRow) {
-    const curKey = DPAD_THEMES.some(t => t.key === sty) ? sty : DPAD_THEMES[0].key;
-    styRow.innerHTML = DPAD_THEMES.map(t => {
-      const c = Object.assign({}, DP_DEF, t.css);
-      const face = `background:${c.bg};border:${c.border};border-radius:${c.radius};`
-        + `clip-path:${c.clip};box-shadow:${c.shadow};color:${c.arrow};`
-        + `font-size:${c.fs};font-family:${c.font};text-shadow:${c.tshadow};`;
-      return `<div class="dp-sw ${curKey === t.key ? 'sel' : ''}" title="${t.name}" onclick="setDpadStyle('${t.key}')">`
-        + `<div class="dp-sw-face" style="${face}">${t.glyph}</div>`
-        + `<div class="dp-sw-name">${t.name}</div></div>`;
-    }).join('');
+    const curKey = DPAD_ARROWS.some(a => a.key === sty) ? sty : DPAD_ARROWS[0].key;
+    styRow.innerHTML = DPAD_ARROWS.map(a =>
+      `<div class="dp-sw ${curKey === a.key ? 'sel' : ''}" title="${a.name}" onclick="setDpadStyle('${a.key}')">`
+      + `<div class="dp-sw-face" style="color:${col}">${a.glyph}</div></div>`).join('');
+  }
+  if (colRow) {
+    colRow.innerHTML = DPAD_COLORS.map(c =>
+      `<div class="dp-color-sw ${col === c.color ? 'sel' : ''}" title="${c.name}" style="background:${c.color}" onclick="setDpadColor('${c.color}')"></div>`).join('');
   }
 }
 
