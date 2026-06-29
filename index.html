@@ -4572,6 +4572,9 @@ let player = { x: 5, y: 5, facing: 'left', hp: 100, maxHp: 100, mp: 60, maxMp: 6
   // Ascension — the advanced specialization chosen at the Trainer (null until the
   // hero ascends at level 20+). Unlocks that path's focused skill tree.
   ascension: null,
+  // Last Stand — a clutch survival that, once per floor, turns a killing blow
+  // into 1 HP instead of death. Refreshed each new floor in generateMap().
+  lastStandReady: true,
   // Skill tree — 1 skill point earned per level (separate from attribute points),
   // spent on the class's passive/active/path nodes. `skills` maps node id → rank;
   // `skillCds` holds each active skill's independent cooldown.
@@ -6050,6 +6053,7 @@ function tryBuildVault(reach) {
 function generateMap() {
   inTown = false;
   floorSerial++;
+  player.lastStandReady = true; // a fresh Last Stand each floor
   rollFloorMod();
   // ~35% of floors get a subtle colour wash for atmosphere.
   floorTint = Math.random() < 0.35 ? pick(FLOOR_TINTS) : null;
@@ -12476,7 +12480,33 @@ function footDist(e) {
 // little XP — but it no longer erases your build over a stray hazard step: you
 // KEEP every equipped piece, and your whole bag is left behind as a recoverable
 // grave on the floor where you fell. Walk back to the grave to reclaim it all.
+// Class-flavoured cry for the Last Stand survival, so the clutch save reads as
+// a defiant moment rather than a generic "you survived".
+function lastStandLog() {
+  const who = player.name || HERO;
+  const lines = {
+    warrior: `🛡️ ${who} summons every last shred of courage and refuses to fall — a defiant LAST STAND!`,
+    rogue:   `🗡️ ${who} twists from the killing blow at the last instant — a desperate LAST STAND!`,
+    mage:    `🔮 ${who} bends a final flicker of arcane will into a ward against death — a LAST STAND!`,
+    templar: `✨ ${who} clings to faith as holy light beats back death — a steadfast LAST STAND!`,
+  };
+  return lines[player.class] || `🔥 ${who} digs deep and refuses to die — a LAST STAND!`;
+}
+
 function handleDeath() {
+  // Last Stand: once per floor, a killing blow leaves you clinging to 1 HP
+  // instead of dying. It's free (no buff burned) so it triggers before the
+  // Phoenix bowl below, saving that revive for a later death.
+  if (player.lastStandReady) {
+    player.lastStandReady = false;
+    player.hp = 1;
+    sfx('levelup'); screenFlash('#ffd24b'); addShake(6);
+    spawnFloatingText(player.x, player.y, 'LAST STAND!', '#ffd24b');
+    spawnParticles(player.x, player.y, '#ffd24b', 10, 0.09);
+    log(lastStandLog(), 'important');
+    updateBars(); renderPanel(); saveGame(); draw();
+    return;
+  }
   // Phoenix / Everything ramen: a `revive` bowl lets you cheat death ONCE. The
   // buff is burned, every ailment is cleansed, and you rise at half health/mana
   // right where you stand — no town trip, no penalties.
