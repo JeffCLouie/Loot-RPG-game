@@ -16506,7 +16506,7 @@ function pulseLoop(ts) {
   const hasShrine = Object.keys(shrineData).length > 0;
   const juicing = particles.length || tracers.length || Date.now() < shakeUntil;
   const liquid = mapData.some(row => row && row.some(t => t === 6 || t === 7));
-  if ((inTown || merchant || mystic || hasFountain || hasShrine || quest || graveMarker || floatingTexts.length || statusEffects.length || hasElite || juicing || liquid) && ts - lastPulse > 30) { lastPulse = ts; draw(); }
+  if ((inTown || merchant || mystic || hasFountain || hasShrine || quest || graveMarker || floatingTexts.length || statusEffects.length || hasElite || juicing || liquid || floorCleared) && ts - lastPulse > 30) { lastPulse = ts; draw(); }
   // Animate the danger halo every frame — it's a DOM overlay, so it must keep
   // pulsing even when the canvas is idle (e.g. standing still at low HP).
   updateHaloVignette();
