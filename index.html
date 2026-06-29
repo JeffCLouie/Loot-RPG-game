@@ -9588,14 +9588,15 @@ function draw() {
     ctx.restore();
   });
 
-  // Ground food
+  // Ground food — drawn large so a rare bowl is easy to spot on the map.
   groundFood.forEach(f => {
     const px = offX + f.x * tw, py = offY + f.y * th;
-    ctx.font = `${Math.round(tw * 0.6)}px serif`;
+    const foodSize = Math.round(tw * 0.95);
+    ctx.font = `${foodSize}px serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    if (!(spriteReady && drawSpriteC('food', px + tw/2, py + th/2, Math.round(tw * 0.6))))
-      drawEmoji(f.emoji, px + tw/2, py + th/2, Math.round(tw * 0.6));
+    if (!(spriteReady && drawSpriteC('food', px + tw/2, py + th/2, foodSize)))
+      drawEmoji(f.emoji, px + tw/2, py + th/2, foodSize);
   });
 
   // Coin piles — a soft circular golden glow so loose gold catches the eye.
