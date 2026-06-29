@@ -12708,7 +12708,7 @@ function renderHero(el) {
       <div class="hc-line">⚔️ Damage scales with <b>${ATTRIBUTES[dmgA.primary].label}</b>${dmgA.secondary ? ` & ${ATTRIBUTES[dmgA.secondary].label}` : ''}</div>
       ${(() => { const pri = activeSkillList()[0], sig = classSignature(player.class);
         return pri ? `<div class="hc-line">${pri.icon} <b>${pri.name}</b> — ${pri.desc} <span style="opacity:0.7">(${pri.mp} MP · press R)</span></div>`
-          : (sig ? `<div class="hc-line" style="opacity:0.8">✨ Spend a skill point to learn ${sig.icon} <b>${sig.name}</b> (SKILLS tab)</div>` : ''); })()}
+          : (sig ? `<div class="hc-line" style="opacity:0.8">Spend a skill point to learn ${sig.icon} <b>${sig.name}</b> (SKILLS tab)</div>` : ''); })()}
       ${ascData() ? `<div class="hc-line" style="color:${ascData().color}">${ascData().icon} <b>${ascData().name}</b> — ${ascData().blurb}</div>`
         : (cls && (player.level || 1) >= ASCEND_LEVEL ? `<div class="hc-line" style="color:#e8c267">🌟 Ready to ascend — visit the Trainer 🎓</div>` : '')}
       <div class="hc-line" style="opacity:0.75">Weapons: ${cls.weapons.join(', ')}</div>
