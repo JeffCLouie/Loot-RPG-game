@@ -5501,6 +5501,7 @@ document.addEventListener('click', (e) => {
 
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
+  { date: '2026-06-29', size: 'small', v: 'Healer charges a fee', by: 'Claude', notes: ['A full rest & cure at the town healer is no longer free — it now costs gold that climbs exponentially with your level (a few coins early, a real gold sink once you’re powerful).', 'The free, cooldown-gated Health and Mana potions are unchanged, so you can still recover mid-run without paying.'] },
   { date: '2026-06-29', size: 'medium', v: 'Power leaderboard', by: 'Claude', notes: ['The global leaderboards now have a fourth board ranking heroes by their highest Power ever reached, alongside Furthest floor, Level and Gold.'] },
   { date: '2026-06-29', size: 'big', v: 'Paper-doll gear screen', by: 'Jeff Louie', notes: ['The GEAR tab is now a Diablo-2-style equipment doll: each slot is a framed cell laid out around a faint hero body, with worn pieces ringed in their rarity colour. Tap a slot for its tooltip, ✕ to unequip.'] },
   { date: '2026-06-29', size: 'small', v: 'Monochrome UI symbols', by: 'Jeff Louie', notes: ['Menu and HUD emoji that aren’t game icons now render as flat single-colour symbols instead of colourful emoji (and the title-screen setting icons no longer vanish). The colourful pixel-art game icons are unchanged.'] },
@@ -7593,26 +7594,40 @@ function toggleLockCraft(i) {
 }
 
 // ── HEALER — rest to full HP/MP and cure ailments ──
+// A full rest is no longer free: the healer charges a fee that climbs
+// exponentially with the hero's level (~14% per level), so it's pocket change
+// while you're weak but a meaningful gold sink once you're powerful. The free,
+// cooldown-gated Health/Mana potions remain the cheap mid-fight option.
+function healCost() {
+  const lvl = player.level || 1;
+  return Math.round(10 * Math.pow(1.14, lvl - 1));
+}
 function openHealer() { openTownModal('⛑️ Healer'); renderHealer(); }
 function renderHealer() {
   const full = player.hp >= player.maxHp && player.mp >= player.maxMp;
+  const cost = healCost();
+  const afford = player.gold >= cost;
   setTownContent(`
-    <div class="town-blurb">The healer mends your wounds and cleanses any lingering curse before you head back down.</div>
+    <div class="town-blurb">The healer mends your wounds and cleanses any lingering curse before you head back down — for a fee that grows with your legend.</div>
     <div class="shop-row">
       <span class="loot-icon">❤️</span>
       <div class="shop-row-info"><div class="shop-row-name">Full Rest &amp; Cure</div>
         <div class="shop-row-sub">Restore all HP/MP and clear poison &amp; curses</div></div>
-      <span class="shop-price">Free</span>
-      <button class="shop-buy-btn" ${full ? 'disabled' : ''} onclick="restHeal()">REST</button>
+      <span class="shop-price">${cost}g</span>
+      <button class="shop-buy-btn" ${(full || !afford) ? 'disabled' : ''} onclick="restHeal()">REST</button>
     </div>
+    ${(!full && !afford) ? `<div class="town-blurb" style="color:var(--hp)">You can't cover the ${cost}g fee — earn more gold, or quaff a free potion instead.</div>` : ''}
     <div class="town-blurb" style="opacity:0.8">Need a quick top-up mid-fight? Quaff a Health (Q) or Mana (E) potion — they're a skill now, free to use but share a 3-turn cooldown.</div>`);
 }
 function restHeal() {
   if (player.hp >= player.maxHp && player.mp >= player.maxMp) return;
+  const cost = healCost();
+  if (player.gold < cost) { log(`Not enough gold — the healer charges ${cost}g for a full rest.`); return; }
+  player.gold -= cost;
   player.hp = player.maxHp; player.mp = player.maxMp;
   statusEffects = statusEffects.filter(s => s.target !== 'player');
   sfx('potion');
-  log('⛑️ The healer restores you to full and cleanses every ailment.', 'loot');
+  log(`⛑️ The healer restores you to full and cleanses every ailment for ${cost}g.`, 'loot');
   updateBars(); renderHealer(); saveGame();
 }
 
