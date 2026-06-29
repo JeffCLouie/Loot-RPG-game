@@ -12837,12 +12837,11 @@ function renderPanel() {
         return oa - ob;
       });
     if (rows.length === 0) {
-      el.innerHTML = strip + subtabs + '<div id="empty-panel">' +
-        (inventory.length === 0 ? 'No items yet.<br>Explore!' : 'Nothing here.') + '</div>' +
-        lootGlossaryHTML();
+      el.innerHTML = strip + subtabs + lootGlossaryHTML() + '<div id="empty-panel">' +
+        (inventory.length === 0 ? 'No items yet.<br>Explore!' : 'Nothing here.') + '</div>';
       return;
     }
-    el.innerHTML = strip + subtabs + rows.map(({ item, i }) => {
+    el.innerHTML = strip + subtabs + lootGlossaryHTML() + rows.map(({ item, i }) => {
       const equipable = !!item.slot;
       const slotName = item.slot ? SLOTS[item.slot].label.replace(/^\S+\s/, '') : 'potion';
       // Compare this item's power to whatever currently fills its slot, so we can
@@ -12871,7 +12870,7 @@ function renderPanel() {
               : `<button class="row-btn locked-row-btn" ${hoverTip(`<div class='ht-name'>🔒 Can't Wield</div><div class='ht-line'>Your class can't wield this weapon.</div>`)} onclick="quickEquip(${i})">🔒</button>`)
           : ''}
       </div>`;
-    }).join('') + lootGlossaryHTML();
+    }).join('');
   } else if (currentTab === 'equip') {
     el.innerHTML = SLOT_KEYS.map(s => renderSlot(s, SLOTS[s].label)).join('') +
       `<div style="margin-top:8px;font-size:10px;color:#555">Tap EQUIP on any loot<br>item to gear up.</div>`;
