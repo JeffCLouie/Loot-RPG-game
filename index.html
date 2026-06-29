@@ -301,8 +301,12 @@
   #conquest-body { display: flex; flex-direction: column; gap: 9px; margin-bottom: 16px; }
   .conquest-line { font-size: 12.5px; color: #f3e4cf; line-height: 1.5; }
   .conquest-scar { color: #ff9b8a; }
+  .conquest-actions { display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
   .conquest-btn { background: #6a4a1c; border: 1px solid var(--gold); color: #fff2d6; font-family: 'Courier New', monospace; font-size: 13px; letter-spacing: 1px; padding: 9px 22px; border-radius: 8px; cursor: pointer; }
   .conquest-btn:active { background: #8a6326; }
+  /* Secondary "stay" action — muted so Return to Town stays the obvious primary. */
+  .conquest-btn-alt { background: transparent; border-color: #6a5a3a; color: #cdbb95; }
+  .conquest-btn-alt:active { background: #2e2212; }
 
   /* ── VERSION HISTORY POPUP ── */
   #version-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 400; display: none; align-items: center; justify-content: center; padding: 16px; }
@@ -2335,7 +2339,10 @@
     <div id="conquest-card">
       <div id="conquest-title">Difficulty Conquered!</div>
       <div id="conquest-body"></div>
-      <button class="conquest-btn" onclick="conquestToTown()">🏰 Return to Town</button>
+      <div class="conquest-actions">
+        <button class="conquest-btn" onclick="conquestToTown()">🏰 Return to Town</button>
+        <button class="conquest-btn conquest-btn-alt" onclick="closeConquest()">Stay on this floor</button>
+      </div>
     </div>
   </div>
 
@@ -6861,8 +6868,11 @@ function generateMap() {
   // onward. Which is which depends on how you arrived:
   //   • descended / gated / loaded in → onward is DOWN (deeper), entry is UP.
   //   • climbed up from below → onward is UP (higher), entry is DOWN (back down).
-  // Floor 1 has nothing above it, so its far stair is always down regardless.
-  const climbing = arrivalDir === 'up' && dungeonLevel > 1;
+  // Floor 1 of EACH difficulty has nothing above it within its dungeon, so its
+  // "up" stair is really an exit back to TOWN (handled in the move handler) — it
+  // never climbs. Keyed on the DISPLAYED floor so it holds for Hardened/Brutal/
+  // Endless floor 1 too, not just Normal's.
+  const climbing = arrivalDir === 'up' && displayFloor() > 1;
   const farStair = climbing ? 12 : 2;   // the way onward
   const entryStair = climbing ? 2 : 12; // the way back, under your feet
   // The last floor of a finite difficulty (its boss floor 25) is the END of that
@@ -6882,9 +6892,10 @@ function generateMap() {
   }
 
   // ── ENTRY STAIR ── back the way you came. It sits on the entry tile (where you
-  // arrive), so walking back onto it returns you to the previous floor. Floor 1
-  // has no floor above, so it gets none — use TOWN to leave the first floor.
-  if (dungeonLevel > 1) mapData[startPos.y][startPos.x] = entryStair;
+  // arrive), so walking back onto it returns you whence you came. On floor 1 of a
+  // difficulty this is the UP stair, which leads back to TOWN rather than a floor
+  // above — every first floor gets one so you can always step out to town.
+  mapData[startPos.y][startPos.x] = entryStair;
 
   // ── LAVA (passable, burns) ── pooled into a couple of cohesive patches
   // rather than scattered single tiles. Lava and water must never touch (it
@@ -7762,7 +7773,7 @@ function openTownHub() {
   const gateFloor = Math.max(1, dungeonReturn || player.maxFloor || 1);
   const gateTile =
     `<button class="town-menu-btn tm-gate${revivedInTown ? ' tm-gate-urgent' : ''}" onclick="openTownService('gate')">
-       <span class="tm-icon">${dlIcon('feat_portal') || '🌀'}</span>
+       <span class="tm-icon">${dlIcon('ui_gate') || '🗺'}</span>
        <span class="tm-text"><span class="tm-name">Dungeon Gate</span><span class="tm-desc">${revivedInTown ? 'Head back down to keep questing' : `Back to ${floorLabel(gateFloor)}, or pick a difficulty`}</span></span>
      </button>`;
   const blurb = revivedInTown
@@ -10350,9 +10361,11 @@ function draw() {
           ctx.restore();
         }
       } else if (t === 12) {
-        // Stairs up — DawnLike pixel staircase (the ▲ arrow is baked into the
-        // tile). Never sealed, and no glow ring or arrow badge is layered on.
-        if (!(spriteReady && drawSprite('stairs_up', px, py, tw))) {
+        // "Up" stair. On floor 1 of a difficulty it's the way back to TOWN, so it
+        // shows the dungeon-gate marker (the same tile the HUD floor and town gate
+        // use); on deeper floors it's the DawnLike climbing staircase.
+        const upSprite = displayFloor() === 1 ? 'ui_gate' : 'stairs_up';
+        if (!(spriteReady && drawSprite(upSprite, px, py, tw))) {
           ctx.fillStyle = '#0d0d14'; ctx.fillRect(px, py, tw, th);
           for (let s = 0; s < 4; s++) {
             const shade = 20 + s * 14;
@@ -11541,7 +11554,9 @@ function move(dx, dy) {
   // Stairs up → climb back to the previous floor. Always open (the floor above
   // is one you've already been through), so there's never an unlock condition.
   if (tile === 12) {
-    if (dungeonLevel <= 1) { player.x = nx; player.y = ny; draw(); return; }
+    // On floor 1 of a difficulty there's no floor above — the "up" stair is the
+    // way back to TOWN (same access rules as the town gate).
+    if (displayFloor() === 1) { player.x = nx; player.y = ny; enterTown(); return; }
     dungeonLevel--;
     statusEffects = [];
     tickBuffs();
@@ -14035,6 +14050,8 @@ function renderHero(el) {
       ${stat('Crit chance', Math.round(playerCritChance()*100) + '%')}
       ${stat('Crit damage', Math.round(critDamageMult()*100) + '%')}
       ${stat('Dodge', Math.round(playerDodge()*100) + '%')}
+      ${diffClearedCount() ? `<div class="hc-line" style="display:flex;justify-content:space-between;color:#ff9b8a;margin-top:4px"><span>⚔️ Conqueror's scars</span><b>−${Math.round((1 - diffDebuffMult()) * 100)}%</b></div>
+      <div class="hc-line" style="opacity:0.62;font-size:10px;color:#ff9b8a">${diffClearedCount()} difficult${diffClearedCount() === 1 ? 'y' : 'ies'} conquered — lowers Max&nbsp;HP &amp; damage dealt.</div>` : ''}
       ${extRows ? `<div class="hc-line" style="opacity:0.5;margin-top:4px">— from gear —</div>${extRows}` : ''}
     </div>`;
   const cls = playerClass();
