@@ -9888,20 +9888,39 @@ function draw() {
     const t = Date.now() / 300;
     const gsp = 0.5 + 0.5 * Math.sin(t);
     // Bright pulsing glow behind the grave sprite — a soft radial fade (the same
-    // style as pickups), not a boxy shadow halo.
-    glowUnder(cx, cy, tw * (0.5 + 0.12 * gsp), `rgba(255,220,110,${0.5 + 0.25 * gsp})`);
+    // style as pickups), not a boxy shadow halo. Doubled up so it really beams.
+    glowUnder(cx, cy, tw * (0.75 + 0.18 * gsp), `rgba(255,200,70,${0.4 + 0.25 * gsp})`);
+    glowUnder(cx, cy, tw * (0.42 + 0.12 * gsp), `rgba(255,240,160,${0.6 + 0.3 * gsp})`);
     ctx.save();
-    // Expanding "come grab me" ring that fades as it grows — an animated beacon
-    // so the reclaim spot is easy to find.
-    const ringT = (Date.now() % 1200) / 1200;
-    ctx.strokeStyle = `rgba(255,215,90,${0.55 * (1 - ringT)})`;
-    ctx.lineWidth = Math.max(1.5, tw * 0.06);
-    ctx.beginPath();
-    ctx.arc(cx, cy, tw * (0.3 + 0.32 * ringT), 0, Math.PI * 2);
-    ctx.stroke();
+    // Two staggered expanding "come grab me" rings that fade as they grow — an
+    // animated beacon so the reclaim spot is impossible to miss.
+    for (let r = 0; r < 2; r++) {
+      const ringT = ((Date.now() + r * 600) % 1200) / 1200;
+      ctx.strokeStyle = `rgba(255,215,90,${0.6 * (1 - ringT)})`;
+      ctx.lineWidth = Math.max(1.5, tw * 0.06);
+      ctx.beginPath();
+      ctx.arc(cx, cy, tw * (0.3 + 0.4 * ringT), 0, Math.PI * 2);
+      ctx.stroke();
+    }
     ctx.restore();
     if (!(spriteReady && drawSpriteC('feat_grave', cx, cy, Math.round(tw * 0.8))))
       drawEmoji('🪦', cx, gpy + th / 2 + th * 0.04, Math.round(tw * 0.72));
+    // Bobbing downward chevron floating above the grave — a clear "pick this up"
+    // beacon that points right at your lost loot. Drawn procedurally (UI marker).
+    ctx.save();
+    const bob = Math.sin(Date.now() / 250) * th * 0.08;
+    const ay = gpy - th * 0.18 + bob, aw = tw * 0.26, ah = th * 0.2;
+    ctx.fillStyle = `rgba(255,225,110,${0.75 + 0.25 * gsp})`;
+    ctx.strokeStyle = 'rgba(90,55,0,0.6)';
+    ctx.lineWidth = Math.max(1, tw * 0.03);
+    ctx.beginPath();
+    ctx.moveTo(cx - aw, ay);
+    ctx.lineTo(cx + aw, ay);
+    ctx.lineTo(cx, ay + ah);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
   }
 
   // Quest markers — NPCs, objectives, and pickups, each ringed to stand out.
