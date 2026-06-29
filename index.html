@@ -893,6 +893,23 @@
     justify-content: center; gap: 4px;
   }
   .loot-bulk-btn:active { background: #2a2444; }
+  /* Auto-Loot entry button on the LOOT tab (full-width, with inline on/off state). */
+  .loot-auto-bar { margin: 0 2px 6px; }
+  .loot-auto-btn {
+    width: 100%; background: #1a1726; color: #b6aed0; font-family: 'Courier New', monospace;
+    font-size: 10px; font-weight: bold; letter-spacing: 0.5px; padding: 7px 8px;
+    border: 1px solid var(--border); border-radius: 5px; cursor: pointer;
+    -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .loot-auto-btn:active { background: #2a2444; }
+  /* Lit up when any rarity rule is active, so "on" reads at a glance. */
+  .loot-auto-btn.on { color: #e8c267; border-color: #6a5a2a; background: #221d12; }
+  .loot-auto-btn .la-status {
+    font-size: 9px; letter-spacing: 0.5px; text-transform: uppercase; color: #6f6786;
+    border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px;
+  }
+  .loot-auto-btn.on .la-status { color: #e8c267; border-color: #6a5a2a; }
 
   /* ── LOOT GLOSSARY ── collapsible key to the short stat codes on loot rows. */
   .loot-glossary {
@@ -2254,9 +2271,6 @@
         <button class="settings-item zoom-action" onclick="toggleZoom()">
           <span class="action-label" id="zoom-label">WIDE</span>
         </button>
-        <button class="settings-item autoloot-action" onclick="openAutoLoot()" data-tip="<div class='ht-name'>♻️ Auto-Loot</div><div class='ht-line'>Auto-scrap or auto-sell loot of chosen rarities on pickup.</div><div class='ht-sub'>off by default</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
-          <span class="action-icon">♻️</span><span class="action-label">AUTO-LOOT</span>
-        </button>
         <button class="settings-item unstuck-action" onclick="unstuck()" data-tip="<div class='ht-name'>🌀 Unstuck</div><div class='ht-line'>Warp to a random open spot elsewhere on the floor.</div><div class='ht-sub'>use if you get wedged in</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
           <span class="action-icon">🌀</span><span class="action-label">UNSTUCK</span>
         </button>
@@ -3429,6 +3443,18 @@ function autoLootConfig() {
   if (!player.autoLoot || typeof player.autoLoot !== 'object') player.autoLoot = defaultAutoLoot();
   for (const t of Object.keys(TIERS)) if (!AUTO_LOOT_ACTIONS.includes(player.autoLoot[t])) player.autoLoot[t] = 'keep';
   return player.autoLoot;
+}
+// Short status for the LOOT-tab Auto-Loot button: 'off' when every rarity is kept,
+// otherwise a compact "N scrap · M sell" tally so its state reads at a glance.
+function autoLootSummary() {
+  const cfg = autoLootConfig();
+  let scrap = 0, sell = 0;
+  for (const t of Object.keys(TIERS)) { if (cfg[t] === 'scrap') scrap++; else if (cfg[t] === 'sell') sell++; }
+  if (!scrap && !sell) return 'off';
+  const parts = [];
+  if (scrap) parts.push(`${scrap} scrap`);
+  if (sell) parts.push(`${sell} sell`);
+  return parts.join(' · ');
 }
 
 // ── CRAFTING MATERIALS ──
@@ -6006,6 +6032,7 @@ document.addEventListener('click', (e) => {
 
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
+  { date: '2026-06-29', size: 'small', v: 'Auto-Loot on the LOOT tab', by: 'ASuiter89', notes: ['The ♻️ Auto-Loot picker moved out of the ⚙️ settings menu onto the LOOT tab, where it belongs — a button right above your loot shows its on/off state at a glance and opens the per-rarity Keep / Scrap / Sell picker.'] },
   { date: '2026-06-29', size: 'medium', v: 'Shared stash', by: 'Claude', notes: ['The town Vault is now shared across all of your save slots — gold or gear banked by one hero can be withdrawn by any other, so it doubles as account-wide storage you can pass loot between characters with.', 'Signed in? The shared stash also syncs to your account and follows you across devices.', 'Anything your existing heroes had banked is merged into the shared pool automatically, so nothing is lost.'] },
   { date: '2026-06-29', size: 'big', v: 'Auto-loot & bag selling', by: 'ASuiter89', notes: ['New ♻️ AUTO-LOOT setting (off by default): pick, per rarity, whether dropped gear is kept, auto-scrapped into materials, or auto-sold for gold — so the loot drawer stops clogging with junk.', 'Sell and Scrap now live on the bag itself: tap any loot item for per-piece Sell/Scrap buttons, or use the Sell all / Scrap all bar at the top of the LOOT drawer — no need to visit a vendor.', 'The Merchant is now buy-only and the Craftsman is forge-only; selling and salvaging moved onto the bag.', 'On top of the new difficulty gating, rarer crafting materials drop a little less often from kills — scrapping unwanted loot is a steady way to stock the high end.'] },
   { date: '2026-06-29', size: 'big', v: 'Dungeon difficulties', by: 'Claude', notes: ['Conquer the floor-25 guardian to unlock the next, deadlier difficulty at the town Dungeon Gate: Normal → Hardened → Brutal → Endless, each the same 25 floors but more powerful and bathed in deepening red.', 'Endless mode restarts at floor 1 (as deep as floor 76), rolls random bosses, has no floor cap and ramps ever harder.', 'Death penalties grow per tier — gentle on Normal, ruinous in Endless — and each difficulty conquered leaves a permanent stat scar.', 'Rarer crafting materials are gated by tier: Glimmer (Hardened), Core (Brutal), Chaos Orbs (Endless only).', 'The leaderboard now shows the difficulty with the floor and ranks harder runs above easier ones.'] },
@@ -6120,14 +6147,12 @@ function showVersionHistory() {
 function closeVersion() { document.getElementById('version-overlay').classList.remove('open'); }
 
 // ── AUTO-LOOT SETTINGS ── per-rarity Keep / Scrap / Sell picker, opened from the
-// ⚙️ settings menu. Choices live on player.autoLoot and apply the moment loot
-// drops (see acquireLoot). All-Keep means the feature is off.
+// ♻️ Auto-Loot button on the LOOT tab. Choices live on player.autoLoot and apply
+// the moment loot drops (see acquireLoot). All-Keep means the feature is off.
 const AUTO_LOOT_LABELS = { keep: 'Keep', scrap: 'Scrap', sell: 'Sell' };
 function openAutoLoot() {
   renderAutoLoot();
   document.getElementById('autoloot-overlay').classList.add('open');
-  const menu = document.getElementById('settings-menu');
-  if (menu) menu.classList.remove('open');
 }
 function closeAutoLoot() { document.getElementById('autoloot-overlay').classList.remove('open'); }
 function renderAutoLoot() {
@@ -13839,12 +13864,18 @@ function renderPanel() {
       <button class="loot-bulk-btn" onclick="bagBulk('sell')">${mMoney} Sell all · ${bulkGold}g</button>
       ${bulkScrapN ? `<button class="loot-bulk-btn" onclick="bagBulk('scrap')">${mScrap} Scrap all · ${bulkScrapN}</button>` : ''}
     </div>` : '';
+    // Auto-Loot entry point — lives here on the LOOT tab (not in settings) since it
+    // governs how loot is handled. Always shown, with its on/off state inline.
+    const alSum = autoLootSummary();
+    const autoBar = `<div class="loot-auto-bar">
+      <button class="loot-auto-btn${alSum === 'off' ? '' : ' on'}" onclick="openAutoLoot()" ${hoverTip(`<div class='ht-name'>♻️ Auto-Loot</div><div class='ht-line'>Auto-scrap or auto-sell loot of chosen rarities the moment it drops.</div>`)}>♻️ Auto-Loot <span class="la-status">${alSum}</span></button>
+    </div>`;
     if (rows.length === 0) {
-      el.innerHTML = strip + subtabs + bulkBar + lootGlossaryHTML() + '<div id="empty-panel">' +
+      el.innerHTML = strip + subtabs + autoBar + bulkBar + lootGlossaryHTML() + '<div id="empty-panel">' +
         (inventory.length === 0 ? 'No items yet.<br>Explore!' : 'Nothing here.') + '</div>';
       return;
     }
-    el.innerHTML = strip + subtabs + bulkBar + lootGlossaryHTML() + rows.map(({ item, i }) => {
+    el.innerHTML = strip + subtabs + autoBar + bulkBar + lootGlossaryHTML() + rows.map(({ item, i }) => {
       const equipable = !!item.slot;
       const slotName = item.slot ? SLOTS[item.slot].label.replace(/^\S+\s/, '') : 'potion';
       // Compare this item's power to whatever currently fills its slot, so we can
@@ -16474,7 +16505,7 @@ log('💠 Level up to earn points, then raise attributes in the bag\'s HERO tab.
 log('🗡️ Every weapon fights differently — axes cleave, daggers flurry, bows & staves strike at range, maces stun, scythes drain. Try them all!');
 log('🏰 Tap TOWN (or press T) to warp to the safe hub: craftsman, healer, trainer, enchanter, and a gate to re-enter any floor you\'ve reached.');
 log('🧰 Foes drop crafting materials — 🔩 Scrap, 🔆 Core, ✨ Glimmer, 🌀 Chaos Orb. The 🔨 Craftsman forges blank gear; the 🪄 Enchanter fills in its modifiers.');
-log('♻️ Tap any loot in your 🎒 BAG to Sell it for gold or Scrap it into materials — any time, no vendor needed. Set ⚙️ AUTO-LOOT to do it automatically by rarity on pickup.');
+log('♻️ Tap any loot in your 🎒 BAG to Sell it for gold or Scrap it into materials — any time, no vendor needed. Use the ♻️ Auto-Loot button on the LOOT tab to do it automatically by rarity on pickup.');
 log('⚔️ Each move OR attack passes a turn — get surrounded and every foe piles on, so don\'t let them encircle you.');
 log('🎨 Pixel art from the DawnLike tileset by DragonDePlatino & DawnBringer (CC-BY 4.0).');
 log('🌍 Terrain tiles from "[LPC] Terrains" by bluecarrot16 & LPC contributors (CC-BY-SA 4.0).');
