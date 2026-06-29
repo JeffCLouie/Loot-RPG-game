@@ -610,18 +610,21 @@
   #panel-content::-webkit-scrollbar-thumb { background: var(--border); }
 
   /* Loot subtabs: filter the LOOT list down to a single gear slot (all helms,
-     all chests, …) so a fat bag stays browsable. Small wrapping pills. */
+     all chests, …) so a fat bag stays browsable. Evenly-spaced single row. */
   .loot-subtabs {
     display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
+    flex-wrap: nowrap;
+    gap: 3px;
     margin-bottom: 6px;
   }
   .loot-subtab {
+    flex: 1 1 0;
+    min-width: 0;
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 3px;
-    padding: 3px 7px;
+    padding: 3px 2px;
     background: #15151f;
     border: 1px solid var(--border);
     border-radius: 11px;
@@ -12588,26 +12591,25 @@ function renderPanel() {
     const cat = item => item.slot || 'other';
     const counts = {};
     inventory.forEach(item => { counts[cat(item)] = (counts[cat(item)] || 0) + 1; });
-    // If the active filter no longer has any items (e.g. you sold all helms),
-    // fall back to showing everything so the list never looks empty by accident.
-    if (lootFilter !== 'all' && !counts[lootFilter]) lootFilter = 'all';
-    // Build the subtab bar: All, then each slot that has items, then Other. Each
-    // slot shows the same colourful DawnLike sprite the GEAR tab paints for that
-    // slot (derived from the slot label's emoji), falling back to the flat vector
-    // icon only while the atlas is still loading.
-    const slotLabel = s => SLOTS[s].label.replace(/^\S+\s/, '');
+    // Build the subtab bar: All, every gear slot, then Other — always shown, even
+    // when a category is currently empty, so the row never reflows. Each slot is
+    // represented by its icon alone (icon + count, no text label); only "All"
+    // keeps a word. Slot icons reuse the colourful DawnLike sprite the GEAR tab
+    // paints for that slot (derived from the slot label's emoji), falling back to
+    // the flat vector icon only while the atlas is still loading.
     const slotTabIcon = s => {
       const e = (SLOTS[s].label.match(EMOJI_RE) || [])[0];
       const sp = e ? emojiSprite(e) : null;
       return (sp && dlIcon(sp, 16)) || iconMarkup(SLOT_ICONS[s], ICON_EMPTY_COLOR, false);
     };
+    const otherTabIcon = () => dlIcon('potion_r', 16) || '🧪';
     const tabDefs = [{ key: 'all', icon: '', name: 'All', n: inventory.length }];
     SLOT_KEYS.forEach(s => {
-      if (counts[s]) tabDefs.push({ key: s, icon: slotTabIcon(s), name: slotLabel(s), n: counts[s] });
+      tabDefs.push({ key: s, icon: slotTabIcon(s), name: '', n: counts[s] || 0 });
     });
-    if (counts.other) tabDefs.push({ key: 'other', icon: '', name: 'Other', n: counts.other });
+    tabDefs.push({ key: 'other', icon: otherTabIcon(), name: '', n: counts.other || 0 });
     const subtabs = '<div class="loot-subtabs">' + tabDefs.map(t =>
-      `<button class="loot-subtab ${lootFilter===t.key?'active':''}" onclick="setLootFilter('${t.key}')">${t.icon}${t.name} <span class="st-count">${t.n}</span></button>`
+      `<button class="loot-subtab ${lootFilter===t.key?'active':''}" onclick="setLootFilter('${t.key}')">${t.icon}${t.name}<span class="st-count">${t.n}</span></button>`
     ).join('') + '</div>';
     const rows = inventory
       .map((item, i) => ({ item, i }))
@@ -12633,7 +12635,6 @@ function renderPanel() {
         : `<div class='ht-name'>🔓 Unlocked</div><div class='ht-line'>Tap to lock — keeps it from being sold or salvaged.</div>`)}>${dlIcon('key', 16) || (item.locked ? '🔒' : '🔓')}</button>`;
       return `
       <div class="loot-item item-${item.tier} ${selectedItem===i?'selected':''} ${isUpgrade?'upgrade':''} ${item.locked?'locked':''}">
-        <span class="loot-icon">${iconMarkup(itemIcon(item), tierColor(item))}</span>
         <div class="loot-info" onclick="selectItem(${i}, this)"
              onmouseenter="showTooltip(event,${i})" onmouseleave="hideTooltip()">
           <div class="item-name">${item.name}${craftedMark(item)}</div>
