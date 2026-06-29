@@ -2376,6 +2376,7 @@
       <button class="lb-tab on" id="lb-tab-floor" onclick="setLbTab('floor')">⬇️ Furthest</button>
       <button class="lb-tab" id="lb-tab-level" onclick="setLbTab('level')">⭐ Level</button>
       <button class="lb-tab" id="lb-tab-gold" onclick="setLbTab('gold')">💰 Gold</button>
+      <button class="lb-tab" id="lb-tab-power" onclick="setLbTab('power')"><span data-spr="ui_power"></span> Power</button>
     </div>
     <div class="lb-status" id="lb-status"></div>
     <div class="lb-list" id="lb-list"></div>
@@ -4568,8 +4569,8 @@ let player = { x: 5, y: 5, facing: 'left', hp: 100, maxHp: 100, mp: 60, maxMp: 6
   // so you can't spam potions back-to-back. `potionCd` is that cooldown.
   potionCd: 0,
   // Chosen character name (null until entered on a new game) and the peak gold
-  // ever held — both feed the global leaderboards.
-  name: null, maxGold: 0,
+  // and Power ever reached — all feed the global leaderboards.
+  name: null, maxGold: 0, maxPower: 0,
   // Deepest dungeon floor reached — the Dungeon Gate in town lets you re-enter
   // on any floor up to this, so you can backtrack to grind levels and gear.
   maxFloor: 1,
@@ -5492,6 +5493,7 @@ document.addEventListener('click', (e) => {
 
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
+  { date: '2026-06-29', v: 'Power leaderboard', by: 'Claude', notes: ['The global leaderboards now have a fourth board ranking heroes by their highest Power ever reached, alongside Furthest floor, Level and Gold.'] },
   { date: '2026-06-29', v: 'Paper-doll gear screen', by: 'Jeff Louie', notes: ['The GEAR tab is now a Diablo-2-style equipment doll: each slot is a framed cell laid out around a faint hero body, with worn pieces ringed in their rarity colour. Tap a slot for its tooltip, ✕ to unequip.'] },
   { date: '2026-06-29', v: 'Monochrome UI symbols', by: 'Jeff Louie', notes: ['Menu and HUD emoji that aren’t game icons now render as flat single-colour symbols instead of colourful emoji (and the title-screen setting icons no longer vanish). The colourful pixel-art game icons are unchanged.'] },
   { date: '2026-06-29', v: 'Rarer, smarter loot', by: 'Jeff Louie', notes: ['Lower gear drop rates so each find feels earned.', 'Weapon drops now favour types your class can actually wield, so far fewer unusable weapons turn up.'] },
@@ -14384,6 +14386,8 @@ function loadGame() {
     // name is fine — the init flow prompts for one on the next load.
     if (player.name === undefined) player.name = null;
     if (player.maxGold == null) player.maxGold = player.gold || 0;
+    // Migrate saves that predate the peak-Power tracker (feeds the Power board).
+    if (player.maxPower == null) player.maxPower = 0;
     // Migrate saves that predate the play-time tracker (total ms this hero has
     // been actively played, accumulated by the heartbeat below).
     if (player.playMs == null) player.playMs = 0;
@@ -14731,6 +14735,7 @@ const LB_SORTS = {
   floor: { col: 'max_floor', fmt: v => 'Floor ' + v },
   level: { col: 'level',     fmt: v => 'Lv ' + v },
   gold:  { col: 'gold',      fmt: v => v + 'g' },
+  power: { col: 'power',     fmt: v => '⚡' + v },
 };
 let lbTab = 'floor';
 let lbLastSig = '';       // last-submitted stat signature — skips no-op writes
@@ -14760,6 +14765,7 @@ function lbEntryFromPlayer() {
     max_floor: lbInt(player.maxFloor || 1, 1),
     level: lbInt(player.level || 1, 1),
     gold: lbInt(player.maxGold || player.gold || 0, 0),
+    power: lbInt(player.maxPower || playerPower() || 1, 1),
   };
 }
 
@@ -14768,7 +14774,8 @@ function lbEntryFromPlayer() {
 function lbScheduleSubmit() {
   if (!player || !player.name) return;
   player.maxGold = Math.max(player.maxGold || 0, player.gold || 0);
-  const sig = [player.name, player.maxFloor || 1, player.level || 1, player.maxGold || 0, player.class || ''].join('|');
+  player.maxPower = Math.max(player.maxPower || 0, playerPower() || 0);
+  const sig = [player.name, player.maxFloor || 1, player.level || 1, player.maxGold || 0, player.maxPower || 0, player.class || ''].join('|');
   if (sig === lbLastSig) return;
   lbLastSig = sig;
   if (lbSubmitTimer) return; // a write is already queued; it'll pick up the latest stats
@@ -14803,6 +14810,7 @@ function lbSubmitLocal(entry) {
         max_floor: Math.max(all[i].max_floor || 1, entry.max_floor),
         level: Math.max(all[i].level || 1, entry.level),
         gold: Math.max(all[i].gold || 0, entry.gold),
+        power: Math.max(all[i].power || 1, entry.power),
       };
     } else {
       all.push(entry);
@@ -14824,7 +14832,7 @@ async function lbFetch(tab) {
   const sort = LB_SORTS[tab] || LB_SORTS.floor;
   if (!lbEnabled()) return { rows: lbFetchLocal(sort.col), local: true };
   const url = LB_SUPABASE_URL +
-    '/rest/v1/leaderboard?select=name,player_class,max_floor,level,gold&order=' +
+    '/rest/v1/leaderboard?select=name,player_class,max_floor,level,gold,power&order=' +
     sort.col + '.desc&limit=50';
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 8000);
@@ -14852,7 +14860,7 @@ function closeLeaderboard() {
 }
 function setLbTab(tab) {
   lbTab = LB_SORTS[tab] ? tab : 'floor';
-  ['floor', 'level', 'gold'].forEach(t => {
+  ['floor', 'level', 'gold', 'power'].forEach(t => {
     const el = document.getElementById('lb-tab-' + t);
     if (el) el.classList.toggle('on', t === lbTab);
   });
