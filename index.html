@@ -12669,8 +12669,6 @@ function renderHero(el) {
   }).join('');
   // Derived combat stats so the player can see what their attributes/gear produce.
   const stat = (label, val) => `<div class="hc-line" style="display:flex;justify-content:space-between"><span style="opacity:0.8">${label}</span><b>${val}</b></div>`;
-  // Dedicated DawnLike icon for a stat row (painted from the atlas via data-spr).
-  const sIc = k => `<span data-spr="${k}"></span> `;
   // Extended gear stats (leech, thorns, find, caster %s, …): every one the hero
   // currently carries from gear is listed so nothing stays hidden. Zero-value
   // stats are skipped to keep the panel readable.
@@ -12692,10 +12690,10 @@ function renderHero(el) {
   }).join('');
   const derived = `<div class="hero-class" style="border-color:#445">
       <div class="hc-head"><span class="hc-name">📊 Stats</span></div>
-      ${stat(sIc('w_sword') + 'Attack power', Math.round(totalStat('ATK') + attrDamage()))}
-      ${stat(sIc('a_shield') + 'Defense', Math.round(playerDefense()))}
-      ${stat(sIc('ic_heart') + 'Max HP', player.maxHp)}
-      ${stat(sIc('ui_mp') + 'Max MP', player.maxMp)}
+      ${stat('Attack power', Math.round(totalStat('ATK') + attrDamage()))}
+      ${stat('Defense', Math.round(playerDefense()))}
+      ${stat('Max HP', player.maxHp)}
+      ${stat('Max MP', player.maxMp)}
       ${stat('HP regen', '+' + hpRegenPerTurn() + '/turn')}
       ${stat('MP regen', '+' + mpRegenPerTurn() + '/turn')}
       ${stat('Crit chance', Math.round(playerCritChance()*100) + '%')}
