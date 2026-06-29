@@ -99,6 +99,20 @@ waiting for manual review:
   `balance: lower legendary drop rate`, `ui: enlarge d-pad buttons`.
 - For non-trivial changes, add a short body explaining the reasoning.
 
+## Version history (changelog)
+
+The in-game Version History popup is driven by the `CHANGELOG` array in
+`index.html`. When adding or editing entries:
+
+- **Never reference other games.** Don't describe a feature as "Diablo-2-style",
+  "Golden Sun palette", "roguelike", or by comparison to any other title.
+  Describe **what the change does** in plain terms instead — e.g. write
+  "Rebalanced loot drops" or "Independent per-tier drop rolls", not
+  "Diablo-2-style loot". This is player-facing copy and should stand on its own
+  without leaning on another game for meaning.
+- Keep the same shape as existing entries (`date`, `size`, `v`, `by`, `notes`)
+  and add new releases at the top of the array (newest-first).
+
 ## Before pushing
 
 - Verify the JavaScript has no syntax errors (the game silently fails to run if
