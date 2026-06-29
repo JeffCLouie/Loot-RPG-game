@@ -845,6 +845,25 @@
 
   .item-name { font-weight: bold; }
   .item-type { font-size: 10px; opacity: 0.7; }
+
+  /* "FIRST EQUIP" badge — an empty slot you've never filled. Made loud (gold
+     pill, glow, gentle pulse) so a brand-new gear slot grabs the eye. */
+  .first-equip {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-weight: bold;
+    font-size: 9px;
+    letter-spacing: 0.04em;
+    color: #1a1405;
+    background: linear-gradient(180deg, #ffe08a, #e8c267);
+    box-shadow: 0 0 6px rgba(232,194,103,0.85);
+    animation: firstEquipPulse 1.15s ease-in-out infinite;
+  }
+  @keyframes firstEquipPulse {
+    0%, 100% { box-shadow: 0 0 5px rgba(232,194,103,0.6); transform: scale(1); }
+    50%      { box-shadow: 0 0 11px rgba(255,224,138,1); transform: scale(1.06); }
+  }
   /* Item power badge — a single gold number shown alongside an item's stats. */
   .item-power { color: #ffd24b; font-weight: bold; opacity: 0.95; margin-left: 5px; white-space: nowrap; }
   .item-diff { font-size: 10px; margin-top: 1px; line-height: 1.3; }
@@ -6557,7 +6576,7 @@ function itemStatLine(item) {
 function statDiffLine(item) {
   if (!item || !item.slot) return '';
   const cur = equipped[item.slot];
-  if (!cur) return '<span style="color:#9fd0ff">new slot</span>';
+  if (!cur) return '<span class="first-equip">★ FIRST EQUIP</span>';
   const num = (it, k) => {
     let v = it.stats ? it.stats[k] : undefined;
     if (v === undefined) v = it.attrs ? it.attrs[k] : undefined;
