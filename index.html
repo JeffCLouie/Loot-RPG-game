@@ -5501,7 +5501,7 @@ document.addEventListener('click', (e) => {
 
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
-  { date: '2026-06-29', size: 'small', v: 'Healer charges a fee', by: 'Claude', notes: ['A full rest & cure at the town healer is no longer free — it now costs gold that climbs exponentially with your level (a few coins early, a real gold sink once you’re powerful).', 'The free, cooldown-gated Health and Mana potions are unchanged, so you can still recover mid-run without paying.'] },
+  { date: '2026-06-29', size: 'small', v: 'Healer charges a fee', by: 'Claude', notes: ['A full rest & cure at the town healer is no longer free — it now costs gold that climbs steeply (about 28% per level) the stronger you get: a few coins early, a brutal gold sink at high levels, capped at 100k.', 'The free, cooldown-gated Health and Mana potions are unchanged, so you can still recover mid-run without paying.'] },
   { date: '2026-06-29', size: 'medium', v: 'Power leaderboard', by: 'Claude', notes: ['The global leaderboards now have a fourth board ranking heroes by their highest Power ever reached, alongside Furthest floor, Level and Gold.'] },
   { date: '2026-06-29', size: 'big', v: 'Paper-doll gear screen', by: 'Jeff Louie', notes: ['The GEAR tab is now a Diablo-2-style equipment doll: each slot is a framed cell laid out around a faint hero body, with worn pieces ringed in their rarity colour. Tap a slot for its tooltip, ✕ to unequip.'] },
   { date: '2026-06-29', size: 'small', v: 'Monochrome UI symbols', by: 'Jeff Louie', notes: ['Menu and HUD emoji that aren’t game icons now render as flat single-colour symbols instead of colourful emoji (and the title-screen setting icons no longer vanish). The colourful pixel-art game icons are unchanged.'] },
@@ -7595,12 +7595,14 @@ function toggleLockCraft(i) {
 
 // ── HEALER — rest to full HP/MP and cure ailments ──
 // A full rest is no longer free: the healer charges a fee that climbs
-// exponentially with the hero's level (~14% per level), so it's pocket change
-// while you're weak but a meaningful gold sink once you're powerful. The free,
-// cooldown-gated Health/Mana potions remain the cheap mid-fight option.
+// exponentially with the hero's level (~28% per level), so it's pocket change
+// while you're weak but a steep gold sink once you're powerful. The fee is
+// capped at 100k so it never becomes absurd (the cap is reached around level
+// 39). The free, cooldown-gated Health/Mana potions remain the cheap mid-fight
+// option.
 function healCost() {
   const lvl = player.level || 1;
-  return Math.round(10 * Math.pow(1.14, lvl - 1));
+  return Math.min(100000, Math.round(10 * Math.pow(1.28, lvl - 1)));
 }
 function openHealer() { openTownModal('⛑️ Healer'); renderHealer(); }
 function renderHealer() {
