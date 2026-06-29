@@ -9705,12 +9705,12 @@ function draw() {
   // Vault key — glints on the floor until grabbed.
   if (groundKey) {
     const px = offX + groundKey.x * tw, py = offY + groundKey.y * th;
-    ctx.font = `${Math.round(tw * 0.5)}px serif`;
+    ctx.font = `${Math.round(tw * 0.65)}px serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    glowUnder(px + tw/2, py + th/2, tw * 0.42, 'rgba(255,224,102,0.4)');
-    if (!(spriteReady && drawSpriteC('key', px + tw/2, py + th/2, Math.round(tw * 0.6))))
-      drawEmoji('🗝️', px + tw/2, py + th/2, Math.round(tw * 0.5));
+    glowUnder(px + tw/2, py + th/2, tw * 0.52, 'rgba(255,224,102,0.45)');
+    if (!(spriteReady && drawSpriteC('key', px + tw/2, py + th/2, Math.round(tw * 0.82))))
+      drawEmoji('🗝️', px + tw/2, py + th/2, Math.round(tw * 0.65));
   }
 
   // Merchant (roaming trader in bright robes) — never the town stand-in.
