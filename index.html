@@ -13608,8 +13608,17 @@ let activeSlot = (function () {
 })();
 
 let _wipingSave = false; // set while wiping so unload autosaves can't restore the deleted slot
+// Set just before any intentional reboot-reload (switching slot, starting a new
+// game in another slot, deleting the active slot, or reloading into a freshly
+// synced cloud save). The pagehide / visibilitychange handlers fire a final
+// saveGame() as the page tears down; without this latch that final save would
+// write the OUTGOING hero's in-memory state into slotKey(activeSlot) — clobbering
+// the slot we're about to load, the empty slot we're starting fresh in, or the
+// newer copy we just pulled from the cloud. init() always re-reads the truth from
+// localStorage on the next boot, so suppressing this last save is exactly right.
+let _switchingSlot = false;
 function saveGame() {
-  if (_wipingSave) return; // a new-run wipe is in progress — don't re-write the slot we just cleared
+  if (_wipingSave || _switchingSlot) return; // a slot switch / wipe is mid-flight — don't clobber the target slot
   try {
     const data = {
       player, inventory, equipped, dungeonLevel, buffs, pact,
@@ -13881,9 +13890,16 @@ function slotTimeAgo(ts) {
 // reload is the simplest reliable reset — init() rebuilds all state from the
 // chosen slot (or starts a fresh hero if it's empty).
 function activateSlot(i) {
-  if (i < 0 || i >= SLOT_COUNT) return;
+  if (i < 0 || i >= SLOT_COUNT || i === activeSlot) return;
+  // Flush the hero we're leaving into ITS OWN slot first — activeSlot still
+  // points at it here, so this lands in the right place and preserves the latest
+  // progress. THEN freeze saves so the unload autosaves that fire during reload
+  // can't write that outgoing state into the slot we're switching to. We do NOT
+  // reassign activeSlot in memory: init() re-reads ACTIVE_SLOT_KEY on the next
+  // boot and loads the chosen slot cleanly.
+  try { saveGame(); } catch (e) {}
+  _switchingSlot = true;
   try { localStorage.setItem(ACTIVE_SLOT_KEY, String(i)); } catch (e) {}
-  activeSlot = i;
   location.reload();
 }
 
@@ -13950,9 +13966,18 @@ function renderSlots() {
 // wiped first (the slot list only shows ＋ New Game on empty slots, so this
 // path is reached on empties), then we boot into it — init() shows name entry.
 async function newGameInSlot(i) {
+  if (i < 0 || i >= SLOT_COUNT) return;
+  // Preserve the hero we're leaving in its own slot first — unless we're starting
+  // fresh in the slot we're currently playing, in which case that hero is being
+  // discarded on purpose.
+  if (i !== activeSlot) { try { saveGame(); } catch (e) {} }
+  // Freeze saves so the unload autosaves during reload can't refill slot i with
+  // the outgoing hero's state, then clear the slot locally and in the cloud.
+  _switchingSlot = true;
   try { localStorage.removeItem(slotKey(i)); } catch (e) {}
   await cloudDeleteSlot(i); // clear any cloud row first so the boot sync won't restore it
-  activateSlot(i);
+  try { localStorage.setItem(ACTIVE_SLOT_KEY, String(i)); } catch (e) {}
+  location.reload();
 }
 
 // Two-tap delete: first tap arms the slot, second confirms. Arming auto-clears
@@ -13965,12 +13990,19 @@ function deleteSlot(i) {
     return;
   }
   slotDeleteArmed = -1;
-  try { localStorage.removeItem(slotKey(i)); } catch (e) {}
   // Wiping the slot you're actively playing means there's nothing to fall back
-  // on — reload starts a fresh hero in it. Otherwise just refresh the list. In
-  // both cases drop the cloud row so a signed-in player's delete sticks across
-  // devices and the boot sync can't pull the deleted hero back.
-  if (i === activeSlot) { cloudDeleteSlot(i).then(() => location.reload()); return; }
+  // on — reload starts a fresh hero in it. Freeze saves FIRST (before clearing)
+  // so the unload autosaves that fire during reload can't restore the hero we
+  // just deleted. Otherwise just clear the slot and refresh the list. In both
+  // cases drop the cloud row so a signed-in player's delete sticks across devices
+  // and the boot sync can't pull the deleted hero back.
+  if (i === activeSlot) {
+    _switchingSlot = true;
+    try { localStorage.removeItem(slotKey(i)); } catch (e) {}
+    cloudDeleteSlot(i).then(() => location.reload());
+    return;
+  }
+  try { localStorage.removeItem(slotKey(i)); } catch (e) {}
   cloudDeleteSlot(i);
   renderSlots();
 }
@@ -14356,6 +14388,9 @@ async function cloudBootSync() {
   try { alreadyReloaded = sessionStorage.getItem(CLOUD_BOOT_RELOADED) === '1'; } catch (e) {}
   if (r.activeChanged && !alreadyReloaded) {
     try { sessionStorage.setItem(CLOUD_BOOT_RELOADED, '1'); } catch (e) {}
+    // Freeze saves so the teardown autosave can't write the stale in-memory hero
+    // back over the newer copy we just pulled into the active slot's cache.
+    _switchingSlot = true;
     location.reload();
   }
 }
@@ -14462,6 +14497,7 @@ async function doLogin() {
     acctStatus('Signed in ✓ Syncing your saves…', 'ok');
     try { saveGame(); } catch (e) {}   // persist the current local game before merging
     await cloudReconcile();
+    _switchingSlot = true;             // don't let the teardown save overwrite a pulled-newer slot
     location.reload();
   } catch (e) { acctStatus('Network error — please try again.', 'err'); }
 }
@@ -14479,6 +14515,7 @@ async function doSignup() {
       acctStatus('Account created ✓ Syncing your saves…', 'ok');
       try { saveGame(); } catch (e) {}
       await cloudReconcile();
+      _switchingSlot = true;           // don't let the teardown save overwrite a pulled-newer slot
       location.reload();
     } else {
       // Confirmation required — the player must verify by email, then log in.
@@ -14502,7 +14539,7 @@ async function doSyncNow() {
   acctStatus('Syncing…', 'busy');
   try { saveGame(); } catch (e) {}
   const r = await cloudReconcile();
-  if (r.activeChanged) { location.reload(); return; }
+  if (r.activeChanged) { _switchingSlot = true; location.reload(); return; }
   acctStatus('Synced ✓ Everything is up to date.', 'ok');
 }
 
