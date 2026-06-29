@@ -7892,7 +7892,7 @@ function renderEnchantItem(item) {
     <div class="shop-row"><button class="shop-buy-btn" onclick="enchantBack()">← Back</button>
       <div class="shop-row-info item-${item.tier}" style="margin-left:8px"><div class="shop-row-name">${item.name}${craftedMark(item)}</div>
       <div class="shop-row-sub">${SLOTS[item.slot].label.replace(/^\S+\s/,'')} · ilvl ${item.ilvl} · ${statN}/${caps.stat} stats · ${attrN}/${caps.attr} attrs</div></div></div>
-    <div class="ench-legend">Value rerolls the number · Type swaps the modifier · hover a button for details</div>
+    <div class="ench-legend">Value rerolls the number · Type swaps the modifier · ${touchUI() ? 'press &amp; hold a button for details' : 'hover a button for details'}</div>
     ${lockRows}
     ${empty}${statRows}${attrRows}
     <div class="shop-row" style="margin-top:6px;gap:6px">${augBtn}${allBtn}</div>
@@ -11132,7 +11132,7 @@ function tryRangedAttack(dx, dy) {
 function castSkill() {
   if (!playerClass()) { log('Pick a class to gain skills.'); return; }
   const list = activeSkillList();
-  if (!list.length) { log('No active skill learned yet — spend a skill point in the SKILLS tab (press B).'); return; }
+  if (!list.length) { log(`No active skill learned yet — spend a skill point in the SKILLS tab (${touchUI() ? 'tap 🎒 BAG' : 'press B'}).`); return; }
   castSkillById(list[0].id);
 }
 
@@ -12554,7 +12554,7 @@ function updateBars() {
       const cd = skillCd(sk.id);
       const ready = cd === 0 && player.mp >= sk.mp && !inTown;
       if (label) label.textContent = cd > 0 ? `${cd}` : `${sk.mp}MP`;
-      skillBtn.dataset.tip = `<div class='ht-name' style='color:#e6c34a'>${dlIcon(sk.icon,16)||''} ${sk.name}</div><div class='ht-line'>${sk.desc}</div><div class='ht-sub'>${sk.mp} MP · ${sk.cd}-turn cooldown · press R</div>`;
+      skillBtn.dataset.tip = `<div class='ht-name' style='color:#e6c34a'>${dlIcon(sk.icon,16)||''} ${sk.name}</div><div class='ht-line'>${sk.desc}</div><div class='ht-sub'>${sk.mp} MP · ${sk.cd}-turn cooldown · ${touchUI() ? 'tap to cast' : 'press R'}</div>`;
       skillBtn.classList.toggle('disabled', !ready);
       skillBtn.classList.toggle('ready', ready && player.hp > 0);
     } else {
@@ -12793,7 +12793,7 @@ function renderHero(el) {
       <div class="hc-line">${cls.passive}</div>
       <div class="hc-line">⚔️ Damage scales with <b>${ATTRIBUTES[dmgA.primary].label}</b>${dmgA.secondary ? ` & ${ATTRIBUTES[dmgA.secondary].label}` : ''}</div>
       ${(() => { const pri = activeSkillList()[0], sig = classSignature(player.class);
-        return pri ? `<div class="hc-line">${dlIcon(pri.icon,18)||''} <b>${pri.name}</b> — ${pri.desc} <span style="opacity:0.7">(${pri.mp} MP · press R)</span></div>`
+        return pri ? `<div class="hc-line">${dlIcon(pri.icon,18)||''} <b>${pri.name}</b> — ${pri.desc} <span style="opacity:0.7">(${pri.mp} MP · ${touchUI() ? 'tap to cast' : 'press R'})</span></div>`
           : (sig ? `<div class="hc-line" style="opacity:0.8">Spend a skill point to learn ${dlIcon(sig.icon,16)||''} <b>${sig.name}</b> (SKILLS tab)</div>` : ''); })()}
       ${ascData() ? `<div class="hc-line" style="color:${ascData().color}">${dlIcon(ascData().icon,18)||''} <b>${ascData().name}</b> — ${ascData().blurb}</div>`
         : (cls && (player.level || 1) >= ASCEND_LEVEL ? `<div class="hc-line" style="color:#e8c267">🌟 Ready to ascend — visit the Trainer 🎓</div>` : '')}
@@ -13101,8 +13101,10 @@ function renderSkillBar() {
   const hpFull = player.hp >= player.maxHp;
   const mpFull = player.mp >= player.maxMp;
   const urgent = potReady && player.hp < player.maxHp * 0.35;
-  const healTip = `<div class='ht-name' style='color:var(--hp)'>❤️ Health Potion</div><div class='ht-line'>Quaff to restore a burst of health.</div><div class='ht-sub'>press 1 · 3-turn cooldown</div>`;
-  const manaTip = `<div class='ht-name' style='color:var(--mp)'>🔷 Mana Potion</div><div class='ht-line'>Quaff to restore a burst of mana.</div><div class='ht-sub'>press 2 · 3-turn cooldown</div>`;
+  const healHint = touchUI() ? 'tap to drink' : 'press 1';
+  const manaHint = touchUI() ? 'tap to drink' : 'press 2';
+  const healTip = `<div class='ht-name' style='color:var(--hp)'>❤️ Health Potion</div><div class='ht-line'>Quaff to restore a burst of health.</div><div class='ht-sub'>${healHint} · 3-turn cooldown</div>`;
+  const manaTip = `<div class='ht-name' style='color:var(--mp)'>🔷 Mana Potion</div><div class='ht-line'>Quaff to restore a burst of mana.</div><div class='ht-sub'>${manaHint} · 3-turn cooldown</div>`;
   const healBtn = `<button class="skillbar-btn potion ${potReady && !hpFull ? '' : 'empty'} ${urgent ? 'urgent' : ''}" ${hoverTip(healTip)} onclick="useHealthPotion()">
       <span class="sb-key">1</span><span class="sb-icon">${HEAL_POTION_SVG}</span><span class="sb-info" id="heal-label">${pcd > 0 ? pcd : ''}</span>
     </button>`;
@@ -13119,7 +13121,9 @@ function renderSkillBar() {
     const idx = ++num;
     const key = idx <= 7 ? String(idx + 2) : '';
     const keyHint = idx === 1 ? (key ? `${key} or R` : 'R') : key;
-    const tip = `<div class='ht-name' style='color:#e6c34a'>${dlIcon(s.icon,16)||''} ${s.name}</div><div class='ht-line'>${s.desc}</div><div class='ht-sub'>${s.mp} MP · ${s.cd}-turn cooldown${keyHint ? ` · press ${keyHint}` : ''}</div>`;
+    // Desktop names the number/R key; touch (no keyboard, reached by long-press) says "tap to cast".
+    const castHint = touchUI() ? ' · tap to cast' : (keyHint ? ` · press ${keyHint}` : '');
+    const tip = `<div class='ht-name' style='color:#e6c34a'>${dlIcon(s.icon,16)||''} ${s.name}</div><div class='ht-line'>${s.desc}</div><div class='ht-sub'>${s.mp} MP · ${s.cd}-turn cooldown${castHint}</div>`;
     return `<button class="skillbar-btn ${idx === 1 ? 'baseline ' : ''}${ready ? 'ready' : 'disabled'}" ${hoverTip(tip)} onclick="castSkillById('${s.id}')">
       <span class="sb-key">${key}</span><span class="sb-icon">${dlIcon(s.icon,24)||''}</span><span class="sb-info">${cd > 0 ? cd : s.mp + 'MP'}</span>
     </button>`;
@@ -13184,7 +13188,7 @@ function chooseClass(key) {
   const ov = document.getElementById('class-overlay');
   if (ov) ov.classList.remove('open');
   const sig = classSignature(key);
-  log(`${cls.icon} You are a ${cls.name}! ${cls.passive}.${sig ? ` Spend your skill point in the SKILLS tab (press B) to learn ${sig.name}.` : ''}`, 'important');
+  log(`${cls.icon} You are a ${cls.name}! ${cls.passive}.${sig ? ` Spend your skill point in the SKILLS tab (${touchUI() ? 'tap 🎒 BAG' : 'press B'}) to learn ${sig.name}.` : ''}`, 'important');
   sfx('levelup');
   updateBars(); renderPanel(); renderSkillBar(); draw(); saveGame();
 }
@@ -13454,6 +13458,11 @@ const hoverTipEl = document.getElementById('hovertip');
 // Only real pointers get hover tooltips — on touch, a tap emulates mouseenter
 // and these would pop open at random (e.g. the spell/skill tips on mobile).
 const HOVER_MQ = window.matchMedia('(hover: hover) and (pointer: fine)');
+// Touch UI = no real hover (a coarse pointer / no mouse). Used to phrase input
+// hints for the actual device: desktop keeps "hover" / "press R"; touch, which
+// reaches the same tips by long-press and has no keyboard, says "press & hold" /
+// "tap". Never changes WHAT a hint says, only the input verb.
+function touchUI() { return !HOVER_MQ.matches; }
 function showHoverTip(e, el) {
   if (!HOVER_MQ.matches) return; // mouse hover only; touch uses long-press (below)
   renderHoverTip(el);
