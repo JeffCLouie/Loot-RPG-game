@@ -563,6 +563,15 @@
   .sk-pop .pop-buy:active { background: #6a55a8; }
   .sk-pop .pop-buy:disabled { background: #2a2a3a; color: #666; cursor: not-allowed; }
   .sk-pop .pop-buy.maxed { background: #2e7d32; color: #cdebcf; }
+  /* Show/hide-on-bar toggle for owned actives. */
+  .sk-pop .pop-hide { width: 100%; margin-top: 5px; padding: 5px; border: 1px solid #4a3a7a; border-radius: 5px;
+    background: #221b34; color: #cbb8ff; font-family: inherit; font-size: 9.5px; font-weight: bold;
+    cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+  .sk-pop .pop-hide:active { background: #4a3a7a; }
+  .sk-pop .pop-hide.hidden { background: #3a2330; border-color: #7a4a5a; color: #e8a8b8; }
+  /* Active node currently hidden from the bar: dimmed with a small marker. */
+  .sk-tnode.barhid { opacity: 0.5; }
+  .sk-tnode.barhid .ic { filter: grayscale(0.7); }
 
   /* Sub-tabs across the three trees (passive / active / path). */
   .sk-vtabs { display: flex; gap: 4px; margin: 8px 2px 2px; }
@@ -4224,6 +4233,22 @@ function activeSkillList() {
     }
   }
   return list;
+}
+// The actives the player actually wants on the skill bar / hotkeys. High-level
+// heroes can learn far more actives than they use, so any can be hidden away
+// (toggled from its node popover in the SKILLS tab). Hidden skills stay learned
+// and fully ranked — they're just dropped from the bar, the number keys, and the
+// R-keyed primary slot to keep the bar uncluttered.
+function visibleSkillList() {
+  const hidden = player.hiddenSkills || {};
+  return activeSkillList().filter(s => !hidden[s.id]);
+}
+function isSkillHidden(id) { return !!(player.hiddenSkills && player.hiddenSkills[id]); }
+function toggleSkillHidden(id) {
+  if (!player.hiddenSkills) player.hiddenSkills = {};
+  if (player.hiddenSkills[id]) delete player.hiddenSkills[id];
+  else player.hiddenSkills[id] = true;
+  renderPanel(); renderSkillBar(); saveGame();
 }
 function skillCd(id) { return (player.skillCds && player.skillCds[id]) || 0; }
 function setSkillCd(id, v) { if (!player.skillCds) player.skillCds = {}; player.skillCds[id] = v; }
@@ -11199,8 +11224,10 @@ function tryRangedAttack(dx, dy) {
 // and number keys cast any unlocked tree active. Both route through castSkillById.
 function castSkill() {
   if (!playerClass()) { log('Pick a class to gain skills.'); return; }
-  const list = activeSkillList();
-  if (!list.length) { log(`No active skill learned yet — spend a skill point in the SKILLS tab (${touchUI() ? 'tap 🎒 BAG' : 'press B'}).`); return; }
+  const all = activeSkillList();
+  if (!all.length) { log(`No active skill learned yet — spend a skill point in the SKILLS tab (${touchUI() ? 'tap 🎒 BAG' : 'press B'}).`); return; }
+  const list = visibleSkillList();
+  if (!list.length) { log('Every active skill is hidden — un-hide one in the SKILLS tab to cast it.'); return; }
   castSkillById(list[0].id);
 }
 
@@ -12619,7 +12646,7 @@ function updateBars() {
   // casts), showing its icon and cooldown / mana cost. Hidden until one is learned.
   const skillBtn = document.getElementById('skill-btn');
   if (skillBtn) {
-    const sk = activeSkillList()[0];
+    const sk = visibleSkillList()[0];
     if (sk) {
       skillBtn.style.display = '';
       const icon = document.getElementById('skill-icon');
@@ -12865,7 +12892,7 @@ function renderHero(el) {
         <span class="hc-name" style="color:${cls.color}">${cls.name}</span></div>
       <div class="hc-line">${cls.passive}</div>
       <div class="hc-line">⚔️ Damage scales with <b>${ATTRIBUTES[dmgA.primary].label}</b>${dmgA.secondary ? ` & ${ATTRIBUTES[dmgA.secondary].label}` : ''}</div>
-      ${(() => { const pri = activeSkillList()[0], sig = classSignature(player.class);
+      ${(() => { const pri = visibleSkillList()[0], sig = classSignature(player.class);
         return pri ? `<div class="hc-line">${dlIcon(pri.icon,18)||''} <b>${pri.name}</b> — ${pri.desc} <span style="opacity:0.7">(${pri.mp} MP · ${touchUI() ? 'tap to cast' : 'press R'})</span></div>`
           : (sig ? `<div class="hc-line" style="opacity:0.8">Spend a skill point to learn ${dlIcon(sig.icon,16)||''} <b>${sig.name}</b> (SKILLS tab)</div>` : ''); })()}
       ${ascData() ? `<div class="hc-line" style="color:${ascData().color}">${dlIcon(ascData().icon,18)||''} <b>${ascData().name}</b> — ${ascData().blurb}</div>`
@@ -12984,9 +13011,10 @@ function renderSkills(el) {
     const avail = canBuySkill(n);
     const ready = !owned && !avail && skillReqMet(n);
     const state = maxd ? 'maxed' : avail ? 'avail' : owned ? 'owned' : ready ? 'ready' : 'locked';
-    const badge = maxd ? '✓' : avail ? '+' : owned ? rank : ready ? '☆' : '🔒';
+    const barHidden = n.type === 'active' && owned && isSkillHidden(n.id);
+    const badge = barHidden ? '🚫' : maxd ? '✓' : avail ? '+' : owned ? rank : ready ? '☆' : '🔒';
     const pips = `<div class="pips">${Array.from({ length: 10 }, (_, i) => `<span class="pip${i < rank ? ' on' : ''}"></span>`).join('')}</div>`;
-    return `<button class="sk-tnode ${state}${n.type === 'active' ? ' act' : ''}${selectedSkillId === n.id ? ' sel' : ''}" id="sknode-${n.id}"
+    return `<button class="sk-tnode ${state}${n.type === 'active' ? ' act' : ''}${barHidden ? ' barhid' : ''}${selectedSkillId === n.id ? ' sel' : ''}" id="sknode-${n.id}"
         style="left:${(p[0] * 100).toFixed(2)}%;top:${(p[1] * 100).toFixed(2)}%" onclick="selectSkill('${n.id}')" ondblclick="buySkill('${n.id}')">
       <span class="ic">${dlIconFill(n.icon)}</span><span class="nm">${n.name}</span><span class="badge">${badge}</span>
     </button>`;
@@ -13027,6 +13055,11 @@ function renderSkills(el) {
     const buyBtn = skillMaxed(sn)
       ? `<button class="pop-buy maxed" disabled>✓ Maxed (10/10)</button>`
       : `<button class="pop-buy" ${canBuySkill(sn) ? '' : 'disabled'} onclick="buySkill('${sn.id}')">Learn (rank ${rank + 1}/${sn.max})</button>`;
+    // Owned actives can be hidden from the skill bar / hotkeys to declutter a
+    // late-game kit full of situational spells you rarely cast.
+    const hideBtn = (sn.type === 'active' && rank > 0)
+      ? `<button class="pop-hide${isSkillHidden(sn.id) ? ' hidden' : ''}" onclick="toggleSkillHidden('${sn.id}')">${isSkillHidden(sn.id) ? '🚫 Hidden from bar — tap to show' : '👁 On bar — tap to hide'}</button>`
+      : '';
     pop = `<div class="sk-pop" id="sk-pop">
       <b>${dlIcon(sn.icon,18)||''} ${sn.name}</b>${rankTxt}
       <div class="ty">${typeTxt}</div>
@@ -13034,6 +13067,7 @@ function renderSkills(el) {
       ${ruHtml}
       ${reqHtml}
       ${buyBtn}
+      ${hideBtn}
     </div>`;
   }
 
@@ -13160,7 +13194,7 @@ function positionSkillPop() {
 function renderSkillBar() {
   const bar = document.getElementById('skill-bar');
   if (!bar) return;
-  const skills = activeSkillList();
+  const skills = visibleSkillList();
   // Hide the bar only in town. Out in the dungeon it always renders, even with
   // no active skills learned yet, because the far-left Health/Mana potion
   // buttons are baseline kit every hero needs from the start.
@@ -13822,7 +13856,7 @@ document.addEventListener('keydown', e => {
   if (e.key==='r'||e.key==='R')          castSkill();
   // Number keys 3–9 cast learned tree/path actives (1 & 2 are potions).
   if (e.key>='3' && e.key<='9') {
-    const list = activeSkillList();
+    const list = visibleSkillList();
     const sk = list[parseInt(e.key, 10) - 3];
     if (sk) castSkillById(sk.id);
   }
@@ -13947,6 +13981,8 @@ function loadGame() {
     // Drop the old counters from older saves and seed the shared potion cooldown.
     delete player.healPotions; delete player.manaPotions; delete player.healthPotionsBought;
     if (player.potionCd == null) player.potionCd = 0;
+    // Per-character set of actives hidden from the skill bar (added later).
+    if (!player.hiddenSkills || typeof player.hiddenSkills !== 'object') player.hiddenSkills = {};
     // Migrate saves that predate crafting materials: seed an empty wallet and
     // ensure every material key exists on partial saves.
     if (!player.materials || typeof player.materials !== 'object') player.materials = freshMaterials();
