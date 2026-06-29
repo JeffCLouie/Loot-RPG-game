@@ -67,14 +67,24 @@ used by the leaderboard cover cloud saves too.
 
 - **No backend configured?** If `LB_SUPABASE_URL` / `LB_SUPABASE_KEY` are blank,
   the Cloud Save panel says so and the game just uses local saves.
-- **Conflicts.** Sync is last-write-wins per slot by save timestamp, which fits
-  the "play on one device at a time" case. Playing the same slot on two devices
-  at once can let the later save overwrite the earlier one.
+- **Nothing gets overwritten by a different hero.** Each character carries a
+  stable id (`cid`), and the cloud's slot layout is the shared source of truth.
+  On sync, a character the account already has takes the **newer** of the two
+  copies (last-write-wins by timestamp) in its existing slot, while a character
+  the cloud has never seen — e.g. a different hero that happens to sit in the same
+  slot index on a second device — is **appended to the next free slot** and
+  pushed up. So if a PC holds heroes in slots 1–2 and a phone independently holds
+  two heroes in slots 1–2, syncing lands the phone's pair in slots 3–4 and the
+  account ends up with all four; signing in on the PC then pulls slots 3–4 down so
+  both devices converge. Cloud characters never move, so no save is ever deleted
+  by a sync.
+- **Unlimited slots.** There's no fixed slot cap — the Save Slots menu shows every
+  occupied slot plus one fresh "New Game" row, growing as you add heroes (and as
+  cross-device syncs append more).
 - **Blank slots never win.** A hero who hasn't begun (no class, no progress) is
   never saved, pushed, or counted in a sync — so signing in on a fresh device
   pulls your existing account saves down instead of letting the empty title-screen
-  slot overwrite them. A real cloud save always beats a blank local slot
-  regardless of timestamps; timestamps only decide between two *started* saves.
+  slot overwrite them.
 - **Privacy.** Only the player's own save JSON is stored, and RLS prevents anyone
   else's key from reading it. Passwords are handled entirely by Supabase Auth —
   the game never stores them.
