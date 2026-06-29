@@ -609,6 +609,40 @@
   #panel-content::-webkit-scrollbar-track { background: var(--bg); }
   #panel-content::-webkit-scrollbar-thumb { background: var(--border); }
 
+  /* Loot subtabs: filter the LOOT list down to a single gear slot (all helms,
+     all chests, …) so a fat bag stays browsable. Small wrapping pills. */
+  .loot-subtabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 6px;
+  }
+  .loot-subtab {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 3px 7px;
+    background: #15151f;
+    border: 1px solid var(--border);
+    border-radius: 11px;
+    color: #888;
+    font-family: 'Courier New', monospace;
+    font-size: 10px;
+    cursor: pointer;
+    line-height: 1.2;
+  }
+  .loot-subtab:hover { background: #1e1e2e; color: #bbb; }
+  .loot-subtab.active {
+    background: #20202e;
+    border-color: var(--gold);
+    color: var(--gold);
+  }
+  .loot-subtab .st-count {
+    color: #666;
+    font-size: 9px;
+  }
+  .loot-subtab.active .st-count { color: #c9a84a; }
+
   /* ── LOOT LIST ── */
   .loot-item {
     display: flex;
@@ -4419,6 +4453,9 @@ const QUEST_NPCS  = ['🧑‍🌾','🧓','🧝','🧙‍♀️','👨‍🔧','
 const QUEST_NAMES = ['Elara','Old Tomas','Bram','Sera','the Scholar','Mira','Captain Doran','the Stranger','Wren','Father Aldric'];
 let enemies = [];
 let currentTab = 'inv';
+// Which gear slot the LOOT tab is filtered to ('all', a SLOT_KEYS value, or
+// 'other' for non-equipable items like potions).
+let lootFilter = 'all';
 let selectedItem = null;
 let selectedSkillId = null; // skill-tree node whose detail popover is open (null = none)
 let skillView = 'passive';  // which SKILLS sub-tree is shown: passive | active | path
@@ -12526,6 +12563,12 @@ function switchTab(tab) {
   renderPanel();
 }
 
+// Filter the LOOT tab to a single gear slot ('all' shows everything).
+function setLootFilter(slot) {
+  lootFilter = slot;
+  renderPanel();
+}
+
 function renderPanel() {
   const el = document.getElementById('panel-content');
   if (currentTab === 'inv') {
@@ -12538,14 +12581,32 @@ function renderPanel() {
     // row's original inventory index so equip/select still target the right item.
     const slotOrder = {};
     SLOT_KEYS.forEach((s, idx) => { slotOrder[s] = idx; });
+    // Bucket each item by its filter category ('other' = no equip slot) so we can
+    // count items per subtab and drop categories that are currently empty.
+    const cat = item => item.slot || 'other';
+    const counts = {};
+    inventory.forEach(item => { counts[cat(item)] = (counts[cat(item)] || 0) + 1; });
+    // If the active filter no longer has any items (e.g. you sold all helms),
+    // fall back to showing everything so the list never looks empty by accident.
+    if (lootFilter !== 'all' && !counts[lootFilter]) lootFilter = 'all';
+    // Build the subtab bar: All, then each slot that has items, then Other.
+    const tabDefs = [{ key: 'all', label: '🎒 All', n: inventory.length }];
+    SLOT_KEYS.forEach(s => {
+      if (counts[s]) tabDefs.push({ key: s, label: SLOTS[s].label, n: counts[s] });
+    });
+    if (counts.other) tabDefs.push({ key: 'other', label: '🧪 Other', n: counts.other });
+    const subtabs = '<div class="loot-subtabs">' + tabDefs.map(t =>
+      `<button class="loot-subtab ${lootFilter===t.key?'active':''}" onclick="setLootFilter('${t.key}')">${t.label} <span class="st-count">${t.n}</span></button>`
+    ).join('') + '</div>';
     const rows = inventory
       .map((item, i) => ({ item, i }))
+      .filter(({ item }) => lootFilter === 'all' || cat(item) === lootFilter)
       .sort((a, b) => {
         const oa = a.item.slot in slotOrder ? slotOrder[a.item.slot] : 99;
         const ob = b.item.slot in slotOrder ? slotOrder[b.item.slot] : 99;
         return oa - ob;
       });
-    el.innerHTML = strip + rows.map(({ item, i }) => {
+    el.innerHTML = strip + subtabs + rows.map(({ item, i }) => {
       const equipable = !!item.slot;
       const slotName = item.slot ? SLOTS[item.slot].label.replace(/^\S+\s/, '') : 'potion';
       // Compare this item's power to whatever currently fills its slot, so we can
