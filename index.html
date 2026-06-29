@@ -2188,7 +2188,7 @@
       <div class="bar-track"><div class="bar-fill hp-fill" id="hp-bar" style="width:100%"></div></div>
       <span id="hp-text" style="font-size:10px">100</span>
     </div>
-    <div class="stat-bar" data-tip="<div class='ht-name' style='color:var(--mp)'>🔷 Mana (MP)</div><div class='ht-line'>Spent to cast class skills and spells. Regenerates over time and refills when you level up.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
+    <div class="stat-bar" data-tip="<div class='ht-name' style='color:var(--mp)'>🔷 Mana (MP)</div><div class='ht-line'>Spent to cast class skills and spells. Regenerates slowly over time and partly recovers when you level up.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
       <span style="color:var(--mp);font-size:11px;font-weight:bold;text-shadow:0 0 5px var(--mp)">MP</span>
       <div class="bar-track"><div class="bar-fill mp-fill" id="mp-bar" style="width:100%"></div></div>
       <span id="mp-text" style="font-size:10px">60/60</span>
@@ -2769,7 +2769,10 @@ function applyBaseStats(item, baseName, lvl, mult, dmgMult, opts = {}) {
     item.off = off;
     if (off === 'shield') {
       item.stats.DEF = Math.max(1, Math.floor((1 + lvl) * mult * 0.7 * (bp.def || 1)));
-      item.stats.BLOCK = bp.block || 8;
+      // Block % now scales with item level and is softcapped, so a low-level
+      // shield grants only a sliver of block (a level-1 Tower Shield no longer
+      // hands you 30% of the block cap on the first floor) and climbs gently.
+      item.stats.BLOCK = Math.max(2, Math.round(softcap((bp.block || 8) * (0.35 + lvl * 0.04), bp.block || 8)));
       item.baseStats = ['DEF', 'BLOCK'];
     } else if (off === 'caster') {
       const r = affixStatRange('SPELLPWR', lvl, mult);
@@ -2778,7 +2781,7 @@ function applyBaseStats(item, baseName, lvl, mult, dmgMult, opts = {}) {
       item.baseStats = ['SPELLPWR'];
     } else { // ranged (quiver) / dual (parry blade)
       item.stats.ATK = Math.max(1, Math.floor((1 + lvl * 0.35) * mult * 0.6 * (bp.atk || 1)));
-      if (bp.block) { item.stats.BLOCK = bp.block; item.baseStats = ['ATK', 'BLOCK']; }
+      if (bp.block) { item.stats.BLOCK = Math.max(2, Math.round(softcap(bp.block * (0.35 + lvl * 0.04), bp.block))); item.baseStats = ['ATK', 'BLOCK']; }
       else item.baseStats = ['ATK'];
     }
   } else if (bp.innate) {
@@ -3785,7 +3788,11 @@ function attrDamage() {
 // Crit damage multiplier — equipment-only beyond the base, so gear (CRITDMG)
 // drives how hard your crits land. Crit damage can swing freely up or down, but
 // the multiplier never drops below 0 (no stat should ever read negative).
-function critDamageMult() { return Math.max(0, 2.0 + totalStat('CRITDMG') / 100 + skillBonus('critDmg')); }
+// Capped at 5x (500%) so crit damage — the one offensive % stat with no per-roll
+// ceiling — can't be stacked into an absurd one-shot burst vector now that crit
+// CHANCE is throttled. The cap is only approached with extreme late-game CRITDMG
+// gear; early/mid rolls are untouched. Floored at 0 so a curse never reads negative.
+function critDamageMult() { return Math.min(5.0, Math.max(0, 2.0 + totalStat('CRITDMG') / 100 + skillBonus('critDmg'))); }
 
 // The player's overall power: a blend of level, spent attributes, and equipped gear.
 function playerPower() {
@@ -3841,25 +3848,31 @@ function softcap(R, cap) {
 // the softcap means you only ever creep toward that ceiling very late, and the
 // floor keeps a cursed item from ever reading negative.
 function playerCritChance() {
-  const flat = 0.04 + (player.class === 'rogue' ? 0.08 : 0);
+  // Only the universal 4% base sits outside the softcap. The Rogue's crit edge is
+  // folded INTO the rating (not added flat on top), so even a Rogue's crit
+  // diminishes as they stack more and a fresh Rogue lands just under 10% instead
+  // of starting the game already past the user's "hard to exceed 10%" bar.
   const rating = totalAttr('luck') * ATTR_FX.critPerLuck
     + (totalStat('CRIT') + totalStat('LCK')) * 0.004
-    + skillBonus('crit') + buffMag('critUp') + foodFx('critPct');
-  return Math.max(0, Math.min(0.6, flat + softcap(rating, 0.5)));
+    + skillBonus('crit') + buffMag('critUp') + foodFx('critPct')
+    + (player.class === 'rogue' ? 0.055 : 0);
+  return Math.max(0, Math.min(0.6, 0.04 + softcap(rating, 0.5)));
 }
 
 // Chance to completely avoid an incoming hit. Like crit, every source — the
 // Agility attribute, gear SPD/DODGE, skills, food and buffs — feeds one rating
 // that's softcapped, so dodge climbs slowly and only nears its ceiling very late.
-// Rogues get a flat head-start and a slightly higher cap; depth threat still
-// outpaces dodge so you can never become untouchable.
+// Rogues get an evasive head-start (folded into the rating) and a slightly higher
+// cap; depth threat still outpaces dodge so you can never become untouchable.
 function playerDodge() {
   const rogue = player.class === 'rogue';
-  const flat = rogue ? 0.08 : 0;
+  // Rogue's evasive edge lives INSIDE the softcapped rating too (not a flat bonus
+  // on top), so it diminishes with stacking and can't be maxed at level 1.
   const rating = totalAttr('agility') * ATTR_FX.dodgePerAgi
     + totalStat('SPD') * 0.002 + totalStat('DODGE') * 0.005
-    + skillBonus('dodge') + buffMag('dodgeUp') + foodFx('dodgePct');
-  return Math.max(0, Math.min(rogue ? 0.6 : 0.5, flat + softcap(rating, rogue ? 0.5 : 0.45)));
+    + skillBonus('dodge') + buffMag('dodgeUp') + foodFx('dodgePct')
+    + (rogue ? 0.06 : 0);
+  return Math.max(0, Math.min(rogue ? 0.6 : 0.5, softcap(rating, rogue ? 0.5 : 0.45)));
 }
 function recomputeMaxStats() {
   player.maxHp = baseMaxHp();
@@ -3871,11 +3884,14 @@ function recomputeMaxStats() {
 // Per-turn HP/MP regeneration. Defined here as the single source of truth so the
 // Stats panel can display the exact value applyRegen() applies each turn.
 function hpRegenPerTurn() {
-  let r = totalStat('REGEN') + Math.floor(totalAttr('vitality') * ATTR_FX.hpRegenPerVit);
+  // Fractional on purpose (banked in applyRegen's _hpAcc accumulator) so the slow
+  // Vitality trickle isn't floored to a hard 0/turn for low-Vitality heroes — it's
+  // a smooth, slow drip for everyone rather than an on/off cliff at vit 17.
+  let r = totalStat('REGEN') + totalAttr('vitality') * ATTR_FX.hpRegenPerVit;
   if (player.class === 'templar') r += 2; // Templar mends faster between fights
   r += skillBonus('hpRegen'); // Recovery / Divine Vigor passives
-  r += Math.round(buffMag('regen')); // Redeemer / Bastion regen buffs
-  r += Math.round(foodFx('regen')); // a warm bowl of ramen mends you between fights
+  r += buffMag('regen'); // Redeemer / Bastion regen buffs
+  r += foodFx('regen'); // a warm bowl of ramen mends you between fights
   return r;
 }
 function mpRegenPerTurn() {
@@ -4215,7 +4231,7 @@ const CLASSES = {
   rogue: {
     name: 'Rogue', icon: '🗡️', color: '#5ec27a',
     blurb: 'A nimble striker — more crits and harder to pin down.',
-    passive: '+8% crit chance · +8% dodge',
+    passive: 'Keener crits · harder to pin down',
     dmgAttrs: { primary: 'agility', secondary: 'might' },
     weapons: ['Dagger','Sword','Bow'],
   },
@@ -6061,7 +6077,7 @@ document.addEventListener('click', (e) => {
 
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
-  { date: '2026-06-29', size: 'big', v: 'Stat & resource overhaul', by: 'Claude', notes: ['Crit chance and dodge no longer scale in a straight line off attributes and gear — every point of investment now feeds a softcapped "rating", so the first few percent come cheap but each extra point is worth less than the last. You can keep climbing forever, but only approach the cap at extreme late-game investment instead of maxing out by floor 10.', 'Per-point gains from Luck (crit), Agility (dodge) and gear CRIT/SPD/DODGE were cut hard, so a fresh hero starts much leaner and getting past ~10% crit takes real, dedicated investment.', 'Health and mana are finite again: HP and MP regen trickle far more slowly, a level-up now mends 40% of your bars instead of fully restoring them, mana potions restore a smaller share of max MP, and health potions heal 25% (down from 30%).', 'Net effect: runs lean harder and resources matter more — you can no longer feel like you have limitless HP. Class identities (Rogue crit/dodge, Mage mana, Templar regen) are preserved.'] },
+  { date: '2026-06-29', size: 'big', v: 'Stat & resource overhaul', by: 'Claude', notes: ['Every "chance" stat — crit, dodge, block and damage reduction — no longer scales in a straight line off attributes and gear. Each now feeds a softcapped "rating", so the first few percent come cheap but each extra point is worth less than the last. You can keep climbing forever, but only approach the cap at extreme late-game investment instead of maxing out by floor 10.', 'Per-point gains from Luck (crit), Agility (dodge) and gear CRIT/SPD/DODGE were cut hard, so a fresh hero starts much leaner and pushing crit high takes real, dedicated investment. Even the Rogue\'s crit/dodge edge now diminishes with stacking rather than starting maxed.', 'Shield block now scales with item level (a level-1 Tower Shield no longer hands you a third of the block cap on floor 1), and crit damage is capped at 5× so it can\'t be stacked into a one-shot.', 'Health and mana are finite again: HP/MP regen trickle far more slowly, a level-up mends 40% of your bars instead of fully restoring them, potions heal less, and every burst-heal (skill heals, Scythe reap, leech) is capped to a slice of max HP per use so you can\'t refill from near-death every turn.', 'Net effect: runs lean harder and resources matter — no more limitless HP. Class identities (Rogue finesse, Mage mana, Templar mending) are preserved, just no longer game-breaking early.'] },
   { date: '2026-06-29', size: 'small', v: 'Tidier Settings menu', by: 'Claude', notes: ['The ⚙️ Settings menu is now one consistent style — every row shares the same neutral tile instead of the old jumble of red, blue and green buttons.', 'Sound, Zoom and Time gained icons, and every row’s icon now sits in the same fixed cell so the labels line up cleanly.', 'Only meaningful states still colour: New Run flashes red when armed to wipe, and Sound dims when muted.'] },
   { date: '2026-06-29', size: 'small', v: 'Auto-Loot on the LOOT tab', by: 'ASuiter89', notes: ['The ♻️ Auto-Loot picker moved out of the ⚙️ settings menu onto the LOOT tab, where it belongs — a button right above your loot shows its on/off state at a glance and opens the per-rarity Keep / Scrap / Sell picker.'] },
   { date: '2026-06-29', size: 'medium', v: 'Shared stash', by: 'Claude', notes: ['The town Vault is now shared across all of your save slots — gold or gear banked by one hero can be withdrawn by any other, so it doubles as account-wide storage you can pass loot between characters with.', 'Signed in? The shared stash also syncs to your account and follows you across devices.', 'Anything your existing heroes had banked is merged into the shared pool automatically, so nothing is lost.'] },
@@ -11386,11 +11402,18 @@ function tickPact() {
 
 // Heal a little each turn based on equipped REGEN, up to max HP.
 function applyRegen() {
-  // Vitality grants passive HP regen on top of any REGEN rolled on gear.
+  // Vitality grants passive HP regen on top of any REGEN rolled on gear. Like MP,
+  // it can be sub-1/turn, so bank it in a fractional accumulator and only ever add
+  // whole points to player.hp (keeps the HP readout a clean integer).
   const r = hpRegenPerTurn();
   if (r > 0 && player.hp > 0 && player.hp < player.maxHp) {
-    player.hp = Math.min(player.maxHp, player.hp + r);
-    updateBars();
+    player._hpAcc = (player._hpAcc || 0) + r;
+    const wholeHp = Math.floor(player._hpAcc);
+    if (wholeHp > 0) {
+      player._hpAcc -= wholeHp;
+      player.hp = Math.min(player.maxHp, player.hp + wholeHp);
+      updateBars();
+    }
   }
   // Mana trickles back each turn (faster with Spirit) so staff bolts stay usable.
   // Regen can be less than 1/turn, so bank it in a fractional accumulator and
@@ -11766,11 +11789,15 @@ function applyIncomingMods(dmg) {
   // Block chance is normally capped at 60%; the Aegis keystone raises that ceiling
   // to 75% (its whole point), letting a dedicated shield build wall off more hits.
   const blockCap = skillFlag('aegis') ? 0.75 : 0.6;
-  if (Math.random() < Math.min(blockCap, (totalStat('BLOCK') + skillBonus('block')) / 100)) {
+  // Block chance is softcapped toward blockCap (like crit/dodge), so a dedicated
+  // shield tank creeps toward the ceiling only at extreme late game instead of
+  // hitting it by the mid floors.
+  if (Math.random() < softcap((totalStat('BLOCK') + skillBonus('block')) / 100, blockCap)) {
     dmg = Math.max(1, Math.round(dmg * 0.5));
     spawnFloatingText(player.x, player.y - 0.3, 'BLOCK', '#cfe0ff');
   }
-  const dr = Math.min(0.6, (totalStat('DR') + skillBonus('dr')) / 100);
+  // Flat damage reduction is softcapped the same way toward its 60% ceiling.
+  const dr = softcap((totalStat('DR') + skillBonus('dr')) / 100, 0.6);
   if (dr > 0) dmg = Math.max(1, Math.round(dmg * (1 - dr)));
   dmg = absorbWithShield(dmg);
   return dmg;
@@ -12133,9 +12160,11 @@ function attackEnemy(e, opts = {}) {
     }
   }
 
-  // Reap (Scythe): siphon a quarter of all damage dealt back as health.
+  // Reap (Scythe): siphon a quarter of all damage dealt back as health, capped at
+  // a fraction of max HP per swing (like lifesteal) so it can't out-heal a boss.
   if (style === 'reap' && dealtTotal > 0 && player.hp < player.maxHp) {
-    const got = Math.min(Math.max(1, Math.round(dealtTotal * 0.25)), player.maxHp - player.hp);
+    const reapCap = Math.max(1, Math.round(player.maxHp * 0.15));
+    const got = Math.min(Math.max(1, Math.round(dealtTotal * 0.25)), player.maxHp - player.hp, reapCap);
     if (got > 0) { player.hp += got; spawnFloatingText(player.x, player.y, `+${got}`, '#7fffaa'); }
   }
 
@@ -12509,7 +12538,11 @@ function resolveCast(node, rank) {
     let heal = 0;
     if (c.heal.flat) heal += (c.heal.flat + player.level * (c.heal.perLevel || 0)) * rs;
     if (c.heal.pctDmg) heal += total * c.heal.pctDmg;
-    heal = Math.min(player.maxHp - player.hp, Math.round(heal));
+    // Cap a single cast's healing to a fraction of max HP (like the lifesteal/leech
+    // caps above), so a big smite/nova can't refill you from near-death every turn
+    // and HP stays a finite resource.
+    const healCap = Math.max(1, Math.round(player.maxHp * 0.20));
+    heal = Math.min(player.maxHp - player.hp, healCap, Math.round(heal));
     if (heal > 0) { player.hp += heal; spawnFloatingText(player.x, player.y, `+${heal}`, '#7fffaa'); }
   }
   if (c.buff) {
@@ -14005,8 +14038,8 @@ function renderHero(el) {
       ${stat('Defense', Math.round(playerDefense()))}
       ${stat('Max HP', player.maxHp)}
       ${stat('Max MP', player.maxMp)}
-      ${stat('HP regen', '+' + hpRegenPerTurn() + '/turn')}
-      ${stat('MP regen', '+' + mpRegenPerTurn() + '/turn')}
+      ${stat('HP regen', '+' + (Math.round(hpRegenPerTurn() * 100) / 100) + '/turn')}
+      ${stat('MP regen', '+' + (Math.round(mpRegenPerTurn() * 100) / 100) + '/turn')}
       ${stat('Crit chance', Math.round(playerCritChance()*100) + '%')}
       ${stat('Crit damage', Math.round(critDamageMult()*100) + '%')}
       ${stat('Dodge', Math.round(playerDodge()*100) + '%')}
