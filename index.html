@@ -1464,6 +1464,9 @@
     display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
     margin-top: 18px; padding-top: 16px; border-top: 1px solid #2a2113;
   }
+  /* No "loner" tiles: if the final tile would sit alone in its last row,
+     centre it rather than stranding it in the left column. */
+  #title-settings .title-set-btn:last-child:nth-child(3n + 1) { grid-column: 2; }
   .title-set-btn {
     display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 4px;
     padding: 11px 6px; border: 1px solid var(--border); border-radius: 8px;
