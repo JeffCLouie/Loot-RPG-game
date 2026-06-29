@@ -4336,6 +4336,23 @@ const ASCEND_LEVEL = 20;   // level at which the Trainer offers ascension
 // Build a tree from rows of node literals: assigns band/col/type/max/lvl and a
 // default prerequisite (the node directly above in the previous row) unless the
 // node already declares `req`. Ascension nodes (asc set) use ASC_BANDS for level.
+// Tier → minimum hero level for a WEB-laid-out tree (band index 0..n). Webs use
+// fewer, deeper tiers than the old 6-band grid.
+const WEB_BANDS = [1, 4, 9, 16, 24, 30];
+// Build a free-form WEB tree: a flat list of nodes that each carry their own
+// position (x,y in 0..1) and explicit req/reqAny edges, so a class path can branch
+// and re-converge into a web instead of a straight column. `band` is kept only to
+// gate by level (via WEB_BANDS); positions come from x/y, not a grid.
+function buildWeb(nodes, kind, ascId) {
+  for (const n of nodes) {
+    n.type = n.t || kind; delete n.t;
+    n.max = n.keystone ? 1 : (n.max || 10);
+    if (ascId) n.asc = ascId;
+    n.lvl = n.lvl != null ? n.lvl : (WEB_BANDS[Math.min(n.band || 0, WEB_BANDS.length - 1)] || 1);
+    if (n.col == null) n.col = 0;
+  }
+  return nodes;
+}
 function buildTree(rows, kind, ascId) {
   const out = [];
   rows.forEach((row, b) => {
@@ -4379,69 +4396,69 @@ function buildTree(rows, kind, ascId) {
 
 const SKILL_TREES = {
   warrior: {
-    passive: buildTree([
-      [ {id:'w_p00',name:'Toughened',icon:'sk_w_hardiness',root:true,fx:{maxHpPct:0.03},desc:'+3% maximum health per rank.'},
-        {id:'w_p01',name:'Bloodscent',icon:'sk_w_bloodlust',root:true,charge:{id:'fury',max:5,fx:{dmgDealt:0.04}},trigger:{on:'kill',effect:{charge:'fury'}},fx:{dmgDealt:0.006},desc:'Defines FURY (+4% damage per stack, max 5). Slaying a foe grants a Fury charge. +0.6% damage per rank.'},
-        {id:'w_p02',name:'Heavy Hands',icon:'sk_w_brawn',root:true,fx:{dmgDealt:0.01},cfx:{dmgDealt:0.022},cond:'2h',desc:'+1% damage per rank, +2.2% more while wielding a two-handed weapon.'},
-        {id:'w_p03',name:'Keen Eye',icon:'sk_w_focus',root:true,fx:{crit:0.008},desc:'+0.8% critical strike chance per rank.'},
-        {id:'w_p04',name:'Shield Guard',icon:'sk_w_shieldwall',root:true,charge:{id:'guard',max:5,fx:{dr:1}},trigger:{on:'block',effect:{charge:'guard'}},fx:{block:0.6},desc:'Defines GUARD (+1% damage reduction per stack, max 5). Blocking a hit grants a Guard charge. +0.6% block per rank.'} ],
-      [ {id:'w_p10',name:'Iron Skin',icon:'sk_w_ironskin',req:['w_p00'],fx:{dmgTaken:0.015},desc:'-1.5% damage taken per rank.'},
-        {id:'w_p11',name:'Rampage',icon:'sk_w_rage',req:['w_p01'],trigger:{on:'kill',effect:{buff:{id:'dmgUp',dur:3,mag:0.15}}},fx:{dmgDealt:0.008},desc:'+0.8% damage per rank; a kill grants +15% damage for 3 turns.'},
-        {id:'w_p12',name:'Cleaving Force',icon:'sk_w_cleaver',req:['w_p02'],cfx:{dmgDealt:0.025},cond:'2h',mod:{skill:'w_a02',radius:1},desc:'+2.5% damage with a two-hander per rank; your Cleave strikes a wider area.'},
-        {id:'w_p13',name:'Bloodletter',icon:'sk_w_temper',req:['w_p03'],trigger:{on:'crit',effect:{charge:'fury'}},fx:{critDmg:0.05},desc:'+5% crit damage per rank; critical hits grant a Fury charge.'},
-        {id:'w_p14',name:'Bulwark Stance',icon:'sk_w_thickhide',req:['w_p04'],fx:{dr:0.7},cfx:{dr:1},cond:'shield',desc:'+0.7% damage reduction per rank, +1% more with a shield.'} ],
-      [ {id:'w_p20',name:'Last Wind',icon:'sk_w_recovery',req:['w_p10'],trigger:{on:'lowhp',effect:{buff:{id:'shield',dur:3,mag:45},chance:0.5}},fx:{hpRegen:1.5},desc:'+1.5 HP regen per rank; falling below 25% HP may raise a protective shield.'},
-        {id:'w_p21',name:'Blood Frenzy',icon:'sk_w_sanguine',req:['w_p11'],fx:{lifesteal:0.008},cfx:{lifesteal:0.015},cond:'lowhp',desc:'Heal 0.8% of damage per rank, +1.5% more while below half health.'},
-        {id:'w_p22',name:'Brutality',icon:'sk_w_brutality',req:['w_p12'],fx:{critDmg:0.05},cfx:{critDmg:0.075},cond:'2h',desc:'+5% crit damage per rank, +7.5% more with a two-hander.'},
-        {id:'w_p23',name:'Executioner',icon:'sk_w_executioner',req:['w_p13'],fx:{lowHpDmg:0.04},desc:'+4% damage to wounded foes per rank.'},
-        {id:'w_p24',name:'Spite',icon:'sk_w_spikes',req:['w_p14'],fx:{reflect:0.04},cfx:{reflect:0.05},cond:'shield',trigger:{on:'block',effect:{damage:{flat:6,perLvl:0.5}}},desc:'Reflect 4% of melee per rank (+5% with a shield); blocking smites the attacker.'} ],
-      [ {id:'w_p30',name:'Juggernaut',icon:'sk_w_juggernaut',req:['w_p20'],fx:{maxHpPct:0.035,dr:0.6},desc:'+3.5% max HP and +0.6% damage reduction per rank.'},
-        {id:'w_p31',name:'Unquenchable',icon:'sk_w_bloodlust',req:['w_p21'],trigger:{on:'kill',effect:{charge:'fury',amt:2}},fx:{lifesteal:0.01},desc:'Heal 1% of damage per rank; kills now grant 2 Fury charges.'},
-        {id:'w_p32',name:'Crushing Blows',icon:'sk_w_crushing',req:['w_p22'],fx:{dmgDealt:0.015,pen:0.02},cfx:{dmgDealt:0.025},cond:'2h',desc:'+1.5% damage & +2% pen per rank, +2.5% more with a two-hander.'},
-        {id:'w_p33',name:'Battle Trance',icon:'sk_w_warlord',req:['w_p23'],reqAny:['w_p13'],charge:{id:'fury',max:5,fx:{crit:0.015,critDmg:0.02}},fx:{crit:0.006},desc:'Each Fury charge ALSO grants +1.5% crit and +2% crit damage. +0.6% crit per rank.'},
-        {id:'w_p34',name:'Aegis Training',icon:'sk_w_shieldwall',req:['w_p24'],fx:{block:1,dr:0.6},cfx:{block:1.5},cond:'shield',desc:'+1% block & +0.6% DR per rank, +1.5% block with a shield.'} ],
-      [ {id:'w_p40',name:'Immovable',icon:'sk_w_bulwark',req:['w_p30'],fx:{maxHpPct:0.04,dmgTaken:0.016},desc:'+4% max HP and -1.6% damage taken per rank.'},
-        {id:'w_p41',name:'Carnage',icon:'sk_w_rage',req:['w_p31'],fx:{dmgDealt:0.015},cfx:{lowHpDmg:0.04},cond:'lowhp',desc:'+1.5% damage per rank, +4% vs wounded foes while below half health.'},
-        {id:'w_p42',name:'Titanic Might',icon:'sk_w_titanic',req:['w_p32'],fx:{critDmg:0.04},cfx:{critDmg:0.08,pen:0.02},cond:'2h',desc:'+4% crit damage per rank, +8% crit damage & +2% pen with a two-hander.'},
-        {id:'w_p43',name:'Killing Spree',icon:'sk_w_focus',req:['w_p33'],trigger:{on:'kill',effect:{buff:{id:'critUp',dur:3,mag:0.15}}},fx:{crit:0.008},desc:'+0.8% crit per rank; kills grant +15% crit for 3 turns.'},
-        {id:'w_p44',name:'Shield Wall',icon:'sk_w_bulwark',req:['w_p34'],fx:{dmgTaken:0.014},cfx:{block:1.5,dr:1},cond:'shield',desc:'-1.4% damage taken per rank; +1.5% block & +1% DR with a shield.'} ],
-      [ {id:'w_p50',name:'Juggernaut’s Resolve',icon:'sk_w_immortal',req:['w_p40'],keystone:true,pts:{tree:'passive',n:12},fx:{maxHpPct:0.2},trigger:{on:'lowhp',effect:{buff:{id:'defUp',dur:2,mag:0.4},chance:1}},desc:'KEYSTONE: +20% maximum health; dropping below 25% HP grants 40% damage reduction for 2 turns.'},
-        {id:'w_p51',name:'Berserker’s Pact',icon:'sk_w_berserkersoul',req:['w_p41'],keystone:true,pts:{tree:'passive',n:12},fx:{dmgDealt:0.25,lifesteal:0.12,dmgTaken:-0.12},cfx:{lowHpDmg:0.4},cond:'lowhp',desc:'KEYSTONE: +25% damage and 12% lifesteal (and +40% vs wounded foes while below half HP) — but you take 12% more damage.'},
-        {id:'w_p52',name:'Titan’s Grip',icon:'sk_w_titanic',req:['w_p42'],keystone:true,pts:{tree:'passive',n:12},flag:'titangrip',unlock:'titangrip',cfx:{dmgDealt:0.15},cond:'2h',desc:'KEYSTONE: wield an off-hand even with a two-handed weapon (its stats count 60%); +15% damage with a two-hander.'},
-        {id:'w_p53',name:'Bloodbath',icon:'sk_w_avatarwar',req:['w_p43'],keystone:true,pts:{tree:'passive',n:12},charge:{id:'fury',max:8,fx:{dmgDealt:0.03}},trigger:{on:'kill',effect:{heal:0.1}},desc:'KEYSTONE: Fury cap +3 and each charge grants +3% more damage; kills heal 10% maximum HP.'},
-        {id:'w_p54',name:'Living Aegis',icon:'sk_w_livingaegis',req:['w_p44'],keystone:true,pts:{tree:'passive',n:12},flag:'aegis',unlock:'aegis',cfx:{block:15,reflect:0.3},cond:'shield',trigger:{on:'block',effect:{damage:{flat:10,perLvl:1}}},desc:'KEYSTONE: your block-chance cap rises to 75%; with a shield, +15% block and 30% reflect, and blocking smites the attacker.'} ]
+    passive: buildWeb([
+      {"id":"w_p00","name":"Toughened","icon":"sk_w_hardiness","fx":{"maxHpPct":0.03},"desc":"+3% maximum health per rank.","x":0.13,"y":0.1,"band":0,"root":true},
+      {"id":"w_p01","name":"Bloodscent","icon":"sk_w_bloodlust","charge":{"id":"fury","max":5,"fx":{"dmgDealt":0.04}},"trigger":{"on":"kill","effect":{"charge":"fury"}},"fx":{"dmgDealt":0.006},"desc":"Defines FURY (+4% damage per stack, max 5). Slaying a foe grants a Fury charge. +0.6% damage per rank.","x":0.315,"y":0.1,"band":0,"root":true},
+      {"id":"w_p02","name":"Heavy Hands","icon":"sk_w_brawn","fx":{"dmgDealt":0.01},"cfx":{"dmgDealt":0.022},"cond":"2h","desc":"+1% damage per rank, +2.2% more while wielding a two-handed weapon.","x":0.5,"y":0.1,"band":0,"root":true},
+      {"id":"w_p03","name":"Keen Eye","icon":"sk_w_focus","fx":{"crit":0.008},"desc":"+0.8% critical strike chance per rank.","x":0.685,"y":0.1,"band":0,"root":true},
+      {"id":"w_p04","name":"Shield Guard","icon":"sk_w_shieldwall","charge":{"id":"guard","max":5,"fx":{"dr":1}},"trigger":{"on":"block","effect":{"charge":"guard"}},"fx":{"block":0.6},"desc":"Defines GUARD (+1% damage reduction per stack, max 5). Blocking a hit grants a Guard charge. +0.6% block per rank.","x":0.87,"y":0.1,"band":0,"root":true},
+      {"id":"w_p10","name":"Iron Skin","icon":"sk_w_ironskin","fx":{"dmgTaken":0.015},"desc":"-1.5% damage taken per rank.","x":0.064,"y":0.3,"band":1,"req":["w_p00"]},
+      {"id":"w_p11","name":"Rampage","icon":"sk_w_rage","trigger":{"on":"kill","effect":{"buff":{"id":"dmgUp","dur":3,"mag":0.15}}},"fx":{"dmgDealt":0.008},"desc":"+0.8% damage per rank; a kill grants +15% damage for 3 turns.","x":0.249,"y":0.3,"band":1,"req":["w_p01"]},
+      {"id":"w_p12","name":"Cleaving Force","icon":"sk_w_cleaver","cfx":{"dmgDealt":0.025},"cond":"2h","mod":{"skill":"w_a02","radius":1},"desc":"+2.5% damage with a two-hander per rank; your Cleave strikes a wider area.","x":0.434,"y":0.3,"band":1,"req":["w_p02"]},
+      {"id":"w_p13","name":"Bloodletter","icon":"sk_w_temper","trigger":{"on":"crit","effect":{"charge":"fury"}},"fx":{"critDmg":0.05},"desc":"+5% crit damage per rank; critical hits grant a Fury charge.","x":0.619,"y":0.3,"band":1,"req":["w_p03"]},
+      {"id":"w_p14","name":"Bulwark Stance","icon":"sk_w_thickhide","fx":{"dr":0.7},"cfx":{"dr":1},"cond":"shield","desc":"+0.7% damage reduction per rank, +1% more with a shield.","x":0.804,"y":0.3,"band":1,"req":["w_p04"]},
+      {"id":"w_p20","name":"Last Wind","icon":"sk_w_recovery","trigger":{"on":"lowhp","effect":{"buff":{"id":"shield","dur":3,"mag":45},"chance":0.5}},"fx":{"hpRegen":1.5},"desc":"+1.5 HP regen per rank; falling below 25% HP may raise a protective shield.","x":0.196,"y":0.3,"band":1,"req":["w_p00"]},
+      {"id":"w_p21","name":"Blood Frenzy","icon":"sk_w_sanguine","fx":{"lifesteal":0.008},"cfx":{"lifesteal":0.015},"cond":"lowhp","desc":"Heal 0.8% of damage per rank, +1.5% more while below half health.","x":0.381,"y":0.3,"band":1,"req":["w_p01"]},
+      {"id":"w_p22","name":"Brutality","icon":"sk_w_brutality","fx":{"critDmg":0.05},"cfx":{"critDmg":0.075},"cond":"2h","desc":"+5% crit damage per rank, +7.5% more with a two-hander.","x":0.5660000000000001,"y":0.3,"band":1,"req":["w_p02"]},
+      {"id":"w_p23","name":"Executioner","icon":"sk_w_executioner","fx":{"lowHpDmg":0.04},"desc":"+4% damage to wounded foes per rank.","x":0.7510000000000001,"y":0.3,"band":1,"req":["w_p03"]},
+      {"id":"w_p24","name":"Spite","icon":"sk_w_spikes","fx":{"reflect":0.04},"cfx":{"reflect":0.05},"cond":"shield","trigger":{"on":"block","effect":{"damage":{"flat":6,"perLvl":0.5}}},"desc":"Reflect 4% of melee per rank (+5% with a shield); blocking smites the attacker.","x":0.9359999999999999,"y":0.3,"band":1,"req":["w_p04"]},
+      {"id":"w_p30","name":"Juggernaut","icon":"sk_w_juggernaut","fx":{"maxHpPct":0.035,"dr":0.6},"desc":"+3.5% max HP and +0.6% damage reduction per rank.","x":0.064,"y":0.53,"band":2,"reqAny":["w_p10"]},
+      {"id":"w_p31","name":"Unquenchable","icon":"sk_w_bloodlust","trigger":{"on":"kill","effect":{"charge":"fury","amt":2}},"fx":{"lifesteal":0.01},"desc":"Heal 1% of damage per rank; kills now grant 2 Fury charges.","x":0.249,"y":0.53,"band":2,"reqAny":["w_p11","w_p40"]},
+      {"id":"w_p32","name":"Crushing Blows","icon":"sk_w_crushing","fx":{"dmgDealt":0.015,"pen":0.02},"cfx":{"dmgDealt":0.025},"cond":"2h","desc":"+1.5% damage & +2% pen per rank, +2.5% more with a two-hander.","x":0.434,"y":0.53,"band":2,"reqAny":["w_p12","w_p41"]},
+      {"id":"w_p33","name":"Battle Trance","icon":"sk_w_warlord","charge":{"id":"fury","max":5,"fx":{"crit":0.015,"critDmg":0.02}},"fx":{"crit":0.006},"desc":"Each Fury charge ALSO grants +1.5% crit and +2% crit damage. +0.6% crit per rank.","x":0.619,"y":0.53,"band":2,"reqAny":["w_p13","w_p42"]},
+      {"id":"w_p34","name":"Aegis Training","icon":"sk_w_shieldwall","fx":{"block":1,"dr":0.6},"cfx":{"block":1.5},"cond":"shield","desc":"+1% block & +0.6% DR per rank, +1.5% block with a shield.","x":0.804,"y":0.53,"band":2,"reqAny":["w_p14","w_p43"]},
+      {"id":"w_p40","name":"Immovable","icon":"sk_w_bulwark","fx":{"maxHpPct":0.04,"dmgTaken":0.016},"desc":"+4% max HP and -1.6% damage taken per rank.","x":0.196,"y":0.53,"band":2,"req":["w_p20"]},
+      {"id":"w_p41","name":"Carnage","icon":"sk_w_rage","fx":{"dmgDealt":0.015},"cfx":{"lowHpDmg":0.04},"cond":"lowhp","desc":"+1.5% damage per rank, +4% vs wounded foes while below half health.","x":0.381,"y":0.53,"band":2,"req":["w_p21"]},
+      {"id":"w_p42","name":"Titanic Might","icon":"sk_w_titanic","fx":{"critDmg":0.04},"cfx":{"critDmg":0.08,"pen":0.02},"cond":"2h","desc":"+4% crit damage per rank, +8% crit damage & +2% pen with a two-hander.","x":0.5660000000000001,"y":0.53,"band":2,"req":["w_p22"]},
+      {"id":"w_p43","name":"Killing Spree","icon":"sk_w_focus","trigger":{"on":"kill","effect":{"buff":{"id":"critUp","dur":3,"mag":0.15}}},"fx":{"crit":0.008},"desc":"+0.8% crit per rank; kills grant +15% crit for 3 turns.","x":0.7510000000000001,"y":0.53,"band":2,"req":["w_p23"]},
+      {"id":"w_p44","name":"Shield Wall","icon":"sk_w_bulwark","fx":{"dmgTaken":0.014},"cfx":{"block":1.5,"dr":1},"cond":"shield","desc":"-1.4% damage taken per rank; +1.5% block & +1% DR with a shield.","x":0.9359999999999999,"y":0.53,"band":2,"req":["w_p24"]},
+      {"id":"w_p50","name":"Juggernaut’s Resolve","icon":"sk_w_immortal","keystone":true,"pts":{"tree":"passive","n":12},"fx":{"maxHpPct":0.2},"trigger":{"on":"lowhp","effect":{"buff":{"id":"defUp","dur":2,"mag":0.4},"chance":1}},"desc":"KEYSTONE: +20% maximum health; dropping below 25% HP grants 40% damage reduction for 2 turns.","x":0.13,"y":0.76,"band":3,"reqAny":["w_p30","w_p40"]},
+      {"id":"w_p51","name":"Berserker’s Pact","icon":"sk_w_berserkersoul","keystone":true,"pts":{"tree":"passive","n":12},"fx":{"dmgDealt":0.25,"lifesteal":0.12,"dmgTaken":-0.12},"cfx":{"lowHpDmg":0.4},"cond":"lowhp","desc":"KEYSTONE: +25% damage and 12% lifesteal (and +40% vs wounded foes while below half HP) — but you take 12% more damage.","x":0.315,"y":0.76,"band":3,"reqAny":["w_p31","w_p41"]},
+      {"id":"w_p52","name":"Titan’s Grip","icon":"sk_w_titanic","keystone":true,"pts":{"tree":"passive","n":12},"flag":"titangrip","unlock":"titangrip","cfx":{"dmgDealt":0.15},"cond":"2h","desc":"KEYSTONE: wield an off-hand even with a two-handed weapon (its stats count 60%); +15% damage with a two-hander.","x":0.5,"y":0.76,"band":3,"reqAny":["w_p32","w_p42"]},
+      {"id":"w_p53","name":"Bloodbath","icon":"sk_w_avatarwar","keystone":true,"pts":{"tree":"passive","n":12},"charge":{"id":"fury","max":8,"fx":{"dmgDealt":0.03}},"trigger":{"on":"kill","effect":{"heal":0.1}},"desc":"KEYSTONE: Fury cap +3 and each charge grants +3% more damage; kills heal 10% maximum HP.","x":0.685,"y":0.76,"band":3,"reqAny":["w_p33","w_p43"]},
+      {"id":"w_p54","name":"Living Aegis","icon":"sk_w_livingaegis","keystone":true,"pts":{"tree":"passive","n":12},"flag":"aegis","unlock":"aegis","cfx":{"block":15,"reflect":0.3},"cond":"shield","trigger":{"on":"block","effect":{"damage":{"flat":10,"perLvl":1}}},"desc":"KEYSTONE: your block-chance cap rises to 75%; with a shield, +15% block and 30% reflect, and blocking smites the attacker.","x":0.87,"y":0.76,"band":3,"reqAny":["w_p34","w_p44"]}
     ], 'passive'),
-    active: buildTree([
-      [ {id:'w_a00',name:'Brace',icon:'sk_wa_brace',root:true,mp:8,cd:4,cast:{shape:'self',buff:[{id:'shield',dur:5,mag:50},{id:'defUp',dur:5,mag:0.25}]},desc:'Hunker down for a defensive shield and damage reduction.'},
-        {id:'w_a01',name:'Rend',icon:'sk_wa_rend',root:true,mp:7,cd:3,cast:{shape:'melee',wpn:1.4,lifesteal:0.15,status:{effect:'poison',dur:3,chance:1}},desc:'A bleeding strike that poisons the target and steals life.'},
-        {id:'w_a02',name:'Cleave',icon:'sk_wa_cleave',root:true,mp:7,cd:2,cast:{shape:'cleave',wpn:1.5},desc:'Swing wide, striking all foes in front of you.'},
-        {id:'w_a03',name:'Bash',icon:'sk_wa_bash',root:true,mp:8,cd:4,cast:{shape:'melee',wpn:1.6,crit:true,status:{effect:'stun',dur:1,chance:1}},desc:'A heavy guaranteed-crit blow that stuns the target.'},
-        {id:'w_a04',name:'Shield Bash',icon:'sk_wa_bash',root:true,mp:8,cd:4,cast:{shape:'melee',wpn:1.3,status:{effect:'stun',dur:2,chance:1},buff:[{id:'shield',dur:4,mag:45}]},desc:'Slam with your shield to stun and gain a brief guard.'} ],
-      [ {id:'w_a10',name:'Taunt',icon:'sk_wa_roar',req:['w_a00'],mp:10,cd:5,cast:{shape:'self',buff:[{id:'thorns',dur:6,mag:30},{id:'regen',dur:6,mag:6}]},desc:'A defiant shout granting thorns and regeneration.'},
-        {id:'w_a11',name:'Blood Drinker',icon:'sk_wa_rend',req:['w_a01'],mp:18,cd:5,cast:{shape:'melee',wpn:1.7,lifesteal:0.25,heal:{pctDmg:0.15}},desc:'A vampiric strike healing for a share of the damage dealt.'},
-        {id:'w_a12',name:'Hamstring Swing',icon:'sk_wa_cleave',req:['w_a02'],mp:9,cd:4,cast:{shape:'cleave',wpn:1.7,status:{effect:'vuln',dur:3,chance:1}},desc:'A wide cleave that makes struck foes vulnerable.'},
-        {id:'w_a13',name:'Throw Blade',icon:'sk_wa_throw',req:['w_a03'],mp:8,cd:3,cast:{shape:'bolt',range:6,wpn:1.8,crit:true},desc:'Hurl a weapon at a distant foe with deadly precision.'},
-        {id:'w_a14',name:'Brace',icon:'sk_wa_brace',req:['w_a04'],mp:10,cd:5,cast:{shape:'self',buff:[{id:'shield',dur:6,mag:70},{id:'thorns',dur:6,mag:35}]},desc:'Raise your guard for a heavy shield and reflected thorns.'} ],
-      [ {id:'w_a20',name:'Last Stand',icon:'sk_wa_laststand',req:['w_a10'],mp:14,cd:7,cast:{shape:'self',buff:[{id:'shield',dur:7,mag:110},{id:'defUp',dur:7,mag:0.4}]},desc:'Plant your feet for a massive shield and damage reduction.'},
-        {id:'w_a21',name:'Rampage',icon:'sk_wa_rampage',req:['w_a11'],mp:18,cd:5,cast:{shape:'melee',wpn:1.6,repeat:2,lifesteal:0.2},desc:'A frenzy of strikes hitting twice and stealing heavy life.'},
-        {id:'w_a22',name:'Slam',icon:'sk_wa_slam',req:['w_a12'],mp:12,cd:5,cast:{shape:'nova',radius:2,wpn:1.9,status:{effect:'stun',dur:2,chance:0.6}},desc:'Smash the ground for a shockwave that stuns nearby foes.'},
-        {id:'w_a23',name:'Impale',icon:'sk_wa_impale',req:['w_a13'],mp:12,cd:5,cast:{shape:'line',range:5,wpn:2,crit:true,execute:0.25},desc:'A piercing line strike that executes weakened foes.'},
-        {id:'w_a24',name:'Shield Charge',icon:'sk_wa_charge',req:['w_a14'],mp:12,cd:6,cast:{shape:'blast',range:5,radius:2,wpn:1.6,status:{effect:'stun',dur:2,chance:1},buff:[{id:'shield',dur:5,mag:70}]},desc:'Charge a foe to stun it and raise a protective shield.'} ],
-      [ {id:'w_a30',name:'Warstomp',icon:'sk_wa_warstomp',req:['w_a20'],mp:14,cd:6,cast:{shape:'nova',radius:3,wpn:1.6,knockback:2,status:{effect:'stun',dur:2,chance:0.8}},desc:'Stomp the earth to knock back and stun all around you.'},
-        {id:'w_a31',name:'Blood Frenzy',icon:'sk_wa_warcry',req:['w_a21'],mp:14,cd:7,cast:{shape:'self',buff:[{id:'dmgUp',dur:7,mag:0.4},{id:'lifestealUp',dur:7,mag:0.15}]},desc:'Enter a rage boosting damage and lifesteal as you fight.'},
-        {id:'w_a32',name:'Whirlwind',icon:'sk_wa_whirl',req:['w_a22'],mp:15,cd:5,syn:{skill:'w_p22',per:0.05},cast:{shape:'nova',radius:2,wpn:1.7,repeat:2},desc:'Spin furiously, striking everything around you twice.'},
-        {id:'w_a33',name:'Hook',icon:'sk_wa_hook',req:['w_a23'],mp:12,cd:5,cast:{shape:'bolt',range:7,wpn:2,pull:true,crit:true,status:{effect:'vuln',dur:3,chance:1}},desc:'Yank a distant foe to you with a vicious crit.'},
-        {id:'w_a34',name:'Rally',icon:'sk_wa_rally',req:['w_a24'],mp:14,cd:7,cast:{shape:'self',buff:[{id:'shield',dur:8,mag:120},{id:'thorns',dur:8,mag:50},{id:'defUp',dur:8,mag:0.3}]},desc:'Plant a banner granting a shield and reflective thorns.'} ],
-      [ {id:'w_a40',name:'Unbreakable',icon:'sk_wa_brace',req:['w_a30'],mp:20,cd:9,cast:{shape:'self',buff:[{id:'shield',dur:8,mag:180},{id:'defUp',dur:8,mag:0.5},{id:'regen',dur:8,mag:12}]},desc:'Become a living wall with an immense shield and regeneration.'},
-        {id:'w_a41',name:'Reaping Swing',icon:'sk_wa_reaping',req:['w_a31'],mp:18,cd:5,cast:{shape:'cleave',wpn:2.2,lifesteal:0.3,execute:0.3},desc:'A wide reaping cleave that drains life and executes the weak.'},
-        {id:'w_a42',name:'Colossus Smash',icon:'sk_wa_colossus',req:['w_a32'],mp:18,cd:7,syn:{skill:'w_p32',per:0.05},cast:{shape:'nova',radius:3,wpn:2.6,status:{effect:'vuln',dur:4,chance:1},knockback:2},desc:'A devastating shockwave that shatters and stuns all foes.'},
-        {id:'w_a43',name:'Executioner\'s Strike',icon:'sk_wa_impale',req:['w_a33'],mp:16,cd:6,cast:{shape:'line',range:6,wpn:2.6,crit:true,execute:0.35,status:{effect:'vuln',dur:3,chance:1}},desc:'A guaranteed-crit line that pierces and executes wounded foes.'},
-        {id:'w_a44',name:'Bulwark Aura',icon:'sk_wa_banner',req:['w_a34'],mp:18,cd:8,cast:{shape:'self',buff:[{id:'shield',dur:9,mag:160},{id:'thorns',dur:9,mag:70},{id:'dodgeUp',dur:9,mag:0.2}]},desc:'Raise an aura granting a vast shield and heavy thorns.'} ],
-      [ {id:'w_a50',name:'Avatar',icon:'sk_wa_avatar',req:['w_a40'],mp:30,cd:12,cast:{shape:'self',buff:[{id:'shield',dur:10,mag:260},{id:'defUp',dur:10,mag:0.6},{id:'dmgUp',dur:10,mag:0.5},{id:'regen',dur:10,mag:16}]},desc:'Transform into an unstoppable titan with a colossal shield and surging power.'},
-        {id:'w_a51',name:'Apocalypse',icon:'sk_wa_apocalypse',req:['w_a41'],mp:28,cd:8,cast:{shape:'melee',wpn:2.4,repeat:3,lifesteal:0.35,execute:0.3},desc:'A storm of bloody strikes hitting three times, draining heavy life and executing the wounded.'},
-        {id:'w_a52',name:'Cataclysm',icon:'sk_wa_cataclysm',req:['w_a42'],mp:34,cd:11,syn:{skill:'w_p42',per:0.04},cast:{shape:'nova',radius:4,wpn:3.4,knockback:2,status:{effect:'stun',dur:3,chance:0.8}},desc:'A titanic two-handed quake that obliterates everything around you.'},
-        {id:'w_a53',name:'Decapitate',icon:'sk_wa_titanleap',req:['w_a43'],mp:24,cd:9,cast:{shape:'blast',range:7,radius:2,wpn:3,crit:true,execute:0.4,status:{effect:'vuln',dur:4,chance:1}},desc:'Leap to a foe with a guaranteed crit that executes all but bosses.'},
-        {id:'w_a54',name:'War Machine',icon:'sk_wa_warmachine',req:['w_a44'],mp:30,cd:12,cast:{shape:'self',buff:[{id:'shield',dur:12,mag:300},{id:'thorns',dur:12,mag:110},{id:'defUp',dur:12,mag:0.5},{id:'regen',dur:12,mag:18}]},desc:'Become an impregnable fortress with an immense shield, thorns, and relentless regeneration.'} ]
+    active: buildWeb([
+      {"id":"w_a00","name":"Brace","icon":"sk_wa_brace","mp":8,"cd":4,"cast":{"shape":"self","buff":[{"id":"shield","dur":5,"mag":50},{"id":"defUp","dur":5,"mag":0.25}]},"desc":"Hunker down for a defensive shield and damage reduction.","x":0.13,"y":0.1,"band":0,"root":true},
+      {"id":"w_a01","name":"Rend","icon":"sk_wa_rend","mp":7,"cd":3,"cast":{"shape":"melee","wpn":1.4,"lifesteal":0.15,"status":{"effect":"poison","dur":3,"chance":1}},"desc":"A bleeding strike that poisons the target and steals life.","x":0.315,"y":0.1,"band":0,"root":true},
+      {"id":"w_a02","name":"Cleave","icon":"sk_wa_cleave","mp":7,"cd":2,"cast":{"shape":"cleave","wpn":1.5},"desc":"Swing wide, striking all foes in front of you.","x":0.5,"y":0.1,"band":0,"root":true},
+      {"id":"w_a03","name":"Bash","icon":"sk_wa_bash","mp":8,"cd":4,"cast":{"shape":"melee","wpn":1.6,"crit":true,"status":{"effect":"stun","dur":1,"chance":1}},"desc":"A heavy guaranteed-crit blow that stuns the target.","x":0.685,"y":0.1,"band":0,"root":true},
+      {"id":"w_a04","name":"Shield Bash","icon":"sk_wa_bash","mp":8,"cd":4,"cast":{"shape":"melee","wpn":1.3,"status":{"effect":"stun","dur":2,"chance":1},"buff":[{"id":"shield","dur":4,"mag":45}]},"desc":"Slam with your shield to stun and gain a brief guard.","x":0.87,"y":0.1,"band":0,"root":true},
+      {"id":"w_a10","name":"Taunt","icon":"sk_wa_roar","mp":10,"cd":5,"cast":{"shape":"self","buff":[{"id":"thorns","dur":6,"mag":30},{"id":"regen","dur":6,"mag":6}]},"desc":"A defiant shout granting thorns and regeneration.","x":0.064,"y":0.3,"band":1,"req":["w_a00"]},
+      {"id":"w_a11","name":"Blood Drinker","icon":"sk_wa_rend","mp":18,"cd":5,"cast":{"shape":"melee","wpn":1.7,"lifesteal":0.25,"heal":{"pctDmg":0.15}},"desc":"A vampiric strike healing for a share of the damage dealt.","x":0.249,"y":0.3,"band":1,"req":["w_a01"]},
+      {"id":"w_a12","name":"Hamstring Swing","icon":"sk_wa_cleave","mp":9,"cd":4,"cast":{"shape":"cleave","wpn":1.7,"status":{"effect":"vuln","dur":3,"chance":1}},"desc":"A wide cleave that makes struck foes vulnerable.","x":0.434,"y":0.3,"band":1,"req":["w_a02"]},
+      {"id":"w_a13","name":"Throw Blade","icon":"sk_wa_throw","mp":8,"cd":3,"cast":{"shape":"bolt","range":6,"wpn":1.8,"crit":true},"desc":"Hurl a weapon at a distant foe with deadly precision.","x":0.619,"y":0.3,"band":1,"req":["w_a03"]},
+      {"id":"w_a14","name":"Brace","icon":"sk_wa_brace","mp":10,"cd":5,"cast":{"shape":"self","buff":[{"id":"shield","dur":6,"mag":70},{"id":"thorns","dur":6,"mag":35}]},"desc":"Raise your guard for a heavy shield and reflected thorns.","x":0.804,"y":0.3,"band":1,"req":["w_a04"]},
+      {"id":"w_a20","name":"Last Stand","icon":"sk_wa_laststand","mp":14,"cd":7,"cast":{"shape":"self","buff":[{"id":"shield","dur":7,"mag":110},{"id":"defUp","dur":7,"mag":0.4}]},"desc":"Plant your feet for a massive shield and damage reduction.","x":0.196,"y":0.3,"band":1,"req":["w_a00"]},
+      {"id":"w_a21","name":"Rampage","icon":"sk_wa_rampage","mp":18,"cd":5,"cast":{"shape":"melee","wpn":1.6,"repeat":2,"lifesteal":0.2},"desc":"A frenzy of strikes hitting twice and stealing heavy life.","x":0.381,"y":0.3,"band":1,"req":["w_a01"]},
+      {"id":"w_a22","name":"Slam","icon":"sk_wa_slam","mp":12,"cd":5,"cast":{"shape":"nova","radius":2,"wpn":1.9,"status":{"effect":"stun","dur":2,"chance":0.6}},"desc":"Smash the ground for a shockwave that stuns nearby foes.","x":0.5660000000000001,"y":0.3,"band":1,"req":["w_a02"]},
+      {"id":"w_a23","name":"Impale","icon":"sk_wa_impale","mp":12,"cd":5,"cast":{"shape":"line","range":5,"wpn":2,"crit":true,"execute":0.25},"desc":"A piercing line strike that executes weakened foes.","x":0.7510000000000001,"y":0.3,"band":1,"req":["w_a03"]},
+      {"id":"w_a24","name":"Shield Charge","icon":"sk_wa_charge","mp":12,"cd":6,"cast":{"shape":"blast","range":5,"radius":2,"wpn":1.6,"status":{"effect":"stun","dur":2,"chance":1},"buff":[{"id":"shield","dur":5,"mag":70}]},"desc":"Charge a foe to stun it and raise a protective shield.","x":0.9359999999999999,"y":0.3,"band":1,"req":["w_a04"]},
+      {"id":"w_a30","name":"Warstomp","icon":"sk_wa_warstomp","mp":14,"cd":6,"cast":{"shape":"nova","radius":3,"wpn":1.6,"knockback":2,"status":{"effect":"stun","dur":2,"chance":0.8}},"desc":"Stomp the earth to knock back and stun all around you.","x":0.064,"y":0.53,"band":2,"reqAny":["w_a10"]},
+      {"id":"w_a31","name":"Blood Frenzy","icon":"sk_wa_warcry","mp":14,"cd":7,"cast":{"shape":"self","buff":[{"id":"dmgUp","dur":7,"mag":0.4},{"id":"lifestealUp","dur":7,"mag":0.15}]},"desc":"Enter a rage boosting damage and lifesteal as you fight.","x":0.249,"y":0.53,"band":2,"reqAny":["w_a11","w_a40"]},
+      {"id":"w_a32","name":"Whirlwind","icon":"sk_wa_whirl","mp":15,"cd":5,"syn":{"skill":"w_p22","per":0.05},"cast":{"shape":"nova","radius":2,"wpn":1.7,"repeat":2},"desc":"Spin furiously, striking everything around you twice.","x":0.434,"y":0.53,"band":2,"reqAny":["w_a12","w_a41"]},
+      {"id":"w_a33","name":"Hook","icon":"sk_wa_hook","mp":12,"cd":5,"cast":{"shape":"bolt","range":7,"wpn":2,"pull":true,"crit":true,"status":{"effect":"vuln","dur":3,"chance":1}},"desc":"Yank a distant foe to you with a vicious crit.","x":0.619,"y":0.53,"band":2,"reqAny":["w_a13","w_a42"]},
+      {"id":"w_a34","name":"Rally","icon":"sk_wa_rally","mp":14,"cd":7,"cast":{"shape":"self","buff":[{"id":"shield","dur":8,"mag":120},{"id":"thorns","dur":8,"mag":50},{"id":"defUp","dur":8,"mag":0.3}]},"desc":"Plant a banner granting a shield and reflective thorns.","x":0.804,"y":0.53,"band":2,"reqAny":["w_a14","w_a43"]},
+      {"id":"w_a40","name":"Unbreakable","icon":"sk_wa_brace","mp":20,"cd":9,"cast":{"shape":"self","buff":[{"id":"shield","dur":8,"mag":180},{"id":"defUp","dur":8,"mag":0.5},{"id":"regen","dur":8,"mag":12}]},"desc":"Become a living wall with an immense shield and regeneration.","x":0.196,"y":0.53,"band":2,"req":["w_a20"]},
+      {"id":"w_a41","name":"Reaping Swing","icon":"sk_wa_reaping","mp":18,"cd":5,"cast":{"shape":"cleave","wpn":2.2,"lifesteal":0.3,"execute":0.3},"desc":"A wide reaping cleave that drains life and executes the weak.","x":0.381,"y":0.53,"band":2,"req":["w_a21"]},
+      {"id":"w_a42","name":"Colossus Smash","icon":"sk_wa_colossus","mp":18,"cd":7,"syn":{"skill":"w_p32","per":0.05},"cast":{"shape":"nova","radius":3,"wpn":2.6,"status":{"effect":"vuln","dur":4,"chance":1},"knockback":2},"desc":"A devastating shockwave that shatters and stuns all foes.","x":0.5660000000000001,"y":0.53,"band":2,"req":["w_a22"]},
+      {"id":"w_a43","name":"Executioner's Strike","icon":"sk_wa_impale","mp":16,"cd":6,"cast":{"shape":"line","range":6,"wpn":2.6,"crit":true,"execute":0.35,"status":{"effect":"vuln","dur":3,"chance":1}},"desc":"A guaranteed-crit line that pierces and executes wounded foes.","x":0.7510000000000001,"y":0.53,"band":2,"req":["w_a23"]},
+      {"id":"w_a44","name":"Bulwark Aura","icon":"sk_wa_banner","mp":18,"cd":8,"cast":{"shape":"self","buff":[{"id":"shield","dur":9,"mag":160},{"id":"thorns","dur":9,"mag":70},{"id":"dodgeUp","dur":9,"mag":0.2}]},"desc":"Raise an aura granting a vast shield and heavy thorns.","x":0.9359999999999999,"y":0.53,"band":2,"req":["w_a24"]},
+      {"id":"w_a50","name":"Avatar","icon":"sk_wa_avatar","mp":30,"cd":12,"cast":{"shape":"self","buff":[{"id":"shield","dur":10,"mag":260},{"id":"defUp","dur":10,"mag":0.6},{"id":"dmgUp","dur":10,"mag":0.5},{"id":"regen","dur":10,"mag":16}]},"desc":"Transform into an unstoppable titan with a colossal shield and surging power.","x":0.13,"y":0.76,"band":3,"reqAny":["w_a30","w_a40"]},
+      {"id":"w_a51","name":"Apocalypse","icon":"sk_wa_apocalypse","mp":28,"cd":8,"cast":{"shape":"melee","wpn":2.4,"repeat":3,"lifesteal":0.35,"execute":0.3},"desc":"A storm of bloody strikes hitting three times, draining heavy life and executing the wounded.","x":0.315,"y":0.76,"band":3,"reqAny":["w_a31","w_a41"]},
+      {"id":"w_a52","name":"Cataclysm","icon":"sk_wa_cataclysm","mp":34,"cd":11,"syn":{"skill":"w_p42","per":0.04},"cast":{"shape":"nova","radius":4,"wpn":3.4,"knockback":2,"status":{"effect":"stun","dur":3,"chance":0.8}},"desc":"A titanic two-handed quake that obliterates everything around you.","x":0.5,"y":0.76,"band":3,"reqAny":["w_a32","w_a42"]},
+      {"id":"w_a53","name":"Decapitate","icon":"sk_wa_titanleap","mp":24,"cd":9,"cast":{"shape":"blast","range":7,"radius":2,"wpn":3,"crit":true,"execute":0.4,"status":{"effect":"vuln","dur":4,"chance":1}},"desc":"Leap to a foe with a guaranteed crit that executes all but bosses.","x":0.685,"y":0.76,"band":3,"reqAny":["w_a33","w_a43"]},
+      {"id":"w_a54","name":"War Machine","icon":"sk_wa_warmachine","mp":30,"cd":12,"cast":{"shape":"self","buff":[{"id":"shield","dur":12,"mag":300},{"id":"thorns","dur":12,"mag":110},{"id":"defUp","dur":12,"mag":0.5},{"id":"regen","dur":12,"mag":18}]},"desc":"Become an impregnable fortress with an immense shield, thorns, and relentless regeneration.","x":0.87,"y":0.76,"band":3,"reqAny":["w_a34","w_a44"]}
     ], 'active'),
   },
 
@@ -14193,10 +14210,13 @@ const SKILL_BRANCHES = {
 // Fraction of the tree height reserved at the top for the branch headers.
 const SK_HEADER = 0.08;
 function nodePos(n, cols, bands) {
-  // Reserve a header band up top, then spread the rows evenly below it so the
-  // columns read as clean vertical branches.
+  // Web nodes carry their own position (a branching web); grid nodes are placed by
+  // band/col into clean columns. The header band up top is reserved either way.
+  if (n.x != null) return [ n.x, SK_HEADER + n.y * (1 - SK_HEADER - 0.02) ];
   return [ (n.col + 0.5) / cols, SK_HEADER + (n.band + 0.5) / bands * (1 - SK_HEADER - 0.02) ];
 }
+// Is this tree laid out as a free-form web (nodes carry x/y)?
+function isWebTree(tree) { return tree.length > 0 && tree[0].x != null; }
 function treeDims(tree) {
   let cols = 1, bands = 1;
   for (const n of tree) { cols = Math.max(cols, n.col + 1); bands = Math.max(bands, n.band + 1); }
@@ -14245,12 +14265,12 @@ function renderSkills(el) {
 
   const tree = skillTreeFor(skillView);
   const { cols, bands } = treeDims(tree);
+  const web = isWebTree(tree);
   const byId = {}; tree.forEach(n => byId[n.id] = n);
 
-  // Branch connectors. Drawn as clean ORTHOGONAL elbows (drop down, jog across,
-  // drop in) rather than long diagonals, so the tree reads like a Diablo skill
-  // tab: straight vertical spines within a branch, tidy right-angle bridges
-  // between adjacent branches. Lit purple once the prerequisite is owned.
+  // Branch connectors. A WEB draws straight links between freely-placed nodes so
+  // each path reads as a branching web; the legacy grid draws clean orthogonal
+  // elbows. Lit purple once the prerequisite is owned.
   let lines = '';
   for (const n of tree) {
     const reqs = [...(n.req || []), ...(n.reqAny || [])];
@@ -14260,10 +14280,8 @@ function renderSkills(el) {
       const q = byId[rid]; if (!q) continue;
       const a = nodePos(q, cols, bands);
       const x1 = a[0] * 100, y1 = a[1] * 100, x2 = p[0] * 100, y2 = p[1] * 100;
-      // Same column → a single vertical segment; different column → an elbow that
-      // turns at the midpoint between the two rows.
       let pts;
-      if (Math.abs(x1 - x2) < 0.01) pts = `${x1.toFixed(1)},${y1.toFixed(1)} ${x2.toFixed(1)},${y2.toFixed(1)}`;
+      if (web || Math.abs(x1 - x2) < 0.01) pts = `${x1.toFixed(1)},${y1.toFixed(1)} ${x2.toFixed(1)},${y2.toFixed(1)}`;
       else { const ym = ((y1 + y2) / 2).toFixed(1); pts = `${x1.toFixed(1)},${y1.toFixed(1)} ${x1.toFixed(1)},${ym} ${x2.toFixed(1)},${ym} ${x2.toFixed(1)},${y2.toFixed(1)}`; }
       if (skillRank(rid) > 0) {
         lines += `<polyline points="${pts}" fill="none" stroke="#8c6eff" stroke-opacity="0.28" stroke-width="6" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>`;
@@ -14273,22 +14291,25 @@ function renderSkills(el) {
       }
     }
   }
-  // Diablo-style branch headers: one label per column naming its build path.
+  // Branch headers naming each build path. A web places one over each cluster's
+  // entry node; the grid places one over each column.
   let branchHeads = '';
   const branchNames = (skillView === 'passive' || skillView === 'active') ? (SKILL_BRANCHES[player.class] || null) : null;
   if (branchNames) {
-    for (let c = 0; c < cols; c++) {
-      const x = ((c + 0.5) / cols * 100).toFixed(2);
-      branchHeads += `<div class="sk-branch" style="left:${x}%">${branchNames[c] || ''}</div>`;
+    if (web) {
+      const entries = tree.filter(n => n.band === 0).sort((a, b) => a.x - b.x);
+      entries.forEach((n, i) => { branchHeads += `<div class="sk-branch" style="left:${(n.x * 100).toFixed(2)}%">${branchNames[i] || ''}</div>`; });
+    } else {
+      for (let c = 0; c < cols; c++) branchHeads += `<div class="sk-branch" style="left:${((c + 0.5) / cols * 100).toFixed(2)}%">${branchNames[c] || ''}</div>`;
     }
   }
 
-  // Per-band level labels down the left edge so the gating reads clearly.
+  // Per-tier level labels down the left edge so the gating reads clearly.
   let bandLabels = '';
   const seenBand = {};
   for (const n of tree) {
     if (seenBand[n.band]) continue; seenBand[n.band] = true;
-    const y = ((n.band + 0.6) / (bands + 0.1) * 100).toFixed(1);
+    const y = web ? (nodePos(n, cols, bands)[1] * 100).toFixed(1) : ((n.band + 0.6) / (bands + 0.1) * 100).toFixed(1);
     const met = (player.level || 1) >= n.lvl;
     bandLabels += `<div class="sk-band ${met ? 'met' : ''}" style="top:${y}%">Lv${n.lvl}</div>`;
   }
