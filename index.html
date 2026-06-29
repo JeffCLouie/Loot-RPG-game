@@ -631,6 +631,7 @@
     cursor: pointer;
     line-height: 1.2;
   }
+  .loot-subtab .svg-icon { width: 14px; height: 14px; }
   .loot-subtab:hover { background: #1e1e2e; color: #bbb; }
   .loot-subtab.active {
     background: #20202e;
@@ -12589,14 +12590,17 @@ function renderPanel() {
     // If the active filter no longer has any items (e.g. you sold all helms),
     // fall back to showing everything so the list never looks empty by accident.
     if (lootFilter !== 'all' && !counts[lootFilter]) lootFilter = 'all';
-    // Build the subtab bar: All, then each slot that has items, then Other.
-    const tabDefs = [{ key: 'all', label: '🎒 All', n: inventory.length }];
+    // Build the subtab bar: All, then each slot that has items, then Other. Each
+    // slot reuses its existing gear vector icon (SLOT_ICONS + iconMarkup) rather
+    // than an emoji, matching the GEAR tab's slot art.
+    const slotLabel = s => SLOTS[s].label.replace(/^\S+\s/, '');
+    const tabDefs = [{ key: 'all', icon: '', name: 'All', n: inventory.length }];
     SLOT_KEYS.forEach(s => {
-      if (counts[s]) tabDefs.push({ key: s, label: SLOTS[s].label, n: counts[s] });
+      if (counts[s]) tabDefs.push({ key: s, icon: iconMarkup(SLOT_ICONS[s], ICON_EMPTY_COLOR, false), name: slotLabel(s), n: counts[s] });
     });
-    if (counts.other) tabDefs.push({ key: 'other', label: '🧪 Other', n: counts.other });
+    if (counts.other) tabDefs.push({ key: 'other', icon: '', name: 'Other', n: counts.other });
     const subtabs = '<div class="loot-subtabs">' + tabDefs.map(t =>
-      `<button class="loot-subtab ${lootFilter===t.key?'active':''}" onclick="setLootFilter('${t.key}')">${t.label} <span class="st-count">${t.n}</span></button>`
+      `<button class="loot-subtab ${lootFilter===t.key?'active':''}" onclick="setLootFilter('${t.key}')">${t.icon}${t.name} <span class="st-count">${t.n}</span></button>`
     ).join('') + '</div>';
     const rows = inventory
       .map((item, i) => ({ item, i }))
