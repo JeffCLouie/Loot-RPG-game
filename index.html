@@ -419,7 +419,7 @@
   .skill-btn:active { background: #4a3a7a; }
   /* Greyed when on cooldown or short on mana; pulses when ready to fire. */
   .skill-btn.disabled { background: #211c2a; border-color: #33304a; color: #6a647a; }
-  .skill-btn.ready { background: #3a2c66; border-color: #d4c4ff; color: #efe6ff; animation: skillReady 1.4s ease-in-out infinite; }
+  .skill-btn.ready { background: #3a2c66; border-color: #ffd86a; color: #fff3cf; animation: skillReadyGold 1.4s ease-in-out infinite; }
   /* Town gate is gated: greyed + dimmed while you can't slip away (in combat,
      floor uncleared, or the gate is still recharging). */
   .action-btn.disabled { opacity: 0.45; filter: grayscale(0.6); }
@@ -612,13 +612,9 @@
   .skillbar-btn .sb-info { font-size: 8px; letter-spacing: 0.5px; }
   /* Ready to cast: brighter fill + a crisp outline that gently pulses so an
      available skill clearly stands apart from greyed/cooling-down ones. */
-  .skillbar-btn.ready { background: #3a2c66; border-color: #b9a3ff; color: #efe6ff; animation: skillReady 1.4s ease-in-out infinite; }
+  .skillbar-btn.ready { background: #3a2c66; border-color: #ffd86a; color: #fff3cf; animation: skillReadyGold 1.4s ease-in-out infinite; }
   .skillbar-btn.baseline.ready { background: #4a3a1e; border-color: #ffd86a; color: #fff3cf; animation: skillReadyGold 1.4s ease-in-out infinite; }
   .skillbar-btn.ready:active { background: #4a3a7a; }
-  @keyframes skillReady {
-    0%,100% { box-shadow: 0 0 6px rgba(160,130,255,0.55); border-color: #9d86e6; }
-    50%     { box-shadow: 0 0 13px rgba(180,150,255,0.9); border-color: #d4c4ff; }
-  }
   @keyframes skillReadyGold {
     0%,100% { box-shadow: 0 0 6px rgba(255,200,80,0.5); border-color: #e6bf52; }
     50%     { box-shadow: 0 0 14px rgba(255,215,110,0.9); border-color: #ffe39a; }
