@@ -13006,7 +13006,10 @@ function renderSkillBar() {
   const bar = document.getElementById('skill-bar');
   if (!bar) return;
   const skills = activeSkillList();
-  if (!skills.length || inTown) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+  // Hide the bar only in town. Out in the dungeon it always renders, even with
+  // no active skills learned yet, because the far-left Health/Mana potion
+  // buttons are baseline kit every hero needs from the start.
+  if (inTown) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
   bar.style.display = 'flex';
   // Potion skills pinned to the far left of the bar: Health (Q) then Mana (E).
   // They're unlimited but share a one-turn cooldown, so the info slot shows the
