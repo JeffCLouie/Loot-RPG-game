@@ -11322,16 +11322,16 @@ function foesInRange(range) {
     .filter(o => !o.dead && (Math.abs(o.x - player.x) + Math.abs(o.y - player.y)) <= range)
     .sort((a, b) => (Math.abs(a.x - player.x) + Math.abs(a.y - player.y)) - (Math.abs(b.x - player.x) + Math.abs(b.y - player.y)));
 }
-// A walkable, unoccupied tile adjacent to enemy e (for blink targeting), or null.
+// A safe, unoccupied tile adjacent to enemy e for the hero to blink onto.
+// Skips lava (7) and spikes (8) so a teleport never strands the hero on a
+// hazard; returns null if every adjacent tile is wall/occupied/hazardous, in
+// which case the caller strikes from afar without relocating.
 function adjacentOpenTile(e) {
   const dirs = [[0,-1],[0,1],[-1,0],[1,0],[-1,-1],[1,1],[-1,1],[1,-1]];
   for (const [dx, dy] of dirs) {
     const x = e.x + dx, y = e.y + dy;
-    if (x < 0 || y < 0 || x >= MAP_W || y >= MAP_H) continue;
-    const t = mapData[y][x];
-    if (t === 1 || t === 6 || t === 10 || t === 11) continue; // wall / deep water / sealed
-    if (getEnemyAt(x, y)) continue;
-    if (x === player.x && y === player.y) continue;
+    if (!playerCanStand(x, y)) continue;
+    if (mapData[y][x] === 7 || mapData[y][x] === 8) continue; // never land in lava/spikes
     return { x, y };
   }
   return null;
