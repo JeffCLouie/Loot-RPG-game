@@ -4229,14 +4229,57 @@ function weaponBaseType(item) {
   return null;
 }
 
-// Can the current class equip this item? Non-weapons (and weapons of an
-// unrecognised type) are always allowed; a classless hero has no restriction.
+// Weapon categories that count as melee (a parrying dagger pairs with these).
+const MELEE_CATS = new Set(['Sword', 'Axe', 'Mace', 'Spear', 'Dagger', 'Scythe']);
+// The off-hand family of an item (shield / caster / ranged / dual), recorded on
+// item.off at generation; defaults to shield for any older/oddly-shaped off-hand.
+function offhandFamily(item) { return (item && item.off) || 'shield'; }
+// Why an off-hand can't be equipped alongside `weapon` (the current main hand, may
+// be null), or null if the pairing is allowed. Each off-hand wants a fitting main
+// hand: a quiver feeds a BOW (and is back-worn, so it's exempt from the two-hander
+// rule), a parrying dagger needs a one-handed MELEE weapon to dual with, and a
+// shield/focus just needs a free hand (a 1H weapon or none). Titan's Grip frees the
+// hand a two-hander would otherwise take.
+function offhandEquipError(item, weapon) {
+  if (!item || item.slot !== 'offhand') return null;
+  const fam = offhandFamily(item);
+  const w = weapon;
+  if (fam === 'ranged') {
+    return (w && weaponBaseType(w) === 'Bow') ? null : 'A quiver only works with a bow.';
+  }
+  if (w && isTwoHander(w) && !skillFlag('titangrip')) {
+    return 'A two-handed weapon leaves no hand free for an off-hand.';
+  }
+  if (fam === 'dual') {
+    if (!w || weaponHandsOf(w) !== 1 || !MELEE_CATS.has(weaponBaseType(w))) {
+      return 'A parrying dagger needs a one-handed melee weapon in your main hand.';
+    }
+  }
+  return null; // shield / caster: any one-handed weapon or a free hand works
+}
+
+// Can the current class/loadout equip this item right now? Non-weapon, non-off-hand
+// gear is always allowed; a classless hero has no weapon restriction; an off-hand
+// must also pair with the equipped main-hand weapon (see offhandEquipError).
 function canEquipItem(item) {
-  if (!item || item.slot !== 'weapon') return true;
+  if (!item) return true;
+  if (item.slot === 'offhand') return offhandEquipError(item, equipped.weapon) === null;
+  if (item.slot !== 'weapon') return true;
   const cls = playerClass();
   if (!cls) return true;
   const t = weaponBaseType(item);
   return !t || cls.weapons.includes(t);
+}
+// A short, human reason this item can't be equipped right now (for the loot lock
+// tooltip), or '' if it can.
+function equipLockReason(item) {
+  if (!item) return '';
+  if (item.slot === 'weapon') {
+    const cls = playerClass();
+    return (cls && !canEquipItem(item)) ? `A ${cls.name} can't wield this — ${cls.name}s use ${cls.weapons.join(', ')}.` : '';
+  }
+  if (item.slot === 'offhand') return offhandEquipError(item, equipped.weapon) || '';
+  return '';
 }
 
 // Can the current class wield this weapon BASE type (Sword, Bow, …)? Used to grey
@@ -13907,7 +13950,7 @@ function renderPanel() {
         ${equipable
           ? (canEquipItem(item)
               ? `<button class="row-btn equip-row-btn ${isUpgrade?'upgrade-btn':''}" onclick="quickEquip(${i})">${equippedHere && isUpgrade?'SWAP':'EQUIP'}</button>`
-              : `<button class="row-btn locked-row-btn" ${hoverTip(`<div class='ht-name'>🔒 Can't Wield</div><div class='ht-line'>Your class can't wield this weapon.</div>`)} onclick="quickEquip(${i})">🔒</button>`)
+              : `<button class="row-btn locked-row-btn" ${hoverTip(`<div class='ht-name'>🔒 Can't Equip</div><div class='ht-line'>${equipLockReason(item)}</div>`)} onclick="quickEquip(${i})">🔒</button>`)
           : ''}
       </div>
       ${selectedItem === i && HOVER_MQ.matches ? bagActionsHTML(item, i) : ''}`;
@@ -14545,6 +14588,23 @@ function dollSprite(slot, item) {
 // One equipment frame. `item` may be null (empty slot — dim placeholder sprite).
 function renderDollSlot(slot) {
   const item = equipped[slot];
+  // A two-handed weapon occupies your off-hand too: show that slot as FILLED by the
+  // weapon (both hands) rather than an open slot, unless Titan's Grip frees the hand.
+  if (slot === 'offhand' && !item && isTwoHander(equipped.weapon) && !skillFlag('titangrip')) {
+    const w = equipped.weapon;
+    const tic = dlIcon(dollSprite('weapon', w), 40) || `<span class="pd-emoji">🤲</span>`;
+    const tcol = (TIERS[w.tier] || {}).color || '';
+    const tstyle = tcol ? ` style="border-color:${tcol}77;box-shadow:0 0 6px ${tcol}33;opacity:.62"` : ' style="opacity:.62"';
+    return `<div class="pd-cell">
+      <div class="pd-slot filled"${tstyle}
+           onclick="tapSlot('weapon', this)"
+           onmouseenter="hoverSlot(event,'weapon')" onmouseleave="hideTooltip()">
+        ${tic}
+        <span class="item-power pd-pwr" style="background:#2a2418;color:#cdbf9a">2H</span>
+      </div>
+      <div class="pd-cap" style="color:#8a7d63">Both hands</div>
+    </div>`;
+  }
   const sp = dollSprite(slot, item);
   const emoji = (SLOTS[slot].label.match(EMOJI_RE) || ['❔'])[0];
   const ic = dlIcon(sp, 40) || `<span class="pd-emoji">${emoji}</span>`;
@@ -14587,21 +14647,24 @@ function quickEquip(i) {
   if (!item) return;
   const slot = item.slot;
   if (!slot) { log(`${logItem(item)} can't be equipped.`); return; }
-  if (!canEquipItem(item)) {
+  if (slot === 'weapon' && !canEquipItem(item)) {
     const cls = playerClass();
     log(`🔒 A ${cls.name} can't wield that — ${cls.name}s use ${cls.weapons.join(', ')}.`);
     return;
   }
-  // Two-handers and off-hands share the same hands: a 2H weapon leaves none free
-  // for an off-hand, and vice versa — unless the Titan's Grip passive is learned.
-  if (slot === 'weapon' && isTwoHander(item) && equipped.offhand && !skillFlag('titangrip')) {
+  // Off-hands must pair with your main-hand weapon (a quiver needs a bow, a parry
+  // dagger a one-handed melee weapon, a shield/focus a free hand).
+  if (slot === 'offhand') {
+    const reason = offhandEquipError(item, equipped.weapon);
+    if (reason) { sfx('denied'); log(`🔒 ${reason}`); return; }
+  }
+  // Equipping a new weapon may leave the current off-hand incompatible (a two-hander
+  // takes the hand, a non-bow strands a quiver, a wand strands a parry dagger) —
+  // stow the off-hand back into the bag rather than silently dropping its stats.
+  if (slot === 'weapon' && equipped.offhand && offhandEquipError(equipped.offhand, item)) {
     inventory.push(equipped.offhand);
     equipped.offhand = null;
-    log('🔒 Your two-handed weapon needs both hands — off-hand stowed.');
-  }
-  if (slot === 'offhand' && isTwoHander(equipped.weapon) && !skillFlag('titangrip')) {
-    log('🔒 A two-handed weapon leaves no hand free for an off-hand — learn Titan\'s Grip to wield both.');
-    return;
+    log('🔒 Your off-hand no longer fits that weapon — off-hand stowed.');
   }
   if (equipped[slot]) inventory.push(equipped[slot]); // swap old back into bag
   equipped[slot] = item;
