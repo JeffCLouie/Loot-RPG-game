@@ -2237,11 +2237,11 @@ const MAP_W = 20, MAP_H = 20;
 
 // Each equipment slot, with the base item names that roll for it.
 const SLOTS = {
+  weapon: { label: '⚔ Weapon', names: ['Sword','Axe','Dagger','Staff','Bow','Mace','Spear','Scythe'] },
   head:   { label: '🪖 Head',   names: ['Helm','Cap','Crown','Hood','Circlet'] },
   chest:  { label: '👕 Chest',  names: ['Chestplate','Robe','Cuirass','Tunic','Mail'] },
   hands:  { label: '🧤 Hands',  names: ['Gauntlets','Gloves','Bracers','Grips'] },
   legs:   { label: '👖 Legs',   names: ['Greaves','Leggings','Tassets','Trousers'] },
-  weapon: { label: '⚔ Weapon', names: ['Sword','Axe','Dagger','Staff','Bow','Mace','Spear','Scythe'] },
   ring:   { label: '💍 Ring',   names: ['Ring','Band','Signet','Loop'] },
   amulet: { label: '📿 Amulet', names: ['Amulet','Pendant','Necklace','Talisman','Charm'] },
 };
@@ -3557,15 +3557,15 @@ const WEAPON_STYLE_DESC = {
 };
 // The reach of a base, or of an item's resolved weapon type.
 function weaponRange(base) { return WEAPON_RANGE[base] || 1; }
-// A tiny horizontal map of a weapon's reach: the gold centre tile is you, each red
-// tile ahead is a square it can strike; faint tiles behind keep you centred so the
-// reach reads at a glance. Shared by the weapon tooltip and the Forge preview.
+// A tiny horizontal map of a weapon's reach: the gold tile is you, each red tile
+// ahead is a square it can strike, so the reach reads at a glance. Shared by the
+// weapon tooltip and the Forge preview.
 function weaponRangeGridHTML(base) {
   const range = weaponRange(base);
   let cells = '';
-  for (let i = -range; i <= range; i++) {
-    const bg = i === 0 ? '#e3c344' : i > 0 ? '#c0392b' : '#241c14';
-    const bd = i === 0 ? '#f4e08a' : i > 0 ? '#e0556b' : '#3a3226';
+  for (let i = 0; i <= range; i++) {
+    const bg = i === 0 ? '#e3c344' : '#c0392b';
+    const bd = i === 0 ? '#f4e08a' : '#e0556b';
     cells += `<span class="rg-cell" style="background:${bg};border-color:${bd}"></span>`;
   }
   return `<span class="range-grid">${cells}</span><span class="range-cap">reach ${range}</span>`;
@@ -12559,11 +12559,7 @@ function renderPanel() {
   const el = document.getElementById('panel-content');
   if (currentTab === 'inv') {
     const strip = matStripHTML();
-    if (inventory.length === 0) {
-      el.innerHTML = strip + '<div id="empty-panel">No items yet.<br>Explore!</div>';
-      return;
-    }
-    // Sort the displayed list by slot (head, chest, hands, …) while keeping each
+    // Sort the displayed list by slot (weapon, head, chest, …) while keeping each
     // row's original inventory index so equip/select still target the right item.
     const slotOrder = {};
     SLOT_KEYS.forEach((s, idx) => { slotOrder[s] = idx; });
@@ -12600,6 +12596,11 @@ function renderPanel() {
         const ob = b.item.slot in slotOrder ? slotOrder[b.item.slot] : 99;
         return oa - ob;
       });
+    if (rows.length === 0) {
+      el.innerHTML = strip + subtabs + '<div id="empty-panel">' +
+        (inventory.length === 0 ? 'No items yet.<br>Explore!' : 'Nothing here.') + '</div>';
+      return;
+    }
     el.innerHTML = strip + subtabs + rows.map(({ item, i }) => {
       const equipable = !!item.slot;
       const slotName = item.slot ? SLOTS[item.slot].label.replace(/^\S+\s/, '') : 'potion';
