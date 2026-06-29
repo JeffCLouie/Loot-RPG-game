@@ -5593,7 +5593,7 @@ canvas.addEventListener('pointerup', e => {
 const touchDpad = document.getElementById('touch-dpad');
 // Movement-pad preferences: corner to dock it in, and its opacity (0 = hidden).
 const DPAD_KEY = 'dpadCfg';
-let dpadCfg = { pos: 'left', opacity: 1, style: 'gilded' };
+let dpadCfg = { pos: 'left', opacity: 0.33, style: 'gilded' };
 // 20 movement-pad themes for the STYLE picker. Each supplies one rightward arrow
 // glyph (CSS rotates it per direction) plus a colour/shape palette, applied as
 // inline CSS variables on #touch-dpad by applyDpadTheme(). DP_DEF fills any gaps.
@@ -6975,7 +6975,7 @@ function renderDpadControls() {
   const opBtn = (val, label) =>
     `<button class="dpad-cfg-btn ${Math.abs(op - val) < 0.001 ? 'sel' : ''}" onclick="setDpadOpacity(${val})">${label}</button>`;
   posRow.innerHTML = posBtn('left', 'Left') + posBtn('center', 'Centre') + posBtn('right', 'Right');
-  opRow.innerHTML  = opBtn(1, 'Full') + opBtn(0.66, '66%') + opBtn(0.33, '33%') + opBtn(0, 'Off');
+  opRow.innerHTML  = opBtn(0.33, 'Low') + opBtn(0.66, 'Med') + opBtn(1, 'High') + opBtn(0, 'Off');
   if (styRow) {
     const curKey = DPAD_THEMES.some(t => t.key === sty) ? sty : DPAD_THEMES[0].key;
     styRow.innerHTML = DPAD_THEMES.map(t => {
