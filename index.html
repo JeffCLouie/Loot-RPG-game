@@ -321,6 +321,8 @@
   .version-size.sz-medium { color: #9fd2a8; background: rgba(70, 180, 95, 0.24); }
   .version-size.sz-big    { color: #ffd27a; background: rgba(230, 165, 50, 0.30); }
   .version-note { font-size: 11px; color: var(--text); opacity: 0.85; line-height: 1.45; }
+  /* Art attributions tucked at the foot of the version popup. */
+  .version-credits { margin-top: 14px; padding-top: 10px; border-top: 1px solid #2a2113; font-size: 9px; color: #6b5f47; line-height: 1.5; }
 
   /* Time-played popup — reuses the version overlay's framing. */
   #playtime-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 400; display: none; align-items: center; justify-content: center; padding: 16px; }
@@ -2447,8 +2449,6 @@
     <button class="title-play" id="title-play" onclick="titlePlay()">⚔️ ENTER THE DUNGEON</button>
     <button class="title-play secondary" id="title-newrun" style="display:none" onclick="titleNewRun()">↻ Start a New Run</button>
     <div id="title-settings">
-      <button class="title-set-btn" onclick="titleSound()"><span class="tsb-ic" id="t-sound-ic">🔊</span><span class="tsb-lbl" id="t-sound-lbl">Sound</span></button>
-      <button class="title-set-btn" onclick="titleZoom()"><span class="tsb-ic">🔍</span><span class="tsb-lbl" id="t-zoom-lbl">Zoom</span></button>
       <button class="title-set-btn" onclick="openAccount()"><span class="tsb-ic"><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg></span><span class="tsb-lbl">Cloud Save</span></button>
       <button class="title-set-btn" onclick="openSlots()"><span class="tsb-ic">💾</span><span class="tsb-lbl">Save Slots</span></button>
       <button class="title-set-btn" onclick="showLeaderboard()"><span class="tsb-ic">🏆</span><span class="tsb-lbl">Leaderboards</span></button>
@@ -2457,7 +2457,7 @@
     </div>
     <!-- Optional sign-in callout — updated by refreshAccountUi() to reflect login state. -->
     <div id="title-cloud" onclick="openAccount()"></div>
-    <div id="title-credit">Pixel art from the DawnLike tileset by DragonDePlatino &amp; DawnBringer (CC-BY&nbsp;4.0).<br>Terrain tiles from &ldquo;[LPC] Terrains&rdquo; by bluecarrot16 &amp; LPC contributors (CC-BY-SA&nbsp;4.0).</div>
+    <div id="title-credit">Built by JL &amp; AS</div>
   </div>
 </div>
 
@@ -6105,6 +6105,12 @@ function showVersionHistory() {
       if (c.date !== lastDate) { html += `<div class="version-date">${fmtChangelogDate(c.date)}</div>`; lastDate = c.date; }
       html += `<div class="version-entry"><div class="version-ver">${c.v}${sizeBadge(c.size)}${c.by ? ` <span class="version-by ${initials(c.by) === 'JL' ? 'jl' : 'as'}">${initials(c.by)}</span>` : ''}</div>${c.notes.map(n => `<div class="version-note">• ${n}</div>`).join('')}</div>`;
     }
+    // Art attributions (moved off the title screen). CC-BY requires the credit
+    // stay visible somewhere — this popup is its home.
+    html += `<div class="version-credits">` +
+      `Pixel art from the DawnLike tileset by DragonDePlatino &amp; DawnBringer (CC-BY&nbsp;4.0).<br>` +
+      `Terrain tiles from &ldquo;[LPC] Terrains&rdquo; by bluecarrot16 &amp; LPC contributors (CC-BY-SA&nbsp;4.0).` +
+      `</div>`;
     el.innerHTML = html;
   }
   document.getElementById('version-overlay').classList.add('open');
