@@ -484,6 +484,9 @@
     0%,100% { transform: scale(1); box-shadow: 0 0 5px rgba(232,69,60,0.7); }
     50% { transform: scale(1.22); box-shadow: 0 0 12px rgba(255,90,80,1); }
   }
+  /* Plain bracketed item tally on the LOOT tab — same tab font, just dimmed so
+     it reads as a subtitle, not a badge. */
+  .tab-num { margin-left: 5px; opacity: 0.65; font-weight: normal; }
 
   /* ── HERO / ATTRIBUTES PANEL ── */
   .hero-power { text-align: center; padding: 8px 4px; margin-bottom: 6px; border: 1px solid var(--border); border-radius: 6px; background: #14140f; }
@@ -12663,6 +12666,11 @@ function updateBars() {
       foodHud.style.display = 'none';
     }
   }
+
+  // Show how many items are in the bag right in the LOOT tab label, in the same
+  // tab font (a dim bracket, not a badge).
+  const invTab = document.getElementById('tab-inv');
+  if (invTab) invTab.innerHTML = `LOOT<span class="tab-num">(${inventory.length})</span>`;
 
   // Nudge the HERO / SKILLS tabs when there are unspent points to spend.
   const pts = player.attrPoints || 0;
