@@ -7112,10 +7112,13 @@ function maybeSpawnQuest(reach) {
   }
 
   // ── NPC-at-a-spot quests: rescue, escort, lostpet, wounded, courier ──
+  // A quest NPC stands on (and blocks) its tile, so never park it on a one-tile
+  // chokepoint or it could wall the player out of part of the floor.
   let spot = null, bestD = -1;
   const wantFar = (kind === 'rescue');
   for (let i = 0; i < 50; i++) {
     const c = randomFloorTile(reach); if (!c) break;
+    if (isChokePoint(c.x, c.y)) continue;
     const d = Math.abs(c.x - player.x) + Math.abs(c.y - player.y);
     if (wantFar) { if (d > bestD) { bestD = d; spot = c; } }
     else { if (d >= 2 && d <= 8) { spot = c; break; } if (!spot) spot = c; }
