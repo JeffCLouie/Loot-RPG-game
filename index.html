@@ -1468,6 +1468,18 @@
     display: flex; align-items: center; justify-content: center;
   }
   .title-set-btn .tsb-lbl { font-size: 10px; letter-spacing: .5px; line-height: 1.2; white-space: nowrap; }
+  /* ── MONOCHROME UI EMOJI ── Menu/HUD emoji that aren't game-thing icons render
+     as flat single-colour symbols instead of colourful emoji (or being dropped).
+     `font-variant-emoji: text` asks for the monochrome text glyph where the
+     browser supports it; the grayscale filter is the fallback that desaturates a
+     colour glyph. They inherit the surrounding text colour. The colourful
+     DawnLike pixel-art game icons are unaffected — they're sprites, not emoji. */
+  .ui-emoji, .keep-emoji, .tsb-ic { font-variant-emoji: text; }
+  /* Fallback for engines without font-variant-emoji: desaturate the colour glyph
+     so it still reads as a monochrome symbol. */
+  @supports not (font-variant-emoji: text) {
+    .ui-emoji, .keep-emoji, .tsb-ic { filter: grayscale(1); }
+  }
   #title-credit { color: #6b5f47; font-size: 9px; margin-top: 16px; line-height: 1.5; }
   /* Leaderboard tabs + rows */
   .lb-tabs { display: flex; gap: 6px; margin-bottom: 9px; }
@@ -2313,7 +2325,7 @@
       <button class="title-set-btn" onclick="titleZoom()"><span class="tsb-ic">🔍</span><span class="tsb-lbl" id="t-zoom-lbl">Zoom</span></button>
       <button class="title-set-btn" onclick="openAccount()"><span class="tsb-ic">☁️</span><span class="tsb-lbl">Cloud Save</span></button>
       <button class="title-set-btn" onclick="openSlots()"><span class="tsb-ic">💾</span><span class="tsb-lbl">Save Slots</span></button>
-      <button class="title-set-btn" onclick="showLeaderboard()"><span class="tsb-ic" data-spr="ui_trophy"></span><span class="tsb-lbl">Leaderboards</span></button>
+      <button class="title-set-btn" onclick="showLeaderboard()"><span class="tsb-ic">🏆</span><span class="tsb-lbl">Leaderboards</span></button>
       <button class="title-set-btn" onclick="showVersionHistory()"><span class="tsb-ic">📜</span><span class="tsb-lbl">Version</span></button>
       <button class="title-set-btn" onclick="showPlayTime()"><span class="tsb-ic">⏱️</span><span class="tsb-lbl">Time Played</span></button>
     </div>
@@ -9041,7 +9053,15 @@ function _iconifyTextNode(node) {
       const tmp = document.createElement('span');
       tmp.innerHTML = dlIconAt(sp, px);
       if (tmp.firstChild) frag.appendChild(tmp.firstChild);
-    } // unmapped emoji → dropped
+    } else {
+      // No DawnLike tile for this glyph — keep it as a flat monochrome UI symbol
+      // (styled by .ui-emoji) instead of dropping it, so menu/section emoji still
+      // read as mono icons. The span is exempt from re-processing below.
+      const ms = document.createElement('span');
+      ms.className = 'ui-emoji';
+      ms.textContent = m[0];
+      frag.appendChild(ms);
+    }
     last = EMOJI_RE.lastIndex;
   }
   if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
@@ -9068,7 +9088,8 @@ function iconifyTree(root) {
     acceptNode(n) {
       const p = n.parentNode;
       if (!p || _SKIP_TAGS[p.nodeName]) return NodeFilter.FILTER_REJECT;
-      if (p.classList && p.classList.contains('dl-ic')) return NodeFilter.FILTER_REJECT;
+      // Leave already-iconified sprites and kept-as-mono UI emoji alone.
+      if (p.closest && p.closest('.dl-ic, .ui-emoji, .keep-emoji, .tsb-ic')) return NodeFilter.FILTER_REJECT;
       EMOJI_RE.lastIndex = 0;
       return EMOJI_RE.test(n.nodeValue || '') ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
     }
@@ -9086,7 +9107,7 @@ function startEmojiDeEmojify() {
       mu.addedNodes.forEach(node => {
         if (node.nodeType === 3) {
           const p = node.parentNode;
-          if (p && !_SKIP_TAGS[p.nodeName] && !(p.classList && p.classList.contains('dl-ic'))) _iconifyTextNode(node);
+          if (p && !_SKIP_TAGS[p.nodeName] && !(p.closest && p.closest('.dl-ic, .ui-emoji, .keep-emoji, .tsb-ic'))) _iconifyTextNode(node);
         } else if (node.nodeType === 1) {
           iconifyTree(node);
         }
