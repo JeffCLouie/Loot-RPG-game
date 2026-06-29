@@ -1411,15 +1411,20 @@
     margin-top: 18px; padding-top: 16px; border-top: 1px solid #2a2113;
   }
   .title-set-btn {
-    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 4px;
     padding: 11px 6px; border: 1px solid var(--border); border-radius: 8px;
     background: #1b160f; color: #d9c39a; cursor: pointer;
-    font-family: 'Courier New', monospace;
+    font-family: 'Courier New', monospace; text-align: center;
     -webkit-tap-highlight-color: transparent; touch-action: manipulation;
   }
   .title-set-btn:active { background: #2a2113; }
-  .title-set-btn .tsb-ic { font-size: 21px; line-height: 1; }
-  .title-set-btn .tsb-lbl { font-size: 10px; letter-spacing: .5px; }
+  /* Fixed-height icon row keeps every tile's label on the same baseline whether
+     the icon is an emoji or a DawnLike sprite. */
+  .title-set-btn .tsb-ic {
+    font-size: 21px; line-height: 1; height: 24px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .title-set-btn .tsb-lbl { font-size: 10px; letter-spacing: .5px; line-height: 1.2; white-space: nowrap; }
   #title-credit { color: #6b5f47; font-size: 9px; margin-top: 16px; line-height: 1.5; }
   /* Leaderboard tabs + rows */
   .lb-tabs { display: flex; gap: 6px; margin-bottom: 9px; }
@@ -2261,13 +2266,13 @@
     <button class="title-play" id="title-play" onclick="titlePlay()">⚔️ ENTER THE DUNGEON</button>
     <button class="title-play secondary" id="title-newrun" style="display:none" onclick="titleNewRun()">↻ Start a New Run</button>
     <div id="title-settings">
-      <button class="title-set-btn" onclick="titleSound()"><span class="tsb-lbl" id="t-sound-lbl">Sound: On</span></button>
-      <button class="title-set-btn" onclick="titleZoom()"><span class="tsb-lbl" id="t-zoom-lbl">Zoom</span></button>
+      <button class="title-set-btn" onclick="titleSound()"><span class="tsb-ic" id="t-sound-ic">🔊</span><span class="tsb-lbl" id="t-sound-lbl">Sound</span></button>
+      <button class="title-set-btn" onclick="titleZoom()"><span class="tsb-ic">🔍</span><span class="tsb-lbl" id="t-zoom-lbl">Zoom</span></button>
       <button class="title-set-btn" onclick="openAccount()"><span class="tsb-ic">☁️</span><span class="tsb-lbl">Cloud Save</span></button>
       <button class="title-set-btn" onclick="openSlots()"><span class="tsb-ic">💾</span><span class="tsb-lbl">Save Slots</span></button>
       <button class="title-set-btn" onclick="showLeaderboard()"><span class="tsb-ic" data-spr="ui_trophy"></span><span class="tsb-lbl">Leaderboards</span></button>
       <button class="title-set-btn" onclick="showVersionHistory()"><span class="tsb-ic">📜</span><span class="tsb-lbl">Version</span></button>
-      <button class="title-set-btn" onclick="showPlayTime()"><span class="tsb-lbl">Time Played</span></button>
+      <button class="title-set-btn" onclick="showPlayTime()"><span class="tsb-ic">⏱️</span><span class="tsb-lbl">Time Played</span></button>
     </div>
     <!-- Optional sign-in callout — updated by refreshAccountUi() to reflect login state. -->
     <div id="title-cloud" onclick="openAccount()"></div>
@@ -15085,8 +15090,10 @@ function submitName() {
 function refreshTitleToggles() {
   const si = document.getElementById('t-sound-ic');
   const sl = document.getElementById('t-sound-lbl');
+  // The icon shows mute state, so the label stays a tidy one-word "Sound" that
+  // lines up with the other tiles.
   if (si) si.textContent = audio.muted ? '\u{1F507}' : '\u{1F50A}';
-  if (sl) sl.textContent = audio.muted ? 'Sound: Off' : 'Sound: On';
+  if (sl) sl.textContent = 'Sound';
   const zl = document.getElementById('t-zoom-lbl');
   if (zl) zl.textContent = 'Zoom: ' + (ZOOM_LABELS[zoomLevel] || 'Wide');
 }
