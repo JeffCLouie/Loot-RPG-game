@@ -6564,6 +6564,7 @@ document.addEventListener('click', (e) => {
 
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
+  { date: '2026-06-29', size: 'small', v: 'Floor 1 portal fix', by: 'Claude', notes: ['Stepping onto the gate on the first floor of a difficulty now actually returns you to town again. It was silently doing nothing; the TOWN button still worked, but walking into the portal didn\'t.'] },
   { date: '2026-06-29', size: 'big', v: 'Rating-based combat overhaul', by: 'Claude', notes: ['Chances no longer use flat caps. Crit, dodge, hit, block and damage reduction are now Path-of-Exile-style RATINGS — integer stats you build from attributes and gear — and the actual % is your rating measured against the enemy you\'re facing: chance = rating / (rating + opposition). It can approach 100% but never reach it, so absurd numbers are mechanically impossible rather than clamped.', 'Opposition grows with depth, so a rating that gives big % on floor 5 gives much less on floor 50 — you have to keep investing to stay sharp, and there\'s no maxing a stat once and coasting. In true endgame you can still stack a stat very high; it\'s just never trivial or absolute.', 'Combat is now two-sided: enemies have Accuracy (which eats your dodge) and Evasion (so your weapon attacks can MISS). You have an Accuracy rating too — Agility and the new ACC gear affix raise it. Most attacks still land, but "Accurate" foes punch through evasion and slippery "Evasive" foes need real Accuracy to hit. (Spells never miss.)', 'Agility now drives both Evasion and Accuracy; Luck drives Crit; gear CRIT/SPD/DODGE/BLOCK/DR read as ratings (shown as flat numbers, with the live % on the HERO sheet vs your current floor). Crit damage is uncapped again — it\'s a magnitude, not a chance.', 'Health and mana stay finite (from the prior pass): slower HP/MP regen, level-ups mend ~40% instead of a full refill, smaller potions, and burst-heals capped per use.'] },
   { date: '2026-06-29', size: 'medium', v: 'Every action costs a turn', by: 'Claude', notes: ['Anything you do on a floor now passes a turn, so the world keeps moving even when you can’t. Bumping a wall, the map edge, deep water, a locked door or sealed stairs all tick the clock just like the Wait button.', 'Walking into a boss’s wall of force now passes a turn too, so the barriers pinning you in crumble on their own — no more mashing the Wait button to escape the Rat King’s cage.', 'Being stunned no longer freezes the dungeon: a wasted action still lets foes act while the stun wears off. Drinking from a fountain, touching a shrine and cracking open a chest underfoot are all turns as well.'] },
   { date: '2026-06-29', size: 'big', v: 'Rebalanced loot drops', by: 'ASuiter89', notes: ['Loot rarity is rebalanced so you stop drowning in high-end gear: instead of rolling the rarity table several times and keeping the rarest (which buried you in oranges), each drop now makes one independent check per tier from rarest down, so a baseline drop is ~50% normal, ~21% junk, ~19% uncommon, ~6% rare, ~2% epic, ~0.6% legendary, ~0.15% unique.', 'Magic Find, your Luck and deeper floors still raise the odds — but with diminishing returns that barely move legendary/unique and hard per-tier caps, so stacking Magic Find now floods you with greens and blues rather than legendaries.', 'Tougher foes drop MORE items, not just luckier ones: every kill makes a number of independent “picks” (ordinary foes 1, elites 3, bosses 5), each either dropping nothing or one item — so a boss sprays a pile of loot while a trash mob mostly drops nothing. Elites and bosses are still guaranteed at least one piece.'] },
@@ -12136,8 +12137,11 @@ function move(dx, dy) {
   // is one you've already been through), so there's never an unlock condition.
   if (tile === 12) {
     // On floor 1 of a difficulty there's no floor above — the "up" stair is the
-    // way back to TOWN (same access rules as the town gate).
-    if (displayFloor() === 1) { player.x = nx; player.y = ny; enterTown(); return; }
+    // way back to TOWN (same access rules as the town gate). This fires from
+    // INSIDE the already-guarded move turn, so call the raw town-entry handle:
+    // the guarded enterTown would see the in-flight __turnBusy flag and silently
+    // no-op, stranding the player on the portal instead of sending them to town.
+    if (displayFloor() === 1) { player.x = nx; player.y = ny; enterTownRaw(); return; }
     dungeonLevel--;
     statusEffects = [];
     tickBuffs();
@@ -14284,6 +14288,13 @@ function pickup() {
 // Install the re-entrancy / halt guard around every player-action entry point.
 // Done here (after all are defined) by reassigning the binding, so both internal
 // callers and inline onclick="…" handlers route through the guarded version.
+// Raw, unguarded handle to the town-entry logic. move() uses this when a step
+// onto the floor-1 gate resolves into entering town: that call happens while the
+// move turn already holds __turnBusy, so it must bypass the re-entrancy guard
+// (the guarded enterTown would otherwise drop it and leave the player stranded
+// on the portal). Direct callers (TOWN button, 0/T key, conquest) still use the
+// guarded enterTown below.
+const enterTownRaw = enterTown;
 move           = guardAction(move);
 pickup         = guardAction(pickup);
 castSkillById  = guardAction(castSkillById);
