@@ -632,6 +632,7 @@
     line-height: 1.2;
   }
   .loot-subtab .svg-icon { width: 14px; height: 14px; }
+  .loot-subtab .dl-ic { width: 16px !important; height: 16px !important; }
   .loot-subtab:hover { background: #1e1e2e; color: #bbb; }
   .loot-subtab.active {
     background: #20202e;
@@ -12591,12 +12592,18 @@ function renderPanel() {
     // fall back to showing everything so the list never looks empty by accident.
     if (lootFilter !== 'all' && !counts[lootFilter]) lootFilter = 'all';
     // Build the subtab bar: All, then each slot that has items, then Other. Each
-    // slot reuses its existing gear vector icon (SLOT_ICONS + iconMarkup) rather
-    // than an emoji, matching the GEAR tab's slot art.
+    // slot shows the same colourful DawnLike sprite the GEAR tab paints for that
+    // slot (derived from the slot label's emoji), falling back to the flat vector
+    // icon only while the atlas is still loading.
     const slotLabel = s => SLOTS[s].label.replace(/^\S+\s/, '');
+    const slotTabIcon = s => {
+      const e = (SLOTS[s].label.match(EMOJI_RE) || [])[0];
+      const sp = e ? emojiSprite(e) : null;
+      return (sp && dlIcon(sp, 16)) || iconMarkup(SLOT_ICONS[s], ICON_EMPTY_COLOR, false);
+    };
     const tabDefs = [{ key: 'all', icon: '', name: 'All', n: inventory.length }];
     SLOT_KEYS.forEach(s => {
-      if (counts[s]) tabDefs.push({ key: s, icon: iconMarkup(SLOT_ICONS[s], ICON_EMPTY_COLOR, false), name: slotLabel(s), n: counts[s] });
+      if (counts[s]) tabDefs.push({ key: s, icon: slotTabIcon(s), name: slotLabel(s), n: counts[s] });
     });
     if (counts.other) tabDefs.push({ key: 'other', icon: '', name: 'Other', n: counts.other });
     const subtabs = '<div class="loot-subtabs">' + tabDefs.map(t =>
