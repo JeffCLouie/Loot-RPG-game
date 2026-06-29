@@ -3612,12 +3612,16 @@ const ATTR_FX = {
   atkPerMight:   0.6,    // Might → flat Attack power for EVERY class (see attrDamage)
   hpPerVit:      11,     // Vitality → max HP
   defPerVit:     0.5,    // Vitality → Defense
-  hpRegenPerVit: 0.16,   // Vitality → HP regen / turn
+  hpRegenPerVit: 0.06,   // Vitality → HP regen / turn (a slow trickle — HP is finite)
   mpPerSpr:      6,      // Spirit → max MP
-  mpRegenPerSpr: 0.10,   // Spirit → MP regen / turn
+  mpRegenPerSpr: 0.05,   // Spirit → MP regen / turn (a slow trickle — mana runs dry)
   spellPerSpr:   3,      // Spirit → spell skill power (Firebolt/Mend)
-  dodgePerAgi:   0.0072, // Agility → dodge chance
-  critPerLuck:   0.009,  // Luck → crit chance
+  // Agility/Luck no longer convert to dodge/crit linearly — they feed a *rating*
+  // that's run through softcap() (see playerDodge / playerCritChance), so every
+  // point is worth less than the last and these caps only matter in extreme
+  // late game. Kept tiny on purpose: stacking them is meant to be slow grind.
+  dodgePerAgi:   0.0009, // Agility → dodge rating (pre-softcap)
+  critPerLuck:   0.001,  // Luck → crit rating (pre-softcap)
 };
 // Damage scaling off the class's primary / secondary attribute (per point).
 const ATTR_DMG_PRIMARY   = 2.4;
@@ -3815,25 +3819,47 @@ function playerDefense() {
   return totalStat('DEF') + totalAttr('vitality') * ATTR_FX.defPerVit + foodFx('defFlat');
 }
 
-// Crit chance — driven by Luck (and gear CRIT/LCK). Crit chance only ever ranges
-// 0–100% in play, so it's clamped to [0%, 60%]: capped so you can't become a
-// guaranteed-crit machine, and floored at 0 so a cursed item can never push it
-// negative (no stat should ever read below 0).
-function playerCritChance() {
-  const rogueCrit = player.class === 'rogue' ? 0.08 : 0;
-  return Math.max(0, Math.min(0.6, 0.04 + rogueCrit + skillBonus('crit') + buffMag('critUp') + foodFx('critPct')
-    + (totalStat('CRIT') + totalStat('LCK')) * 0.01
-    + totalAttr('luck') * ATTR_FX.critPerLuck));
+// ── DIMINISHING RETURNS ──
+// The percentage "chance" stats (crit, dodge) used to scale LINEARLY off
+// attributes and gear, so a dedicated build could cap them out within the first
+// ten floors. They now run every point of investment through this softcap curve
+// instead: all of a stat's sources are summed into a single linear "rating" R,
+// which is then compressed toward a ceiling. The first few percent come cheap,
+// but each extra point of rating is worth less than the last — you can keep
+// pushing the number up forever, yet only approach the cap at extreme, late-game
+// investment, so there's no min/maxing it in the early floors.
+//   softcap(R, cap) ≈ R while R is tiny · → cap as R grows · cap/2 when R == cap.
+function softcap(R, cap) {
+  if (R <= 0 || cap <= 0) return 0;
+  return R / (1 + R / cap);
 }
 
-// Chance to completely avoid an incoming hit, driven by Agility and gear SPD.
-// Capped so you can never become untouchable — depth threat still outpaces it.
+// Crit chance. A small flat base (your class identity) is guaranteed and never
+// diminished; everything you INVEST in crit — the Luck attribute, gear CRIT/LCK,
+// skills, food and buffs — is summed into one rating and softcapped, so stacking
+// crit has ever-shrinking returns. Still clamped to [0%, 60%] as a hard backstop:
+// the softcap means you only ever creep toward that ceiling very late, and the
+// floor keeps a cursed item from ever reading negative.
+function playerCritChance() {
+  const flat = 0.04 + (player.class === 'rogue' ? 0.08 : 0);
+  const rating = totalAttr('luck') * ATTR_FX.critPerLuck
+    + (totalStat('CRIT') + totalStat('LCK')) * 0.004
+    + skillBonus('crit') + buffMag('critUp') + foodFx('critPct');
+  return Math.max(0, Math.min(0.6, flat + softcap(rating, 0.5)));
+}
+
+// Chance to completely avoid an incoming hit. Like crit, every source — the
+// Agility attribute, gear SPD/DODGE, skills, food and buffs — feeds one rating
+// that's softcapped, so dodge climbs slowly and only nears its ceiling very late.
+// Rogues get a flat head-start and a slightly higher cap; depth threat still
+// outpaces dodge so you can never become untouchable.
 function playerDodge() {
-  const base = totalAttr('agility') * ATTR_FX.dodgePerAgi + totalStat('SPD') * 0.006
-    + totalStat('DODGE') / 100 + skillBonus('dodge') + buffMag('dodgeUp') + foodFx('dodgePct');
-  // Rogues are slipperier: a flat dodge bump and a slightly higher ceiling.
-  if (player.class === 'rogue') return Math.min(0.6, base + 0.08);
-  return Math.min(0.5, base);
+  const rogue = player.class === 'rogue';
+  const flat = rogue ? 0.08 : 0;
+  const rating = totalAttr('agility') * ATTR_FX.dodgePerAgi
+    + totalStat('SPD') * 0.002 + totalStat('DODGE') * 0.005
+    + skillBonus('dodge') + buffMag('dodgeUp') + foodFx('dodgePct');
+  return Math.max(0, Math.min(rogue ? 0.6 : 0.5, flat + softcap(rating, rogue ? 0.5 : 0.45)));
 }
 function recomputeMaxStats() {
   player.maxHp = baseMaxHp();
@@ -3855,8 +3881,9 @@ function hpRegenPerTurn() {
 function mpRegenPerTurn() {
   // A slow trickle on purpose: mana should run dry in sustained fights so mana
   // pots stay worth quaffing. Kept fractional (applyRegen accumulates it) so
-  // sub-1 regen is possible while the MP readout stays a clean integer.
-  return 0.5 + totalAttr('spirit') * ATTR_FX.mpRegenPerSpr + skillBonus('mpRegen');
+  // sub-1 regen is possible while the MP readout stays a clean integer. The base
+  // and the per-Spirit rate are both deliberately low — mana is a finite resource.
+  return 0.25 + totalAttr('spirit') * ATTR_FX.mpRegenPerSpr + skillBonus('mpRegen');
 }
 
 const FOODS = [
@@ -6034,6 +6061,7 @@ document.addEventListener('click', (e) => {
 
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
+  { date: '2026-06-29', size: 'big', v: 'Stat & resource overhaul', by: 'Claude', notes: ['Crit chance and dodge no longer scale in a straight line off attributes and gear — every point of investment now feeds a softcapped "rating", so the first few percent come cheap but each extra point is worth less than the last. You can keep climbing forever, but only approach the cap at extreme late-game investment instead of maxing out by floor 10.', 'Per-point gains from Luck (crit), Agility (dodge) and gear CRIT/SPD/DODGE were cut hard, so a fresh hero starts much leaner and getting past ~10% crit takes real, dedicated investment.', 'Health and mana are finite again: HP and MP regen trickle far more slowly, a level-up now mends 40% of your bars instead of fully restoring them, mana potions restore a smaller share of max MP, and health potions heal 25% (down from 30%).', 'Net effect: runs lean harder and resources matter more — you can no longer feel like you have limitless HP. Class identities (Rogue crit/dodge, Mage mana, Templar regen) are preserved.'] },
   { date: '2026-06-29', size: 'small', v: 'Tidier Settings menu', by: 'Claude', notes: ['The ⚙️ Settings menu is now one consistent style — every row shares the same neutral tile instead of the old jumble of red, blue and green buttons.', 'Sound, Zoom and Time gained icons, and every row’s icon now sits in the same fixed cell so the labels line up cleanly.', 'Only meaningful states still colour: New Run flashes red when armed to wipe, and Sound dims when muted.'] },
   { date: '2026-06-29', size: 'small', v: 'Auto-Loot on the LOOT tab', by: 'ASuiter89', notes: ['The ♻️ Auto-Loot picker moved out of the ⚙️ settings menu onto the LOOT tab, where it belongs — a button right above your loot shows its on/off state at a glance and opens the per-rarity Keep / Scrap / Sell picker.'] },
   { date: '2026-06-29', size: 'medium', v: 'Shared stash', by: 'Claude', notes: ['The town Vault is now shared across all of your save slots — gold or gear banked by one hero can be withdrawn by any other, so it doubles as account-wide storage you can pass loot between characters with.', 'Signed in? The shared stash also syncs to your account and follows you across devices.', 'Anything your existing heroes had banked is merged into the shared pool automatically, so nothing is lost.'] },
@@ -9376,7 +9404,7 @@ function affixStatValue(stat, lvl, mult) {
 // level & rarity but cap out, so stacking five rolls can't trivialise the game —
 // `per` is the growth and `cap` the per-roll ceiling.
 const AFFIX_CURVES = {
-  ATK:{flat:1}, DEF:{flat:1}, SPD:{flat:1}, HP:{flat:6}, MP:{flat:4}, REGEN:{flat:0.4},
+  ATK:{flat:1}, DEF:{flat:1}, SPD:{flat:1}, HP:{flat:6}, MP:{flat:4}, REGEN:{flat:0.2},
   THORNS:{flat:0.7}, HPKILL:{flat:0.7}, MPKILL:{flat:0.5},
   LEECH:{pct:0.18,cap:8}, MPLEECH:{pct:0.18,cap:8}, DR:{pct:0.12,cap:6}, BLOCK:{pct:0.16,cap:8},
   DODGE:{pct:0.12,cap:6}, IDMG:{pct:0.25,cap:12}, DBLSTRIKE:{pct:0.14,cap:7}, CLEAVE:{pct:0.5,cap:25},
@@ -13543,8 +13571,10 @@ function checkLevelUp() {
     player.attrPoints = (player.attrPoints || 0) + ATTR_POINTS_PER_LEVEL;
     player.skillPoints = (player.skillPoints || 0) + SKILL_POINTS_PER_LEVEL;
     recomputeMaxStats();        // level grants more base HP/MP
-    player.hp = player.maxHp;   // a level up fully restores you
-    player.mp = player.maxMp;
+    // A level-up mends a chunk of HP/MP — a real relief mid-fight, but no longer
+    // a free full reset, so health and mana stay finite resources you manage.
+    player.hp = Math.min(player.maxHp, player.hp + Math.round(player.maxHp * 0.4));
+    player.mp = Math.min(player.maxMp, player.mp + Math.round(player.maxMp * 0.4));
     sfx('levelup');
     showLevelUpBanner(player.level);
     log(`⭐ LEVEL UP! You are now level ${player.level}!`, 'important');
@@ -13709,7 +13739,7 @@ function updateBars() {
 // after a sip both flasks recharge over a few turns. Health potions restore a
 // percentage of max HP so they scale with you instead of becoming useless at
 // high levels.
-const HEAL_PERCENT = 0.30;
+const HEAL_PERCENT = 0.25;     // a sip mends 25% of max HP — sustain, not a reset
 const POTION_CD = 3;            // shared cooldown — recharges over 3 turns
 function healPotionAmount() { return Math.max(1, Math.round(player.maxHp * HEAL_PERCENT)); }
 function potionReady() { return (player.potionCd || 0) === 0; }
@@ -13723,13 +13753,17 @@ function useHealthPotion() {
   spendPotionTurn();
 }
 
-const MANA_AMOUNT = 40;
+// Mana potions restore a fraction of max MP (so they scale with you) rather than
+// a flat pool — kept deliberately modest so mana stays a resource you ration.
+const MANA_PERCENT = 0.25;
+function manaPotionAmount() { return Math.max(10, Math.round(player.maxMp * MANA_PERCENT)); }
 function useManaPotion() {
   if (!potionReady()) { log(`⏳ Potions recharge — ${player.potionCd} turn${player.potionCd === 1 ? '' : 's'} left.`); return; }
   if (player.mp >= player.maxMp) { log('Already at full mana.'); return; }
-  player.mp = Math.min(player.maxMp, player.mp + MANA_AMOUNT);
+  const restore = Math.min(player.maxMp - player.mp, manaPotionAmount());
+  player.mp += restore;
   sfx('potion');
-  log(`🔷 Quaffed a ${logPotion('Mana Potion')}. +${MANA_AMOUNT} MP`, 'loot');
+  log(`🔷 Quaffed a ${logPotion('Mana Potion')}. +${restore} MP`, 'loot');
   spendPotionTurn();
 }
 
