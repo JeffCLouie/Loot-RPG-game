@@ -6023,10 +6023,18 @@ function generateMap() {
     const n = rnd(2, 5);
     for (let i = 0; i < n; i++) { const c = randomFloorTile(reach); if (c) mapData[c.y][c.x] = 8; }
   }
-  // ── TELEPORTER PAIR ──
-  if (rooms.length >= 2 && Math.random() < 0.45) {
-    const a = randomFloorTile(reach), b = randomFloorTile(reach);
-    if (a && b && (a.x !== b.x || a.y !== b.y)) {
+  // ── TELEPORTER PAIR ── rare, and the two pads must sit far apart so a warp
+  // is a meaningful shortcut rather than a tiny hop.
+  if (rooms.length >= 2 && Math.random() < 0.18) {
+    const MIN_TP_DIST = 22; // Manhattan tiles between the paired pads
+    let a = null, b = null;
+    for (let tries = 0; tries < 60; tries++) {
+      const p = randomFloorTile(reach), q = randomFloorTile(reach);
+      if (p && q && (Math.abs(p.x - q.x) + Math.abs(p.y - q.y)) >= MIN_TP_DIST) {
+        a = p; b = q; break;
+      }
+    }
+    if (a && b) {
       mapData[a.y][a.x] = 9; mapData[b.y][b.x] = 9;
       teleporters[a.y+','+a.x] = { x: b.x, y: b.y };
       teleporters[b.y+','+b.x] = { x: a.x, y: a.y };
