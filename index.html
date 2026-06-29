@@ -8388,6 +8388,9 @@ function spawnEnemies() {
   // Some floor modifiers crowd the level with extra foes.
   if (!isBossFloor && floorMod.enemyMult) count = Math.round(count * floorMod.enemyMult);
   if (!isBossFloor && pfx('enemy', 1) !== 1) count = Math.max(1, Math.round(count * pfx('enemy', 1)));
+  // The opening floors used to be a faceroll — pack one extra foe onto floors 1-3
+  // so even the first dive makes you fight for it.
+  if (!isBossFloor && dungeonLevel <= 3) count += 1;
 
   // Pick 2-3 enemy types for this floor from the depth-appropriate band, so
   // each floor has variety while every monster stays around the same level.
@@ -8412,6 +8415,12 @@ function spawnEnemies() {
   // end (deep floors just demand a lot more grinding to get over).
   const lvlGap = Math.max(0, player.level - dungeonLevel);
   const threatScale = Math.min(2, 1 + lvlGap * 0.06);
+
+  // Early-game bite: the first few floors are deliberately punchy so wins feel
+  // earned, not handed out — your bare-knuckle scraps actually hurt. Strongest on
+  // floor 1 and fading to nothing by floor 5 (deeper floors already bite hard via
+  // depthThreat, so this only lifts the soft opening).
+  const earlyBite = dungeonLevel <= 4 ? 1 + (5 - dungeonLevel) * 0.13 : 1;
 
   for (let i = 0; i < count; i++) {
     let ex, ey;
@@ -8481,7 +8490,7 @@ function spawnEnemies() {
         // main's anti-grind nudge on top (out-leveling a floor toughens its foes).
         const threat = depthThreat(mobLevel);
         const baseHp = Math.max(1, Math.round((10 + mobLevel * 8) * threat * (floorMod.hpMult || 1) * pfx('hp', 1) * threatScale));
-        const baseDmg = Math.max(1, Math.round((3.5 + mobLevel * 1.9 + bandIdx) * threat * (floorMod.dmgMult || 1) * pfx('dmg', 1) * threatScale));
+        const baseDmg = Math.max(1, Math.round((3.5 + mobLevel * 1.9 + bandIdx) * threat * (floorMod.dmgMult || 1) * pfx('dmg', 1) * threatScale * earlyBite));
         if (i === eliteIndex) {
           const eHp = Math.round(baseHp * 2.2);
           const eName = pick(ELITE_NAMES);
