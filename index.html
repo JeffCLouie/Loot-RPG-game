@@ -4774,7 +4774,7 @@ const SKILL_TREES = {
       {"id":"w_a21","name":"Rampage","icon":"sk_wa_rampage","mp":18,"cd":5,"cast":{"shape":"melee","wpn":1.6,"repeat":2,"lifesteal":0.2},"desc":"A frenzy of strikes hitting twice and stealing heavy life.","br":1,"x":0.72,"y":0.34,"band":1,"req":["w_a01"]},
       {"id":"w_a22","name":"Slam","icon":"sk_wa_slam","mp":12,"cd":5,"cast":{"shape":"nova","radius":2,"wpn":1.9,"status":{"effect":"stun","dur":2,"chance":0.6}},"desc":"Smash the ground for a shockwave that stuns nearby foes.","br":2,"x":0.72,"y":0.34,"band":1,"req":["w_a02"]},
       {"id":"w_a23","name":"Impale","icon":"sk_wa_impale","mp":12,"cd":5,"cast":{"shape":"line","range":5,"wpn":2,"crit":true,"execute":0.25},"desc":"A piercing line strike that executes weakened foes.","br":3,"x":0.72,"y":0.34,"band":1,"req":["w_a03"]},
-      {"id":"w_a24","name":"Shield Charge","icon":"sk_wa_charge","mp":12,"cd":6,"cast":{"shape":"blast","range":5,"radius":2,"wpn":1.6,"status":{"effect":"stun","dur":2,"chance":1},"buff":[{"id":"shield","dur":5,"mag":70}]},"desc":"Charge a foe to stun it and raise a protective shield.","br":4,"x":0.72,"y":0.34,"band":1,"req":["w_a04"]},
+      {"id":"w_a24","name":"Shield Charge","icon":"sk_wa_charge","mp":12,"cd":6,"cast":{"shape":"teleport","range":5,"wpn":1.6,"status":{"effect":"stun","dur":2,"chance":1},"buff":[{"id":"shield","dur":5,"mag":70}]},"desc":"Charge across the gap to the nearest foe — slam it for a stun and raise a protective shield. Your way onto a ranged attacker.","br":4,"x":0.72,"y":0.34,"band":1,"req":["w_a04"]},
       {"id":"w_a30","name":"Warstomp","icon":"sk_wa_warstomp","mp":14,"cd":6,"cast":{"shape":"nova","radius":3,"wpn":1.6,"knockback":2,"status":{"effect":"stun","dur":2,"chance":0.8}},"desc":"Stomp the earth to knock back and stun all around you.","br":0,"x":0.28,"y":0.58,"band":2,"req":["w_a10"]},
       {"id":"w_a31","name":"Blood Frenzy","icon":"sk_wa_warcry","mp":14,"cd":7,"cast":{"shape":"self","buff":[{"id":"dmgUp","dur":7,"mag":0.4},{"id":"lifestealUp","dur":7,"mag":0.15}]},"desc":"Enter a rage boosting damage and lifesteal as you fight.","br":1,"x":0.28,"y":0.58,"band":2,"req":["w_a11"]},
       {"id":"w_a32","name":"Whirlwind","icon":"sk_wa_whirl","mp":15,"cd":5,"syn":{"skill":"w_p22","per":0.05},"cast":{"shape":"nova","radius":2,"wpn":1.7,"repeat":2},"desc":"Spin furiously, striking everything around you twice.","br":2,"x":0.28,"y":0.58,"band":2,"req":["w_a12"]},
@@ -4788,7 +4788,7 @@ const SKILL_TREES = {
       {"id":"w_a50","name":"Avatar","icon":"sk_wa_avatar","mp":30,"cd":12,"cast":{"shape":"self","buff":[{"id":"shield","dur":10,"mag":260},{"id":"defUp","dur":10,"mag":0.6},{"id":"dmgUp","dur":10,"mag":0.5},{"id":"regen","dur":10,"mag":16}]},"desc":"Transform into an unstoppable titan with a colossal shield and surging power.","br":0,"x":0.5,"y":0.82,"band":3,"reqAny":["w_a30","w_a40"]},
       {"id":"w_a51","name":"Apocalypse","icon":"sk_wa_apocalypse","mp":28,"cd":8,"cast":{"shape":"melee","wpn":2.4,"repeat":3,"lifesteal":0.35,"execute":0.3},"desc":"A storm of bloody strikes hitting three times, draining heavy life and executing the wounded.","br":1,"x":0.5,"y":0.82,"band":3,"reqAny":["w_a31","w_a41"]},
       {"id":"w_a52","name":"Cataclysm","icon":"sk_wa_cataclysm","mp":34,"cd":11,"syn":{"skill":"w_p42","per":0.04},"cast":{"shape":"nova","radius":4,"wpn":3.4,"knockback":2,"status":{"effect":"stun","dur":3,"chance":0.8}},"desc":"A titanic two-handed quake that obliterates everything around you.","br":2,"x":0.5,"y":0.82,"band":3,"reqAny":["w_a32","w_a42"]},
-      {"id":"w_a53","name":"Decapitate","icon":"sk_wa_titanleap","mp":24,"cd":9,"cast":{"shape":"blast","range":7,"radius":2,"wpn":3,"crit":true,"execute":0.4,"status":{"effect":"vuln","dur":4,"chance":1}},"desc":"Leap to a foe with a guaranteed crit that executes all but bosses.","br":3,"x":0.5,"y":0.82,"band":3,"reqAny":["w_a33","w_a43"]},
+      {"id":"w_a53","name":"Decapitate","icon":"sk_wa_titanleap","mp":24,"cd":9,"cast":{"shape":"teleport","range":7,"wpn":3,"crit":true,"execute":0.4,"status":{"effect":"vuln","dur":4,"chance":1}},"desc":"Leap across the battlefield onto a foe with a guaranteed crit that executes all but bosses — runs down fleeing archers and casters.","br":3,"x":0.5,"y":0.82,"band":3,"reqAny":["w_a33","w_a43"]},
       {"id":"w_a54","name":"War Machine","icon":"sk_wa_warmachine","mp":30,"cd":12,"cast":{"shape":"self","buff":[{"id":"shield","dur":12,"mag":300},{"id":"thorns","dur":12,"mag":110},{"id":"defUp","dur":12,"mag":0.5},{"id":"regen","dur":12,"mag":18}]},"desc":"Become an impregnable fortress with an immense shield, thorns, and relentless regeneration.","br":4,"x":0.5,"y":0.82,"band":3,"reqAny":["w_a34","w_a44"]}
     ], 'active'),
   },
@@ -4971,7 +4971,7 @@ const SKILL_TREES = {
       {"id":"t_a12","name":"Retribution","icon":"sk_ta_strike","mp":9,"cd":4,"syn":{"skill":"t_p02","per":0.05},"cast":{"shape":"cleave","wpn":1.6,"status":{"effect":"vuln","dur":3,"chance":1}},"desc":"A vengeful cleave that leaves struck foes vulnerable.","br":2,"x":0.28,"y":0.34,"band":1,"req":["t_a02"]},
       {"id":"t_a13","name":"Bless","icon":"sk_ta_blessbuff","mp":10,"cd":5,"cast":{"shape":"self","buff":[{"id":"regen","dur":7,"mag":10},{"id":"dmgUp","dur":7,"mag":0.2}]},"desc":"Bless yourself with renewing regeneration and surging might.","br":3,"x":0.28,"y":0.34,"band":1,"req":["t_a03"]},
       {"id":"t_a14","name":"Holy Fire","icon":"sk_ta_holyfire","mp":12,"cd":5,"syn":{"skill":"t_p04","per":0.05},"cast":{"shape":"nova","spell":1.3,"radius":2,"status":{"effect":"burn","dur":3,"chance":0.8}},"desc":"Erupt in holy flame, scorching all foes around you.","br":4,"x":0.28,"y":0.34,"band":1,"req":["t_a04"]},
-      {"id":"t_a20","name":"Zealous Strike","icon":"sk_ta_strike","mp":12,"cd":5,"syn":{"skill":"t_p20","per":0.05},"cast":{"shape":"melee","wpn":1.7,"spell":0.9,"lifesteal":0.15,"repeat":2},"desc":"A flurry of two holy strikes that drains the life of the wicked.","br":0,"x":0.72,"y":0.34,"band":1,"req":["t_a00"]},
+      {"id":"t_a20","name":"Zealous Charge","icon":"sk_ta_strike","mp":12,"cd":5,"syn":{"skill":"t_p20","per":0.05},"cast":{"shape":"teleport","range":5,"wpn":1.7,"spell":0.9,"lifesteal":0.15,"repeat":2,"buff":[{"id":"dodgeUp","dur":2,"mag":0.3}]},"desc":"Charge the nearest foe in a burst of holy fervor, striking twice and draining life — closes on archers and casters, dodging as you go.","br":0,"x":0.72,"y":0.34,"band":1,"req":["t_a00"]},
       {"id":"t_a21","name":"Aegis Field","icon":"sk_ta_aegisfield","mp":14,"cd":7,"cast":{"shape":"self","buff":[{"id":"shield","dur":8,"mag":130},{"id":"defUp","dur":8,"mag":0.35},{"id":"regen","dur":8,"mag":10}]},"desc":"Project a vast aegis granting a great shield, defense, and regeneration.","br":1,"x":0.72,"y":0.34,"band":1,"req":["t_a01"]},
       {"id":"t_a22","name":"Condemn","icon":"sk_ta_condemn","mp":12,"cd":5,"syn":{"skill":"t_p22","per":0.05},"cast":{"shape":"blast","spell":1.4,"radius":2,"range":5,"knockback":2,"status":{"effect":"stun","dur":2,"chance":0.7}},"desc":"Hurl a damning blast that knocks back and stuns the guilty.","br":2,"x":0.72,"y":0.34,"band":1,"req":["t_a02"]},
       {"id":"t_a23","name":"Consecrate","icon":"sk_ta_consecrate","mp":18,"cd":6,"syn":{"skill":"t_p23","per":0.05},"cast":{"shape":"nova","spell":1,"radius":3,"heal":{"flat":50,"perLevel":4},"buff":[{"id":"regen","dur":6,"mag":12}]},"desc":"Hallow the ground, searing foes while mending your wounds.","br":3,"x":0.72,"y":0.34,"band":1,"req":["t_a03"]},
@@ -15158,6 +15158,10 @@ const BUFF_LABEL = {
   lifestealUp: 'lifesteal',
 };
 const turnsTxt = d => `${d} turn${d === 1 ? '' : 's'}`;
+// shield/regen/thorns buffs carry a FLAT magnitude (HP / reflect), the rest a
+// fraction shown as a percent — matches how resolveCast applies them.
+const FLAT_BUFFS = new Set(['shield', 'regen', 'thorns']);
+const buffAmt = b => FLAT_BUFFS.has(b.id) ? `+${Math.round(b.mag)}` : `+${Math.round((b.mag || 0) * 100)}%`;
 // fx object → compact per-rank one-liner ("+1.5% crit, +3 attack"), for charges.
 function fxOneLine(fx) {
   return Object.keys(fx).map(k => {
@@ -15168,7 +15172,7 @@ function fxOneLine(fx) {
 function trigEffectLabel(e) {
   const p = [];
   if (e.charge) p.push(`gain ${e.amt && e.amt > 1 ? e.amt + ' ' : ''}<b>${e.charge}</b>`);
-  if (e.buff) p.push(`+${Math.round((e.buff.mag || 0) * 100)}% ${BUFF_LABEL[e.buff.id] || e.buff.id} (${turnsTxt(e.buff.dur)})`);
+  if (e.buff) p.push(`${buffAmt(e.buff)} ${BUFF_LABEL[e.buff.id] || e.buff.id} (${turnsTxt(e.buff.dur)})`);
   if (typeof e.heal === 'number') p.push(`heal ${Math.round(e.heal * 100)}% HP`);
   if (typeof e.mana === 'number') p.push(`restore ${Math.round(e.mana * 100)}% MP`);
   if (e.nextCrit) p.push('next hit crits');
@@ -15215,10 +15219,14 @@ function skillMechList(n) {
   }
   if (n.cast) {
     const c = n.cast;
+    // Movement first — gap-closers/pulls/escapes are the headline of a mobility skill.
+    if (c.shape === 'teleport') add('Gap-closer', '#5fc9c0', `Blink up to ${c.range || 6} tiles onto the nearest foe and strike — closes on ranged attackers.`);
+    if (c.pull) add('Pull', '#5fc9c0', 'Yanks a distant foe across the gap to you.');
+    if (c.recall) add('Escape', '#5fc9c0', 'Blink away to the spot furthest from any foe.');
     if (c.status) add('Status', '#d98a6f', `Inflicts ${c.status.effect} (${turnsTxt(c.status.dur)}).`);
     if (c.detonate) add('Detonate', '#e07a3a', `Explodes vuln-marked foes for ${Math.round(c.detonate * 100)}% damage.`);
     if (c.summon) add('Summon', '#7ad08a', `Calls ${c.summon.count > 1 ? c.summon.count + ' ' : ''}${c.summon.kind}${c.summon.count > 1 ? 's' : ''} for ${turnsTxt(c.summon.ttl)}.`);
-    if (Array.isArray(c.buff)) for (const b of c.buff) add('Buff', '#6fb7d9', `+${Math.round((b.mag || 0) * 100)}% ${BUFF_LABEL[b.id] || b.id} (${turnsTxt(b.dur)}).`);
+    if (Array.isArray(c.buff)) for (const b of c.buff) add('Buff', '#6fb7d9', `${buffAmt(b)} ${BUFF_LABEL[b.id] || b.id} (${turnsTxt(b.dur)}).`);
     if (c.heal) {
       const parts = [];
       if (c.heal.flat) parts.push(`${c.heal.flat} HP`);
