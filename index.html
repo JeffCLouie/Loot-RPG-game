@@ -13875,6 +13875,12 @@ function clearHeldMove() { heldMoveKeys.length = 0; stopMoveRepeat(); }
 // If the window loses focus we never get the keyup, so drop any held keys to
 // avoid the player running off on their own when focus returns.
 window.addEventListener('blur', clearHeldMove);
+// A right-click opens the OS/desktop context menu, which swallows the keyup for
+// any held movement key — so the key would "stick" and the hero keeps running.
+// Dropping held keys on contextmenu (and when the tab is hidden, same problem)
+// stops the runaway.
+window.addEventListener('contextmenu', clearHeldMove);
+document.addEventListener('visibilitychange', () => { if (document.hidden) clearHeldMove(); });
 
 document.addEventListener('keyup', e => {
   const i = heldMoveKeys.indexOf(e.key);
