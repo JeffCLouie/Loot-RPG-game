@@ -1746,7 +1746,11 @@
     .skill-btn { display: none !important; }
 
     /* Drawer: full-width sheet over the dungeon, stopping above the nav bar so
-       its bottom rows stay readable instead of slipping behind the buttons. */
+       its bottom rows stay readable instead of slipping behind the buttons.
+       Lifted above the town / shop / mystic menus (200/210) so the bag can be
+       opened ON TOP of the town hub — e.g. after dying you can assess your loot
+       and gear before deciding what to sell, forge, or stash. It stops above the
+       nav bar, so the BAG/CLOSE toggle stays reachable to flip back to town. */
     #side-panel {
       left: 0;
       right: auto;
@@ -1754,6 +1758,7 @@
       bottom: var(--bar-h);
       border-left: none;
       box-shadow: 0 -4px 16px rgba(0,0,0,0.6);
+      z-index: 230;
     }
   }
 
@@ -1894,7 +1899,11 @@
     .skill-btn { display: none !important; }
 
     /* Drawer: full-width sheet over the dungeon, stopping above the nav bar so
-       its bottom rows stay readable instead of slipping behind the buttons. */
+       its bottom rows stay readable instead of slipping behind the buttons.
+       Lifted above the town / shop / mystic menus (200/210) so the bag can be
+       opened ON TOP of the town hub — e.g. after dying you can assess your loot
+       and gear before deciding what to sell, forge, or stash. It stops above the
+       nav bar, so the BAG/CLOSE toggle stays reachable to flip back to town. */
     #side-panel {
       left: 0;
       right: auto;
@@ -1902,6 +1911,7 @@
       bottom: var(--bar-h);
       border-left: none;
       box-shadow: 0 -4px 16px rgba(0,0,0,0.6);
+      z-index: 230;
     }
   }
 
