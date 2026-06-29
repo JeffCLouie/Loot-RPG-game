@@ -6066,13 +6066,24 @@ function generateMap() {
   if (dungeonLevel > 1) mapData[startPos.y][startPos.x] = entryStair;
 
   // ── LAVA (passable, burns) ── pooled into a couple of cohesive patches
-  // rather than scattered single tiles.
+  // rather than scattered single tiles. Lava and water must never touch (it
+  // reads as wrong and the shores would clash), so any cluster tile that sits
+  // next to water — orthogonally or diagonally — is left as plain floor.
   if (dungeonLevel >= 2 && Math.random() < 0.4) {
+    const nearWater = (x, y) => {
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const nx = x + dx, ny = y + dy;
+        if (nx >= 0 && ny >= 0 && nx < MAP_W && ny < MAP_H && mapData[ny][nx] === 6) return true;
+      }
+      return false;
+    };
     const pools = rnd(1, 2);
     for (let p = 0; p < pools; p++) {
       const seed = randomFloorTile(reach);
-      if (!seed) break;
-      for (const c of growCluster(seed, rnd(3, 7))) mapData[c.y][c.x] = 7;
+      if (!seed || nearWater(seed.x, seed.y)) continue; // keep pools clear of water
+      for (const c of growCluster(seed, rnd(3, 7))) {
+        if (!nearWater(c.x, c.y)) mapData[c.y][c.x] = 7;
+      }
     }
   }
   // ── SPIKE TRAPS (passable, stabs) ──
