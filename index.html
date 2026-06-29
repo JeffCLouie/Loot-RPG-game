@@ -3557,15 +3557,15 @@ const WEAPON_STYLE_DESC = {
 };
 // The reach of a base, or of an item's resolved weapon type.
 function weaponRange(base) { return WEAPON_RANGE[base] || 1; }
-// A tiny horizontal map of a weapon's reach: the gold centre tile is you, each red
-// tile ahead is a square it can strike; faint tiles behind keep you centred so the
-// reach reads at a glance. Shared by the weapon tooltip and the Forge preview.
+// A tiny horizontal map of a weapon's reach: the gold tile is you, each red tile
+// ahead is a square it can strike, so the reach reads at a glance. Shared by the
+// weapon tooltip and the Forge preview.
 function weaponRangeGridHTML(base) {
   const range = weaponRange(base);
   let cells = '';
-  for (let i = -range; i <= range; i++) {
-    const bg = i === 0 ? '#e3c344' : i > 0 ? '#c0392b' : '#241c14';
-    const bd = i === 0 ? '#f4e08a' : i > 0 ? '#e0556b' : '#3a3226';
+  for (let i = 0; i <= range; i++) {
+    const bg = i === 0 ? '#e3c344' : '#c0392b';
+    const bd = i === 0 ? '#f4e08a' : '#e0556b';
     cells += `<span class="rg-cell" style="background:${bg};border-color:${bd}"></span>`;
   }
   return `<span class="range-grid">${cells}</span><span class="range-cap">reach ${range}</span>`;
