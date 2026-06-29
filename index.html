@@ -6188,6 +6188,7 @@ function setAutoLoot(tier, action) {
   autoLootConfig()[tier] = action;
   sfx('click');
   renderAutoLoot();
+  renderPanel();   // refresh the LOOT-tab button's on/off status behind the overlay
   saveGame();
 }
 function setAutoLootAll(action) {
@@ -6196,6 +6197,7 @@ function setAutoLootAll(action) {
   for (const t of Object.keys(TIERS)) cfg[t] = action;
   sfx('click');
   renderAutoLoot();
+  renderPanel();   // refresh the LOOT-tab button's on/off status behind the overlay
   saveGame();
 }
 
