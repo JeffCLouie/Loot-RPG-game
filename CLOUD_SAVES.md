@@ -70,6 +70,11 @@ used by the leaderboard cover cloud saves too.
 - **Conflicts.** Sync is last-write-wins per slot by save timestamp, which fits
   the "play on one device at a time" case. Playing the same slot on two devices
   at once can let the later save overwrite the earlier one.
+- **Blank slots never win.** A hero who hasn't begun (no class, no progress) is
+  never saved, pushed, or counted in a sync — so signing in on a fresh device
+  pulls your existing account saves down instead of letting the empty title-screen
+  slot overwrite them. A real cloud save always beats a blank local slot
+  regardless of timestamps; timestamps only decide between two *started* saves.
 - **Privacy.** Only the player's own save JSON is stored, and RLS prevents anyone
   else's key from reading it. Passwords are handled entirely by Supabase Auth —
   the game never stores them.

@@ -13617,8 +13617,23 @@ let _wipingSave = false; // set while wiping so unload autosaves can't restore t
 // newer copy we just pulled from the cloud. init() always re-reads the truth from
 // localStorage on the next boot, so suppressing this last save is exactly right.
 let _switchingSlot = false;
+// Has this save actually been started? A brand-new hero on the title screen has
+// no class and no progress (level 1, floor 1, no gold) — that "blank" pre-game
+// state must never be persisted, pushed to the cloud, or allowed to win a sync
+// over a real save, or signing in on a fresh device clobbers existing slots.
+// Class is the primary signal; the progress checks also cover legacy saves made
+// before the class system (class null, but real level/floor/gold).
+function saveStarted(d) {
+  if (!d || !d.player) return false;
+  const p = d.player;
+  return !!(p.class || (p.level > 1) || (p.maxFloor > 1) || (p.gold > 0));
+}
 function saveGame() {
   if (_wipingSave || _switchingSlot) return; // a slot switch / wipe is mid-flight — don't clobber the target slot
+  // Don't create a save for a hero who hasn't begun (no class / no progress).
+  // This is the "save file before the game is even started" that otherwise gets
+  // stamped with a fresh ts and pushed over real cloud saves on a new device.
+  if (!saveStarted({ player })) return;
   try {
     const data = {
       player, inventory, equipped, dungeonLevel, buffs, pact,
@@ -14312,6 +14327,9 @@ async function cloudPushSlot(slot, opts) {
   let raw; try { raw = localStorage.getItem(slotKey(slot)); } catch (e) {}
   if (!raw) return false;
   let data; try { data = JSON.parse(raw); } catch (e) { return false; }
+  // Never upload a blank, not-yet-started hero — it would overwrite whatever real
+  // save already lives in this slot on the account.
+  if (!saveStarted(data)) return false;
   if (!opts.keepalive) await ensureToken();
   try {
     const res = await fetch(LB_SUPABASE_URL + '/rest/v1/saves?on_conflict=user_id,slot', {
@@ -14366,11 +14384,24 @@ async function cloudReconcile() {
     const c = cloud[i];
     const cts = (c && c.ts) || 0;
     const lts = (local && local.ts) || 0;
-    if (c && cts > lts) {
-      // Cloud holds a newer save — pull it into the local cache.
+    const cStarted = saveStarted(c);
+    const lStarted = saveStarted(local);
+    const pullCloud = () => {
       try { localStorage.setItem(slotKey(i), JSON.stringify(c)); if (i === activeSlot) result.activeChanged = true; } catch (e) {}
-    } else if (local && lts > cts) {
-      // Local is newer (or the slot is cloud-only-missing) — push it up.
+    };
+    if (cStarted && !lStarted) {
+      // Cloud has a real character but this device's slot is blank/unstarted —
+      // always take the cloud copy, no matter how fresh the local ts looks. This
+      // is the fix for a new device clobbering existing account saves.
+      pullCloud();
+    } else if (lStarted && !cStarted) {
+      // This device has the only real save for the slot — push it up.
+      uploads.push(cloudPushSlot(i));
+    } else if (c && cts > lts) {
+      // Both real (or both blank): cloud holds the newer save — pull it down.
+      pullCloud();
+    } else if (local && lStarted && lts > cts) {
+      // Both real: local is the newer save — push it up.
       uploads.push(cloudPushSlot(i));
     }
   }
