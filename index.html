@@ -6332,6 +6332,7 @@ document.addEventListener('click', (e) => {
 
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
+  { date: '2026-06-29', size: 'medium', v: 'Every action costs a turn', by: 'Claude', notes: ['Anything you do on a floor now passes a turn, so the world keeps moving even when you can’t. Bumping a wall, the map edge, deep water, a locked door or sealed stairs all tick the clock just like the Wait button.', 'Walking into a boss’s wall of force now passes a turn too, so the barriers pinning you in crumble on their own — no more mashing the Wait button to escape the Rat King’s cage.', 'Being stunned no longer freezes the dungeon: a wasted action still lets foes act while the stun wears off. Drinking from a fountain, touching a shrine and cracking open a chest underfoot are all turns as well.'] },
   { date: '2026-06-29', size: 'big', v: 'Diablo-2-style loot drops', by: 'ASuiter89', notes: ['Loot rarity is rebalanced so you stop drowning in high-end gear: instead of rolling the rarity table several times and keeping the rarest (which buried you in oranges), each drop now makes one independent check per tier from rarest down, so a baseline drop is ~50% normal, ~21% junk, ~19% uncommon, ~6% rare, ~2% epic, ~0.6% legendary, ~0.15% unique.', 'Magic Find, your Luck and deeper floors still raise the odds — but with Diablo-2-style diminishing returns that barely move legendary/unique and hard per-tier caps, so stacking Magic Find now floods you with greens and blues rather than legendaries.', 'Tougher foes drop MORE items, not just luckier ones: every kill makes a number of independent “picks” (ordinary foes 1, elites 3, bosses 5), each either dropping nothing or one item — so a boss sprays a pile of loot while a trash mob mostly drops nothing. Elites and bosses are still guaranteed at least one piece.'] },
   { date: '2026-06-29', size: 'small', v: 'Tidier Settings menu', by: 'Claude', notes: ['The ⚙️ Settings menu is now one consistent style — every row shares the same neutral tile instead of the old jumble of red, blue and green buttons.', 'Sound, Zoom and Time gained icons, and every row’s icon now sits in the same fixed cell so the labels line up cleanly.', 'Only meaningful states still colour: New Run flashes red when armed to wipe, and Sound dims when muted.'] },
   { date: '2026-06-29', size: 'small', v: 'Auto-Loot on the LOOT tab', by: 'ASuiter89', notes: ['The ♻️ Auto-Loot picker moved out of the ⚙️ settings menu onto the LOOT tab, where it belongs — a button right above your loot shows its on/off state at a glance and opens the per-rarity Keep / Scrap / Sell picker.'] },
@@ -11676,6 +11677,10 @@ function activateShrine(nx, ny) {
     }
   }
   updateBars();
+  // Touching a shrine is a step onto its tile — the turn passes and foes act.
+  // (move() already ran the player's upkeep before handing off to us.)
+  runEnemyTurn();
+  moveQuestEntities();
   saveGame();
   draw();
 }
@@ -11821,9 +11826,11 @@ function move(dx, dy) {
   // the backdrop.
   if (inTown) { openTownHub(); return; }
   if (isPlayerStunned()) {
+    // Stunned: your action is wasted, but the turn still passes — foes act while
+    // you reel, and the stun ticks down toward wearing off.
     tickStatusEffects();
     applyRegen();
-    draw();
+    endBlockedTurn();
     return;
   }
   tickStatusEffects();
@@ -11833,13 +11840,15 @@ function move(dx, dy) {
   if (dx > 0) player.facing = 'right';
   else if (dx < 0) player.facing = 'left';
   const nx = player.x + dx, ny = player.y + dy;
-  if (nx < 0 || ny < 0 || nx >= MAP_W || ny >= MAP_H) return;
+  // Every blocked step below still spends the turn (endBlockedTurn) — walking
+  // into the map edge, a wall, water or a barrier passes time just like waiting.
+  if (nx < 0 || ny < 0 || nx >= MAP_W || ny >= MAP_H) { endBlockedTurn(); return; }
 
   const tile = mapData[ny][nx];
-  if (tile === 1) return; // wall
-  if (tile === 6) return; // deep water — impassable
+  if (tile === 1) { endBlockedTurn(); return; } // wall
+  if (tile === 6) { endBlockedTurn(); return; } // deep water — impassable
   // A boss-conjured barrier blocks the way until it crumbles.
-  if (bossWallAt(nx, ny)) { log('🧱 A wall of force blocks your path!'); return; }
+  if (bossWallAt(nx, ny)) { log('🧱 A wall of force blocks your path!'); endBlockedTurn(); return; }
 
   // Cracked wall → smash through it (opens a shortcut), then step in.
   if (tile === 10) {
@@ -11848,7 +11857,7 @@ function move(dx, dy) {
   }
   // Locked door → needs a key; otherwise it bars the way.
   if (tile === 11) {
-    if (!hasKey) { log('🔒 A locked door bars the way — find its key.'); return; }
+    if (!hasKey) { log('🔒 A locked door bars the way — find its key.'); endBlockedTurn(); return; }
     hasKey = false;
     mapData[ny][nx] = 0;
     log('🔑 You unlock the vault door!', 'important');
@@ -11911,6 +11920,7 @@ function move(dx, dy) {
     if (!floorCleared) {
       log(`🔒 The stairs are sealed. ${clearConditionLabel()}`, 'important');
       sfx('click');
+      endBlockedTurn();
       return;
     }
     // Resolve an escort quest before leaving the floor.
@@ -11932,6 +11942,7 @@ function move(dx, dy) {
     if (isLastFiniteFloor()) {
       log(`👑 This is the deepest floor of the ${diffMeta().name} dungeon — conquer its guardian, then take the next difficulty from town.`, 'important');
       sfx('click');
+      endBlockedTurn();
       return;
     }
     dungeonLevel++;
@@ -11961,6 +11972,9 @@ function move(dx, dy) {
     sfx('potion');
     log(`⛲ The Fountain of Healing restores you to full HP and MP!`, 'important');
     updateBars();
+    // Drinking from the fountain is a step like any other — the floor's foes act.
+    runEnemyTurn();
+    moveQuestEntities();
     saveGame();
     draw();
     return;
@@ -13834,6 +13848,20 @@ function passTurn() {
   saveGame();
 }
 
+// Resolve the rest of a turn for a player action that DIDN'T move the hero — a
+// refused step (bumping a wall, deep water, the map edge, a wall of force, a
+// locked or sealed door/stairs) or a turn spent stunned. move()'s upkeep (status
+// ticks + regen) has already run for these, so here we only let the foes act,
+// age boss hazards (so a barrier penning you in crumbles on its own), trail any
+// escort, then redraw + save. This is what makes "any action costs a turn" hold
+// for blocked moves — no more mashing the Wait button to wait out a barrier.
+function endBlockedTurn() {
+  runEnemyTurn();
+  moveQuestEntities();
+  draw();
+  saveGame();
+}
+
 // Roll a chest's contents straight into the player's pack. Shared by the
 // ground-chest pickup path and by enemy death drops (which auto-collect, so
 // you never have to walk over and open them). (x,y) is only used for the rare
@@ -13945,10 +13973,11 @@ function pickupChestsAt(x, y) {
 function pickup() {
   const opened = pickupChestsAt(player.x, player.y);
   if (opened === 0) { log('You wait...'); passTurn(); return; }
+  // Cracking open a chest underfoot is an action too — it costs a turn (foes act,
+  // and a sprung mimic gets to bite). passTurn handles the upkeep, draw and save.
   renderPanel();
   updateBars();
-  saveGame();
-  draw();
+  passTurn();
 }
 
 // Install the re-entrancy / halt guard around every player-action entry point.
