@@ -5848,6 +5848,47 @@ function reachableFrom(sx, sy) {
   return seen;
 }
 
+// Never force the player across a trap. A 0-1 BFS from the start treats lava
+// (7) and spikes (8) as cost-1 and plain floor as cost-0, so any normal floor
+// tile whose cheapest route still costs >0 can only be reached by stepping on a
+// trap — i.e. a forced chokepoint. We melt the traps along that route back to
+// floor and repeat. Open-room pools (you can walk around) and dead-end pools
+// (no floor beyond them) are left untouched, since neither blocks a real path.
+function ensureTrapFreePath() {
+  const TRAP = t => t === 7 || t === 8;
+  const DIRS = [[1,0],[-1,0],[0,1],[0,-1]];
+  const W = MAP_W, H = MAP_H;
+  for (let guard = 0; guard < 200; guard++) {
+    const dist = new Array(W * H).fill(Infinity);
+    const prev = new Array(W * H).fill(-1);
+    const start = player.y * W + player.x;
+    dist[start] = 0;
+    let dq = [start], target = -1;
+    while (dq.length) {
+      const cur = dq.shift();
+      const cx = cur % W, cy = (cur / W) | 0, cd = dist[cur];
+      // First non-trap floor tile we settle whose route cost > 0 is a tile you
+      // can only reach by crossing a trap → melt the path to it.
+      if (cd > 0 && !TRAP(mapData[cy][cx])) { target = cur; break; }
+      for (const [dx, dy] of DIRS) {
+        const nx = cx + dx, ny = cy + dy;
+        if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+        if (!isFloorPassable(mapData[ny][nx])) continue;
+        const ni = ny * W + nx, nd = cd + (TRAP(mapData[ny][nx]) ? 1 : 0);
+        if (nd < dist[ni]) {
+          dist[ni] = nd; prev[ni] = cur;
+          if (nd === cd) dq.unshift(ni); else dq.push(ni);
+        }
+      }
+    }
+    if (target === -1) break;        // no forced traps left
+    for (let p = target; p !== -1; p = prev[p]) {
+      const py = (p / W) | 0, px = p % W;
+      if (TRAP(mapData[py][px])) mapData[py][px] = 0;
+    }
+  }
+}
+
 // Carve a guaranteed-open L-shaped path, clearing both rock and water so the
 // connection can't be silently blocked by a pool mid-route.
 function tunnel(x1, y1, x2, y2) {
@@ -6216,6 +6257,9 @@ function generateMap() {
     const n = rnd(2, 5);
     for (let i = 0; i < n; i++) { const c = randomFloorTile(reach); if (c) mapData[c.y][c.x] = 8; }
   }
+  // With traps down, melt any that sit on the only route somewhere so the
+  // player is never forced to step on lava/spikes to get where they're going.
+  ensureTrapFreePath();
   // ── TELEPORTER PAIR ── rare, and the two pads must sit far apart so a warp
   // is a meaningful shortcut rather than a tiny hop.
   if (rooms.length >= 2 && Math.random() < 0.18) {
@@ -10918,17 +10962,18 @@ function move(dx, dy) {
     updateBars();
   }
 
-  // Lava → burns you (never lethal on its own).
+  // Lava → burns you, scaling hard with depth and your HP pool so a careless
+  // step gets more punishing the deeper you go (never lethal on its own).
   if (tile === 7) {
-    const burn = 4 + dungeonLevel;
+    const burn = Math.round(4 + dungeonLevel * 1.5 + player.maxHp * 0.05);
     player.hp = Math.max(1, player.hp - burn);
     spawnFloatingText(player.x, player.y, `${burn}`, '#ff7733');
     log(`🔥 The lava scorches you for ${burn}!`, 'important');
     updateBars();
   }
-  // Spikes → stab you (never lethal on their own).
+  // Spikes → stab you, likewise ramping with depth (never lethal on their own).
   if (tile === 8) {
-    const stab = 3 + Math.floor(dungeonLevel / 2);
+    const stab = Math.round(3 + dungeonLevel + player.maxHp * 0.03);
     player.hp = Math.max(1, player.hp - stab);
     spawnFloatingText(player.x, player.y, `${stab}`, '#ff3344');
     log(`🩸 Spikes stab you for ${stab}!`);
