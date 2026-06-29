@@ -580,10 +580,10 @@
   .asc-head { display: flex; align-items: center; gap: 6px; font-size: 12px; }
   .asc-blurb { font-size: 9px; color: #b9aee0; margin-top: 3px; line-height: 1.45; }
 
-  /* ── SKILL BAR (baseline class skill + learned actives) ── */
+  /* ── SKILL BAR (learned actives; first one is the R-keyed primary) ── */
   #skill-bar { display: flex; gap: 5px; justify-content: center; flex-wrap: wrap; padding: 4px 6px; }
   .skillbar-btn { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; min-width: 42px; padding: 3px 5px; border-radius: 7px; border: 1px solid #4a3a7a; background: #2a1f4a; color: #cbb8ff; cursor: pointer; font-family: 'Courier New', monospace; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
-  /* The baseline class skill is marked off in gold so it reads as the primary, always-available ability. */
+  /* The hero's primary (first-learned) active is marked off in gold so it reads as the R-keyed signature ability. */
   .skillbar-btn.baseline { border-color: var(--frame); background: #3a2f1a; color: #f0e0b8; }
   .skillbar-btn.baseline .sb-key { color: var(--gold); }
   .skillbar-btn.baseline.disabled { background: #211c2a; border-color: #33304a; color: #6a647a; }
@@ -1505,7 +1505,7 @@
     /* Keyboard replaces the d-pad; the drawer stays open so no bag toggle. */
     #dpad { display: none; }
     .bag-btn { display: none; }
-    /* The class skill now lives on the skill bar, so drop the redundant
+    /* The primary skill now lives on the skill bar, so drop the redundant
        ⚡ button from the top-right nav (matches the mobile layout). */
     .skill-btn { display: none !important; }
   }
@@ -1583,7 +1583,7 @@
     }
     .action-icon { font-size: 21px; }
     .action-label { font-size: 9px; }
-    /* The class skill now lives on the skill bar (above the log), so drop the
+    /* The primary skill now lives on the skill bar (above the log), so drop the
        redundant ⚡ button from the bottom nav to keep it uncluttered. */
     .skill-btn { display: none !important; }
 
@@ -1740,7 +1740,7 @@
     }
     .action-icon { font-size: 21px; }
     .action-label { font-size: 9px; }
-    /* The class skill now lives on the skill bar (above the log), so drop the
+    /* The primary skill now lives on the skill bar (above the log), so drop the
        redundant ⚡ button from the bottom nav to keep it uncluttered. */
     .skill-btn { display: none !important; }
 
@@ -1860,10 +1860,10 @@
 <div id="main">
   <div id="game-wrap">
     <canvas id="canvas"></canvas>
-    <!-- Active skills (baseline class skill + any learned tree actives). Sits
-         between the map and the log so it's reachable in the thumb zone on
-         mobile. Populated by renderSkillBar(); hidden in town / before a class
-         is chosen. -->
+    <!-- Active skills (every learned tree active; the first is the R-keyed
+         primary). Sits between the map and the log so it's reachable in the
+         thumb zone on mobile. Populated by renderSkillBar(); hidden in town /
+         before any active is learned. -->
     <div id="skill-bar" style="display:none"></div>
     <div id="bottom-row">
       <div id="log"></div>
@@ -1883,7 +1883,7 @@
       <div id="action-buttons">
         <!-- The Health Potion now lives at the far left of the skill bar
              (rendered by renderSkillBar), so it's dropped from this nav row. -->
-        <button class="action-btn skill-btn" id="skill-btn" onclick="castSkill()" style="display:none" data-tip="<div class='ht-name'>⚡ Class Skill</div><div class='ht-line'>Cast your class's special skill.</div><div class='ht-sub'>press R</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
+        <button class="action-btn skill-btn" id="skill-btn" onclick="castSkill()" style="display:none" data-tip="<div class='ht-name'>⚡ Primary Skill</div><div class='ht-line'>Cast your first-learned active skill.</div><div class='ht-sub'>press R</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
           <span class="action-icon" id="skill-icon">⚡</span><span class="action-label" id="skill-label">SKILL</span>
         </button>
         <button class="action-btn town-action" onclick="enterTown()" data-tip="<div class='ht-name'>🏰 Town</div><div class='ht-line'>Step through the gate to the safe hub — shops, forge, healer, stash.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
@@ -3554,8 +3554,10 @@ function weaponRangeGridHTML(base) {
 // Every class now starts with the SAME attributes (ATTR_BASE in each). A class's
 // identity instead lives in `dmgAttrs` — the primary/secondary attributes its
 // attacks scale off, so a Mage hits with Spirit while a Rogue hits with Agility —
-// plus its passive, MP-fueled active skill (cast with the ⚡ button / R key), and
-// the weapon types it can wield. Off-class weapons still drop and sell, but can't
+// plus its passive and the weapon types it can wield. There is no always-on
+// baseline skill: every hero starts with one skill point and learns its first
+// active (Cleave / Backstab / Firebolt / Mend) from the tree.
+// Off-class weapons still drop and sell, but can't
 // be equipped (a hard lock — see canEquipItem). Class is chosen on a new game and
 // can be re-picked at the town Trainer.
 const CLASSES = {
@@ -3565,8 +3567,6 @@ const CLASSES = {
     passive: '+10% damage dealt · −15% damage taken',
     dmgAttrs: { primary: 'might', secondary: 'vitality' },
     weapons: ['Sword','Axe','Mace','Spear','Scythe'],
-    skill: { id:'cleave', name:'Cleave', icon:'🪓', mp:12, cd:3,
-             desc:'A sweeping blow strikes every adjacent foe hard.' },
   },
   rogue: {
     name: 'Rogue', icon: '🗡️', color: '#5ec27a',
@@ -3574,8 +3574,6 @@ const CLASSES = {
     passive: '+8% crit chance · +8% dodge',
     dmgAttrs: { primary: 'agility', secondary: 'might' },
     weapons: ['Dagger','Sword','Bow'],
-    skill: { id:'backstab', name:'Backstab', icon:'🎯', mp:10, cd:3,
-             desc:'A guaranteed, devastating critical on an adjacent foe.' },
   },
   mage: {
     name: 'Mage', icon: '🔮', color: '#7d9bff',
@@ -3583,8 +3581,6 @@ const CLASSES = {
     passive: '+30% max MP · spell-powered Firebolt',
     dmgAttrs: { primary: 'spirit', secondary: 'luck' },
     weapons: ['Staff','Dagger'],
-    skill: { id:'firebolt', name:'Firebolt', icon:'🔥', mp:14, cd:2,
-             desc:'Hurl fire at the nearest foe in range — it can\'t retaliate.' },
   },
   templar: {
     name: 'Templar', icon: '🛡️', color: '#e8c95a',
@@ -3592,8 +3588,6 @@ const CLASSES = {
     passive: '+20% max HP · stronger regen',
     dmgAttrs: { primary: 'vitality', secondary: 'spirit' },
     weapons: ['Sword','Mace','Spear'],
-    skill: { id:'mend', name:'Mend', icon:'✨', mp:12, cd:3,
-             desc:'Channel spirit to restore a burst of health.' },
   },
 };
 const CLASS_KEYS = Object.keys(CLASSES);
@@ -3647,6 +3641,16 @@ function classDmgTakenMult() {
 // prerequisite only needs that prereq at rank 1 to unlock (D2-style banding).
 // Ascending (see ASCENSIONS) unlocks a focused specialization "PATH" tree.
 const SKILL_POINTS_PER_LEVEL = 1;
+// Every hero begins with one skill point to spend, so a fresh character can
+// immediately learn its first active (Cleave / Backstab / Firebolt / Mend)
+// instead of being handed an always-on baseline skill.
+const SKILL_POINTS_AT_START = 1;
+// Total skill points a hero of the given level has earned over its lifetime
+// (the starting point plus one per level gained). Used to grant the right pool
+// on a new game and to reconcile older saves on load.
+function earnedSkillPoints(level) {
+  return SKILL_POINTS_AT_START + Math.max(0, (level || 1) - 1) * SKILL_POINTS_PER_LEVEL;
+}
 // band index → minimum hero level for base trees, and for ascension PATH trees.
 const SKILL_BANDS = [1, 4, 8, 13, 19, 26];
 const ASC_BANDS   = [20, 25, 31];
@@ -4080,6 +4084,14 @@ const MINION_SPRITE = {
 
 // The current class's passive/active trees (empty for a classless legacy save).
 function classTrees() { return (player.class && SKILL_TREES[player.class]) || { passive: [], active: [] }; }
+// A class's signature active — the first node of its active tree (Cleave,
+// Backstab, Firebolt, Mend). There's no always-on baseline skill anymore, so
+// this is purely for display: it's what a fresh hero learns with its starting
+// skill point. Returns null for an unknown / classless key.
+function classSignature(key) {
+  const t = SKILL_TREES[key];
+  return t && t.active && t.active[0] ? t.active[0] : null;
+}
 // The chosen ascension's PATH tree (empty until the hero ascends).
 function ascData() { return (player.ascension && ASCENSIONS[player.ascension]) || null; }
 function ascTree() { const a = ascData(); return a ? a.tree : []; }
@@ -4120,12 +4132,11 @@ function canBuySkill(node) {
 function spentSkillPoints() {
   return classSkillTree().reduce((s, n) => s + skillRank(n.id), 0);
 }
-// Castable actives: the always-available baseline class skill first, then every
-// unlocked active node (base or path) — each keyed by its own id for cooldowns.
+// Castable actives: every unlocked active node (base tree or ascension path),
+// in tree order — each keyed by its own id for cooldowns. The first entry is the
+// hero's primary skill (cast with the ⚡ button / R key).
 function activeSkillList() {
-  const cls = playerClass();
   const list = [];
-  if (cls && cls.skill) list.push({ ...cls.skill, baseline: true });
   for (const n of classSkillTree()) {
     if (n.type === 'active' && skillRank(n.id) > 0) {
       list.push({ id: n.id, name: n.name, icon: n.icon, mp: n.mp, cd: n.cd, desc: n.desc, node: n });
@@ -5229,6 +5240,7 @@ document.addEventListener('click', (e) => {
 
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
+  { v: 'Start with a skill point', by: 'Claude', notes: ['The always-on baseline class skill (Cleave / Backstab / Firebolt / Mend) is gone — it just duplicated the first node of each class’s skill tree.', 'Instead every hero now starts with one skill point, so you pick your first active yourself. R and the ⚡ button cast your first-learned active.', 'Existing characters keep their builds and are granted the extra starting point retroactively.'] },
   { v: 'Boss battle abilities', by: 'Jeff Louie', notes: ['Every 5th-floor guardian now fights with a kit of telegraphed tricks instead of just walking at you.', 'Walls of flame and firestorms leave burning ground; chains yank you into melee; shockwaves hurl you back; barriers of force pen you in.', 'Bosses also blink to close gaps, freeze you solid, raise damage-halving wards, and mend their wounds when cornered.'] },
   { v: 'Slower mana regen', by: 'Jeff Louie', notes: ['Mana now trickles back about half as fast, so it actually runs dry in long fights and mana potions are worth carrying again.'] },
   { v: 'Time played counter', by: 'Jeff Louie', notes: ['New ⏱️ TIME button in Settings shows your grand total play time across every character, plus a per-hero breakdown.', 'Each save slot now lists how long that character has been played.'] },
@@ -7422,10 +7434,11 @@ function renderTrainer() {
       const c = CLASSES[k];
       const cur = player.class === k;
       const ccost = classChangeCost();
+      const sig = classSignature(k);
       return `<div class="shop-row">
         <span class="loot-icon">${c.icon}</span>
         <div class="shop-row-info"><div class="shop-row-name" style="color:${c.color}">${c.name}${cur ? ' (current)' : ''}</div>
-          <div class="shop-row-sub">${c.passive} · ${c.skill.icon} ${c.skill.name}</div></div>
+          <div class="shop-row-sub">${c.passive}${sig ? ` · learns ${sig.icon} ${sig.name}` : ''}</div></div>
         <button class="shop-buy-btn" ${cur || player.gold < ccost ? 'disabled' : ''} onclick="changeClass('${k}')">${cur ? '—' : ccost + 'g'}</button>
       </div>`;
     }).join('')}`);
@@ -11004,16 +11017,17 @@ function tryRangedAttack(dx, dy) {
 // button or the R key. A skill spends MP, resolves its effect, then passes a
 // turn (the floor's foes act) and begins its cooldown. Failures (no target, not
 // enough mana, on cooldown) are reported in the log and cost nothing.
-// R key / ⚡ button cast the baseline class skill; the skill bar and number keys
-// cast unlocked tree actives. Both route through castSkillById.
+// R key / ⚡ button cast the hero's primary (first-learned) active; the skill bar
+// and number keys cast any unlocked tree active. Both route through castSkillById.
 function castSkill() {
-  const cls = playerClass();
-  if (!cls || !cls.skill) { log('Pick a class to gain its skill.'); return; }
-  castSkillById(cls.skill.id);
+  if (!playerClass()) { log('Pick a class to gain skills.'); return; }
+  const list = activeSkillList();
+  if (!list.length) { log('No active skill learned yet — spend a skill point in the SKILLS tab (press B).'); return; }
+  castSkillById(list[0].id);
 }
 
-// Cast any active skill the player currently has (baseline or learned), shared by
-// every entry point. Validates town/stun/cooldown/mana, resolves the effect, then
+// Cast any active skill the player has learned, shared by every entry point.
+// Validates town/stun/cooldown/mana, resolves the effect, then
 // spends MP, passes a turn, and begins that skill's own cooldown. A skill that
 // can't resolve (no target, nothing to heal) costs nothing.
 function castSkillById(id) {
@@ -11043,17 +11057,10 @@ function castSkillById(id) {
   saveGame();
 }
 
-// Dispatch an active skill id to its implementation. Each returns true if it
+// Dispatch an active skill id to its implementation. Every active is a
+// data-driven tree / path node resolved from its `cast`; returns true if it
 // actually fired (so castSkillById knows whether to spend the turn/MP).
 function runActiveSkill(id) {
-  // The four baseline class skills keep their bespoke implementations.
-  switch (id) {
-    case 'cleave':   return skillCleave();
-    case 'backstab': return skillBackstab();
-    case 'firebolt': return skillFirebolt();
-    case 'mend':     return skillMend();
-  }
-  // Everything else is a data-driven tree / path active resolved from its `cast`.
   const node = skillNode(id);
   if (node && node.type === 'active' && node.cast) return resolveCast(node, skillRank(id));
   return false;
@@ -11062,69 +11069,6 @@ function runActiveSkill(id) {
 // Foes orthogonally/diagonally adjacent to the player.
 function adjacentToPlayer() {
   return enemies.filter(o => !o.dead && Math.abs(o.x - player.x) <= 1 && Math.abs(o.y - player.y) <= 1);
-}
-
-// Warrior — Cleave: a heavy swing that lands on every adjacent foe.
-function skillCleave() {
-  const adj = adjacentToPlayer();
-  if (!adj.length) { log('🪓 No foe within reach to cleave.'); return false; }
-  sfx('crit');
-  let total = 0;
-  adj.forEach(e => {
-    const h = rollPlayerHit(e);
-    const d = Math.max(1, Math.round(h.dmg * 1.5));
-    total += d;
-    dealDamage(e, d, true);
-  });
-  lifestealHeal(total);
-  log(`🪓 ${HERO} cleaves ${adj.length} foe${adj.length === 1 ? '' : 's'} for ${total}!`, 'important');
-  return true;
-}
-
-// Rogue — Backstab: a guaranteed, oversized critical on one adjacent foe.
-function skillBackstab() {
-  const adj = adjacentToPlayer().sort((a, b) => a.hp - b.hp);
-  if (!adj.length) { log('🎯 No foe adjacent to backstab.'); return false; }
-  const e = adj[0];
-  let dmg = getWeaponDamage() + player.level * 2 + totalStat('ATK') + attrDamage();
-  dmg = Math.round(dmg * 3.0 * classDmgDealtMult());
-  if (buffs.power) dmg = Math.round(dmg * 1.5);
-  if (foodFx('dmgPct')) dmg = Math.round(dmg * (1 + foodFx('dmgPct'))); // ramen damage buff
-  dmg = Math.max(1, Math.min(dmg, Math.ceil(e.maxHp * 0.6))); // big, but no instant boss delete
-  sfx('crit');
-  dealDamage(e, dmg, true);
-  log(`🎯 CRITICAL! ${HERO} backstabs ${enemyLabel(e)} for ${dmg}!`, 'important');
-  return true;
-}
-
-// Mage — Firebolt: a ranged fire nuke on the nearest foe in range; no reprisal.
-function skillFirebolt() {
-  const range = 6;
-  const inRange = enemies
-    .filter(o => !o.dead && (Math.abs(o.x - player.x) + Math.abs(o.y - player.y)) <= range)
-    .sort((a, b) => (Math.abs(a.x - player.x) + Math.abs(a.y - player.y)) - (Math.abs(b.x - player.x) + Math.abs(b.y - player.y)));
-  if (!inRange.length) { log('🔥 No foe within range of your Firebolt.'); return false; }
-  const e = inRange[0];
-  let dmg = (16 + player.level * 3 + totalAttr('spirit') * ATTR_FX.spellPerSpr) * spellPowerMult();
-  if (buffs.power) dmg = Math.round(dmg * 1.5);
-  if (foodFx('dmgPct')) dmg = Math.round(dmg * (1 + foodFx('dmgPct'))); // ramen damage buff
-  dmg = Math.max(1, Math.round(dmg));
-  sfx('attack');
-  spawnFloatingText(player.x, player.y, '🔥', '#ff8844');
-  dealDamage(e, dmg, true);
-  log(`🔥 ${HERO} hurls a Firebolt at ${enemyLabel(e)} for ${dmg}!`, 'important');
-  return true;
-}
-
-// Templar — Mend: spend mana to restore a burst of health.
-function skillMend() {
-  if (player.hp >= player.maxHp) { log('✨ Already at full health.'); return false; }
-  const heal = Math.min(player.maxHp - player.hp, 40 + player.level * 4 + totalAttr('spirit') * (ATTR_FX.spellPerSpr + 1));
-  player.hp += heal;
-  sfx('potion');
-  spawnFloatingText(player.x, player.y, `+${heal}`, '#7fffaa');
-  log(`✨ ${HERO} channels Mend and recovers ${heal} HP.`, 'important');
-  return true;
 }
 
 // ── SKILL-TREE ACTIVES ──
@@ -12480,12 +12424,12 @@ function updateBars() {
   // potion cooldown / ready / urgent state is set inside renderSkillBar itself.
   renderSkillBar();
 
-  // Class-skill button: shows the skill icon, and its cooldown / mana cost.
+  // Primary-skill button: mirrors the hero's first-learned active (the one R / ⚡
+  // casts), showing its icon and cooldown / mana cost. Hidden until one is learned.
   const skillBtn = document.getElementById('skill-btn');
   if (skillBtn) {
-    const cls = playerClass();
-    if (cls && cls.skill) {
-      const sk = cls.skill;
+    const sk = activeSkillList()[0];
+    if (sk) {
       skillBtn.style.display = '';
       const icon = document.getElementById('skill-icon');
       const label = document.getElementById('skill-label');
@@ -12699,7 +12643,9 @@ function renderHero(el) {
         <span class="hc-name" style="color:${cls.color}">${cls.name}</span></div>
       <div class="hc-line">${cls.passive}</div>
       <div class="hc-line">⚔️ Damage scales with <b>${ATTRIBUTES[dmgA.primary].label}</b>${dmgA.secondary ? ` & ${ATTRIBUTES[dmgA.secondary].label}` : ''}</div>
-      <div class="hc-line">${cls.skill.icon} <b>${cls.skill.name}</b> — ${cls.skill.desc} <span style="opacity:0.7">(${cls.skill.mp} MP)</span></div>
+      ${(() => { const pri = activeSkillList()[0], sig = classSignature(player.class);
+        return pri ? `<div class="hc-line">${pri.icon} <b>${pri.name}</b> — ${pri.desc} <span style="opacity:0.7">(${pri.mp} MP · press R)</span></div>`
+          : (sig ? `<div class="hc-line" style="opacity:0.8">✨ Spend a skill point to learn ${sig.icon} <b>${sig.name}</b> (SKILLS tab)</div>` : ''); })()}
       ${ascData() ? `<div class="hc-line" style="color:${ascData().color}">${ascData().icon} <b>${ascData().name}</b> — ${ascData().blurb}</div>`
         : (cls && (player.level || 1) >= ASCEND_LEVEL ? `<div class="hc-line" style="color:#e8c267">🌟 Ready to ascend — visit the Trainer 🎓</div>` : '')}
       <div class="hc-line" style="opacity:0.75">Weapons: ${cls.weapons.join(', ')}</div>
@@ -12985,11 +12931,11 @@ function positionSkillPop() {
   pop.style.top = top + 'px';
 }
 
-// The on-screen bar of active skills: the baseline class skill first (keyed R,
-// matching the R key / ⚡ button), then any learned tree actives (keyed 1–4,
-// matching the number keys). Showing the baseline here means mobile players, who
-// have no keyboard and where the ⚡ button is dropped from the nav bar, can still
-// see and cast their class skill. Hidden in town and before a class is chosen.
+// The on-screen bar of active skills: every learned tree / path active, keyed by
+// the number keys (3–9). The first entry is also the hero's primary skill, cast
+// with the R key / ⚡ button. Listing them here means mobile players, who have no
+// keyboard and where the ⚡ button is dropped from the nav bar, can still see and
+// cast their skills. Hidden in town and before any active is learned.
 function renderSkillBar() {
   const bar = document.getElementById('skill-bar');
   if (!bar) return;
@@ -13012,17 +12958,18 @@ function renderSkillBar() {
   const manaBtn = `<button class="skillbar-btn potion mana ${potReady && !mpFull ? '' : 'empty'}" ${hoverTip(manaTip)} onclick="useManaPotion()">
       <span class="sb-key">2</span><span class="sb-icon">${MANA_POTION_SVG}</span><span class="sb-info">${pcd > 0 ? pcd : ''}</span>
     </button>`;
-  let extraNum = 0;
+  let num = 0;
   bar.innerHTML = healBtn + manaBtn + skills.map((s) => {
     const cd = skillCd(s.id);
     const ready = cd === 0 && player.mp >= s.mp && player.hp > 0;
-    // Number keys 1–9 map to the first nine learned actives; any beyond that are
-    // click/tap only (a deep build can learn more actives than there are keys).
-    const idx = s.baseline ? 0 : ++extraNum;
-    // Potions hold keys 1–2, so the first seven extra actives map to 3–9.
-    const key = s.baseline ? 'R' : (idx <= 7 ? String(idx + 2) : '');
-    const tip = `<div class='ht-name' style='color:#e6c34a'>${s.icon} ${s.name}</div><div class='ht-line'>${s.desc}</div><div class='ht-sub'>${s.mp} MP · ${s.cd}-turn cooldown${key ? ` · press ${key}` : ''}</div>`;
-    return `<button class="skillbar-btn ${s.baseline ? 'baseline ' : ''}${ready ? 'ready' : 'disabled'}" ${hoverTip(tip)} onclick="castSkillById('${s.id}')">
+    // Potions hold keys 1–2, so the first seven learned actives map to keys 3–9;
+    // any beyond that are click/tap only (a deep build can learn more actives
+    // than there are keys). The first active also answers to R / the ⚡ button.
+    const idx = ++num;
+    const key = idx <= 7 ? String(idx + 2) : '';
+    const keyHint = idx === 1 ? (key ? `${key} or R` : 'R') : key;
+    const tip = `<div class='ht-name' style='color:#e6c34a'>${s.icon} ${s.name}</div><div class='ht-line'>${s.desc}</div><div class='ht-sub'>${s.mp} MP · ${s.cd}-turn cooldown${keyHint ? ` · press ${keyHint}` : ''}</div>`;
+    return `<button class="skillbar-btn ${idx === 1 ? 'baseline ' : ''}${ready ? 'ready' : 'disabled'}" ${hoverTip(tip)} onclick="castSkillById('${s.id}')">
       <span class="sb-key">${key}</span><span class="sb-icon">${s.icon}</span><span class="sb-info">${cd > 0 ? cd : s.mp + 'MP'}</span>
     </button>`;
   }).join('');
@@ -13054,13 +13001,14 @@ function showClassPick() {
   if (!ov) return;
   const title = document.getElementById('class-title');
   if (title) title.textContent = player.name ? `Choose ${player.name}'s Class` : 'Choose your Hero';
-  sub.textContent = 'Pick a class — it shapes which attributes your damage scales off, the weapons you can wield, and the special skill you cast. You can retrain later at the town Trainer.';
+  sub.textContent = 'Pick a class — it shapes which attributes your damage scales off, the weapons you can wield, and its skill tree. You start with one skill point to spend. You can retrain later at the town Trainer.';
   cards.innerHTML = CLASS_KEYS.map(k => {
     const c = CLASSES[k];
+    const sig = classSignature(k);
     return `<button class="class-card" style="border-left-color:${c.color}" onclick="chooseClass('${k}')">
       <div class="cc-head"><span class="cc-icon">${c.icon}</span><span class="cc-name" style="color:${c.color}">${c.name}</span></div>
       <div class="cc-blurb">${c.blurb}</div>
-      <div class="cc-detail">Passive: ${c.passive}<br>${c.skill.icon} ${c.skill.name}: ${c.skill.desc}<br>Weapons: ${c.weapons.join(', ')}</div>
+      <div class="cc-detail">Passive: ${c.passive}<br>${sig ? `Starting skill: ${sig.icon} ${sig.name} — ${sig.desc}<br>` : ''}Weapons: ${c.weapons.join(', ')}</div>
     </button>`;
   }).join('');
   ov.classList.add('open');
@@ -13075,13 +13023,17 @@ function chooseClass(key) {
   player.class = key;
   player.skillCd = 0; player.ascension = null;
   player.skills = {}; player.skillCds = {}; combatBuffs = {};
+  // A fresh hero owns its full lifetime pool of skill points (the starting point
+  // plus one per level) with nothing yet spent.
+  player.skillPoints = earnedSkillPoints(player.level);
   recomputeMaxStats();
   player.hp = player.maxHp;
   player.mp = player.maxMp;
   revalidateWeapon(cls);
   const ov = document.getElementById('class-overlay');
   if (ov) ov.classList.remove('open');
-  log(`${cls.icon} You are a ${cls.name}! ${cls.passive}. Skill: ${cls.skill.icon} ${cls.skill.name} — press R to cast.`, 'important');
+  const sig = classSignature(key);
+  log(`${cls.icon} You are a ${cls.name}! ${cls.passive}.${sig ? ` Spend your skill point in the SKILLS tab (press B) to learn ${sig.icon} ${sig.name}.` : ''}`, 'important');
   sfx('levelup');
   updateBars(); renderPanel(); renderSkillBar(); draw(); saveGame();
 }
@@ -13115,7 +13067,7 @@ function changeClass(key) {
   if (player.mp > player.maxMp) player.mp = player.maxMp;
   revalidateWeapon(cls);
   sfx('shrine');
-  log(`${cls.icon} You retrain as a ${cls.name}! Skill: ${cls.skill.icon} ${cls.skill.name}.${refunded ? ` ${refunded} skill point${refunded === 1 ? '' : 's'} refunded.` : ''}`, 'important');
+  log(`${cls.icon} You retrain as a ${cls.name}!${refunded ? ` ${refunded} skill point${refunded === 1 ? '' : 's'} refunded — respend them in the SKILLS tab.` : ''}`, 'important');
   updateBars(); renderPanel(); renderSkillBar(); renderTrainer(); draw(); saveGame();
 }
 
@@ -13553,8 +13505,8 @@ document.addEventListener('keydown', e => {
   if (e.key==='r'||e.key==='R')          castSkill();
   // Number keys 3–9 cast learned tree/path actives (1 & 2 are potions).
   if (e.key>='3' && e.key<='9') {
-    const extras = activeSkillList().filter(s => !s.baseline);
-    const sk = extras[parseInt(e.key, 10) - 3];
+    const list = activeSkillList();
+    const sk = list[parseInt(e.key, 10) - 3];
     if (sk) castSkillById(sk.id);
   }
   if (e.key==='t'||e.key==='T')          enterTown();
@@ -13660,19 +13612,18 @@ function loadGame() {
     if (player.skillPoints == null) player.skillPoints = 0;
     if (!player.skills || typeof player.skills !== 'object') player.skills = {};
     if (!player.skillCds || typeof player.skillCds !== 'object') player.skillCds = {};
-    // Fold the old single-skill cooldown into the per-skill map for the baseline.
-    if (player.class && CLASSES[player.class] && player.skillCd) {
-      const bid = CLASSES[player.class].skill.id;
-      if (player.skillCds[bid] == null) player.skillCds[bid] = player.skillCd;
-    }
+    // The old always-on baseline class skill is gone, so its standalone cooldown
+    // is dropped — `skillCd` is no longer read (kept on the object only so older
+    // code paths don't choke on undefined).
     // Drop any skill ranks that don't belong to the current class's tree (e.g.
-    // after a class change on an older save), then grant points retroactively for
-    // levels gained before the tree existed (1 per level above 1, minus any
-    // already banked or spent on valid nodes).
+    // after a class change on an older save), then top up to the hero's full
+    // lifetime pool (the starting point plus one per level) minus anything
+    // already banked or spent on valid nodes. This also retroactively grants the
+    // starting skill point to saves made before the baseline skill was removed.
     {
       const valid = new Set(classSkillTree().map(n => n.id));
       for (const k of Object.keys(player.skills)) if (!valid.has(k)) delete player.skills[k];
-      const earned = Math.max(0, (player.level || 1) - 1) * SKILL_POINTS_PER_LEVEL;
+      const earned = earnedSkillPoints(player.level);
       const have = (player.skillPoints || 0) + spentSkillPoints();
       if (have < earned) player.skillPoints += (earned - have);
     }
@@ -14581,8 +14532,8 @@ if (hadSave) {
 log('Progress auto-saves automatically as you play.');
 log('Open 🎒 BAG to view your loot; press the pad\'s USE button to grab items.');
 log(`Tap the ❤️ or 🔷 flask to quaff a ${logPotion('Potion')} — they're a skill now, free to use but share a 3-turn cooldown.`);
-log('⌨️ Keys: Q health potion · E mana potion · R class skill · T town · B open bag · Space/F use.');
-log('⚡ Your class grants a special skill — tap the ⚡ button (or press R) to spend mana on it.');
+log('⌨️ Keys: Q health potion · E mana potion · R primary skill · 3–9 skills · T town · B open bag · Space/F use.');
+log('⚡ You start with a skill point — open 🎒 BAG ▸ SKILLS to learn your first active, then tap ⚡ (or press R) to cast it.');
 log('⚡ Each item has a Power value; your total Power blends level, gear, and attributes.');
 log('💠 Level up to earn points, then raise attributes in the bag\'s HERO tab.');
 log('🗡️ Every weapon fights differently — axes cleave, daggers flurry, bows & staves strike at range, maces stun, scythes drain. Try them all!');
