@@ -103,6 +103,18 @@
   .xp-track { width: 46px; height: 6px; background: #45455e; border: 1px solid #000; border-radius: 3px; overflow: hidden; }
   .xp-fill { height: 100%; background: linear-gradient(180deg, #ffe9a0, var(--gold)); box-shadow: 0 0 5px var(--gold); transition: width 0.2s; }
 
+  /* Floor / foes readout pinned to the top-left of the map. Desktop only —
+     hidden by default so mobile keeps these in the header (see media query). */
+  #map-info { display: none; }
+  #map-info > div {
+    display: flex; align-items: center; gap: 5px; width: fit-content;
+    padding: 2px 9px; border-radius: 7px; font-size: 13px; font-weight: bold;
+    background: rgba(20,14,30,0.66); border: 1px solid rgba(232,194,103,0.28);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.5); line-height: 1.5;
+  }
+  #map-floor { color: #9fd0ff; }
+  #map-foes { color: #ff9a9a; }
+
   /* Danger halo: a pulsing edge glow that signals low HP and player status
      effects. Sits above every panel/menu (but below the rotate gate) so it
      reads over the bag, shops and HUD. Colour + opacity are driven per-frame
@@ -733,6 +745,12 @@
   @keyframes potReadyBlue { 0%,100% { box-shadow: 0 0 4px 1px rgba(90,150,255,0.45); } 50% { box-shadow: 0 0 12px 3px rgba(120,170,255,0.9); } }
   /* Critically low HP overrides the gentle glow with a faster alarm pulse. */
   .skillbar-btn.potion.urgent { animation: healPulse 0.85s ease-in-out infinite; }
+  /* TOWN button (desktop): a green/parchment tone so it reads as "leave to the
+     safe hub", distinct from the purple skills and the red/blue potions. */
+  .skillbar-btn.town { border-color: #6b9b5a; background: #243a1f; color: #d6f0c8; }
+  .skillbar-btn.town .sb-key { color: #bfe6a8; }
+  .skillbar-btn.town:active { background: #335a2a; }
+  .skillbar-btn.town.disabled { background: #20271c; border-color: #34402f; color: #7a8a6c; }
 
   #panel-content { flex: 1; overflow-y: auto; padding: 6px; }
   #panel-content::-webkit-scrollbar { width: 4px; }
@@ -1837,16 +1855,47 @@
       box-shadow: none;
     }
 
-    /* Header reserves room on the right for the floating action buttons that
-       move up into it on web, and stays tall enough to seat them. */
+    /* Desktop header is a centred two-row grid, truly centred in the viewport:
+         row 1   HP — Name — MP        row 2   Power — Level — Gold
+       The side columns are equal (1fr) so the name/level sit dead-centre. The
+       lone SETTINGS button still floats top-right (TOWN moved to the skill bar),
+       so the left/right padding is symmetric to keep the centre line honest. */
     #header {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      justify-items: center;
+      column-gap: 18px;
+      row-gap: 4px;
+      flex-wrap: nowrap;
       min-height: 46px;
-      padding-right: 178px;
+      padding: 6px 64px;
+    }
+    /* #stats holds name + HP + MP; dissolve its box so those three promote to
+       header grid cells and can be placed individually (font-size still
+       inherits to them). */
+    #stats { display: contents; font-size: 14px; }
+    #header #hero-name-hud { grid-column: 2; grid-row: 1; max-width: 220px; }
+    #header #stats .stat-bar:nth-child(2) { grid-column: 1; grid-row: 1; justify-self: end; }   /* HP, left of name */
+    #header #stats .stat-bar:nth-child(3) { grid-column: 3; grid-row: 1; justify-self: start; }  /* MP, right of name */
+    #header #power-hud    { grid-column: 1; grid-row: 2; justify-self: end; }
+    #header #level-hud    { grid-column: 2; grid-row: 2; }
+    #header #gold-display { grid-column: 3; grid-row: 2; justify-self: start; }
+    /* Pact / food buff timers (only shown when active) tuck into centred rows
+       below so they never knock the main two rows off-centre. */
+    #header #pact-hud { grid-column: 1 / -1; grid-row: 3; }
+    #header #food-hud { grid-column: 1 / -1; grid-row: 4; }
+    /* Floor and foes move out of the header to the top-left of the map. */
+    #header #floor-hud, #header #enemies-hud { display: none; }
+    /* Show the map-corner floor / foes readout (mobile keeps these in header). */
+    #map-info {
+      display: flex; flex-direction: column; gap: 4px;
+      position: absolute; z-index: 50; pointer-events: none;
+      top: 8px; left: calc(clamp(250px, 24vw, 480px) + 10px);
     }
     /* On PC there's room for a bigger HUD: bump the stat / gold / chip fonts and
        bars up so health, mana, floor, level, etc. are easier to read. */
     #header h1 { font-size: 17px; }
-    #stats { font-size: 14px; gap: 16px; }
     .bar-track { width: 92px; height: 16px; }
     #gold-display { font-size: 14px; }
     .hud-item { font-size: 14px; }
@@ -1936,6 +1985,9 @@
     /* The primary skill now lives on the skill bar, so drop the redundant
        ⚡ button from the top-right nav (matches the mobile layout). */
     .skill-btn { display: none !important; }
+    /* TOWN also moves onto the skill bar (key 0), so drop it from the top-right
+       nav — leaving only SETTINGS up there. */
+    .town-action { display: none !important; }
   }
 
   /* ── FORCE PORTRAIT ON MOBILE ──
@@ -2290,6 +2342,14 @@
 <div id="main">
   <div id="game-wrap">
     <canvas id="canvas"></canvas>
+    <!-- Desktop-only floor / foes readout pinned to the top-left of the map.
+         On mobile these stay in the header (this whole block is display:none),
+         so mobile is unchanged. No lock icon: foes remaining already signals a
+         sealed floor, and the pill is simply hidden once the floor is clear. -->
+    <div id="map-info">
+      <div id="map-floor">🗺️ <span id="map-floor-num">1</span><span class="floor-diff" id="map-floor-diff"></span></div>
+      <div id="map-foes"><span data-spr="ui_foes"></span> <span id="map-foes-num">0</span> foes</div>
+    </div>
     <!-- Active skills (every learned tree active; the first is the R-keyed
          primary). Sits between the map and the log so it's reachable in the
          thumb zone on mobile. Populated by renderSkillBar(); hidden in town /
@@ -13988,11 +14048,27 @@ function updateBars() {
   setText('level-num', player.level);
   const xpBar = document.getElementById('xp-bar');
   if (xpBar) xpBar.style.width = Math.min(100, player.xp / xpForLevel(player.level) * 100) + '%';
-  setText('enemies-num', (enemies || []).filter(e => !e.dead).length);
-  // Seal indicator: 🔒 while hostiles block the exit, 🔓 once the floor is clear.
+  const foeCount = (enemies || []).filter(e => !e.dead).length;
+  setText('enemies-num', foeCount);
+  // Seal indicator (mobile header): 🔒 while hostiles block the exit, 🔓 once
+  // the floor is clear. Desktop drops the lock entirely (see #map-info below).
   const clearEl = document.getElementById('clear-status');
   if (clearEl) clearEl.textContent = floorCleared ? '🔓' : '🔒';
   setText('power-num', playerPower());
+
+  // Desktop map-corner readout mirrors the floor + foe count (mobile keeps
+  // these in the header). No lock icon: the foes pill simply hides once the
+  // floor is clear, so an empty floor IS the "unlocked" signal.
+  const mapInfo = document.getElementById('map-info');
+  if (mapInfo) {
+    mapInfo.style.display = inTown ? 'none' : '';
+    setText('map-floor-num', displayFloor());
+    const mfd = document.getElementById('map-floor-diff');
+    if (mfd && fd) { mfd.textContent = fd.textContent; mfd.style.color = fd.style.color; mfd.style.background = fd.style.background; }
+    setText('map-foes-num', foeCount);
+    const mapFoes = document.getElementById('map-foes');
+    if (mapFoes) mapFoes.style.display = foeCount > 0 ? '' : 'none';
+  }
 
   // Active mystic pact indicator (hidden when no pact is in effect).
   const pactHud = document.getElementById('pact-hud');
@@ -14825,7 +14901,7 @@ function renderSkillBar() {
       <span class="sb-key">2</span><span class="sb-icon">${MANA_POTION_SVG}</span><span class="sb-info">${pcd > 0 ? pcd : ''}</span>
     </button>`;
   let num = 0;
-  bar.innerHTML = healBtn + manaBtn + skills.map((s) => {
+  const skillsHtml = skills.map((s) => {
     const cd = skillCd(s.id);
     const ready = cd === 0 && player.mp >= s.mp && player.hp > 0;
     // Potions hold keys 1–2, so the first seven learned actives map to keys 3–9;
@@ -14841,6 +14917,18 @@ function renderSkillBar() {
       <span class="sb-key">${key}</span><span class="sb-icon">${dlIcon(s.icon,24)||''}</span><span class="sb-info">${cd > 0 ? cd : s.mp + 'MP'}</span>
     </button>`;
   }).join('');
+  // Desktop only: a TOWN button on the far right of the bar (the header's TOWN
+  // button moved here, keyed 0). Greyed when the gate is currently sealed.
+  // Hidden on touch — mobile keeps TOWN in the bottom control bar, unchanged.
+  let townBtn = '';
+  if (!touchUI()) {
+    const acc = townAccess();
+    const townTip = `<div class='ht-name'>🏰 Town</div><div class='ht-line'>Step through the gate to the safe hub — shops, forge, healer, stash.</div><div class='ht-sub'>press 0</div>`;
+    townBtn = `<button class="skillbar-btn town${acc.ok ? '' : ' disabled'}" ${hoverTip(townTip)} onclick="enterTown()">
+      <span class="sb-key">0</span><span class="sb-icon">${dlIcon('ui_gate',24) || '🏰'}</span><span class="sb-info">TOWN</span>
+    </button>`;
+  }
+  bar.innerHTML = healBtn + manaBtn + skillsHtml + townBtn;
 }
 
 // The potion flasks used by the skill-bar Health (red) and Mana (blue) buttons.
@@ -15564,7 +15652,7 @@ document.addEventListener('keydown', e => {
     const sk = list[parseInt(e.key, 10) - 3];
     if (sk) castSkillById(sk.id);
   }
-  if (e.key==='t'||e.key==='T')          enterTown();
+  if (e.key==='t'||e.key==='T'||e.key==='0') enterTown();   // 0 mirrors the skill-bar TOWN button
   if (e.key==='b'||e.key==='B'||e.key==='i'||e.key==='I') togglePanel();
 });
 
