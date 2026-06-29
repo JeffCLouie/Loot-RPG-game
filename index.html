@@ -1816,11 +1816,9 @@
   #touch-dpad .dpad-btn:active {
     background: rgba(255, 255, 255, 0.14);
   }
-  #touch-dpad .dpad-center {
-    font-size: 10px;
-    letter-spacing: 1px;
-    color: var(--dp-arrow, #e8c267);
-  }
+  /* Centre button is a "wait/pass turn" control — a faint, colourless clock. */
+  #touch-dpad .dpad-center { color: rgba(245, 240, 230, 0.5); }
+  .dpad-center .dp-clock { width: 20px; height: 20px; display: block; }
 
   /* One-time hint that teaches the movement pad after the d-pad's removal.
      Floats just above the bottom bar and fades itself out. */
@@ -2025,7 +2023,7 @@
         <button class="dpad-btn" data-dir="up" aria-label="Move up"></button>
         <div></div>
         <button class="dpad-btn" data-dir="left" aria-label="Move left"></button>
-        <button class="dpad-btn dpad-center" data-dir="pickup">USE</button>
+        <button class="dpad-btn dpad-center" data-dir="pickup" aria-label="Wait a turn"><svg class="dp-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 1.8"/></svg></button>
         <button class="dpad-btn" data-dir="right" aria-label="Move right"></button>
         <div></div>
         <button class="dpad-btn" data-dir="down" aria-label="Move down"></button>
@@ -2144,7 +2142,7 @@
   <div id="touch-dpad">
     <button class="dpad-btn" data-dir="up" aria-label="Move up"></button>
     <button class="dpad-btn" data-dir="left" aria-label="Move left"></button>
-    <button class="dpad-btn dpad-center" data-dir="pickup" aria-label="Use / pick up">USE</button>
+    <button class="dpad-btn dpad-center" data-dir="pickup" aria-label="Wait a turn"><svg class="dp-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 1.8"/></svg></button>
     <button class="dpad-btn" data-dir="right" aria-label="Move right"></button>
     <button class="dpad-btn" data-dir="down" aria-label="Move down"></button>
   </div>
