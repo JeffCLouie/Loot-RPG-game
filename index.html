@@ -2421,7 +2421,8 @@ const MAP_W = 20, MAP_H = 20;
 
 // Each equipment slot, with the base item names that roll for it.
 const SLOTS = {
-  weapon: { label: '⚔ Weapon', names: ['Sword','Axe','Dagger','Staff','Bow','Mace','Spear','Scythe'] },
+  weapon: { label: '⚔ Weapon', names: ['Shortsword','Arming Sword','Rapier','Greatsword','Claymore','Hatchet','War Axe','Greataxe','Battleaxe','Dagger','Stiletto','Kris','Mace','Morningstar','Maul','Spear','Halberd','Pike','Staff','Wand','Shortbow','Longbow','Scythe','War Scythe'] },
+  offhand:{ label: '🛡 Off-Hand', names: ['Buckler','Kite Shield','Tower Shield','Tome','Focus','Quiver','Parrying Dagger'] },
   head:   { label: '🪖 Head',   names: ['Helm','Cap','Crown','Hood','Circlet'] },
   chest:  { label: '👕 Chest',  names: ['Chestplate','Robe','Cuirass','Tunic','Mail'] },
   hands:  { label: '🧤 Hands',  names: ['Gauntlets','Gloves','Bracers','Grips'] },
@@ -2432,7 +2433,7 @@ const SLOTS = {
 const SLOT_KEYS = Object.keys(SLOTS);
 
 // Roll weights for which slot a dropped item belongs to.
-const SLOT_WEIGHTS = { weapon:22, chest:15, head:13, hands:13, legs:13, ring:12, amulet:12 };
+const SLOT_WEIGHTS = { weapon:22, chest:15, head:13, hands:13, legs:13, ring:12, amulet:12, offhand:11 };
 
 // ── AFFIX SYSTEM ──
 // Beyond its headline (weapon DMG / armor DEF), an item carries up to a
@@ -2464,13 +2465,16 @@ const TIER_AFFIX_CAPS = {
 // slot's own headline (weapon DMG, armor DEF/ATK) is never listed here, since the
 // headline already occupies that stat and would only waste a pool slot.
 const SLOT_AFFIX_POOLS = {
-  weapon: { stats: ['ATK','CRIT','CRITDMG','IDMG','DBLSTRIKE','CLEAVE','BOSSDMG','EXEC','PEN','LEECH','MPLEECH','SPELLPWR'], attrs: ['might','agility','spirit'] },
+  weapon: { stats: ['ATK','CRIT','CRITDMG','IDMG','DBLSTRIKE','CLEAVE','BOSSDMG','EXEC','PEN','LEECH','MPLEECH','SPELLPWR','BLEED','STUNPWR'], attrs: ['might','agility','spirit'] },
   head:   { stats: ['HP','MP','REGEN','CRIT','CRITDMG','SPD','MAGICFIND','XPGAIN','SPELLPWR','CDR','MCR','DODGE','MPKILL','MATFIND'], attrs: ['vitality','spirit','luck'] },
   chest:  { stats: ['HP','REGEN','MP','DR','BLOCK','THORNS','HPKILL','DODGE','MAGICFIND'], attrs: ['vitality','spirit','luck'] },
   hands:  { stats: ['CRIT','CRITDMG','IDMG','DBLSTRIKE','SPD','PEN','LEECH','EXEC','CDR','CLEAVE','BLOCK','THORNS'], attrs: ['might','agility','spirit'] },
   legs:   { stats: ['SPD','HP','REGEN','DODGE','DR','BLOCK','MP','GOLDFIND','XPGAIN','HPKILL'], attrs: ['agility','vitality','luck'] },
   ring:   { stats: ['CRIT','CRITDMG','ATK','IDMG','LEECH','MPLEECH','GOLDFIND','MAGICFIND','MATFIND','HP','MP','DEF','DBLSTRIKE','BOSSDMG','EXEC','PEN','MCR','MPKILL','CLEAVE'], attrs: ['might','agility','luck','spirit','vitality'] },
   amulet: { stats: ['MP','HP','REGEN','SPELLPWR','CDR','MCR','MPLEECH','MPKILL','HPKILL','THORNS','MAGICFIND','DR','ATK','DEF','BOSSDMG','GOLDFIND','XPGAIN','MATFIND'], attrs: ['spirit','luck','vitality','might','agility'] },
+  // Off-hands: defensive layers + caster utility. A shield's BLOCK headline already
+  // flows through totalStat('BLOCK') into combat, so it needs no special-casing.
+  offhand:{ stats: ['BLOCK','DR','THORNS','HP','REGEN','MP','SPELLPWR','CDR','MCR','CRIT','DODGE'], attrs: ['vitality','spirit','luck'] },
 };
 
 // ── ITEM BASE PROFILES ──
@@ -2507,8 +2511,94 @@ const BASE_STATS = {
   // jewelry — each base's signature innate stat (drawn from its slot pool)
   Ring: { innate: 'CRIT' }, Band: { innate: 'HP' }, Signet: { innate: 'GOLDFIND' }, Loop: { innate: 'MP' },
   Amulet: { innate: 'MP' }, Pendant: { innate: 'HP' }, Necklace: { innate: 'SPELLPWR' }, Talisman: { innate: 'MAGICFIND' }, Charm: { innate: 'REGEN' },
+  // off-hands — `off` family decides which headline an off-hand carries: shields
+  // bring DEF + a flat BLOCK %, caster off-hands bring Spell Power, ranged/dual
+  // off-hands bring a little Attack (the parry blade also blocks). See applyBaseStats.
+  Buckler:        { off:'shield', def:0.7, block:8 },
+  'Kite Shield':  { off:'shield', def:1.0, block:12 },
+  'Tower Shield': { off:'shield', def:1.4, block:18 },
+  Tome:           { off:'caster', spellpwr:1.4 },
+  Focus:          { off:'caster', spellpwr:1.0 },
+  Quiver:         { off:'ranged', atk:1.1 },
+  'Parrying Dagger': { off:'dual', atk:0.8, block:6 },
 };
 function baseProfile(name) { return BASE_STATS[name] || {}; }
+
+// ── WEAPON SUB-TYPES ──
+// A second layer UNDER the eight weapon categories (Sword, Axe, …): each category
+// splits into distinct sub-types that share the category's class restriction,
+// style and icon but roll their OWN damage profile, reach, attack style and affix
+// bias — so a one-handed Rapier (fast, crit, reach) and a two-handed Greatsword
+// (slow, heavy, cleaving) both read as "Sword" to the class lock yet play nothing
+// alike. `hands` is 1 or 2 (a two-hander forgoes the off-hand slot unless Titan's
+// Grip is learned). `dmg`/`spread` scale the headline exactly like BASE_STATS, so
+// the category baselines below match the old per-category numbers (no balance
+// reset). `style`/`range` override the category defaults; `bias` weights which
+// affixes the sub-type tends to roll (a weight, never an exclusion — every weapon
+// can still roll anything in its slot pool). Bias keys must live in the weapon
+// affix pool. Icons reuse the category's existing art (no new sprites).
+const WEAPON_SUBTYPES = {
+  // Swords
+  'Shortsword':  { cat:'Sword',  hands:1, dmg:0.92, spread:0.30, style:'flurry', range:1, bias:{ DBLSTRIKE:4, CRIT:3 } },
+  'Arming Sword':{ cat:'Sword',  hands:1, dmg:1.00, spread:0.40, style:'slash',  range:1, bias:{ IDMG:3, ATK:3 } },
+  'Rapier':      { cat:'Sword',  hands:1, dmg:0.85, spread:0.22, style:'thrust', range:2, bias:{ CRIT:4, CRITDMG:3, PEN:3 } },
+  'Greatsword':  { cat:'Sword',  hands:2, dmg:1.85, spread:0.70, style:'cleave', range:1, bias:{ CLEAVE:4, BOSSDMG:3, IDMG:3 } },
+  'Claymore':    { cat:'Sword',  hands:2, dmg:1.70, spread:1.00, style:'reap',   range:1, bias:{ CRITDMG:4, EXEC:3, LEECH:3 } },
+  // Axes
+  'Hatchet':     { cat:'Axe',    hands:1, dmg:1.00, spread:0.55, style:'flurry', range:1, bias:{ DBLSTRIKE:4, ATK:3 } },
+  'War Axe':     { cat:'Axe',    hands:1, dmg:1.15, spread:0.70, style:'cleave', range:1, bias:{ CLEAVE:4, IDMG:3 } },
+  'Greataxe':    { cat:'Axe',    hands:2, dmg:2.00, spread:1.10, style:'cleave', range:1, bias:{ CLEAVE:4, BOSSDMG:3, IDMG:3 } },
+  'Battleaxe':   { cat:'Axe',    hands:2, dmg:1.80, spread:0.90, style:'reap',   range:1, bias:{ EXEC:4, CRITDMG:3 } },
+  // Daggers
+  'Dagger':      { cat:'Dagger', hands:1, dmg:0.72, spread:0.18, style:'flurry', range:1, bias:{ CRIT:4, DBLSTRIKE:3 } },
+  'Stiletto':    { cat:'Dagger', hands:1, dmg:0.68, spread:0.14, style:'thrust', range:1, bias:{ PEN:4, CRIT:3 } },
+  'Kris':        { cat:'Dagger', hands:1, dmg:0.78, spread:0.30, style:'flurry', range:1, bias:{ LEECH:4, BLEED:4 } },
+  // Maces
+  'Mace':        { cat:'Mace',   hands:1, dmg:1.10, spread:0.40, style:'crush',  range:1, bias:{ IDMG:3, BOSSDMG:2 } },
+  'Morningstar': { cat:'Mace',   hands:1, dmg:1.18, spread:0.55, style:'crush',  range:1, bias:{ BOSSDMG:4, IDMG:3 } },
+  'Maul':        { cat:'Mace',   hands:2, dmg:1.95, spread:0.60, style:'crush',  range:1, bias:{ STUNPWR:5, BOSSDMG:3 } },
+  // Spears
+  'Spear':       { cat:'Spear',  hands:1, dmg:1.00, spread:0.35, style:'thrust', range:2, bias:{ PEN:3, CRIT:3 } },
+  'Halberd':     { cat:'Spear',  hands:2, dmg:1.75, spread:0.55, style:'cleave', range:2, bias:{ CLEAVE:4, IDMG:3 } },
+  'Pike':        { cat:'Spear',  hands:2, dmg:1.65, spread:0.45, style:'thrust', range:3, bias:{ PEN:4, BOSSDMG:3 } },
+  // Staves (caster)
+  'Staff':       { cat:'Staff',  hands:2, dmg:0.85, spread:0.30, style:'bolt',   range:4, bias:{ SPELLPWR:4, MPLEECH:2 } },
+  'Wand':        { cat:'Staff',  hands:1, dmg:0.70, spread:0.25, style:'bolt',   range:4, bias:{ SPELLPWR:4, CRIT:2 } },
+  // Bows (ranged)
+  'Shortbow':    { cat:'Bow',    hands:2, dmg:0.88, spread:0.45, style:'shot',   range:4, bias:{ DBLSTRIKE:4, CRIT:2 } },
+  'Longbow':     { cat:'Bow',    hands:2, dmg:0.98, spread:0.70, style:'shot',   range:5, bias:{ CRITDMG:4, BOSSDMG:3 } },
+  // Scythes
+  'Scythe':      { cat:'Scythe', hands:2, dmg:1.10, spread:0.65, style:'reap',   range:1, bias:{ LEECH:4, EXEC:3 } },
+  'War Scythe':  { cat:'Scythe', hands:2, dmg:1.80, spread:0.80, style:'reap',   range:2, bias:{ CLEAVE:3, LEECH:3 } },
+};
+// Sub-type keys sorted longest-first so a name match prefers the most specific
+// ("War Axe" beats "Axe", "Arming Sword" beats any bare word).
+const SUBTYPE_KEYS = Object.keys(WEAPON_SUBTYPES).sort((a, b) => b.length - a.length);
+// The sub-type carried by an item's name (longest match wins), or null for a
+// legacy bare-category weapon ("Ancient Sword of Power" → null, resolved by the
+// category fallback in weaponBaseType).
+function weaponSubType(item) {
+  const nm = (item && item.name) || '';
+  for (const s of SUBTYPE_KEYS) if (nm.includes(s)) return s;
+  return null;
+}
+function subTypeData(name) { return WEAPON_SUBTYPES[name] || null; }
+// Resolve the weapon CATEGORY (Sword, Axe, …) from a sub-type or bare name.
+function weaponCategoryOf(name) {
+  const d = WEAPON_SUBTYPES[name];
+  if (d) return d.cat;
+  return WEAPON_STYLES[name] ? name : null; // already a category, or unknown
+}
+// How many hands a weapon (item or base-name) needs: two-handers forgo off-hands.
+function weaponHandsOf(nameOrItem) {
+  const name = typeof nameOrItem === 'string' ? nameOrItem
+    : (nameOrItem ? weaponSubType(nameOrItem) : null);
+  const d = name && WEAPON_SUBTYPES[name];
+  return d ? d.hands : 1; // legacy bare weapons count as one-handed
+}
+function isTwoHander(item) {
+  return !!(item && item.slot === 'weapon' && weaponHandsOf(item) === 2);
+}
 // Apply a base's headline (and jewelry innate) stats onto a fresh item's stats
 // object. Shared by the Forge's blank pieces and generateItem's drops so both
 // honour the base. Records any innate jewelry stat on item.baseStats so the
@@ -2517,13 +2607,39 @@ function applyBaseStats(item, baseName, lvl, mult, dmgMult, opts = {}) {
   const bp = baseProfile(baseName);
   const slot = item.slot;
   if (slot === 'weapon') {
-    const base = Math.max(1, Math.floor((2 + lvl * 1.2) * dmgMult * (bp.dmg || 1)));
-    const spread = Math.max(1, Math.floor(base * (bp.spread != null ? bp.spread : 0.4)));
+    // Damage profile comes from the weapon SUB-TYPE (Greatsword vs Rapier); a
+    // legacy bare-category name falls back to its BASE_STATS category baseline.
+    const sd = WEAPON_SUBTYPES[baseName] || BASE_STATS[weaponCategoryOf(baseName)] || bp;
+    const dm = sd.dmg != null ? sd.dmg : 1;
+    const sp = sd.spread != null ? sd.spread : 0.4;
+    const base = Math.max(1, Math.floor((2 + lvl * 1.2) * dmgMult * dm));
+    const spread = Math.max(1, Math.floor(base * sp));
     item.stats.DMG = `${base}-${base + spread}`;
   } else if (slot === 'head' || slot === 'chest' || slot === 'hands' || slot === 'legs') {
     const slotDef = { chest: 1.3, legs: 1.0, head: 0.8, hands: 0.7 }[slot];
     item.stats.DEF = Math.max(1, Math.floor((1 + lvl) * mult * slotDef * (bp.def || 1)));
     if (slot === 'hands') item.stats.ATK = Math.max(1, Math.floor((1 + lvl * 0.35) * mult * 0.6 * (bp.atk || 1)));
+  } else if (slot === 'offhand') {
+    // Off-hands carry a headline shaped by their family (see BASE_STATS `off`):
+    // shields → DEF + a flat BLOCK %, casters → Spell Power, ranged/dual → Attack
+    // (the parry blade also blocks). The family is remembered on item.off so combat
+    // (dual-wield, etc.) can read it without re-resolving by name.
+    const off = bp.off || 'shield';
+    item.off = off;
+    if (off === 'shield') {
+      item.stats.DEF = Math.max(1, Math.floor((1 + lvl) * mult * 0.7 * (bp.def || 1)));
+      item.stats.BLOCK = bp.block || 8;
+      item.baseStats = ['DEF', 'BLOCK'];
+    } else if (off === 'caster') {
+      const r = affixStatRange('SPELLPWR', lvl, mult);
+      const sv = opts.fixed ? Math.round((r.min + r.max) / 2) : rnd(r.min, r.max);
+      item.stats.SPELLPWR = Math.max(1, Math.round(sv * (bp.spellpwr || 1)));
+      item.baseStats = ['SPELLPWR'];
+    } else { // ranged (quiver) / dual (parry blade)
+      item.stats.ATK = Math.max(1, Math.floor((1 + lvl * 0.35) * mult * 0.6 * (bp.atk || 1)));
+      if (bp.block) { item.stats.BLOCK = bp.block; item.baseStats = ['ATK', 'BLOCK']; }
+      else item.baseStats = ['ATK'];
+    }
   } else if (bp.innate) {
     // ring / amulet: bake in the base's signature stat and mark it protected.
     // opts.fixed → use the band's midpoint so the Forge preview is deterministic
@@ -2560,8 +2676,13 @@ const ITEM_ICONS = {
   Ring:'ring', Band:'ring', Signet:'ring', Loop:'ring',
   // amulet
   Amulet:'amulet', Pendant:'amulet', Necklace:'amulet', Talisman:'talisman', Charm:'orb',
+  // off-hands — reuse EXISTING DawnLike atlas tiles (no new sprites): shields use
+  // the shield tile, caster off-hands an orb, the quiver a bow, the parry blade a
+  // dagger. These are atlas keys (resolved via the iconMarkup→dlIcon fallback).
+  Buckler:'a_shield', 'Kite Shield':'a_shield', 'Tower Shield':'a_shield',
+  Tome:'ic_orb', Focus:'ic_orb', Quiver:'w_bow', 'Parrying Dagger':'w_dagger',
 };
-const SLOT_ICONS = { head:'helm', chest:'chestplate', hands:'gloves', legs:'legs', weapon:'sword', ring:'ring', amulet:'amulet' };
+const SLOT_ICONS = { head:'helm', chest:'chestplate', hands:'gloves', legs:'legs', weapon:'sword', ring:'ring', amulet:'amulet', offhand:'a_shield' };
 
 // Vector geometry for every icon key, in a 0-100 box. Each icon is a list of
 // [path, material] LAYERS, so loot looks like a real object: a sword is a steel
@@ -2629,7 +2750,13 @@ function matColor(m) { return MATERIALS[m] || m; }
 // through, so the same call sites render both.
 function iconMarkup(val, color, frame = true) {
   const layers = ICON_PATHS[val];
-  if (!layers) return val || '';
+  if (!layers) {
+    // Not a vector key. If it's a DawnLike atlas key (off-hands reuse 'a_shield',
+    // 'ic_orb', 'w_bow', 'w_dagger' — no new sprites), render it from the existing
+    // atlas. Otherwise pass the raw value through (legacy emoji).
+    const dl = (val && SPRITE_IDX[val] !== undefined) ? dlIcon(val, 30) : '';
+    return dl || val || '';
+  }
   const c = color || ICON_EMPTY_COLOR;
   const paths = layers.map(([d, m]) => {
     const f = matColor(m);
@@ -3095,10 +3222,24 @@ const VISUAL_SLOTS = ['head','chest','weapon'];
 // saved items are matched by the base word in their name, falling back to a
 // generic per-slot icon (or a potion flask for non-gear).
 function iconKeyFromName(name, slot) {
+  // A weapon's name may carry a sub-type (Greatsword) that has no icon of its own;
+  // it reuses its category's existing art (no new sprites for sub-types).
+  if (slot === 'weapon') {
+    for (const s of SUBTYPE_KEYS) if ((name || '').includes(s)) return ITEM_ICONS[WEAPON_SUBTYPES[s].cat] || 'sword';
+  }
   for (const base of Object.keys(ITEM_ICONS)) {
     if (new RegExp('\\b' + base + '\\b').test(name || '')) return ITEM_ICONS[base];
   }
   return SLOT_ICONS[slot] || 'amulet';
+}
+// The icon key for a freshly rolled/forged base. Weapon sub-types inherit their
+// category's icon; everything else maps its base name straight through.
+function iconForBase(slot, baseName) {
+  if (slot === 'weapon') {
+    const cat = weaponCategoryOf(baseName);
+    return ITEM_ICONS[cat] || ITEM_ICONS[baseName] || SLOT_ICONS[slot] || 'sword';
+  }
+  return ITEM_ICONS[baseName] || SLOT_ICONS[slot] || 'amulet';
 }
 // Potions (and other slotless items) keep their emoji flask.
 function potionIcon(item) { return /\bMana\b/i.test((item && item.name) || '') ? '🔷' : '🧪'; }
@@ -3106,7 +3247,9 @@ function itemIcon(item) {
   if (!item) return '';
   // Trust a stored icon only if it's a known vector key; otherwise re-resolve by
   // name so gear saved under the old emoji system heals to the right vector icon.
-  if (item.icon && ICON_PATHS[item.icon]) return item.icon;
+  // Trust a stored vector key, or a DawnLike atlas key (off-hands reuse atlas
+  // tiles like 'a_shield' since they have no vector icon); else re-resolve by name.
+  if (item.icon && (ICON_PATHS[item.icon] || SPRITE_IDX[item.icon] !== undefined)) return item.icon;
   if (!item.slot) return potionIcon(item);
   return iconKeyFromName(item.name, item.slot);
 }
@@ -3230,20 +3373,23 @@ const STAT_LABELS = { ATK:'Attack', DEF:'Defense', SPD:'Speed', LCK:'Fortune', H
   IDMG:'Increased Dmg %', DBLSTRIKE:'Double Strike %', CLEAVE:'Cleave %', BOSSDMG:'Dmg vs Bosses %',
   EXEC:'Execute %', PEN:'Armor Pen %', GOLDFIND:'Gold Find %', XPGAIN:'XP Gain %',
   MAGICFIND:'Magic Find %', MATFIND:'Material Find %', SPELLPWR:'Spell Power %',
-  CDR:'Cooldown Reduc %', MCR:'Mana Cost Reduc %' };
+  CDR:'Cooldown Reduc %', MCR:'Mana Cost Reduc %',
+  // ── weapon-flavour stats ── BLEED chance to open a bleeding wound (a DoT);
+  // STUNPWR raises crushing weapons' stun chance & duration.
+  BLEED:'Bleed Chance %', STUNPWR:'Stun Power %' };
 // Short codes for the compact one-line item summary (the tooltip/enchanter use the
 // full STAT_LABELS above). Anything missing falls back to its raw key.
 const STAT_SHORT = { ATK:'ATK', DEF:'DEF', SPD:'SPD', LCK:'FOR', HP:'HP', MP:'MP', CRIT:'CRIT',
   CRITDMG:'CDMG', REGEN:'REG', LEECH:'LCH', MPLEECH:'MLC', HPKILL:'HoK', MPKILL:'MoK',
   THORNS:'THN', DR:'DR', BLOCK:'BLK', DODGE:'DGE', IDMG:'IDMG', DBLSTRIKE:'2X', CLEAVE:'CLV',
   BOSSDMG:'vsB', EXEC:'EXE', PEN:'PEN', GOLDFIND:'GF', XPGAIN:'XP', MAGICFIND:'MF', MATFIND:'MTF',
-  SPELLPWR:'SP', CDR:'CDR', MCR:'MCR' };
+  SPELLPWR:'SP', CDR:'CDR', MCR:'MCR', BLEED:'BLD', STUNPWR:'STN' };
 // Stats whose value is a percentage — shown with a trailing % and consumed as /100
 // throughout combat. (CRIT/CRITDMG were always percentages; they're listed too so
 // the compact line shows their unit.)
 const PCT_STATS = new Set(['CRIT','CRITDMG','LEECH','MPLEECH','DR','BLOCK','DODGE','IDMG',
   'DBLSTRIKE','CLEAVE','BOSSDMG','EXEC','PEN','GOLDFIND','XPGAIN','MAGICFIND','MATFIND',
-  'SPELLPWR','CDR','MCR']);
+  'SPELLPWR','CDR','MCR','BLEED','STUNPWR']);
 const HERO = '🧙';
 
 // ── POWER & ATTRIBUTES ──
@@ -3254,7 +3400,7 @@ const STAT_POWER_WEIGHTS = { ATK:3, DEF:2, SPD:2, LCK:2, HP:1, MP:1, CRIT:4, CRI
   // New stats weighted by rough combat value per point so item Power stays sane.
   LEECH:5, MPLEECH:3, HPKILL:1, MPKILL:1, THORNS:1, DR:6, BLOCK:4, DODGE:5, IDMG:4, DBLSTRIKE:5,
   CLEAVE:2, BOSSDMG:2, EXEC:2, PEN:2, GOLDFIND:1, XPGAIN:1, MAGICFIND:2, MATFIND:1, SPELLPWR:3,
-  CDR:4, MCR:3 };
+  CDR:4, MCR:3, BLEED:3, STUNPWR:2 };
 // Per-point power weight of a raised attribute carried on an item (e.g. +13 Might).
 const ATTR_POWER_WEIGHT = 6;
 // A small flat nudge per rarity — kept low on purpose so an item's power is
@@ -3720,6 +3866,8 @@ const WEAPON_STYLES = {
 function weaponStyle() {
   const w = equipped.weapon;
   if (!w || !w.name) return 'fist';
+  const sub = weaponSubType(w);
+  if (sub) return WEAPON_SUBTYPES[sub].style;
   for (const base of Object.keys(WEAPON_STYLES)) {
     if (new RegExp('\\b' + base + '\\b').test(w.name)) return WEAPON_STYLES[base];
   }
@@ -3748,8 +3896,21 @@ const WEAPON_STYLE_DESC = {
   thrust: 'Reaches an extra tile, striking without reprisal',
   reap:   'Wide arc that heals you for part of the hit',
 };
-// The reach of a base, or of an item's resolved weapon type.
-function weaponRange(base) { return WEAPON_RANGE[base] || 1; }
+// The reach of a base/sub-type, or of an item's resolved weapon type. A sub-type
+// (Pike, Rapier) carries its own reach; a bare category falls back to the table.
+function weaponRange(base) {
+  if (WEAPON_SUBTYPES[base]) return WEAPON_SUBTYPES[base].range;
+  return WEAPON_RANGE[base] || 1;
+}
+// The reach of an actual item, resolving its sub-type first (so a Pike reaches 3
+// even though its 'thrust' style's category default is 2). Used by combat.
+function weaponRangeOf(item) {
+  if (!item) return 1;
+  const sub = weaponSubType(item);
+  if (sub) return WEAPON_SUBTYPES[sub].range;
+  const cat = weaponBaseType(item);
+  return (cat && WEAPON_RANGE[cat]) || 1;
+}
 // A tiny horizontal map of a weapon's reach: the gold tile is you, each red tile
 // ahead is a square it can strike, so the reach reads at a glance. Shared by the
 // weapon tooltip and the Forge preview.
@@ -3812,6 +3973,10 @@ function playerClass() { return player.class ? CLASSES[player.class] : null; }
 // weapon. Drives class equip restrictions.
 function weaponBaseType(item) {
   if (!item || !item.name) return null;
+  // New items carry a sub-type word → resolve its category directly.
+  const sub = weaponSubType(item);
+  if (sub) return WEAPON_SUBTYPES[sub].cat;
+  // Legacy bare-category weapons ("Ancient Sword of Power") keep the old match.
   for (const base of Object.keys(WEAPON_STYLES)) {
     if (new RegExp('\\b' + base + '\\b').test(item.name)) return base;
   }
@@ -3833,7 +3998,10 @@ function canEquipItem(item) {
 function classCanUseWeaponBase(base) {
   const cls = playerClass();
   if (!cls) return true;            // a classless hero has no weapon restriction
-  return cls.weapons.includes(base);
+  // `base` may be a sub-type (Greatsword) or a bare category (Sword) — the class
+  // lock is keyed by category, so resolve sub-types down to their category first.
+  const cat = weaponCategoryOf(base) || base;
+  return cls.weapons.includes(cat);
 }
 
 // Combat passives keyed off the chosen class — now also folding in any damage
@@ -3879,10 +4047,15 @@ function buildTree(rows, kind, ascId) {
     row.forEach((n, c) => {
       n.band = b; n.col = c;
       n.type = n.t || kind; delete n.t;
-      n.max = 10;
+      // Keystones are single-rank build-definers; everything else ranks to 10.
+      n.max = n.keystone ? 1 : (n.max || 10);
       if (ascId) n.asc = ascId;
       n.lvl = (ascId ? ASC_BANDS : SKILL_BANDS)[b];
-      if (!n.req && b > 0) {
+      // Auto-link a node to the one directly above it ONLY when it declares no
+      // explicit prerequisite of its own. A DAG node uses `req` (AND of all) and/or
+      // `reqAny` (OR of any), and a `root:true` node opens with no prereq at all —
+      // that's what turns the old straight ladders into a branching web.
+      if (!n.req && !n.reqAny && !n.root && b > 0) {
         const prev = rows[b - 1];
         const parent = prev[Math.min(c, prev.length - 1)];
         n.req = [parent.id];
@@ -4320,14 +4493,77 @@ function skillTreeFor(view) {
 function classSkillTree() { const t = classTrees(); return t.passive.concat(t.active, ascTree()); }
 function skillNode(id) { return classSkillTree().find(n => n.id === id) || null; }
 function skillRank(id) { return (player.skills && player.skills[id]) || 0; }
-// Sum a passive bonus key across every owned node rank (both trees + path).
+// Sum a passive bonus key across every owned node rank (both trees + path). A
+// node's always-on `fx` always counts; its CONDITIONAL `cfx` counts only while its
+// `cond` is currently true (e.g. "+damage WHILE wielding a two-hander"). Because
+// cfx reuses the SAME bonus keys the combat formulas already read, a conditional
+// passive needs zero new combat hooks — it just feeds the existing consumers.
 function skillBonus(key) {
   if (!player.skills) return 0;
   let sum = 0;
   for (const n of classSkillTree()) {
-    if (n.type === 'passive' && n.fx && n.fx[key]) sum += n.fx[key] * skillRank(n.id);
+    if (n.type !== 'passive') continue;
+    const r = skillRank(n.id);
+    if (!r) continue;
+    if (n.fx && n.fx[key]) sum += n.fx[key] * r;
+    if (n.cfx && n.cfx[key] && condMet(n.cond)) sum += n.cfx[key] * r;
   }
   return sum;
+}
+// Total ranks spent in a given tree of the current class (for "spend N points
+// here to unlock" keystone gates).
+function pointsInTree(kind) {
+  const t = classTrees();
+  const arr = kind === 'active' ? t.active : kind === 'path' ? ascTree() : t.passive;
+  return arr.reduce((s, n) => s + skillRank(n.id), 0);
+}
+// Is a build-defining FLAG on? True when any owned node declares it via `flag` or
+// `unlock`. This is the one extra hook the genuinely-new mechanics read (Titan's
+// Grip, Dual Mastery, Aegis cap, …) — cheap: only called behind a guard.
+function skillFlag(name) {
+  if (!player || !player.skills) return false;
+  for (const n of classSkillTree()) {
+    if (skillRank(n.id) > 0 && (n.flag === name || n.unlock === name)) return true;
+  }
+  return false;
+}
+// Evaluate a named CONDITION for a conditional passive against the live loadout /
+// hero state. Data-driven (a string key, never a closure in save data) so cond
+// passives stay cheap and serialization-safe. Unknown conds are simply false.
+function condMet(cond) {
+  if (!cond) return true;
+  const w = equipped.weapon, o = equipped.offhand;
+  switch (cond) {
+    case '2h':       return isTwoHander(w);
+    case '1h':       return !!w && !isTwoHander(w);
+    case 'freehand': return !!w && !isTwoHander(w) && !o;   // a 1H weapon and no off-hand
+    case 'offhand':  return !!o;
+    case 'nooffhand':return !o;
+    case 'shield':   return !!o && o.off === 'shield';
+    case 'casteroff':return !!o && o.off === 'caster';
+    case 'dualoff':  return !!o && o.off === 'dual';
+    case 'wand':     return weaponSubType(w) === 'Wand';
+    case 'finesse':  { const s = weaponSubType(w); return s === 'Rapier' || s === 'Stiletto'; }
+    case 'bleedwpn': return totalStat('BLEED') > 0;
+    case 'lowhp':    return !!player.maxHp && player.hp < player.maxHp * 0.5;
+    case 'fullhp':   return !!player.maxHp && player.hp >= player.maxHp * 0.9;
+    default:
+      if (cond.indexOf('style:') === 0) return weaponStyle() === cond.slice(6);
+      if (cond.indexOf('cat:') === 0)   return weaponBaseType(w) === cond.slice(4);
+      return false;
+  }
+}
+// The bonus off-hand swing fraction granted by Dual Mastery (0 if not unlocked or
+// no parry-blade off-hand equipped), scaling with the unlocking node's rank.
+function dualWieldMult() {
+  if (!equipped.offhand || equipped.offhand.off !== 'dual') return 0;
+  for (const n of classSkillTree()) {
+    if (n.flag === 'dualwield' || n.unlock === 'dualwield') {
+      const r = skillRank(n.id);
+      if (r > 0) return 0.22 + 0.02 * r;   // rank 1 → 24%, rank 10 → 42%
+    }
+  }
+  return 0;
 }
 // Spell-damage multiplier from spell passives + gear + transient spell buffs.
 function spellPowerMult() { return 1 + skillBonus('spell') + buffMag('spellUp') + totalStat('SPELLPWR') / 100; }
@@ -4336,7 +4572,11 @@ function skillReqMet(node) {
   if (!node) return false;
   if (node.asc && player.ascension !== node.asc) return false;
   if (player.level < (node.lvl || 1)) return false;
+  // `req` = ALL of these prerequisites (AND); `reqAny` = at least ONE (OR), which
+  // is how two branches merge into a shared node; `pts` = spend N points in a tree.
   if (node.req) for (const rid of node.req) if (skillRank(rid) < 1) return false;
+  if (node.reqAny && node.reqAny.length && !node.reqAny.some(rid => skillRank(rid) >= 1)) return false;
+  if (node.pts && pointsInTree(node.pts.tree) < node.pts.n) return false;
   return true;
 }
 function skillMaxed(node) { return skillRank(node.id) >= (node.max || 1); }
@@ -4599,7 +4839,7 @@ let inventory = [];
 // and gear kept here are never spent at merchants and never lost on death; the
 // stash is only accessible from the Vault in town.
 let stash = { gold: 0, items: [] };
-let equipped = { head: null, chest: null, hands: null, legs: null, weapon: null, ring: null, amulet: null };
+let equipped = { head: null, chest: null, hands: null, legs: null, weapon: null, offhand: null, ring: null, amulet: null };
 let groundItems = []; // chests on the floor: { x, y } — loot is rolled when opened
 // Death drop: when you fall, your whole bag is left as a recoverable grave on the
 // floor where you died. `graveSite` is the persistent record { floor, items, gold };
@@ -7357,8 +7597,9 @@ function renderForge() {
   const baseBtns = names.map(n => {
     const locked = isWeapon && !classCanUseWeaponBase(n);
     const cls = `forge-opt${n === forgeBase ? ' on' : ''}${locked ? ' forge-opt-locked' : ''}`;
+    const hand = isWeapon ? ` <span style="opacity:.55;font-size:9px">${weaponHandsOf(n) === 2 ? '2H' : '1H'}</span>` : '';
     const reach = isWeapon ? ` <span style="opacity:.6;font-size:9px">⟷${weaponRange(n)}</span>` : '';
-    return `<button class="${cls}" ${locked ? 'disabled' : `onclick="forgeSelectBase('${n}')"`}>${n}${reach}${locked ? ' 🔒' : ''}</button>`;
+    return `<button class="${cls}" ${locked ? 'disabled' : `onclick="forgeSelectBase('${n.replace(/'/g, "\\'")}')"`}>${n}${hand}${reach}${locked ? ' 🔒' : ''}</button>`;
   }).join('');
   const tierBtns = CRAFT_TIERS.map(t => {
     const caps = TIER_AFFIX_CAPS[t] || { stat: 0, attr: 0 };
@@ -7378,7 +7619,7 @@ function renderForge() {
   const cls = playerClass();
   let baseHint = '';
   if (isWeapon) {
-    const style = WEAPON_STYLES[forgeBase];
+    const style = WEAPON_SUBTYPES[forgeBase] ? WEAPON_SUBTYPES[forgeBase].style : WEAPON_STYLES[forgeBase];
     baseHint = `<div style="padding:1px 2px 3px">${weaponRangeGridHTML(forgeBase)}` +
       (WEAPON_STYLE_DESC[style] ? `<div style="color:#9a8d70;font-size:9px;margin-top:3px;font-style:italic">${WEAPON_STYLE_DESC[style]}</div>` : '') +
       (cls ? `<div style="color:#8a7d63;font-size:9px;margin-top:3px">🔒 bases are weapons your ${cls.name} can't wield</div>` : '') +
@@ -7420,7 +7661,7 @@ function craftBlankItem(slot, tier, baseName) {
   const item = {
     id: Math.random(), name: 'Crafted ' + baseName, tier, slot, ilvl: lvl,
     stats: {}, attrs: {}, value, crafted: true, flavor: 'Forged by your own hand.',
-    icon: ITEM_ICONS[baseName] || SLOT_ICONS[slot],
+    icon: iconForBase(slot, baseName),
   };
   // The base shapes the headline (weapon DMG / armor DEF) and gives jewelry its
   // innate signature stat, so picking a base at the Forge has a real effect.
@@ -8663,6 +8904,7 @@ const AFFIX_CURVES = {
   BOSSDMG:{pct:0.4,cap:18}, EXEC:{pct:0.3,cap:15}, PEN:{pct:0.5,cap:25}, GOLDFIND:{pct:0.7,cap:35},
   XPGAIN:{pct:0.5,cap:25}, MAGICFIND:{pct:0.4,cap:20}, MATFIND:{pct:0.6,cap:30}, SPELLPWR:{pct:0.3,cap:15},
   CDR:{pct:0.12,cap:6}, MCR:{pct:0.16,cap:8},
+  BLEED:{pct:0.3,cap:15}, STUNPWR:{pct:0.5,cap:25},
 };
 function affixStatRange(stat, lvl, mult) {
   // Crit chance / Fortune: small numbers, kept on a tight band (and capped) so a
@@ -8797,7 +9039,7 @@ function generateItem(rolls = 1, ilvl = null, forceTier = null, forceSlot = null
   let value = Math.round(baseValue * (1 + lvl * 0.12));
 
   const item = { id: Math.random(), name, tier, slot, ilvl: lvl, stats, attrs, value,
-    flavor: pick(FLAVOR[tier]), icon: ITEM_ICONS[baseName] || SLOT_ICONS[slot] };
+    flavor: pick(FLAVOR[tier]), icon: iconForBase(slot, baseName) };
 
   // Headline stat by slot, shaped by the rolled base (Axe hits harder than a
   // Dagger, plate guards more than a robe) — and a jewelry base's innate stat.
@@ -8842,7 +9084,8 @@ function rollBaseName(slot) {
   if (slot === 'weapon') {
     const cls = playerClass();
     if (cls && cls.weapons && cls.weapons.length) {
-      const usable = names.filter(n => cls.weapons.includes(n));
+      // names are sub-types now; the class lock is by category, so resolve first.
+      const usable = names.filter(n => cls.weapons.includes(weaponCategoryOf(n)));
       if (usable.length) return Math.random() < 0.85 ? pick(usable) : pick(names);
     }
   }
@@ -10439,6 +10682,15 @@ function tryBossStatusProc(e) {
 function tryPlayerStatusProc(e) {
   const w = equipped.weapon;
   if (!w) return;
+  // Bleed (gear stat): a chance to open a bleeding wound — a poison-style damage-
+  // over-time — on hit. Unlike the epic+ proc below this fires at ANY rarity, so a
+  // bleed-rolled Kris bleeds even as a rare. Reuses the existing poison effect.
+  const bleed = totalStat('BLEED');
+  if (bleed > 0 && !e.dead && Math.random() < bleed / 100) {
+    applyStatusEffect(e, 'poison', 3, 'player');
+    const label = e.isBoss ? e.name : e.type;
+    log(`🩸 Your ${w.name} opens a bleeding wound on ${label}!`, 'loot');
+  }
   const tierOrder = Object.keys(TIERS);
   const tierIdx = tierOrder.indexOf(w.tier);
   if (tierIdx >= 4 && Math.random() < 0.15) {
@@ -10938,12 +11190,17 @@ function getWeaponDamage() {
   return rnd(1, 3); // bare fists
 }
 
-// Sum a flat stat (ATK, DEF, etc.) across all equipped gear.
+// Sum a flat stat (ATK, DEF, etc.) across all equipped gear. Titan's Grip lets you
+// wield an off-hand alongside a two-hander, but at a cost: its stats count for 60%.
+// The guard is cheap (the rare 2H+off-hand combo) so skillFlag is rarely hit.
 function totalStat(name) {
   let sum = 0;
+  const tgPenalty = (equipped.offhand && isTwoHander(equipped.weapon) && skillFlag('titangrip')) ? 0.6 : 1;
   for (const slot of SLOT_KEYS) {
     const it = equipped[slot];
-    if (it && typeof it.stats[name] === 'number') sum += it.stats[name];
+    if (it && typeof it.stats[name] === 'number') {
+      sum += (slot === 'offhand' && tgPenalty !== 1) ? Math.round(it.stats[name] * tgPenalty) : it.stats[name];
+    }
   }
   return sum;
 }
@@ -10966,7 +11223,10 @@ function mitigateDamage(raw, lvl) {
 // halve it, then a flat Damage Reduction %. Both are capped so they can't make the
 // hero untouchable. Returns the final HP damage (≥1).
 function applyIncomingMods(dmg) {
-  if (Math.random() < Math.min(0.6, (totalStat('BLOCK') + skillBonus('block')) / 100)) {
+  // Block chance is normally capped at 60%; the Aegis keystone raises that ceiling
+  // to 75% (its whole point), letting a dedicated shield build wall off more hits.
+  const blockCap = skillFlag('aegis') ? 0.75 : 0.6;
+  if (Math.random() < Math.min(blockCap, (totalStat('BLOCK') + skillBonus('block')) / 100)) {
     dmg = Math.max(1, Math.round(dmg * 0.5));
     spawnFloatingText(player.x, player.y - 0.3, 'BLOCK', '#cfe0ff');
   }
@@ -11297,6 +11557,16 @@ function attackEnemy(e, opts = {}) {
     }
   }
 
+  // Dual Mastery (passive unlock): a parry-blade off-hand lands a bonus off-hand
+  // strike for a fraction of weapon damage every swing — the dual-wield fantasy
+  // delivered through the off-hand slot rather than a second weapon slot.
+  const dwm = (!ranged && !e.dead) ? dualWieldMult() : 0;
+  if (dwm > 0) {
+    const before = dealtTotal;
+    swing(e, dwm);
+    if (dealtTotal > before) spawnFloatingText(e.x, e.y - 0.3, `↺${dealtTotal - before}`, '#a9e0ff');
+  }
+
   // Cleave % (gear): splash a slice of the damage dealt onto adjacent foes (on top
   // of any weapon cleave above), so even a single-target weapon can hit a crowd.
   const clv = totalStat('CLEAVE') / 100;
@@ -11309,10 +11579,15 @@ function attackEnemy(e, opts = {}) {
     });
   }
 
-  // Crush (Mace): heavy blows have a good chance to stun a surviving foe.
-  if (style === 'crush' && !e.dead && Math.random() < 0.5) {
-    applyStatusEffect(e, 'stun', 1, 'player');
-    log(`🔨 ${label} is stunned by the blow!`, 'important');
+  // Crush (Mace): heavy blows have a good chance to stun a surviving foe. Stun
+  // Power % (gear, biased onto Mauls) raises both the chance and the duration, so a
+  // crushing build can reliably lock a target down.
+  if (style === 'crush' && !e.dead) {
+    const stunPwr = totalStat('STUNPWR');
+    if (Math.random() < 0.5 + stunPwr / 100) {
+      applyStatusEffect(e, 'stun', stunPwr >= 15 ? 2 : 1, 'player');
+      log(`🔨 ${label} is stunned by the blow!`, 'important');
+    }
   }
 
   // Reap (Scythe): siphon a quarter of all damage dealt back as health.
@@ -11340,7 +11615,7 @@ function tryRangedAttack(dx, dy) {
   if (dx === 0 && dy === 0) return false;
   if (getEnemyAt(player.x + dx, player.y + dy)) return false; // adjacent → normal melee
   const style = weaponStyle();
-  const range = STYLE_RANGE[style] || 1;
+  const range = weaponRangeOf(equipped.weapon) || STYLE_RANGE[style] || 1;
   if (range < 2) return false;            // melee-only weapons can't poke at range
   const mpCost = style === 'bolt' ? 4 : 0; // the Staff's bolt spends a little mana
   if (mpCost && player.mp < mpCost) return false;
@@ -13116,6 +13391,7 @@ function renderHero(el) {
     ['BLOCK','a_shield','Block'], ['SPELLPWR','ic_orb','Spell power'], ['CDR','ic_wand','Cooldown reduc'],
     ['MCR','ui_mp','Mana cost reduc'], ['GOLDFIND','ic_money','Gold find'], ['XPGAIN','scroll','XP gain'],
     ['MAGICFIND','chest','Magic find'], ['MATFIND','mat_scrap','Material find'],
+    ['BLEED','ic_heart','Bleed chance'], ['STUNPWR','ic_stun','Stun power'],
   ];
   const extRows = EXT.map(([k, sp, name]) => {
     const t = totalStat(k);
@@ -13223,12 +13499,15 @@ function renderSkills(el) {
   const { cols, bands } = treeDims(tree);
   const byId = {}; tree.forEach(n => byId[n.id] = n);
 
-  // Branch connectors (one per node→prerequisite within this tree).
+  // Branch connectors (one per node→prerequisite within this tree). Both hard
+  // prerequisites (req) and any-of merges (reqAny) draw a line, so the DAG's
+  // cross-links and branch joins are all visible — not just a straight ladder.
   let lines = '';
   for (const n of tree) {
-    if (!n.req) continue;
+    const reqs = [...(n.req || []), ...(n.reqAny || [])];
+    if (!reqs.length) continue;
     const p = nodePos(n, cols, bands);
-    for (const rid of n.req) {
+    for (const rid of reqs) {
       const q = byId[rid]; if (!q) continue;
       const a = nodePos(q, cols, bands);
       const x1 = (a[0] * 100).toFixed(1), y1 = (a[1] * 100).toFixed(1);
@@ -13287,6 +13566,20 @@ function renderSkills(el) {
       const rn = byId[rid] || skillNode(rid); const ok = skillRank(rid) >= 1;
       reqRows.push(`<span class="${ok ? 'rqok' : 'rqno'}">${ok ? '✓' : '🔒'} ${rn ? rn.name : rid}</span>`);
     }
+    // OR-merge prerequisite: any one of these unlocks the node.
+    if (sn.reqAny && sn.reqAny.length) {
+      const names = sn.reqAny.map(rid => (byId[rid] || skillNode(rid) || {}).name || rid);
+      const ok = sn.reqAny.some(rid => skillRank(rid) >= 1);
+      reqRows.push(`<span class="${ok ? 'rqok' : 'rqno'}">${ok ? '✓' : '🔒'} Any: ${names.join(' / ')}</span>`);
+    }
+    // "Spend N points in this tree" gate for deep keystones.
+    if (sn.pts) {
+      const have = pointsInTree(sn.pts.tree);
+      const ok = have >= sn.pts.n;
+      reqRows.push(`<span class="${ok ? 'rqok' : 'rqno'}">${ok ? '✓' : '🔒'} ${sn.pts.n} pts in ${sn.pts.tree} tree (${have}/${sn.pts.n})</span>`);
+    }
+    // Build-defining unlock badge so a keystone reads as more than a stat node.
+    if (sn.unlock || sn.flag) reqRows.unshift(`<span class="rqok" style="color:#e8c267">★ Build-defining</span>`);
     // "On rank up" preview — the concrete buff the next point buys.
     let ruHtml = '';
     if (!skillMaxed(sn)) {
@@ -13364,23 +13657,52 @@ const FX_LABELS = {
   magicFind: ['magic find', 'pct'],  xpGain:    ['XP gain', 'pct'],
 };
 // Format a single fx magnitude into a signed, human string (e.g. "+1.2%", "+2").
+// A negative magnitude (a keystone trade-off, e.g. Glass Cannon's −HP) flips the
+// sign so the cost reads honestly.
 function fmtFxVal(kind, v) {
-  const sign = kind === 'fracNeg' ? '−' : '+';
-  if (kind === 'flat') return `${sign}${Math.round(v * 10) / 10}`;
-  const pct = kind === 'pct' ? v : v * 100;
+  let sign = kind === 'fracNeg' ? '−' : (v < 0 ? '−' : '+');
+  const a = Math.abs(v);
+  if (kind === 'flat') return `${sign}${Math.round(a * 10) / 10}`;
+  const pct = kind === 'pct' ? a : a * 100;
   return `${sign}${Math.round(pct * 10) / 10}%`;
+}
+// Human text for a conditional passive's trigger, shown after its bonus.
+const COND_LABELS = {
+  '2h':'with a 2H weapon', '1h':'with a 1H weapon', 'freehand':'with a free hand',
+  'offhand':'with an off-hand', 'nooffhand':'with no off-hand', 'shield':'with a shield',
+  'casteroff':'with a caster off-hand', 'dualoff':'with a parry off-hand',
+  'wand':'with a wand', 'finesse':'with a rapier/stiletto', 'bleedwpn':'with a bleed weapon',
+  'lowhp':'below 50% HP', 'fullhp':'above 90% HP',
+};
+function condLabel(c) {
+  if (!c) return '';
+  if (COND_LABELS[c]) return COND_LABELS[c];
+  if (c.indexOf('style:') === 0) return `with ${c.slice(6)} weapons`;
+  if (c.indexOf('cat:') === 0) return `with a ${c.slice(4)}`;
+  return c;
 }
 // Build the "On rank up" preview rows: the concrete buff each point buys, shown
 // as current total → next-rank total. Returns [] when there's nothing to preview.
 function skillRankUpRows(node, rank) {
   const rows = [];
-  if (node.type === 'passive' && node.fx) {
-    for (const k of Object.keys(node.fx)) {
+  if (node.type === 'passive' && (node.fx || node.cfx)) {
+    if (node.fx) for (const k of Object.keys(node.fx)) {
       const meta = FX_LABELS[k] || [k, 'frac'];
       const per = node.fx[k];
       const cur = fmtFxVal(meta[1], per * rank);
       const next = fmtFxVal(meta[1], per * (rank + 1));
       rows.push([meta[0], rank > 0 ? `${cur} → <b>${next}</b>` : `<b>${next}</b>`]);
+    }
+    // Conditional bonuses read with their trigger so the trade-off is legible.
+    if (node.cfx) {
+      const cl = condLabel(node.cond);
+      for (const k of Object.keys(node.cfx)) {
+        const meta = FX_LABELS[k] || [k, 'frac'];
+        const per = node.cfx[k];
+        const cur = fmtFxVal(meta[1], per * rank);
+        const next = fmtFxVal(meta[1], per * (rank + 1));
+        rows.push([`${meta[0]} ${cl}`, rank > 0 ? `${cur} → <b>${next}</b>` : `<b>${next}</b>`]);
+      }
     }
   } else if (node.type === 'active' && node.cast) {
     const cur = Math.round(rankScale(rank || 1) * 100);
@@ -13403,10 +13725,11 @@ function skillRankUpRows(node, rank) {
 }
 // Plain-text "new total" summary at a given rank, for the level-up log line.
 function skillTotalSummary(node, rank) {
-  if (node.type === 'passive' && node.fx) {
-    return Object.keys(node.fx)
-      .map(k => { const m = FX_LABELS[k] || [k, 'frac']; return `${m[0]} ${fmtFxVal(m[1], node.fx[k] * rank)}`; })
-      .join(', ');
+  if (node.type === 'passive' && (node.fx || node.cfx)) {
+    const parts = [];
+    if (node.fx) for (const k of Object.keys(node.fx)) { const m = FX_LABELS[k] || [k, 'frac']; parts.push(`${m[0]} ${fmtFxVal(m[1], node.fx[k] * rank)}`); }
+    if (node.cfx) { const cl = condLabel(node.cond); for (const k of Object.keys(node.cfx)) { const m = FX_LABELS[k] || [k, 'frac']; parts.push(`${m[0]} ${fmtFxVal(m[1], node.cfx[k] * rank)} ${cl}`); } }
+    return parts.join(', ');
   }
   if (node.type === 'active' && node.cast) {
     let s = `effect power ${Math.round(rankScale(rank) * 100)}%`;
@@ -13601,6 +13924,12 @@ function dollSprite(slot, item) {
     if (!item) return 'w_sword';
     return DOLL_WEAPON_ATLAS[item.icon] || DOLL_WEAPON_ATLAS[iconKeyFromName(item.name, 'weapon')] || 'w_sword';
   }
+  if (slot === 'offhand') {
+    // Off-hand items already store an existing atlas key (a_shield / ic_orb /
+    // w_bow / w_dagger); render that, defaulting to the shield tile when empty.
+    if (item && SPRITE_IDX[item.icon] !== undefined) return item.icon;
+    return 'a_shield';
+  }
   return DOLL_SLOT_ATLAS[slot] || 'a_amulet';
 }
 // One equipment frame. `item` may be null (empty slot — dim placeholder sprite).
@@ -13630,9 +13959,9 @@ function renderPaperdoll() {
   // Grid laid out like a body: weapon|head|amulet / hands|chest|ring / -|legs|-.
   const blank = '<div class="pd-cell"></div>';
   const cells = [
-    renderDollSlot('weapon'), renderDollSlot('head'),  renderDollSlot('amulet'),
-    renderDollSlot('hands'),  renderDollSlot('chest'), renderDollSlot('ring'),
-    blank,                    renderDollSlot('legs'),  blank,
+    renderDollSlot('weapon'),  renderDollSlot('head'),  renderDollSlot('amulet'),
+    renderDollSlot('hands'),   renderDollSlot('chest'), renderDollSlot('ring'),
+    renderDollSlot('offhand'), renderDollSlot('legs'),  blank,
   ].join('');
   return `<div class="paperdoll">${bodyHTML}${cells}
     <div class="pd-hint">Tap a slot for details · ✕ to unequip · EQUIP loot from the LOOT tab</div>
@@ -13648,6 +13977,17 @@ function quickEquip(i) {
   if (!canEquipItem(item)) {
     const cls = playerClass();
     log(`🔒 A ${cls.name} can't wield that — ${cls.name}s use ${cls.weapons.join(', ')}.`);
+    return;
+  }
+  // Two-handers and off-hands share the same hands: a 2H weapon leaves none free
+  // for an off-hand, and vice versa — unless the Titan's Grip passive is learned.
+  if (slot === 'weapon' && isTwoHander(item) && equipped.offhand && !skillFlag('titangrip')) {
+    inventory.push(equipped.offhand);
+    equipped.offhand = null;
+    log('🔒 Your two-handed weapon needs both hands — off-hand stowed.');
+  }
+  if (slot === 'offhand' && isTwoHander(equipped.weapon) && !skillFlag('titangrip')) {
+    log('🔒 A two-handed weapon leaves no hand free for an off-hand — learn Titan\'s Grip to wield both.');
     return;
   }
   if (equipped[slot]) inventory.push(equipped[slot]); // swap old back into bag
@@ -13803,13 +14143,20 @@ function itemCardHTML(item, opts = {}) {
     statRows.push(`<div class="tt-stat" style="color:#e6c34a">+${v} ${ATTRIBUTES[k].label}</div>`);
   }
   const stats = statRows.join('') || '<div class="tt-stat" style="color:#666">No bonuses</div>';
-  // Weapons show their reach (a little tile grid) and how the base swings.
+  // Weapons show their sub-type, hand requirement, reach (a little tile grid) and
+  // how they swing. Sub-types carry their own style/reach (a Pike reaches 3, a
+  // Rapier thrusts) while still reading as their category for the class lock.
   let weaponLine = '';
   if (item.slot === 'weapon') {
+    const sub = weaponSubType(item);
     const base = weaponBaseType(item);
-    const style = base ? WEAPON_STYLES[base] : null;
-    if (base) {
-      weaponLine = `<div style="margin-top:5px">${weaponRangeGridHTML(base)}</div>` +
+    // Sub-type → its own style/range key; legacy bare weapons → category.
+    const styleKey = sub || base;
+    const style = sub ? WEAPON_SUBTYPES[sub].style : (base ? WEAPON_STYLES[base] : null);
+    if (styleKey) {
+      const hands = weaponHandsOf(item) === 2 ? '2H' : '1H';
+      const subTag = sub ? `<div style="color:#cdbf9a;font-size:10px;margin-top:4px"><b>${sub}</b> · <span style="color:#9a8d70">${hands}${base && base !== sub ? ' ' + base : ''}</span></div>` : '';
+      weaponLine = subTag + `<div style="margin-top:4px">${weaponRangeGridHTML(styleKey)}</div>` +
         (WEAPON_STYLE_DESC[style] ? `<div style="color:#9a8d70;font-size:9px;margin-top:2px;font-style:italic">${WEAPON_STYLE_DESC[style]}</div>` : '');
     }
   }
@@ -14362,7 +14709,9 @@ function loadGame() {
       stash.items = (data.stash.items || []).filter(it => it && it.slot);
     }
     // Rebuild equipped into the new 7-slot shape; salvage any still-valid pieces into the bag.
-    const freshEquipped = { head:null, chest:null, hands:null, legs:null, weapon:null, ring:null, amulet:null };
+    // Off-hand is additive: old saves simply have no off-hand, so it defaults null
+    // and the salvage loop below routes any unknown-slot gear safely to the bag.
+    const freshEquipped = { head:null, chest:null, hands:null, legs:null, weapon:null, offhand:null, ring:null, amulet:null };
     const old = data.equipped || {};
     Object.values(old).forEach(it => {
       if (it && it.slot && freshEquipped.hasOwnProperty(it.slot) && !freshEquipped[it.slot]) {
