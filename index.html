@@ -13129,7 +13129,6 @@ function renderSlot(slot, label) {
     <div class="slot-info" onclick="tapSlot('${slot}', this)"
          onmouseenter="hoverSlot(event,'${slot}')" onmouseleave="hideTooltip()">
       <span class="slot-label">${label}</span>
-      <span class="loot-icon slot-icon">${item ? iconMarkup(itemIcon(item), tierColor(item)) : iconMarkup(SLOT_ICONS[slot], ICON_EMPTY_COLOR)}</span>
       <span class="slot-item ${item ? 'item-'+item.tier : ''}">
         ${item ? item.name + ` <span class="item-power">⚡${itemPower(item)}</span>` : '<span class="slot-empty">— empty —</span>'}
       </span>
