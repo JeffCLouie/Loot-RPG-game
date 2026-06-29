@@ -13928,7 +13928,8 @@ function renderSkills(el) {
     const badge = barHidden ? '🚫' : maxd ? '✓' : avail ? '+' : owned ? rank : ready ? '☆' : '🔒';
     const pips = `<div class="pips">${Array.from({ length: 10 }, (_, i) => `<span class="pip${i < rank ? ' on' : ''}"></span>`).join('')}</div>`;
     return `<button class="sk-tnode ${state}${n.type === 'active' ? ' act' : ''}${barHidden ? ' barhid' : ''}${selectedSkillId === n.id ? ' sel' : ''}" id="sknode-${n.id}"
-        style="left:${(p[0] * 100).toFixed(2)}%;top:${(p[1] * 100).toFixed(2)}%" onclick="selectSkill('${n.id}')" ondblclick="buySkill('${n.id}')">
+        style="left:${(p[0] * 100).toFixed(2)}%;top:${(p[1] * 100).toFixed(2)}%" onclick="selectSkill('${n.id}')" ondblclick="buySkill('${n.id}')"
+        data-tip="${skillTipHtml(n)}" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
       <span class="ic">${dlIconFill(n.icon)}</span><span class="nm">${n.name}</span><span class="badge">${badge}</span>
     </button>`;
   }).join('');
@@ -14007,6 +14008,47 @@ function renderSkills(el) {
       ${pop}
     </div>`;
   positionSkillPop();
+}
+
+// Read-only hover card for a skill node — the same info as the click popover,
+// minus the Learn / Hide buttons, surfaced through the shared hover-tip system so
+// you can read any skill just by pointing at it (clicking still opens the buy
+// popover). Built with single-quoted inner markup since it lives in a data-tip
+// attribute; double quotes in authored text are escaped.
+function skillTipHtml(n) {
+  const esc = s => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+  const rank = skillRank(n.id);
+  const pips = n.type === 'active' ? milestonePips(rank) : '';
+  const typeTxt = n.type === 'active'
+    ? `⚡ Active · ${n.mp}MP · ${n.cd}cd · ${esc(castShapeLabel(n.cast))}`
+    : 'Passive';
+  let h = `<div class='ht-name'>${esc(n.name)} <span style='color:#e8c267'>${rank}/${n.max}${pips ? ' ' + pips : ''}</span></div>`;
+  h += `<div class='ht-line' style='color:#9a8fd0'>${typeTxt}</div>`;
+  h += `<div class='ht-line'>${esc(n.desc)}</div>`;
+  if (!skillMaxed(n)) {
+    const rows = skillRankUpRows(n, rank);
+    if (rows.length) {
+      h += `<div class='ht-line' style='margin-top:3px;color:#9a8fd0'>${rank > 0 ? `On rank up (${rank}→${rank + 1})` : 'When learned'}</div>`;
+      for (const r of rows) h += `<div class='ht-line'>${r[0]}: ${r[1]}</div>`;
+    }
+  }
+  // Gating: hero level + prerequisite skills, ticked green or locked red.
+  const reqs = [];
+  if ((n.lvl || 1) > 1) {
+    const ok = (player.level || 1) >= n.lvl;
+    reqs.push(`<span style='color:${ok ? '#7ad08a' : '#e08a8a'}'>${ok ? '✓' : '🔒'} Lv ${n.lvl}</span>`);
+  }
+  if (n.req) for (const rid of n.req) {
+    const rn = skillNode(rid); const ok = skillRank(rid) >= 1;
+    reqs.push(`<span style='color:${ok ? '#7ad08a' : '#e08a8a'}'>${ok ? '✓' : '🔒'} ${esc(rn ? rn.name : rid)}</span>`);
+  }
+  if (reqs.length) h += `<div class='ht-line' style='margin-top:3px'>${reqs.join(' · ')}</div>`;
+  // Action hint at the foot of the card.
+  if (skillMaxed(n)) h += `<div class='ht-sub'>✓ Maxed</div>`;
+  else if (canBuySkill(n)) h += `<div class='ht-sub'>Click to learn / rank up</div>`;
+  else if (!skillReqMet(n)) h += `<div class='ht-sub'>Locked — requirements unmet</div>`;
+  else if ((player.skillPoints || 0) <= 0) h += `<div class='ht-sub'>Ready — earn a skill point</div>`;
+  return h;
 }
 
 // A short human label for an active's targeting shape, shown in its popover.
