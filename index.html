@@ -960,6 +960,49 @@
   .slot-item { flex: 1; font-size: 10px; overflow: hidden; text-overflow: ellipsis; }
   .slot-empty { color: #333; }
 
+  /* ── PAPER DOLL (GEAR tab) ── Diablo-2-style: equipment frames laid out
+     around a faint hero body, each filled slot framed in its rarity colour. */
+  .paperdoll {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px 8px;
+    padding: 14px 6px 4px;
+    justify-items: center;
+    align-items: start;
+  }
+  /* Faint hero silhouette behind the centre column — the "body" gear sits on. */
+  .pd-body {
+    position: absolute; left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    opacity: 0.16; pointer-events: none; z-index: 0;
+    image-rendering: pixelated;
+  }
+  .pd-cell { display: flex; flex-direction: column; align-items: center; gap: 3px; z-index: 1; width: 100%; }
+  .pd-slot {
+    position: relative;
+    width: 100%; max-width: 76px; aspect-ratio: 1;
+    border: 1px solid #3a3526; border-radius: 5px;
+    background: rgba(8,8,12,0.6);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+  }
+  .pd-slot.empty { border-style: dashed; }
+  .pd-slot.empty .dl-ic, .pd-slot.empty .pd-emoji { opacity: 0.28; }
+  .pd-slot.filled { background: rgba(20,18,12,0.75); }
+  .pd-emoji { font-size: 30px; line-height: 1; filter: grayscale(0.1); }
+  .pd-pwr { position: absolute; bottom: 1px; right: 3px; font-size: 9px; }
+  .pd-unequip {
+    position: absolute; top: -7px; right: -7px;
+    width: 19px; height: 19px; padding: 0;
+    border-radius: 50%; border: 1px solid var(--border);
+    background: #3a1414; color: #f0a0a0; font-size: 11px; line-height: 1;
+    cursor: pointer; z-index: 2;
+  }
+  .pd-cap { font-size: 9px; color: #777; text-align: center; letter-spacing: 0.5px; max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pd-cell.is-empty .pd-cap { color: #555; }
+  .pd-hint { grid-column: 1 / -1; margin-top: 8px; font-size: 10px; color: #555; text-align: center; }
+
   /* ── LOG ── */
   /* ── BOTTOM ROW: log (left) + dpad (right) ── */
   #bottom-row {
@@ -12915,8 +12958,7 @@ function renderPanel() {
       </div>`;
     }).join('');
   } else if (currentTab === 'equip') {
-    el.innerHTML = SLOT_KEYS.map(s => renderSlot(s, SLOTS[s].label)).join('') +
-      `<div style="margin-top:8px;font-size:10px;color:#555">Tap EQUIP on any loot<br>item to gear up.</div>`;
+    el.innerHTML = renderPaperdoll();
   } else if (currentTab === 'skills') {
     renderSkills(el);
   } else {
@@ -13429,17 +13471,52 @@ function changeClass(key) {
   updateBars(); renderPanel(); renderSkillBar(); renderTrainer(); draw(); saveGame();
 }
 
-function renderSlot(slot, label) {
+// ── PAPER DOLL ── the GEAR tab as a Diablo-2-style equipment screen: each gear
+// slot is a framed cell positioned around a faint hero body, with filled slots
+// framed in their rarity colour. Tap a slot for its tooltip; ✕ unequips.
+const DOLL_WEAPON_ATLAS = { sword:'w_sword', axe:'w_axe', dagger:'w_dagger', staff:'w_staff', bow:'w_bow', mace:'w_mace', spear:'w_spear', scythe:'w_scythe' };
+const DOLL_SLOT_ATLAS = { head:'a_head', chest:'a_chest', hands:'a_hands', legs:'a_legs', ring:'a_ring', amulet:'a_amulet', weapon:'w_sword' };
+// The DawnLike atlas sprite that best pictures what's in (or belongs in) a slot.
+function dollSprite(slot, item) {
+  if (slot === 'weapon') {
+    if (!item) return 'w_sword';
+    return DOLL_WEAPON_ATLAS[item.icon] || DOLL_WEAPON_ATLAS[iconKeyFromName(item.name, 'weapon')] || 'w_sword';
+  }
+  return DOLL_SLOT_ATLAS[slot] || 'a_amulet';
+}
+// One equipment frame. `item` may be null (empty slot — dim placeholder sprite).
+function renderDollSlot(slot) {
   const item = equipped[slot];
-  return `<div class="equip-slot">
-    <div class="slot-info" onclick="tapSlot('${slot}', this)"
+  const sp = dollSprite(slot, item);
+  const emoji = (SLOTS[slot].label.match(EMOJI_RE) || ['❔'])[0];
+  const ic = dlIcon(sp, 40) || `<span class="pd-emoji">${emoji}</span>`;
+  const cap = item ? item.name : SLOTS[slot].label.replace(/^\S+\s/, '');
+  const color = item ? (TIERS[item.tier] || {}).color || '' : '';
+  const frameStyle = item && color ? ` style="border-color:${color};box-shadow:0 0 9px ${color}55"` : '';
+  return `<div class="pd-cell ${item ? '' : 'is-empty'}">
+    <div class="pd-slot ${item ? 'filled' : 'empty'}"${frameStyle}
+         onclick="tapSlot('${slot}', this)"
          onmouseenter="hoverSlot(event,'${slot}')" onmouseleave="hideTooltip()">
-      <span class="slot-label">${label}</span>
-      <span class="slot-item ${item ? 'item-'+item.tier : ''}">
-        ${item ? item.name + ` <span class="item-power">⚡${itemPower(item)}</span>` : '<span class="slot-empty">— empty —</span>'}
-      </span>
+      ${ic}
+      ${item ? `<span class="item-power pd-pwr">⚡${itemPower(item)}</span>` : ''}
+      ${item ? `<button class="pd-unequip" onclick="event.stopPropagation();unequip('${slot}')" title="Unequip">✕</button>` : ''}
     </div>
-    ${item ? `<button class="row-btn unequip-row-btn" onclick="unequip('${slot}')">✕</button>` : ''}
+    <div class="pd-cap"${item && color ? ` style="color:${color}"` : ''}>${cap}</div>
+  </div>`;
+}
+function renderPaperdoll() {
+  const heroKey = (player.class && SPRITE_IDX['hero_' + player.class] !== undefined) ? 'hero_' + player.class : 'hero';
+  const body = dlIcon(heroKey, 132);
+  const bodyHTML = body ? `<div class="pd-body">${body}</div>` : '';
+  // Grid laid out like a body: weapon|head|amulet / hands|chest|ring / -|legs|-.
+  const blank = '<div class="pd-cell"></div>';
+  const cells = [
+    renderDollSlot('weapon'), renderDollSlot('head'),  renderDollSlot('amulet'),
+    renderDollSlot('hands'),  renderDollSlot('chest'), renderDollSlot('ring'),
+    blank,                    renderDollSlot('legs'),  blank,
+  ].join('');
+  return `<div class="paperdoll">${bodyHTML}${cells}
+    <div class="pd-hint">Tap a slot for details · ✕ to unequip · EQUIP loot from the LOOT tab</div>
   </div>`;
 }
 
@@ -13784,6 +13861,7 @@ document.addEventListener('click', (e) => {
   if (ttEl.style.display === 'block' &&
       !e.target.closest('.loot-info') &&
       !e.target.closest('.slot-info') &&
+      !e.target.closest('.pd-slot') &&
       !e.target.closest('.row-btn') &&
       !e.target.closest('.tab-btn')) {
     hideTooltip();
