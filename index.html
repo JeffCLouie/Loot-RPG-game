@@ -59,7 +59,9 @@
     flex-shrink: 0;
   }
   #header h1 { color: var(--gold); font-size: 14px; letter-spacing: 2px; text-shadow: 0 0 6px rgba(232,194,103,0.5); }
-  #stats { display: flex; gap: 14px; font-size: 11px; }
+  #stats { display: flex; align-items: center; gap: 14px; font-size: 11px; }
+  /* Hero nameplate sitting to the left of the HP bar in the header. */
+  .hero-name-hud { display: flex; align-items: center; font-weight: bold; color: var(--gold); font-size: 12px; letter-spacing: 0.5px; text-shadow: 0 0 5px rgba(232,194,103,0.5); white-space: nowrap; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
   .stat-bar { display: flex; align-items: center; gap: 4px; }
   .bar-track { width: 74px; height: 13px; background: #45455e; border: 1px solid #000; border-radius: 4px; box-shadow: inset 0 1px 2px rgba(0,0,0,0.6); overflow: hidden; }
   .bar-fill { height: 100%; border-radius: 3px; transition: width 0.2s; }
@@ -100,6 +102,18 @@
   #food-hud { color: #ffb870; }
   .xp-track { width: 46px; height: 6px; background: #45455e; border: 1px solid #000; border-radius: 3px; overflow: hidden; }
   .xp-fill { height: 100%; background: linear-gradient(180deg, #ffe9a0, var(--gold)); box-shadow: 0 0 5px var(--gold); transition: width 0.2s; }
+
+  /* Floor / foes readout pinned to the top-left of the map. Desktop only —
+     hidden by default so mobile keeps these in the header (see media query). */
+  #map-info { display: none; }
+  #map-info > div {
+    display: flex; align-items: center; gap: 5px; width: fit-content;
+    padding: 2px 9px; border-radius: 7px; font-size: 13px; font-weight: bold;
+    background: rgba(20,14,30,0.66); border: 1px solid rgba(232,194,103,0.28);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.5); line-height: 1.5;
+  }
+  #map-floor { color: #9fd0ff; }
+  #map-foes { color: #ff9a9a; }
 
   /* Danger halo: a pulsing edge glow that signals low HP and player status
      effects. Sits above every panel/menu (but below the rotate gate) so it
@@ -299,15 +313,26 @@
   #conquest-body { display: flex; flex-direction: column; gap: 9px; margin-bottom: 16px; }
   .conquest-line { font-size: 12.5px; color: #f3e4cf; line-height: 1.5; }
   .conquest-scar { color: #ff9b8a; }
+  .conquest-actions { display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
   .conquest-btn { background: #6a4a1c; border: 1px solid var(--gold); color: #fff2d6; font-family: 'Courier New', monospace; font-size: 13px; letter-spacing: 1px; padding: 9px 22px; border-radius: 8px; cursor: pointer; }
   .conquest-btn:active { background: #8a6326; }
+  /* Secondary "stay" action — muted so Return to Town stays the obvious primary. */
+  .conquest-btn-alt { background: transparent; border-color: #6a5a3a; color: #cdbb95; }
+  .conquest-btn-alt:active { background: #2e2212; }
 
   /* ── VERSION HISTORY POPUP ── */
-  #version-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 400; display: none; align-items: center; justify-content: center; padding: 16px; }
-  #version-overlay.open { display: flex; }
-  #version-card { background: linear-gradient(180deg, #241c38, #181226); border: 2px solid var(--frame); border-radius: 10px; max-width: 360px; width: 100%; max-height: 80vh; overflow-y: auto; padding: 14px; box-shadow: 0 6px 24px rgba(0,0,0,0.6); }
+  #version-overlay, #howto-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 400; display: none; align-items: center; justify-content: center; padding: 16px; }
+  #version-overlay.open, #howto-overlay.open { display: flex; }
+  #version-card, #howto-card { background: linear-gradient(180deg, #241c38, #181226); border: 2px solid var(--frame); border-radius: 10px; max-width: 360px; width: 100%; max-height: 80vh; overflow-y: auto; padding: 14px; box-shadow: 0 6px 24px rgba(0,0,0,0.6); }
   .version-head { display: flex; justify-content: space-between; align-items: center; color: var(--gold); font-weight: bold; letter-spacing: 1px; margin-bottom: 10px; }
   .version-x { background: none; border: none; color: var(--text); font-size: 16px; cursor: pointer; line-height: 1; }
+  /* How to Play card content. */
+  .howto-sec { color: var(--gold); font-size: 12px; font-weight: bold; letter-spacing: .5px; margin: 13px 2px 4px; }
+  .howto-sec:first-of-type { margin-top: 2px; }
+  .howto-line { color: #cfc6e0; font-size: 11px; line-height: 1.55; margin: 0 2px; }
+  .howto-line b { color: #fff; }
+  .howto-tiers { display: inline-flex; gap: 3px; vertical-align: middle; margin-left: 4px; }
+  .howto-tiers i { width: 9px; height: 9px; border-radius: 2px; transform: rotate(45deg); display: inline-block; }
   /* Date section header — sticks to the top of the scroll card so the current
      group's date stays visible as you scroll the changelog. */
   .version-date {
@@ -340,6 +365,20 @@
   #playtime-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 400; display: none; align-items: center; justify-content: center; padding: 16px; }
   #playtime-overlay.open { display: flex; }
   #playtime-card { background: linear-gradient(180deg, #241c38, #181226); border: 2px solid var(--frame); border-radius: 10px; max-width: 360px; width: 100%; max-height: 80vh; overflow-y: auto; padding: 14px; box-shadow: 0 6px 24px rgba(0,0,0,0.6); }
+
+  /* Graveyard popup — reuses the version/playtime overlay framing. */
+  #graveyard-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 400; display: none; align-items: center; justify-content: center; padding: 16px; }
+  #graveyard-overlay.open { display: flex; }
+  #graveyard-card { background: linear-gradient(180deg, #241c38, #181226); border: 2px solid var(--frame); border-radius: 10px; max-width: 360px; width: 100%; max-height: 80vh; overflow-y: auto; padding: 14px; box-shadow: 0 6px 24px rgba(0,0,0,0.6); }
+  .gy-row { display: flex; align-items: center; gap: 9px; padding: 8px 4px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+  .gy-portrait { flex: 0 0 auto; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; }
+  .gy-portrait .gy-emoji { font-size: 18px; }
+  .gy-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .gy-name { font-size: 12px; color: var(--text); font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .gy-sub { font-size: 10px; color: #8a7d63; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .gy-stats { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end; text-align: right; }
+  .gy-floor { font-size: 12px; color: var(--gold); font-weight: bold; }
+  .gy-meta { font-size: 9px; color: #8a7d63; font-variant-numeric: tabular-nums; }
 
   /* Auto-loot settings popup: a per-rarity Keep / Scrap / Sell picker. */
   #autoloot-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 400; display: none; align-items: center; justify-content: center; padding: 16px; }
@@ -544,6 +583,8 @@
   .tab-num { margin-left: 5px; opacity: 0.65; font-weight: normal; }
 
   /* ── HERO / ATTRIBUTES PANEL ── */
+  /* Hero name shown at the top of the HERO tab. */
+  .hero-nameplate { text-align: center; font-size: 16px; font-weight: bold; letter-spacing: 1px; color: var(--gold); text-shadow: 0 0 8px rgba(232,194,103,0.5); margin-bottom: 6px; padding: 2px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .hero-power { text-align: center; padding: 8px 4px; margin-bottom: 6px; border: 1px solid var(--border); border-radius: 6px; background: #14140f; }
   .hero-power .hp-label { font-size: 10px; color: #888; letter-spacing: 1px; }
   .hero-power .hp-value { font-size: 22px; font-weight: bold; color: #ffd24b; text-shadow: 0 0 10px rgba(255,210,75,0.6); }
@@ -715,6 +756,12 @@
   @keyframes potReadyBlue { 0%,100% { box-shadow: 0 0 4px 1px rgba(90,150,255,0.45); } 50% { box-shadow: 0 0 12px 3px rgba(120,170,255,0.9); } }
   /* Critically low HP overrides the gentle glow with a faster alarm pulse. */
   .skillbar-btn.potion.urgent { animation: healPulse 0.85s ease-in-out infinite; }
+  /* TOWN button (desktop): a green/parchment tone so it reads as "leave to the
+     safe hub", distinct from the purple skills and the red/blue potions. */
+  .skillbar-btn.town { border-color: #6b9b5a; background: #243a1f; color: #d6f0c8; }
+  .skillbar-btn.town .sb-key { color: #bfe6a8; }
+  .skillbar-btn.town:active { background: #335a2a; }
+  .skillbar-btn.town.disabled { background: #20271c; border-color: #34402f; color: #7a8a6c; }
 
   #panel-content { flex: 1; overflow-y: auto; padding: 6px; }
   #panel-content::-webkit-scrollbar { width: 4px; }
@@ -1540,7 +1587,23 @@
       linear-gradient(180deg, #0a0805 0%, #140f08 45%, #0a0805 100%);
   }
   #title-overlay.open { display: flex; }
-  #title-inner { width: 100%; max-width: 420px; text-align: center; margin: auto; }
+  #title-inner { width: 100%; max-width: 420px; text-align: center; margin: auto; position: relative; z-index: 1; }
+  /* Living background — a warm pulsing torch glow + drifting embers behind the
+     title. Purely decorative (pointer-events:none); embers are seeded once. */
+  #title-glow { position: absolute; inset: 0; pointer-events: none; z-index: 0;
+    background: radial-gradient(60% 45% at 50% 40%, rgba(255,170,70,0.16), transparent 70%);
+    animation: titleGlow 5.5s ease-in-out infinite; }
+  @keyframes titleGlow { 0%,100% { opacity: .55; } 50% { opacity: 1; } }
+  #title-embers { position: absolute; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+  #title-embers .ember { position: absolute; bottom: -12px; border-radius: 50%;
+    background: #ffb24a; box-shadow: 0 0 6px 1px rgba(255,140,40,0.8); opacity: 0;
+    animation: emberRise linear infinite; }
+  @keyframes emberRise {
+    0%   { transform: translate(0, 0) scale(1); opacity: 0; }
+    12%  { opacity: .85; }
+    85%  { opacity: .4; }
+    100% { transform: translate(var(--drift, 12px), -100vh) scale(.4); opacity: 0; }
+  }
   .title-crest { font-size: 52px; line-height: 1; margin-bottom: 6px;
     filter: drop-shadow(0 0 12px rgba(255,180,80,0.55)); }
   #title-logo {
@@ -1554,6 +1617,17 @@
     display: inline-block; width: 9px; height: 9px; border-radius: 2px;
     margin: 0 1px; vertical-align: middle; transform: rotate(45deg);
   }
+  /* Returning-hero card above CONTINUE: who you are + how far you've gotten. */
+  #title-hero {
+    margin: 0 0 14px; padding: 11px 14px; text-align: center;
+    border: 1px solid var(--frame); border-radius: 10px;
+    background: linear-gradient(180deg, rgba(58,46,22,0.5), rgba(20,15,8,0.5));
+    box-shadow: inset 0 0 0 1px rgba(255,200,90,0.08);
+  }
+  #title-hero .th-name { font-size: 17px; font-weight: bold; letter-spacing: 1px; line-height: 1.1; }
+  #title-hero .th-sub { font-size: 11px; color: #b9a98a; margin-top: 3px; letter-spacing: .5px; }
+  #title-hero .th-stats { display: flex; justify-content: center; gap: 18px; margin-top: 9px; font-size: 12px; color: #cbb98f; }
+  #title-hero .th-stats b { color: #ffe9b0; font-weight: bold; }
   .title-play {
     width: 100%; box-sizing: border-box; padding: 15px; margin-bottom: 10px;
     border: 2px solid var(--gold); border-radius: 8px;
@@ -1569,6 +1643,18 @@
     background: #221a10; color: #d9b87a; box-shadow: none;
   }
   .title-play.secondary:active { background: #2f2415; }
+  /* Achievement showcase — a wrapping row of progress badges (earned = gold). */
+  #title-achievements { margin-top: 18px; padding-top: 16px; border-top: 1px solid #2a2113; }
+  #title-achievements .ta-head { font-size: 11px; color: #b9a98a; letter-spacing: 1px; margin-bottom: 9px; }
+  #title-achievements .ta-head b { color: var(--gold); }
+  #title-achievements .ta-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 9px; }
+  .ta-badge { display: flex; flex-direction: column; align-items: center; gap: 3px; width: 56px; }
+  .ta-badge .ta-ic { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    border: 1px solid var(--frame); background: #1b160f; color: var(--gold); }
+  .ta-badge.earned .ta-ic { box-shadow: 0 0 10px rgba(255,190,90,0.35); }
+  .ta-badge.locked .ta-ic { color: #4d483f; border-color: #2a2620; background: #15120c; }
+  .ta-badge .ta-nm { font-size: 8px; line-height: 1.15; text-align: center; color: #9a8f70; }
+  .ta-badge.earned .ta-nm { color: #d9c39a; }
   /* Settings grid — mirrors the ⚙️ dropdown's actions as tappable tiles. */
   #title-settings {
     display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
@@ -1667,6 +1753,10 @@
   }
   .gate-floor:active { background: #5a4520; }
   .gate-floor.current { border-color: var(--gold); color: var(--gold); }
+  /* Reached but re-locked by a death — shown so you keep your progress, but you
+     must fight back down to them before they're clickable again. */
+  .gate-floor.locked { opacity: 0.4; cursor: not-allowed; color: #8a7a55; border-style: dashed; }
+  .gate-floor.locked:active { background: #221a10; }
   /* Difficulty tier picker at the top of the Dungeon Gate. */
   .gate-diffs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 8px; }
   .gate-diff {
@@ -1679,8 +1769,12 @@
   .gate-diff.sel { background: #2e2212; }
   .gate-diff.locked { opacity: 0.4; cursor: not-allowed; }
   .gate-tier-blurb { font-size: 11px; opacity: 0.92; margin: 2px 0 8px; }
-  /* The small coloured difficulty tag shown beside the floor number in the HUD. */
-  .floor-diff { font-size: 9px; font-weight: bold; margin-left: 4px; letter-spacing: 0.3px; vertical-align: middle; }
+  /* The small coloured difficulty tag shown beside the floor number in the HUD.
+     Rendered as a faint pill tinted to the active tier's colour (set inline). */
+  .floor-diff { font-size: 9px; font-weight: bold; margin-left: 5px; letter-spacing: 0.4px;
+    text-transform: uppercase; vertical-align: middle; padding: 1px 5px; border-radius: 8px;
+    border: 1px solid currentColor; line-height: 1.4; }
+  .floor-diff:empty { display: none; }
 
   /* Crafting materials — the compact wallet strip (bag + town) and the
      Craftsman's slot/base/rarity pickers. */
@@ -1772,16 +1866,47 @@
       box-shadow: none;
     }
 
-    /* Header reserves room on the right for the floating action buttons that
-       move up into it on web, and stays tall enough to seat them. */
+    /* Desktop header is a centred two-row grid, truly centred in the viewport:
+         row 1   HP — Name — MP        row 2   Power — Level — Gold
+       The side columns are equal (1fr) so the name/level sit dead-centre. The
+       lone SETTINGS button still floats top-right (TOWN moved to the skill bar),
+       so the left/right padding is symmetric to keep the centre line honest. */
     #header {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      justify-items: center;
+      column-gap: 18px;
+      row-gap: 4px;
+      flex-wrap: nowrap;
       min-height: 46px;
-      padding-right: 178px;
+      padding: 6px 64px;
+    }
+    /* #stats holds name + HP + MP; dissolve its box so those three promote to
+       header grid cells and can be placed individually (font-size still
+       inherits to them). */
+    #stats { display: contents; font-size: 14px; }
+    #header #hero-name-hud { grid-column: 2; grid-row: 1; max-width: 220px; }
+    #header #stats .stat-bar:nth-child(2) { grid-column: 1; grid-row: 1; justify-self: end; }   /* HP, left of name */
+    #header #stats .stat-bar:nth-child(3) { grid-column: 3; grid-row: 1; justify-self: start; }  /* MP, right of name */
+    #header #power-hud    { grid-column: 1; grid-row: 2; justify-self: end; }
+    #header #level-hud    { grid-column: 2; grid-row: 2; }
+    #header #gold-display { grid-column: 3; grid-row: 2; justify-self: start; }
+    /* Pact / food buff timers (only shown when active) tuck into centred rows
+       below so they never knock the main two rows off-centre. */
+    #header #pact-hud { grid-column: 1 / -1; grid-row: 3; }
+    #header #food-hud { grid-column: 1 / -1; grid-row: 4; }
+    /* Floor and foes move out of the header to the top-left of the map. */
+    #header #floor-hud, #header #enemies-hud { display: none; }
+    /* Show the map-corner floor / foes readout (mobile keeps these in header). */
+    #map-info {
+      display: flex; flex-direction: column; gap: 4px;
+      position: absolute; z-index: 50; pointer-events: none;
+      top: 8px; left: calc(clamp(250px, 24vw, 480px) + 10px);
     }
     /* On PC there's room for a bigger HUD: bump the stat / gold / chip fonts and
        bars up so health, mana, floor, level, etc. are easier to read. */
     #header h1 { font-size: 17px; }
-    #stats { font-size: 14px; gap: 16px; }
     .bar-track { width: 92px; height: 16px; }
     #gold-display { font-size: 14px; }
     .hud-item { font-size: 14px; }
@@ -1871,6 +1996,9 @@
     /* The primary skill now lives on the skill bar, so drop the redundant
        ⚡ button from the top-right nav (matches the mobile layout). */
     .skill-btn { display: none !important; }
+    /* TOWN also moves onto the skill bar (key 0), so drop it from the top-right
+       nav — leaving only SETTINGS up there. */
+    .town-action { display: none !important; }
   }
 
   /* ── FORCE PORTRAIT ON MOBILE ──
@@ -2198,6 +2326,7 @@
 <!-- HEADER -->
 <div id="header">
   <div id="stats">
+    <div id="hero-name-hud" class="hero-name-hud" style="display:none"></div>
     <div class="stat-bar" data-tip="<div class='ht-name' style='color:var(--hp)'>❤️ Health (HP)</div><div class='ht-line'>Your life. When it hits 0 you die. Restore it with potions, resting in town, and levelling up.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
       <span style="color:var(--hp);font-size:11px;font-weight:bold;text-shadow:0 0 5px var(--hp)">HP</span>
       <div class="bar-track"><div class="bar-fill hp-fill" id="hp-bar" style="width:100%"></div></div>
@@ -2224,6 +2353,14 @@
 <div id="main">
   <div id="game-wrap">
     <canvas id="canvas"></canvas>
+    <!-- Desktop-only floor / foes readout pinned to the top-left of the map.
+         On mobile these stay in the header (this whole block is display:none),
+         so mobile is unchanged. No lock icon: foes remaining already signals a
+         sealed floor, and the pill is simply hidden once the floor is clear. -->
+    <div id="map-info">
+      <div id="map-floor">🗺️ <span id="map-floor-num">1</span><span class="floor-diff" id="map-floor-diff"></span></div>
+      <div id="map-foes"><span data-spr="ui_foes"></span> <span id="map-foes-num">0</span> foes</div>
+    </div>
     <!-- Active skills (every learned tree active; the first is the R-keyed
          primary). Sits between the map and the log so it's reachable in the
          thumb zone on mobile. Populated by renderSkillBar(); hidden in town /
@@ -2280,8 +2417,11 @@
         <button class="settings-item newgame-action" onclick="confirmNewGame()">
           <span class="action-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.5 15a9 9 0 1 1-2-9.6L23 10"/></svg></span><span class="action-label">NEW RUN</span>
         </button>
-        <button class="settings-item sound-action" onclick="toggleSound()">
-          <span class="action-icon" id="sound-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a9 9 0 0 1 0 14"/></svg></span><span class="action-label" id="sound-label">ON</span>
+        <button class="settings-item sound-action" id="music-action" onclick="toggleMusic()">
+          <span class="action-icon" id="music-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span><span class="action-label">MUSIC</span>
+        </button>
+        <button class="settings-item sound-action" id="sfx-action" onclick="toggleSfx()">
+          <span class="action-icon" id="sfx-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a9 9 0 0 1 0 14"/></svg></span><span class="action-label">SFX</span>
         </button>
         <button class="settings-item zoom-action" onclick="toggleZoom()">
           <span class="action-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span><span class="action-label" id="zoom-label">WIDE</span>
@@ -2303,6 +2443,9 @@
         </button>
         <button class="settings-item" onclick="showPlayTime()">
           <span class="action-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 1.8"/></svg></span><span class="action-label">TIME</span>
+        </button>
+        <button class="settings-item" onclick="showGraveyard()">
+          <span class="action-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 21V10a6 6 0 0 1 12 0v11"/><line x1="4" y1="21" x2="20" y2="21"/><line x1="12" y1="6.5" x2="12" y2="12.5"/><line x1="9.5" y1="9" x2="14.5" y2="9"/></svg></span><span class="action-label">GRAVES</span>
         </button>
         <!-- Opens the spectator stream (watch.html) where you can watch Claude
              play Dungeon Loot live. -->
@@ -2341,7 +2484,10 @@
     <div id="conquest-card">
       <div id="conquest-title">Difficulty Conquered!</div>
       <div id="conquest-body"></div>
-      <button class="conquest-btn" onclick="conquestToTown()">🏰 Return to Town</button>
+      <div class="conquest-actions">
+        <button class="conquest-btn" onclick="conquestToTown()">🏰 Return to Town</button>
+        <button class="conquest-btn conquest-btn-alt" onclick="closeConquest()">Stay on this floor</button>
+      </div>
     </div>
   </div>
 
@@ -2353,6 +2499,25 @@
     </div>
   </div>
 
+  <!-- How to Play — quick onboarding, opened from the title screen. -->
+  <div id="howto-overlay" onclick="if(event.target===this)closeHowTo()">
+    <div id="howto-card">
+      <div class="version-head">How to Play <button class="version-x" onclick="closeHowTo()">✕</button></div>
+      <div class="howto-sec">🎯 Goal</div>
+      <div class="howto-line">Delve floor by floor, grab ever-better <b>loot</b>, and survive as deep as you can. Death sends you back to <b>Town</b>, lighter — but your hero lives on.</div>
+      <div class="howto-sec">🕹️ Moving &amp; fighting</div>
+      <div class="howto-line">Move with the <b>d-pad</b> / swipe (touch) or <b>arrows / WASD</b> (keyboard). Walk into an enemy to <b>attack</b> it. The centre <b>clock</b> button waits a turn. Every step is a turn — foes act when you do.</div>
+      <div class="howto-sec">💎 Loot rarity<span class="howto-tiers"><i style="background:#9aa0a6"></i><i style="background:#e8e8e8"></i><i style="background:#4caf50"></i><i style="background:#3a7bd5"></i><i style="background:#a45cd6"></i><i style="background:#e08a2e"></i><i style="background:#d6453a"></i></span></div>
+      <div class="howto-line">Colour is rarity: grey → white → green → blue → purple → orange → red (Mythic). Tap loot in your <b>bag</b> to equip, sell, or scrap it.</div>
+      <div class="howto-sec">✨ Skills &amp; potions</div>
+      <div class="howto-line">Skills cost <b>MP</b> and share cooldowns; their buttons glow gold when ready. Health &amp; mana <b>potions</b> share a short cooldown and pulse when ready to drink.</div>
+      <div class="howto-sec">🔥 Hazards</div>
+      <div class="howto-line"><b>Lava</b> and <b>spikes</b> hurt more the deeper you go — step around them (you're never forced through one).</div>
+      <div class="howto-sec">🔒 Stairs &amp; Town</div>
+      <div class="howto-line">Clear every foe to unseal the <b>glowing down-stairs</b> (the up-stairs just backtrack). In Town, visit the Merchant, Craftsman, Healer, Mystic, Ramen House and more, then take the <b>Dungeon Gate</b> back down.</div>
+    </div>
+  </div>
+
   <!-- Play-time popup, opened from the ⚙️ settings menu. Shows the grand total
        across every save slot plus a per-character breakdown. -->
   <div id="playtime-overlay" onclick="if(event.target===this)closePlayTime()">
@@ -2360,6 +2525,16 @@
       <div class="version-head">Time Played <button class="version-x" onclick="closePlayTime()">✕</button></div>
       <div id="playtime-total"></div>
       <div id="playtime-body"></div>
+    </div>
+  </div>
+
+  <!-- Graveyard of fallen heroes — every past run and how far it got. Opened
+       from the title screen and the in-game ⚙️ settings menu. -->
+  <div id="graveyard-overlay" onclick="if(event.target===this)closeGraveyard()">
+    <div id="graveyard-card">
+      <div class="version-head">⚰️ Graveyard of Fallen Heroes <button class="version-x" onclick="closeGraveyard()">✕</button></div>
+      <div id="graveyard-total"></div>
+      <div id="graveyard-body"></div>
     </div>
   </div>
 
@@ -2462,6 +2637,8 @@
      flashes for a beat on slower phones until showTitle() runs at script end.
      showTitle() then just refines the content (CONTINUE for a returning hero). -->
 <div id="title-overlay" class="open">
+  <div id="title-glow" aria-hidden="true"></div>
+  <div id="title-embers" aria-hidden="true"></div>
   <div id="title-inner">
     <div class="title-crest" id="title-crest"></div>
     <h1 id="title-logo">DUNGEON<span class="title-sub-word">LOOT</span></h1>
@@ -2475,14 +2652,20 @@
       <span class="tier" style="background:#e08a2e"></span>
       <span class="tier" style="background:#d6453a"></span>
     </div>
+    <!-- Hero / journey card — shown above CONTINUE for a returning hero, filled by showTitle(). -->
+    <div id="title-hero" style="display:none"></div>
     <button class="title-play" id="title-play" onclick="titlePlay()">⚔️ ENTER THE DUNGEON</button>
     <button class="title-play secondary" id="title-newrun" style="display:none" onclick="titleNewRun()">↻ Start a New Run</button>
+    <!-- Achievement showcase — progress badges, filled by renderTitleAchievements(). -->
+    <div id="title-achievements" style="display:none"></div>
     <div id="title-settings">
+      <button class="title-set-btn" onclick="showHowTo()"><span class="tsb-ic"><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 1 1 4.4 3.4c-.8.5-1.5 1.1-1.5 2.1"/><line x1="12" y1="17" x2="12" y2="17.01"/></svg></span><span class="tsb-lbl">How to Play</span></button>
       <button class="title-set-btn" onclick="openAccount()"><span class="tsb-ic"><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg></span><span class="tsb-lbl">Cloud Save</span></button>
       <button class="title-set-btn" onclick="openSlots()"><span class="tsb-ic">💾</span><span class="tsb-lbl">Save Slots</span></button>
       <button class="title-set-btn" onclick="showLeaderboard()"><span class="tsb-ic">🏆</span><span class="tsb-lbl">Leaderboards</span></button>
       <button class="title-set-btn" onclick="showVersionHistory()"><span class="tsb-ic">📜</span><span class="tsb-lbl">Version</span></button>
       <button class="title-set-btn" onclick="showPlayTime()"><span class="tsb-ic"><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 1.8"/></svg></span><span class="tsb-lbl">Time Played</span></button>
+      <button class="title-set-btn" onclick="showGraveyard()"><span class="tsb-ic"><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 21V10a6 6 0 0 1 12 0v11"/><line x1="4" y1="21" x2="20" y2="21"/><line x1="12" y1="6.5" x2="12" y2="12.5"/><line x1="9.5" y1="9" x2="14.5" y2="9"/></svg></span><span class="tsb-lbl">Graveyard</span></button>
     </div>
     <!-- Optional sign-in callout — updated by refreshAccountUi() to reflect login state. -->
     <div id="title-cloud" onclick="openAccount()"></div>
@@ -3041,6 +3224,28 @@ function drawSprite(name, dx, dy, dsize) {
 function drawSpriteC(name, cx, cy, size) {
   return drawSprite(name, cx - size / 2, cy - size / 2, size);
 }
+// Shared, crisp on-screen sprite sizes for world entities, each a pure function
+// of the camera tile `tw`. Routing same-class things through one of these keeps
+// them the same size as one another at every zoom and screen size.
+//
+// Why this exists: drawSprite snaps every sprite to a whole multiple of the 16px
+// atlas tile to stay crisp. On a roomy desktop view (large `tw`) that 16px step
+// is a small slice of the sprite, so the hero (≈0.9·tw) and a slightly-smaller
+// NPC (≈0.82·tw) round to the SAME multiple and look alike. On a phone
+// (`tw`≈28-32) the step is huge: the hero rounds UP to 32px (a full tile) while
+// the NPC/chest/coin rounds DOWN to 16px — half a tile — and looks tiny. Bucketing
+// them together fixes that: characters track the hero, pickups stay one step
+// smaller but never collapse to half-size.
+function charSpritePx(tw) {
+  // Matches the hero's own snapped size exactly, so every character lines up with it.
+  return ATLAS_TS * Math.max(1, Math.round(Math.round(tw * 0.9) / ATLAS_TS));
+}
+function itemSpritePx(tw) {
+  // One tile smaller than a character on roomy views, but floored at a full tile
+  // so pickups never shrink to half-size on small (mobile) screens.
+  const c = charSpritePx(tw);
+  return c > ATLAS_TS * 2 ? c - ATLAS_TS : c;
+}
 // Build an HTML <span> showing a DawnLike atlas tile as a CSS background, for DOM
 // menus (the canvas blitter can't reach the DOM). Returns '' until the atlas has
 // loaded so callers fall back to their emoji.
@@ -3431,14 +3636,18 @@ function visualIcon(slot) {
 
 const POTIONS = ['Health Potion','Mana Potion','Elixir'];
 
+// The Diablo-2-style loot tiers, rarest last. Order matters: it defines the
+// rarity ranking used throughout (auto-loot, enchanting, sorting). Rarity is no
+// longer chosen by a weight here — that lives in rollTier/TIER_BASE — so these
+// carry only the colour each tier communicates with.
 const TIERS = {
-  junk:      { color: '#6b6b6b', weight: 30 },
-  normal:    { color: '#e8e8e8', weight: 35 },
-  uncommon:  { color: '#44bb44', weight: 20 },
-  rare:      { color: '#4488ff', weight: 10 },
-  epic:      { color: '#aa44ff', weight: 4  },
-  legendary: { color: '#ff8800', weight: 1  },
-  unique:    { color: '#ff2222', weight: 0.5},
+  junk:      { color: '#6b6b6b' },
+  normal:    { color: '#e8e8e8' },
+  uncommon:  { color: '#44bb44' },
+  rare:      { color: '#4488ff' },
+  epic:      { color: '#aa44ff' },
+  legendary: { color: '#ff8800' },
+  unique:    { color: '#ff2222' },
 };
 
 // ── AUTO-LOOT ──
@@ -3699,7 +3908,7 @@ const DIFFS = [
 // Endless.
 function diffOf(dl) { return Math.min(4, Math.floor(((dl || 1) - 1) / FLOORS_PER_DIFF) + 1); }
 function currentDifficulty() { return diffOf(dungeonLevel); }
-function diffMeta(dl) { return DIFFS[diffOf(dl) - 1]; }
+function diffMeta(dl) { dl = (dl == null ? dungeonLevel : dl); return DIFFS[diffOf(dl) - 1]; }
 function isEndless() { return dungeonLevel > FINITE_DEPTH; }
 // The floor number shown to the player. Finite tiers cycle 1–25; Endless keeps
 // climbing (1, 2, 3 … unbounded) from its own floor 1.
@@ -3733,6 +3942,15 @@ function frontierDiff() { return Math.min(4, diffClearedCount() + 1); }
 // gear climbs. Multiplicative, ~6% per tier conquered (so Endless heroes fight
 // at ~83% of their raw power).
 function diffDebuffMult() { return Math.pow(0.94, diffClearedCount()); }
+
+// Record reaching the current `dungeonLevel`: deepens both the all-time max (for
+// display, gambling/crafting item level, leaderboards) and the currently-unlocked
+// Gate frontier (the floors you can re-enter). A death can later shove gateFloor
+// back; fighting forward raises it again here, re-opening the locked floors.
+function recordDepth() {
+  player.maxFloor = Math.max(player.maxFloor || 1, dungeonLevel);
+  player.gateFloor = Math.max(player.gateFloor || 1, dungeonLevel);
+}
 
 // ── MATERIAL GATING ──
 // Rarer crafting materials only turn up once you're delving a hard enough tier:
@@ -5268,9 +5486,14 @@ let player = { x: 5, y: 5, facing: 'left', hp: 100, maxHp: 100, mp: 60, maxMp: 6
   // Chosen character name (null until entered on a new game) and the peak gold
   // and Power ever reached — all feed the global leaderboards.
   name: null, maxGold: 0, maxPower: 0,
-  // Deepest dungeon floor reached — the Dungeon Gate in town lets you re-enter
-  // on any floor up to this, so you can backtrack to grind levels and gear.
+  // Deepest dungeon floor reached — the Dungeon Gate in town shows every floor up
+  // to this so you keep your progress and can backtrack to grind levels and gear.
   maxFloor: 1,
+  // Deepest floor currently *re-enterable* at the Gate. Normally tracks maxFloor,
+  // but a death in your frontier tier shoves it back to your return floor: the
+  // deeper floors you'd reached re-lock (🔒, unclickable) until you fight back
+  // down to them. Each fresh death can push it back further, locking more.
+  gateFloor: 1,
   // Finite difficulty tiers conquered (0–3). Drives Dungeon-Gate unlocks and the
   // permanent per-tier stat debuff.
   diffCleared: 0,
@@ -5458,7 +5681,7 @@ window.gameState = function gameState(radius) {
   const MODALS = [
     ['title-overlay', 'title'], ['class-overlay', 'classSelect'], ['death-overlay', 'dead'],
     ['settings-menu', 'settings'], ['version-overlay', 'changelog'], ['playtime-overlay', 'playtime'],
-    ['autoloot-overlay', 'autoloot'],
+    ['howto-overlay', 'howto'], ['autoloot-overlay', 'autoloot'],
     ['shop-overlay', 'shop'], ['mystic-overlay', 'mystic'], ['town-overlay', 'town'],
   ];
   let mode = 'dungeon', blockingOverlay = null;
@@ -5530,12 +5753,21 @@ window.gameState = function gameState(radius) {
 // so the game stays a single self-contained, trivially shareable HTML file.
 // The whole module is defensive: if audio is unavailable for any reason, the
 // game keeps running silently rather than throwing.
-const AUDIO_KEY = 'dungeonLootAudio';
+const AUDIO_KEY = 'dungeonLootAudio';        // legacy single "all sound" switch
+const AUDIO_MUSIC_KEY = 'dungeonLootMusic';
+const AUDIO_SFX_KEY = 'dungeonLootSfx';
 const audio = {
   ctx: null, master: null, musicGain: null, sfxGain: null,
-  muted: false, started: false,
+  muted: false, musicMuted: false, sfxMuted: false, started: false,
 };
-try { audio.muted = localStorage.getItem(AUDIO_KEY) === 'off'; } catch (e) {}
+try {
+  // Music and SFX mute independently now. Migrate the old single switch: if a
+  // split flag isn't set yet, fall back to the legacy "all off" value.
+  const legacy = localStorage.getItem(AUDIO_KEY) === 'off';
+  const m = localStorage.getItem(AUDIO_MUSIC_KEY), s = localStorage.getItem(AUDIO_SFX_KEY);
+  audio.musicMuted = m === null ? legacy : m === 'off';
+  audio.sfxMuted   = s === null ? legacy : s === 'off';
+} catch (e) {}
 
 // ── ZOOM ── how many tiles span the shorter axis of the play area. Fewer
 // tiles = bigger tiles. The zoom button cycles through these stops; each step
@@ -5562,7 +5794,7 @@ function audioInit() {
     // voices together and tames peaks so nothing clips into harshness — most of
     // the difference between "cheap beep" and "polished" is this and the reverb.
     audio.master = audio.ctx.createGain();
-    audio.master.gain.value = audio.muted ? 0 : 0.9;
+    audio.master.gain.value = 0.9;
     const comp = audio.ctx.createDynamicsCompressor();
     comp.threshold.value = -14; comp.knee.value = 24; comp.ratio.value = 3;
     comp.attack.value = 0.003; comp.release.value = 0.25;
@@ -5577,7 +5809,7 @@ function audioInit() {
 
     // SFX bus: mostly dry with a touch of reverb.
     audio.sfxGain = audio.ctx.createGain();
-    audio.sfxGain.gain.value = 0.4;
+    audio.sfxGain.gain.value = audio.sfxMuted ? 0 : 0.4;
     audio.sfxGain.connect(audio.master);
     const sfxVerb = audio.ctx.createGain();
     sfxVerb.gain.value = 0.12;
@@ -5586,7 +5818,7 @@ function audioInit() {
 
     // Music bus: more reverb for a lush, spacious dungeon ambience.
     audio.musicGain = audio.ctx.createGain();
-    audio.musicGain.gain.value = 0.28;
+    audio.musicGain.gain.value = audio.musicMuted ? 0 : 0.28;
     audio.musicGain.connect(audio.master);
     const musicVerb = audio.ctx.createGain();
     musicVerb.gain.value = 0.3;
@@ -5675,7 +5907,7 @@ function noise(dur, when, vol = 0.4, cutoff = 3800, type = 'lowpass') {
 
 // Named sound effects, each keyed to a game event.
 function sfx(name) {
-  if (audio.muted) return;
+  if (audio.sfxMuted) return;
   const ctx = audioInit();
   if (!ctx || ctx.state === 'suspended') return;
   const t = ctx.currentTime;
@@ -6026,7 +6258,7 @@ function musicLeadStep(scale, chord) {
 }
 function scheduleMusic() {
   const ctx = audio.ctx;
-  if (!ctx || audio.muted || ctx.state === 'suspended') return;
+  if (!ctx || audio.musicMuted || ctx.state === 'suspended') return;
   if (!musicProg) musicProg = mpick(MUSIC_SECTIONS[musicStructIdx].progs);
   if (!musicSectionEndTime) {
     musicSectionEndTime = musicNext + SECTION_MIN + Math.random() * (SECTION_MAX - SECTION_MIN);
@@ -6156,24 +6388,43 @@ function startMusic() {
   scheduleMusic();
 }
 
-// Toggle all audio on/off, persist the choice, and refresh the button.
-function toggleSound() {
-  audio.muted = !audio.muted;
-  try { localStorage.setItem(AUDIO_KEY, audio.muted ? 'off' : 'on'); } catch (e) {}
-  if (audio.master) audio.master.gain.value = audio.muted ? 0 : 0.9;
-  if (!audio.muted) { audioUnlock(); sfx('click'); }
-  updateSoundButton();
+// Music and SFX mute independently. Each toggle persists its own flag, adjusts
+// its bus gain live, and refreshes its button. The master stays at full volume.
+const SVG_OPEN = "<svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\">";
+const SOUND_ON_SVG  = SVG_OPEN + "<polygon points=\"11 5 6 9 2 9 2 15 6 15 11 19 11 5\"/><path d=\"M15.5 8.5a5 5 0 0 1 0 7\"/><path d=\"M19 5a9 9 0 0 1 0 14\"/></svg>";
+const SOUND_OFF_SVG = SVG_OPEN + "<polygon points=\"11 5 6 9 2 9 2 15 6 15 11 19 11 5\"/><line x1=\"22\" y1=\"9\" x2=\"16\" y2=\"15\"/><line x1=\"16\" y1=\"9\" x2=\"22\" y2=\"15\"/></svg>";
+const MUSIC_ON_SVG  = SVG_OPEN + "<path d=\"M9 18V5l12-2v13\"/><circle cx=\"6\" cy=\"18\" r=\"3\"/><circle cx=\"18\" cy=\"16\" r=\"3\"/></svg>";
+const MUSIC_OFF_SVG = SVG_OPEN + "<path d=\"M9 18V5l12-2v13\"/><circle cx=\"6\" cy=\"18\" r=\"3\"/><circle cx=\"18\" cy=\"16\" r=\"3\"/><line x1=\"2\" y1=\"2\" x2=\"22\" y2=\"22\"/></svg>";
+
+function toggleMusic() {
+  audio.musicMuted = !audio.musicMuted;
+  try { localStorage.setItem(AUDIO_MUSIC_KEY, audio.musicMuted ? 'off' : 'on'); } catch (e) {}
+  if (audio.musicGain) audio.musicGain.gain.value = audio.musicMuted ? 0 : 0.28;
+  if (!audio.musicMuted) audioUnlock();
+  updateMusicButton();
 }
-const SOUND_ON_SVG = "<svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polygon points=\"11 5 6 9 2 9 2 15 6 15 11 19 11 5\"/><path d=\"M15.5 8.5a5 5 0 0 1 0 7\"/><path d=\"M19 5a9 9 0 0 1 0 14\"/></svg>";
-const SOUND_OFF_SVG = "<svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polygon points=\"11 5 6 9 2 9 2 15 6 15 11 19 11 5\"/><line x1=\"22\" y1=\"9\" x2=\"16\" y2=\"15\"/><line x1=\"16\" y1=\"9\" x2=\"22\" y2=\"15\"/></svg>";
-function updateSoundButton() {
-  const ic = document.getElementById('sound-icon');
-  const lbl = document.getElementById('sound-label');
-  if (ic) ic.innerHTML = audio.muted ? SOUND_OFF_SVG : SOUND_ON_SVG;
-  if (lbl) lbl.textContent = audio.muted ? 'OFF' : 'ON';
-  const btn = document.querySelector('.sound-action');
-  if (btn) btn.classList.toggle('muted', audio.muted);
+function toggleSfx() {
+  audio.sfxMuted = !audio.sfxMuted;
+  try { localStorage.setItem(AUDIO_SFX_KEY, audio.sfxMuted ? 'off' : 'on'); } catch (e) {}
+  if (audio.sfxGain) audio.sfxGain.gain.value = audio.sfxMuted ? 0 : 0.4;
+  if (!audio.sfxMuted) { audioUnlock(); sfx('click'); }
+  updateSfxButton();
 }
+function updateMusicButton() {
+  const ic = document.getElementById('music-icon');
+  if (ic) ic.innerHTML = audio.musicMuted ? MUSIC_OFF_SVG : MUSIC_ON_SVG;
+  const btn = document.getElementById('music-action');
+  if (btn) btn.classList.toggle('muted', audio.musicMuted);
+}
+function updateSfxButton() {
+  const ic = document.getElementById('sfx-icon');
+  if (ic) ic.innerHTML = audio.sfxMuted ? SOUND_OFF_SVG : SOUND_ON_SVG;
+  const btn = document.getElementById('sfx-action');
+  if (btn) btn.classList.toggle('muted', audio.sfxMuted);
+}
+function updateSoundButtons() { updateMusicButton(); updateSfxButton(); }
+// Back-compat for any lingering "all sound" caller (e.g. an old title toggle).
+function toggleSound() { toggleMusic(); toggleSfx(); }
 
 // Cycle the play-area zoom through ZOOM_STOPS (wraps back to the default at the
 // end). Each step widens the view by one tile on every side. Persist the
@@ -6211,6 +6462,8 @@ document.addEventListener('click', (e) => {
 
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
+  { date: '2026-06-29', size: 'medium', v: 'Every action costs a turn', by: 'Claude', notes: ['Anything you do on a floor now passes a turn, so the world keeps moving even when you can’t. Bumping a wall, the map edge, deep water, a locked door or sealed stairs all tick the clock just like the Wait button.', 'Walking into a boss’s wall of force now passes a turn too, so the barriers pinning you in crumble on their own — no more mashing the Wait button to escape the Rat King’s cage.', 'Being stunned no longer freezes the dungeon: a wasted action still lets foes act while the stun wears off. Drinking from a fountain, touching a shrine and cracking open a chest underfoot are all turns as well.'] },
+  { date: '2026-06-29', size: 'big', v: 'Diablo-2-style loot drops', by: 'ASuiter89', notes: ['Loot rarity is rebalanced so you stop drowning in high-end gear: instead of rolling the rarity table several times and keeping the rarest (which buried you in oranges), each drop now makes one independent check per tier from rarest down, so a baseline drop is ~50% normal, ~21% junk, ~19% uncommon, ~6% rare, ~2% epic, ~0.6% legendary, ~0.15% unique.', 'Magic Find, your Luck and deeper floors still raise the odds — but with Diablo-2-style diminishing returns that barely move legendary/unique and hard per-tier caps, so stacking Magic Find now floods you with greens and blues rather than legendaries.', 'Tougher foes drop MORE items, not just luckier ones: every kill makes a number of independent “picks” (ordinary foes 1, elites 3, bosses 5), each either dropping nothing or one item — so a boss sprays a pile of loot while a trash mob mostly drops nothing. Elites and bosses are still guaranteed at least one piece.'] },
   { date: '2026-06-29', size: 'small', v: 'Tidier Settings menu', by: 'Claude', notes: ['The ⚙️ Settings menu is now one consistent style — every row shares the same neutral tile instead of the old jumble of red, blue and green buttons.', 'Sound, Zoom and Time gained icons, and every row’s icon now sits in the same fixed cell so the labels line up cleanly.', 'Only meaningful states still colour: New Run flashes red when armed to wipe, and Sound dims when muted.'] },
   { date: '2026-06-29', size: 'small', v: 'Auto-Loot on the LOOT tab', by: 'ASuiter89', notes: ['The ♻️ Auto-Loot picker moved out of the ⚙️ settings menu onto the LOOT tab, where it belongs — a button right above your loot shows its on/off state at a glance and opens the per-rarity Keep / Scrap / Sell picker.'] },
   { date: '2026-06-29', size: 'medium', v: 'Shared stash', by: 'Claude', notes: ['The town Vault is now shared across all of your save slots — gold or gear banked by one hero can be withdrawn by any other, so it doubles as account-wide storage you can pass loot between characters with.', 'Signed in? The shared stash also syncs to your account and follows you across devices.', 'Anything your existing heroes had banked is merged into the shared pool automatically, so nothing is lost.'] },
@@ -6325,6 +6578,8 @@ function showVersionHistory() {
   if (menu) menu.classList.remove('open');
 }
 function closeVersion() { document.getElementById('version-overlay').classList.remove('open'); }
+function showHowTo() { const ov = document.getElementById('howto-overlay'); if (ov) ov.classList.add('open'); }
+function closeHowTo() { const ov = document.getElementById('howto-overlay'); if (ov) ov.classList.remove('open'); }
 
 // ── AUTO-LOOT SETTINGS ── per-rarity Keep / Scrap / Sell picker, opened from the
 // ♻️ Auto-Loot button on the LOOT tab. Choices live on player.autoLoot and apply
@@ -6417,6 +6672,44 @@ function showPlayTime() {
   if (menu) menu.classList.remove('open');
 }
 function closePlayTime() { document.getElementById('playtime-overlay').classList.remove('open'); }
+
+// Short date for a headstone, e.g. "Jun 29". Falls back to empty on bad input.
+function fmtGraveDate(ts) {
+  if (!ts) return '';
+  try { return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); }
+  catch (e) { return ''; }
+}
+// Graveyard of Fallen Heroes — a roll of every past run and how far it got.
+function showGraveyard() {
+  const totalEl = document.getElementById('graveyard-total');
+  const bodyEl = document.getElementById('graveyard-body');
+  const list = loadGraveyard();
+  if (totalEl) {
+    totalEl.className = 'pt-total';
+    totalEl.innerHTML = `<div class="pt-total-val">${list.length}</div>`
+      + `<div class="pt-total-label">${list.length === 1 ? 'Fallen hero' : 'Fallen heroes'}</div>`;
+  }
+  if (bodyEl) {
+    bodyEl.innerHTML = list.length
+      ? list.map(r => {
+          const portrait = (r.cls && dlIcon('hero_' + r.cls, 28)) || `<span class="gy-emoji">${r.cls ? CLASSES[r.cls].icon : '🧙'}</span>`;
+          const clsName = r.asc ? ASCENSIONS[r.asc].name : (r.cls ? CLASSES[r.cls].name : 'Wanderer');
+          const date = fmtGraveDate(r.ts);
+          return `<div class="gy-row">`
+            + `<span class="gy-portrait">${portrait}</span>`
+            + `<span class="gy-info"><span class="gy-name">${escapeHtml(r.name || 'Adventurer')}</span>`
+            + `<span class="gy-sub">${escapeHtml(clsName)} · Lv ${r.level}</span></span>`
+            + `<span class="gy-stats"><span class="gy-floor">Floor ${r.floor}</span>`
+            + `<span class="gy-meta">${fmtGold(r.gold)}g${date ? ' · ' + date : ''}</span></span>`
+            + `</div>`;
+        }).join('')
+      : `<div class="pt-empty">No fallen heroes yet.<br>Past runs are laid to rest here when you start a New Run.</div>`;
+  }
+  document.getElementById('graveyard-overlay').classList.add('open');
+  const menu = document.getElementById('settings-menu');
+  if (menu) menu.classList.remove('open');
+}
+function closeGraveyard() { document.getElementById('graveyard-overlay').classList.remove('open'); }
 
 // ══════════════════════════════════════════
 // CANVAS SETUP
@@ -6986,8 +7279,11 @@ function generateMap() {
   // onward. Which is which depends on how you arrived:
   //   • descended / gated / loaded in → onward is DOWN (deeper), entry is UP.
   //   • climbed up from below → onward is UP (higher), entry is DOWN (back down).
-  // Floor 1 has nothing above it, so its far stair is always down regardless.
-  const climbing = arrivalDir === 'up' && dungeonLevel > 1;
+  // Floor 1 of EACH difficulty has nothing above it within its dungeon, so its
+  // "up" stair is really an exit back to TOWN (handled in the move handler) — it
+  // never climbs. Keyed on the DISPLAYED floor so it holds for Hardened/Brutal/
+  // Endless floor 1 too, not just Normal's.
+  const climbing = arrivalDir === 'up' && displayFloor() > 1;
   const farStair = climbing ? 12 : 2;   // the way onward
   const entryStair = climbing ? 2 : 12; // the way back, under your feet
   // The last floor of a finite difficulty (its boss floor 25) is the END of that
@@ -7007,9 +7303,10 @@ function generateMap() {
   }
 
   // ── ENTRY STAIR ── back the way you came. It sits on the entry tile (where you
-  // arrive), so walking back onto it returns you to the previous floor. Floor 1
-  // has no floor above, so it gets none — use TOWN to leave the first floor.
-  if (dungeonLevel > 1) mapData[startPos.y][startPos.x] = entryStair;
+  // arrive), so walking back onto it returns you whence you came. On floor 1 of a
+  // difficulty this is the UP stair, which leads back to TOWN rather than a floor
+  // above — every first floor gets one so you can always step out to town.
+  mapData[startPos.y][startPos.x] = entryStair;
 
   // ── LAVA (passable, burns) ── pooled into a couple of cohesive patches
   // rather than scattered single tiles. Lava and water must never touch (it
@@ -7884,11 +8181,11 @@ function openTownHub() {
        <span class="tm-icon">${dlIcon(s.dl) || s.icon}</span>
        <span class="tm-text"><span class="tm-name">${s.name}</span><span class="tm-desc">${s.desc}</span></span>
      </button>`).join('');
-  const gateFloor = Math.max(1, dungeonReturn || player.maxFloor || 1);
+  const returnFloor = Math.max(1, dungeonReturn || player.maxFloor || 1);
   const gateTile =
     `<button class="town-menu-btn tm-gate${revivedInTown ? ' tm-gate-urgent' : ''}" onclick="openTownService('gate')">
-       <span class="tm-icon">${dlIcon('feat_portal') || '🌀'}</span>
-       <span class="tm-text"><span class="tm-name">Dungeon Gate</span><span class="tm-desc">${revivedInTown ? 'Head back down to keep questing' : `Back to ${floorLabel(gateFloor)}, or pick a difficulty`}</span></span>
+       <span class="tm-icon">${dlIcon('ui_gate') || '🗺'}</span>
+       <span class="tm-text"><span class="tm-name">Dungeon Gate</span><span class="tm-desc">${revivedInTown ? 'Head back down to keep questing' : `Back to ${floorLabel(returnFloor)}, or pick a difficulty`}</span></span>
      </button>`;
   const blurb = revivedInTown
     ? `<div class="town-blurb town-blurb-revived">💀 You were slain and revived here in <b>Town</b>. Stock up if you like — then take the <b>🌀 Dungeon Gate</b> below (or the ✕ above) to head back down and keep questing.</div>`
@@ -8925,13 +9222,19 @@ function renderEnchantItem(item) {
 // you've reached to grind levels and gear before pushing deeper.
 let gateDiff = 0; // tier selected in the Gate UI; 0 = default to the frontier
 function openGate() { gateDiff = 0; openTownModal('🌀 Dungeon Gate'); renderGate(); }
-// Deepest DISPLAYED floor the hero may re-enter for a given tier.
-function tierFloorCap(d) {
+// Deepest DISPLAYED floor for a tier — every floor the hero has ever reached.
+// These are all shown at the Gate so a death never hides your hard-won progress.
+function tierFloorCap(d) { return tierCapFrom(d, player.maxFloor || 1); }
+// Deepest *re-enterable* floor for a tier. Usually the same as tierFloorCap, but a
+// death in your frontier tier shoves `gateFloor` back, so the floors between this
+// cap and tierFloorCap show locked (🔒) until you fight your way back down to them.
+function tierUnlockedCap(d) { return tierCapFrom(d, player.gateFloor || 1); }
+function tierCapFrom(d, deepest) {
   const dc = diffClearedCount();
   if (d <= dc) return FLOORS_PER_DIFF;                 // conquered → replay any floor
   if (d === dc + 1) {                                  // the frontier tier you're still pushing
-    if (d <= 3) return Math.max(1, Math.min(FLOORS_PER_DIFF, (player.maxFloor || 1) - dc * FLOORS_PER_DIFF));
-    return Math.max(1, (player.maxFloor || 1) - FINITE_DEPTH); // Endless frontier
+    if (d <= 3) return Math.max(1, Math.min(FLOORS_PER_DIFF, deepest - dc * FLOORS_PER_DIFF));
+    return Math.max(1, deepest - FINITE_DEPTH);        // Endless frontier
   }
   return 0;                                            // still locked
 }
@@ -8949,24 +9252,33 @@ function renderGate() {
     const style = (d === gateDiff && unlocked) ? ` style="border-color:${meta.color};color:${meta.color}"` : '';
     tabs += `<button class="${cls}"${style} ${unlocked ? `onclick="selectGateDiff(${d})"` : 'disabled'}>${meta.name}${unlocked ? '' : ' 🔒'}</button>`;
   }
-  // Floor picker for the selected tier. Endless can run very deep, so only the
-  // most recent stretch of floors is listed (no thousand-button grids).
-  const cap = tierFloorCap(gateDiff);
+  // Floor picker for the selected tier. Every floor you've reached is shown (so a
+  // death never erases your progress), but floors past the currently-unlocked cap
+  // are locked (🔒) and unclickable until you fight back down to them. Endless can
+  // run very deep, so only the most recent stretch is listed (no thousand-button
+  // grids).
+  const cap = tierFloorCap(gateDiff);              // deepest reached → shown
+  const open = tierUnlockedCap(gateDiff);          // deepest re-enterable → clickable
   const startF = (gateDiff === 4 && cap > 40) ? cap - 39 : 1;
   let buttons = '';
   for (let f = startF; f <= cap; f++) {
     const dl = (gateDiff - 1) * FLOORS_PER_DIFF + f;
     const deepest = f === cap;
-    buttons += `<button class="gate-floor ${dl === dungeonReturn ? 'current' : ''}" onclick="enterDungeonAt(${gateDiff},${f})">${f}${deepest ? ' ▾' : ''}</button>`;
+    if (f > open) {
+      buttons += `<button class="gate-floor locked" disabled title="Locked — fight back down to re-open">${f} 🔒</button>`;
+    } else {
+      buttons += `<button class="gate-floor ${dl === dungeonReturn ? 'current' : ''}" onclick="enterDungeonAt(${gateDiff},${f})">${f}${deepest ? ' ▾' : ''}</button>`;
+    }
   }
   const meta = DIFFS[gateDiff - 1];
   const conquered = diffClearedCount() >= gateDiff;
+  const lockNote = open < cap ? ` Locked past floor ${open} — fight back down to re-open.` : '';
   let blurb;
   if (gateDiff === 4) {
-    blurb = 'Endless: the dungeon never ends. Floors climb from 1 forever, bosses are random, and the threat keeps ramping. Death here bites hardest.';
+    blurb = `Endless: the dungeon never ends. Floors climb from 1 forever, bosses are random, and the threat keeps ramping. Death here bites hardest.${lockNote}`;
   } else {
     const flavour = gateDiff === 1 ? 'as it was meant to be played' : 'the same 25 floors, far tougher and bloodier';
-    const tail = conquered ? 'Conquered — drop in on any floor to grind.' : `Deepest reached: floor ${cap} of 25.`;
+    const tail = conquered ? 'Conquered — drop in on any floor to grind.' : `Deepest reached: floor ${cap} of 25.${lockNote}`;
     blurb = `${meta.name}: ${flavour}. ${tail}`;
   }
   setTownContent(`
@@ -8981,11 +9293,13 @@ function enterDungeonAt(diff, floor) {
   if (floor == null) { const dl = Math.max(1, Math.round(diff) || 1); diff = diffOf(dl); floor = displayFloor(dl); }
   const front = frontierDiff();
   diff = Math.max(1, Math.min(front, Math.round(diff) || 1));
-  floor = Math.max(1, Math.min(tierFloorCap(diff) || 1, Math.round(floor) || 1));
+  // Clamp to the *unlocked* cap, not just the reached cap — a death can re-lock
+  // deep floors, and you can't re-enter past where you've fought back down to.
+  floor = Math.max(1, Math.min(tierUnlockedCap(diff) || 1, Math.round(floor) || 1));
   revivedInTown = false; // entering the dungeon clears the post-death prompt
   closeTown();
   dungeonLevel = (diff - 1) * FLOORS_PER_DIFF + floor;
-  player.maxFloor = Math.max(player.maxFloor || 1, dungeonLevel);
+  recordDepth();
   statusEffects = [];
   player.x = 5; player.y = 5;
   arrivalDir = 'down';
@@ -9236,7 +9550,7 @@ function drawTownNpcs(offX, offY, tw, th, scale) {
     ctx.textBaseline = 'middle';
     // DawnLike townsfolk sprite + icon tag, falling back to the emoji.
     const tSprite = TOWN_SPRITE[n.kind];
-    if (!(tSprite && spriteReady && drawSpriteC(tSprite, px + tw / 2, py + th / 2 + th * 0.02, Math.round(tw * 0.82))))
+    if (!(tSprite && spriteReady && drawSpriteC(tSprite, px + tw / 2, py + th / 2 + th * 0.02, charSpritePx(tw))))
       drawEmoji(n.emoji, px + tw / 2, py + th / 2 + th * 0.02, Math.round(tw * 0.72));
     ctx.font = `bold ${Math.round(tw * 0.32)}px serif`;
     const tagSprite = TOWN_TAG_SPRITE[n.tag];
@@ -9495,38 +9809,73 @@ function spawnGroundLoot() {
 // ITEM GENERATION
 // ══════════════════════════════════════════
 
-// Bonus rarity rolls earned from progression: the deeper you delve and the
-// higher your level, the more rolls every drop gets (and keeps the best),
-// so rarer loot steadily becomes more common. Capped so it stays sane.
-function progressionRolls() {
-  const depth = Math.min(6, Math.floor(dungeonLevel / 4) + Math.floor((player.level - 1) / 5));
-  // The Luck attribute sweetens every drop with extra rarity rolls (capped).
-  const luck = Math.min(3, Math.floor(Math.max(0, totalAttr('luck') - ATTR_BASE) / 12));
-  return depth + luck;
+// ── DROP QUALITY (Diablo-2-style independent descending checks) ──
+// Rarity is no longer "roll the table N times and keep the rarest" — that
+// best-of-N is exactly what buried players in oranges, because every extra roll
+// geometrically inflated the odds of a high tier. Instead each drop walks the
+// tiers from RAREST to commonest and makes ONE independent check per tier; the
+// first that passes wins, otherwise the item is a plain normal (or junk). So a
+// high tier stays genuinely rare no matter how lucky the source — luck and Magic
+// Find buy MORE items and a slightly better shot, never a guaranteed legendary.
+
+// Baseline per-tier chance with no Magic Find at shallow depth. Tuned so a
+// vanilla drop is ~ normal 50% · junk 21% · uncommon 19% · rare 6% · epic 2% ·
+// legendary 0.6% · unique 0.15% — normal most common, then junk & uncommon as a
+// pair, then each higher tier far rarer than the last.
+const TIER_BASE      = { unique: 0.0015, legendary: 0.006, epic: 0.02, rare: 0.06, uncommon: 0.20 };
+// Magic-Find diminishing-returns factor per tier (smaller = MF saturates sooner =
+// helps LEAST). Ported from D2's effective-MF curve: the top tiers barely move
+// however much MF you stack, while uncommon has effectively none (huge factor).
+const TIER_MF_FACTOR = { unique: 250, legendary: 350, epic: 500, rare: 600, uncommon: 1e9 };
+// Hard ceiling per tier so Magic Find + depth can never push a tier past a
+// prestige cap — the guarantee that you can't drown in high rarity, ever.
+const TIER_CAP       = { unique: 0.008, legendary: 0.025, epic: 0.07, rare: 0.18, uncommon: 0.55 };
+const TIER_CHECK_ORDER = ['unique', 'legendary', 'epic', 'rare', 'uncommon'];
+// When no rarity check passes, this share of the leftover is junk, the rest
+// normal — keeps normal the single most common drop with junk on par with uncommon.
+const JUNK_FRACTION  = 0.30;
+
+// Magic Find with D2-style diminishing returns: linear up to ~10, then it bends
+// toward `factor` and can never exceed it — which is what self-caps the top tiers.
+function effMF(mf, factor) {
+  if (mf <= 0) return 0;
+  if (mf <= 10) return mf;
+  return mf * factor / (mf + factor);
 }
 
-function rollTier(rolls = 1) {
-  const entries = Object.entries(TIERS);
-  const total = entries.reduce((s, [,v]) => s + v.weight, 0);
-  const rollOnce = () => {
-    let roll = Math.random() * total;
-    for (const [k, v] of entries) {
-      roll -= v.weight;
-      if (roll <= 0) return k;
-    }
-    return 'normal';
-  };
-  // Luckier sources roll several times and keep the rarest result, so bosses
-  // (many rolls) skew much higher than elites, which skew higher than normal.
-  // Progression adds extra rolls on top, raising rarity as you advance.
-  const order = Object.keys(TIERS);
-  const totalRolls = Math.max(1, rolls + progressionRolls());
-  let best = rollOnce();
-  for (let i = 1; i < totalRolls; i++) {
-    const r = rollOnce();
-    if (order.indexOf(r) > order.indexOf(best)) best = r;
+// Gentle, capped depth nudge to the high-end odds (replaces the old explosive
+// progression best-of-N): +1.2% per item level, maxing at +100% around ilvl 83.
+function depthFactor(ilvl) {
+  return 1 + Math.min(1.0, Math.max(0, ilvl) * 0.012);
+}
+
+// The old `rolls`/luck argument is reinterpreted as a small flat Magic-Find-like
+// quality bonus (NOT best-of-N): each step above 1 adds +15 effective MF, so a
+// merchant (3) or rich chest (6) feels a touch better without ever guaranteeing a
+// top tier — the per-tier caps still bound it.
+function rollsQualityBonus(rolls) {
+  return Math.max(0, (rolls || 1) - 1) * 15;
+}
+
+// The Magic-Find score that drives drop QUALITY: gear + skill Magic Find, food,
+// and the Luck attribute (Luck is advertised as raising loot quality). Kept
+// separate from lootMult, which governs drop QUANTITY.
+function qualityMagicFind() {
+  const gear = totalStat('MAGICFIND') + skillBonus('magicFind');
+  const food = foodFx('magicPct') * 100;
+  const luck = Math.max(0, totalAttr('luck') - ATTR_BASE) * 1.5;
+  return Math.max(0, gear + food + luck);
+}
+
+function rollTier(rolls = 1, ilvl = null) {
+  const df = depthFactor(ilvl != null ? ilvl : dungeonLevel);
+  const mf = qualityMagicFind() + rollsQualityBonus(rolls);
+  for (const t of TIER_CHECK_ORDER) {
+    let p = TIER_BASE[t] * df * (1 + effMF(mf, TIER_MF_FACTOR[t]) / 100);
+    if (p > TIER_CAP[t]) p = TIER_CAP[t];
+    if (Math.random() < p) return t;
   }
-  return best;
+  return Math.random() < JUNK_FRACTION ? 'junk' : 'normal';
 }
 
 // Rarity multiplier applied to every rolled value. Deliberately compressed (~4x
@@ -9665,17 +10014,18 @@ function lockedStats(item) {
 }
 
 function generateItem(rolls = 1, ilvl = null, forceTier = null, forceSlot = null) {
-  // forceTier pins the rarity (used by the town gambler, which rolls its own
-  // rarity distribution); otherwise rarity comes from the usual luck rolls.
-  // forceSlot pins the equipment slot (also used by the gambler, when the player
-  // pays to target a specific item type); otherwise the slot is rolled.
-  const tier = forceTier || rollTier(rolls);
-  const slot = (forceSlot && SLOTS[forceSlot]) ? forceSlot : weighted(SLOT_WEIGHTS);
-  const baseName = rollBaseName(slot);
   // Item level: how deep this drop is geared for. Higher item level means
   // bigger raw stats regardless of rarity, so loot from deeper floors steadily
   // outweighs rarer loot found earlier. Defaults to the current dungeon depth.
   const lvl = Math.max(1, Math.round(ilvl != null ? ilvl : dungeonLevel));
+  // forceTier pins the rarity (used by the town gambler, which rolls its own
+  // rarity distribution); otherwise rarity comes from rollTier — independent
+  // per-tier checks scaled by this drop's item level, Magic Find and source luck.
+  // forceSlot pins the equipment slot (also used by the gambler, when the player
+  // pays to target a specific item type); otherwise the slot is rolled.
+  const tier = forceTier || rollTier(rolls, lvl);
+  const slot = (forceSlot && SLOTS[forceSlot]) ? forceSlot : weighted(SLOT_WEIGHTS);
+  const baseName = rollBaseName(slot);
 
   let name = baseName;
   if (tier === 'uncommon') name = pick(PREFIXES) + ' ' + baseName;
@@ -10080,7 +10430,7 @@ function drawHeroSprite(px, py, tw, th, scale) {
     ctx.save();
     ctx.translate(px + tw / 2, 0);
     if (facingRight) ctx.scale(-1, 1);
-    drawSpriteC(heroSprite, 0, py + th / 2, Math.round(tw * 0.9));
+    drawSpriteC(heroSprite, 0, py + th / 2, charSpritePx(tw));
     ctx.restore();
     drawHeldWeapon(px, py, tw, th, facingRight);
     return;
@@ -10475,9 +10825,11 @@ function draw() {
           ctx.restore();
         }
       } else if (t === 12) {
-        // Stairs up — DawnLike pixel staircase (the ▲ arrow is baked into the
-        // tile). Never sealed, and no glow ring or arrow badge is layered on.
-        if (!(spriteReady && drawSprite('stairs_up', px, py, tw))) {
+        // "Up" stair. On floor 1 of a difficulty it's the way back to TOWN, so it
+        // shows the dungeon-gate marker (the same tile the HUD floor and town gate
+        // use); on deeper floors it's the DawnLike climbing staircase.
+        const upSprite = displayFloor() === 1 ? 'ui_gate' : 'stairs_up';
+        if (!(spriteReady && drawSprite(upSprite, px, py, tw))) {
           ctx.fillStyle = '#0d0d14'; ctx.fillRect(px, py, tw, th);
           for (let s = 0; s < 4; s++) {
             const shade = 20 + s * 14;
@@ -10737,7 +11089,7 @@ function draw() {
     // hand-drawn chest below as fallback.
     if (spriteReady && SPRITE_IDX['chest'] !== undefined) {
       glowUnder(cx, cy, tw * (lucky ? 0.6 : 0.46), lucky ? 'rgba(255,224,102,0.45)' : 'rgba(202,162,74,0.3)');
-      drawSpriteC('chest', cx, cy, Math.round(tw * 0.72));
+      drawSpriteC('chest', cx, cy, itemSpritePx(tw));
       return;
     }
     const w = tw * 0.58, h = th * 0.46;
@@ -10790,7 +11142,7 @@ function draw() {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     glowUnder(px + tw/2, py + th/2, tw * 0.42, 'rgba(255,224,102,0.4)');
-    if (!(spriteReady && drawSpriteC('coins', px + tw/2, py + th/2, Math.round(tw * 0.6))))
+    if (!(spriteReady && drawSpriteC('coins', px + tw/2, py + th/2, itemSpritePx(tw))))
       drawEmoji('🪙', px + tw/2, py + th/2, Math.round(tw * 0.52));
   });
 
@@ -10801,7 +11153,7 @@ function draw() {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     glowUnder(px + tw/2, py + th/2, tw * 0.52, 'rgba(255,224,102,0.45)');
-    if (!(spriteReady && drawSpriteC('key', px + tw/2, py + th/2, Math.round(tw * 0.82))))
+    if (!(spriteReady && drawSpriteC('key', px + tw/2, py + th/2, itemSpritePx(tw))))
       drawEmoji('🗝️', px + tw/2, py + th/2, Math.round(tw * 0.65));
   }
 
@@ -10822,7 +11174,7 @@ function draw() {
     ctx.font = `${Math.round(tw * 0.74)}px serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    if (!(spriteReady && drawSpriteC('npc_shop', px + tw/2, py + th/2 + th*0.02, Math.round(tw * 0.82))))
+    if (!(spriteReady && drawSpriteC('npc_shop', px + tw/2, py + th/2 + th*0.02, charSpritePx(tw))))
       drawEmoji('🧙‍♂️', px + tw/2, py + th/2 + th*0.02, Math.round(tw * 0.74));
   }
 
@@ -10842,7 +11194,7 @@ function draw() {
     ctx.font = `${Math.round(tw * 0.74)}px serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    if (!(spriteReady && drawSpriteC('npc_mage', px + tw/2, py + th/2 + th*0.02, Math.round(tw * 0.82))))
+    if (!(spriteReady && drawSpriteC('npc_mage', px + tw/2, py + th/2 + th*0.02, charSpritePx(tw))))
       drawEmoji('🧙', px + tw/2, py + th/2 + th*0.02, Math.round(tw * 0.74));
   }
 
@@ -10995,7 +11347,7 @@ function draw() {
       ctx.stroke();
     }
     ctx.restore();
-    if (!(spriteReady && drawSpriteC('feat_grave', cx, cy, Math.round(tw * 0.8))))
+    if (!(spriteReady && drawSpriteC('feat_grave', cx, cy, charSpritePx(tw))))
       drawEmoji('🪦', cx, gpy + th / 2 + th * 0.04, Math.round(tw * 0.72));
     // Bobbing downward chevron floating above the grave — a clear "pick this up"
     // beacon that points right at your lost loot. Drawn procedurally (UI marker).
@@ -11026,7 +11378,7 @@ function draw() {
       // marker readable instead of a boxy shadow halo.
       glowUnder(dx0 + tw/2, dy0 + th/2 + th*0.02, tw * (0.4 + 0.04*sp), `rgba(${ring},${0.42 + 0.2*sp})`);
       ctx.save();
-      if (!(sprite && spriteReady && drawSpriteC(sprite, dx0 + tw/2, dy0 + th/2 + th*0.02, Math.round(tw * 0.8))))
+      if (!(sprite && spriteReady && drawSpriteC(sprite, dx0 + tw/2, dy0 + th/2 + th*0.02, charSpritePx(tw))))
         drawEmoji(emoji, dx0 + tw/2, dy0 + th/2 + th*0.04, Math.round(tw * 0.72));
       ctx.restore();
     };
@@ -11069,7 +11421,7 @@ function draw() {
     // DawnLike minion sprite (scaled up a touch for "strong" summons), with the
     // emoji as a load-time fallback only.
     const mSprite = MINION_SPRITE[m.kind];
-    const mSz = Math.round(tw * (m.strong ? 0.92 : 0.82));
+    const mSz = Math.max(charSpritePx(tw), Math.round(tw * (m.strong ? 0.92 : 0.82)));
     if (!(mSprite && spriteReady && drawSpriteC(mSprite, mx + tw/2, my + th/2 + th*0.02, mSz))) {
       ctx.font = `${Math.round(tw * (m.strong ? 0.78 : 0.66))}px serif`;
       drawEmoji(m.icon, mx + tw/2, my + th/2 + th*0.02, Math.round(tw * (m.strong ? 0.78 : 0.66)));
@@ -11455,6 +11807,10 @@ function activateShrine(nx, ny) {
     }
   }
   updateBars();
+  // Touching a shrine is a step onto its tile — the turn passes and foes act.
+  // (move() already ran the player's upkeep before handing off to us.)
+  runEnemyTurn();
+  moveQuestEntities();
   saveGame();
   draw();
 }
@@ -11600,9 +11956,11 @@ function move(dx, dy) {
   // the backdrop.
   if (inTown) { openTownHub(); return; }
   if (isPlayerStunned()) {
+    // Stunned: your action is wasted, but the turn still passes — foes act while
+    // you reel, and the stun ticks down toward wearing off.
     tickStatusEffects();
     applyRegen();
-    draw();
+    endBlockedTurn();
     return;
   }
   tickStatusEffects();
@@ -11612,13 +11970,15 @@ function move(dx, dy) {
   if (dx > 0) player.facing = 'right';
   else if (dx < 0) player.facing = 'left';
   const nx = player.x + dx, ny = player.y + dy;
-  if (nx < 0 || ny < 0 || nx >= MAP_W || ny >= MAP_H) return;
+  // Every blocked step below still spends the turn (endBlockedTurn) — walking
+  // into the map edge, a wall, water or a barrier passes time just like waiting.
+  if (nx < 0 || ny < 0 || nx >= MAP_W || ny >= MAP_H) { endBlockedTurn(); return; }
 
   const tile = mapData[ny][nx];
-  if (tile === 1) return; // wall
-  if (tile === 6) return; // deep water — impassable
+  if (tile === 1) { endBlockedTurn(); return; } // wall
+  if (tile === 6) { endBlockedTurn(); return; } // deep water — impassable
   // A boss-conjured barrier blocks the way until it crumbles.
-  if (bossWallAt(nx, ny)) { log('🧱 A wall of force blocks your path!'); return; }
+  if (bossWallAt(nx, ny)) { log('🧱 A wall of force blocks your path!'); endBlockedTurn(); return; }
 
   // Cracked wall → smash through it (opens a shortcut), then step in.
   if (tile === 10) {
@@ -11627,7 +11987,7 @@ function move(dx, dy) {
   }
   // Locked door → needs a key; otherwise it bars the way.
   if (tile === 11) {
-    if (!hasKey) { log('🔒 A locked door bars the way — find its key.'); return; }
+    if (!hasKey) { log('🔒 A locked door bars the way — find its key.'); endBlockedTurn(); return; }
     hasKey = false;
     mapData[ny][nx] = 0;
     log('🔑 You unlock the vault door!', 'important');
@@ -11666,7 +12026,9 @@ function move(dx, dy) {
   // Stairs up → climb back to the previous floor. Always open (the floor above
   // is one you've already been through), so there's never an unlock condition.
   if (tile === 12) {
-    if (dungeonLevel <= 1) { player.x = nx; player.y = ny; draw(); return; }
+    // On floor 1 of a difficulty there's no floor above — the "up" stair is the
+    // way back to TOWN (same access rules as the town gate).
+    if (displayFloor() === 1) { player.x = nx; player.y = ny; enterTown(); return; }
     dungeonLevel--;
     statusEffects = [];
     tickBuffs();
@@ -11688,6 +12050,7 @@ function move(dx, dy) {
     if (!floorCleared) {
       log(`🔒 The stairs are sealed. ${clearConditionLabel()}`, 'important');
       sfx('click');
+      endBlockedTurn();
       return;
     }
     // Resolve an escort quest before leaving the floor.
@@ -11709,10 +12072,11 @@ function move(dx, dy) {
     if (isLastFiniteFloor()) {
       log(`👑 This is the deepest floor of the ${diffMeta().name} dungeon — conquer its guardian, then take the next difficulty from town.`, 'important');
       sfx('click');
+      endBlockedTurn();
       return;
     }
     dungeonLevel++;
-    player.maxFloor = Math.max(player.maxFloor || 1, dungeonLevel);
+    recordDepth();
     statusEffects = [];
     tickBuffs();
     sfx('stairs');
@@ -11738,6 +12102,9 @@ function move(dx, dy) {
     sfx('potion');
     log(`⛲ The Fountain of Healing restores you to full HP and MP!`, 'important');
     updateBars();
+    // Drinking from the fountain is a step like any other — the floor's foes act.
+    runEnemyTurn();
+    moveQuestEntities();
     saveGame();
     draw();
     return;
@@ -12104,15 +12471,38 @@ function onEnemyDefeated(e) {
   // The floor modifier, an active Fortune buff, gear Magic Find, and any pact all
   // sweeten every drop roll.
   const lootMult = (floorMod.lootMult || 1) * (buffs.fortune ? 1.5 : 1) * pfx('loot', 1) * (1 + (totalStat('MAGICFIND') + skillBonus('magicFind')) / 100 + foodFx('magicPct')) * (1 + foodFx('dropPct'));
-  // Drop a chest — bosses and elites always drop, with richer loot. The luck
-  // value is how many rarity rolls the chest makes (more rolls = better odds).
-  // Enemy drops land straight in your pack — no need to walk over and open them.
-  if (e.isBoss || e.isElite || Math.random() < 0.10 * lootMult) {
-    let luck = e.isBoss ? 6 : (e.isElite ? 3 : 1);
-    if (buffs.fortune) luck += 1;
-    const fancy = luck > 1;
-    log(`${fancy ? '🎁' : '🧰'} ${label} dropped a ${fancy ? 'glittering ' : ''}chest!`, 'loot');
-    collectChestLoot(luck, e.level || dungeonLevel, e.x, e.y);
+  // ── Gear drops (Diablo-2-style "picks") ──
+  // Instead of one super-lucky roll, each kill makes a number of independent
+  // PICKS; every pick either finds nothing (NoDrop) or yields one item whose
+  // rarity is rolled on its own (rollTier). Bosses make the most picks — so they
+  // spill the MOST loot — elites fewer, ordinary foes a single stingy pick. The
+  // richer the foe, the small per-item quality nudge it gets too, so the rarity
+  // ratio differs by foe as well as the count. Magic Find & a deep floor erode
+  // the per-pick NoDrop (the single-player echo of D2's "players X" trick), so
+  // juicing loot raises how MUCH drops without ever flooding you with legendaries.
+  {
+    const picksBase = e.isBoss ? 5 : (e.isElite ? 3 : 1);
+    const noDropBase = e.isBoss ? 0.20 : (e.isElite ? 0.45 : 0.85);
+    const qbonus = e.isBoss ? 3 : (e.isElite ? 2 : 1);   // per-item quality nudge
+    const dlvl = e.level || dungeonLevel;
+    const picks = picksBase + (buffs.fortune ? 1 : 0);    // Fortune = one extra pick
+    const noDrop = Math.pow(noDropBase, 1 + Math.max(0, lootMult - 1) / 2);
+    let dropped = 0;
+    for (let p = 0; p < picks; p++) {
+      if (Math.random() >= noDrop) {                       // this pick yields an item
+        const it = generateItem(qbonus, dlvl);
+        if (acquireLoot(it) === 'keep') log(`${e.isBoss ? '🎁' : '🧰'} ${label} dropped ${logItem(it)}`, 'loot');
+        dropped++;
+      }
+    }
+    // Elites and bosses never leave you empty-handed (D2's guaranteed pick).
+    if (dropped === 0 && (e.isBoss || e.isElite)) {
+      const it = generateItem(qbonus, dlvl);
+      if (acquireLoot(it) === 'keep') log(`${e.isBoss ? '🎁' : '🧰'} ${label} dropped ${logItem(it)}`, 'loot');
+      dropped++;
+    }
+    if (dropped > 0) sfx('loot');
+    if (dropped > 1) log(`✨ ${label} spilled ${dropped} pieces of loot!`, 'important');
   }
   if (Math.random() < 0.20 * lootMult && player.hp < player.maxHp) {
     const orb = Math.min(player.maxHp - player.hp, Math.floor(player.maxHp * 0.12));
@@ -13559,6 +13949,17 @@ function handleDeath() {
   const fellOn = dungeonLevel;
   const tierBase = (dTier - 1) * FLOORS_PER_DIFF + 1;
   dungeonReturn = Math.max(tierBase, dungeonLevel - KNOCK);
+  // Re-lock the floors you got knocked back past: a death in your frontier tier
+  // shoves the Gate's re-enterable floor back to your return floor, so the deeper
+  // floors you'd reached relock (shown but 🔒) until you fight back down to them.
+  // Each fresh death can push it back further, locking more. Dying while grinding
+  // an already-conquered tier doesn't claw back your frontier progress.
+  let relocked = false;
+  if (dTier === frontierDiff()) {
+    const prevOpen = player.gateFloor || dungeonReturn;
+    player.gateFloor = Math.min(prevOpen, dungeonReturn);
+    relocked = player.gateFloor < prevOpen;
+  }
   // Comeback relief: the next few floors of your recovery run go a little easier
   // (see spawnEnemies) so a death doesn't trap you in an unwinnable spiral.
   player.reliefFloor = dungeonReturn;
@@ -13569,7 +13970,7 @@ function handleDeath() {
   // Revived in town but WEAKENED — only half health and mana, not a full heal.
   player.hp = Math.max(1, Math.round(player.maxHp * 0.5));
   player.mp = Math.round(player.maxMp * 0.5);
-  showDeathScreen(lostGold, lostXp, dungeonReturn, lostBag, (graveSite ? fellOn : 0));
+  showDeathScreen(lostGold, lostXp, dungeonReturn, lostBag, (graveSite ? fellOn : 0), relocked);
   log(`💀 ${player.name || HERO} was SLAIN on ${floorLabel(fellOn)}! Lost ${lostGold}g${lostXp ? ` and ${lostXp} XP` : ''}${lostBag ? `, and dropped your bag (${lostBag}) — reclaim it on ${floorLabel(fellOn)}` : ''} — revived weakened in town. The dungeon eases up while you find your feet.`, 'important');
   recomputeMaxStats();
   updateBars();
@@ -13579,7 +13980,7 @@ function handleDeath() {
 }
 
 // A hard, unmistakable death screen that spells out every penalty.
-function showDeathScreen(lostGold, lostXp, returnFloor, lostBag, graveFloor) {
+function showDeathScreen(lostGold, lostXp, returnFloor, lostBag, graveFloor, relocked) {
   const el = document.getElementById('death-penalties');
   if (el) {
     const lines = [
@@ -13589,6 +13990,7 @@ function showDeathScreen(lostGold, lostXp, returnFloor, lostBag, graveFloor) {
       (lostBag && graveFloor) ? `🪦 Your bag (${lostBag} item${lostBag === 1 ? '' : 's'}) lies on ${floorLabel(graveFloor)} — go reclaim it` : null,
       `❤️ Revived at half health & mana`,
       `⬇️ Re-enter at ${floorLabel(returnFloor)}`,
+      relocked ? `🔒 Deeper floors are locked at the Gate — fight back down to re-open them` : null,
       `💡 Stuck? Bank gear at the Vault, cook a bowl, strike a pact, or forge gear before diving back.`,
     ].filter(Boolean);
     el.innerHTML = lines.map(t => `<div class="death-pen">${t}</div>`).join('');
@@ -13607,6 +14009,20 @@ function checkPickupProximity() {
 function passTurn() {
   tickStatusEffects();
   applyRegen();
+  runEnemyTurn();
+  moveQuestEntities();
+  draw();
+  saveGame();
+}
+
+// Resolve the rest of a turn for a player action that DIDN'T move the hero — a
+// refused step (bumping a wall, deep water, the map edge, a wall of force, a
+// locked or sealed door/stairs) or a turn spent stunned. move()'s upkeep (status
+// ticks + regen) has already run for these, so here we only let the foes act,
+// age boss hazards (so a barrier penning you in crumbles on its own), trail any
+// escort, then redraw + save. This is what makes "any action costs a turn" hold
+// for blocked moves — no more mashing the Wait button to wait out a barrier.
+function endBlockedTurn() {
   runEnemyTurn();
   moveQuestEntities();
   draw();
@@ -13724,10 +14140,11 @@ function pickupChestsAt(x, y) {
 function pickup() {
   const opened = pickupChestsAt(player.x, player.y);
   if (opened === 0) { log('You wait...'); passTurn(); return; }
+  // Cracking open a chest underfoot is an action too — it costs a turn (foes act,
+  // and a sprung mimic gets to bite). passTurn handles the upkeep, draw and save.
   renderPanel();
   updateBars();
-  saveGame();
-  draw();
+  passTurn();
 }
 
 // Install the re-entrancy / halt guard around every player-action entry point.
@@ -13806,20 +14223,48 @@ function updateBars() {
   document.getElementById('mp-text').textContent = `${player.mp}/${player.maxMp}`;
   document.getElementById('gold-count').textContent = fmtGold(player.gold);
 
+  // Hero nameplate at the far left of the header (hidden until a name is set).
+  const nameHud = document.getElementById('hero-name-hud');
+  if (nameHud) {
+    if (player.name) { nameHud.textContent = player.name; nameHud.style.display = ''; }
+    else { nameHud.style.display = 'none'; }
+  }
+
   // Header HUD: current floor, level + XP progress, enemies remaining.
   const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
   setText('floor-num', displayFloor());
   // Difficulty tag beside the floor number, coloured per tier.
   const fd = document.getElementById('floor-diff');
-  if (fd) { const dm = diffMeta(); fd.textContent = dm.name; fd.style.color = dm.color; }
+  if (fd) {
+    const dm = diffMeta();
+    fd.textContent = dm.name;
+    fd.style.color = dm.color;
+    fd.style.background = dm.color + '22'; // faint tint of the tier colour behind the pill
+  }
   setText('level-num', player.level);
   const xpBar = document.getElementById('xp-bar');
   if (xpBar) xpBar.style.width = Math.min(100, player.xp / xpForLevel(player.level) * 100) + '%';
-  setText('enemies-num', (enemies || []).filter(e => !e.dead).length);
-  // Seal indicator: 🔒 while hostiles block the exit, 🔓 once the floor is clear.
+  const foeCount = (enemies || []).filter(e => !e.dead).length;
+  setText('enemies-num', foeCount);
+  // Seal indicator (mobile header): 🔒 while hostiles block the exit, 🔓 once
+  // the floor is clear. Desktop drops the lock entirely (see #map-info below).
   const clearEl = document.getElementById('clear-status');
   if (clearEl) clearEl.textContent = floorCleared ? '🔓' : '🔒';
   setText('power-num', playerPower());
+
+  // Desktop map-corner readout mirrors the floor + foe count (mobile keeps
+  // these in the header). No lock icon: the foes pill simply hides once the
+  // floor is clear, so an empty floor IS the "unlocked" signal.
+  const mapInfo = document.getElementById('map-info');
+  if (mapInfo) {
+    mapInfo.style.display = inTown ? 'none' : '';
+    setText('map-floor-num', displayFloor());
+    const mfd = document.getElementById('map-floor-diff');
+    if (mfd && fd) { mfd.textContent = fd.textContent; mfd.style.color = fd.style.color; mfd.style.background = fd.style.background; }
+    setText('map-foes-num', foeCount);
+    const mapFoes = document.getElementById('map-foes');
+    if (mapFoes) mapFoes.style.display = foeCount > 0 ? '' : 'none';
+  }
 
   // Active mystic pact indicator (hidden when no pact is in effect).
   const pactHud = document.getElementById('pact-hud');
@@ -14190,6 +14635,8 @@ function renderHero(el) {
       ${stat('Crit chance', Math.round(playerCritChance()*100) + '%')}
       ${stat('Crit damage', Math.round(critDamageMult()*100) + '%')}
       ${stat('Dodge', Math.round(playerDodge()*100) + '%')}
+      ${diffClearedCount() ? `<div class="hc-line" style="display:flex;justify-content:space-between;color:#ff9b8a;margin-top:4px"><span>⚔️ Conqueror's scars</span><b>−${Math.round((1 - diffDebuffMult()) * 100)}%</b></div>
+      <div class="hc-line" style="opacity:0.62;font-size:10px;color:#ff9b8a">${diffClearedCount()} difficult${diffClearedCount() === 1 ? 'y' : 'ies'} conquered — lowers Max&nbsp;HP &amp; damage dealt.</div>` : ''}
       ${extRows ? `<div class="hc-line" style="opacity:0.5;margin-top:4px">— from gear —</div>${extRows}` : ''}
     </div>`;
   const cls = playerClass();
@@ -14208,6 +14655,7 @@ function renderHero(el) {
       <div class="hc-line" style="opacity:0.6">Change class · ascend at the town Trainer 🎓</div>
     </div>` : '';
   el.innerHTML = `
+    <div class="hero-nameplate">${escapeHtml(player.name || 'Adventurer')}</div>
     <div class="hero-power">
       <div class="hp-label">⚡ POWER</div>
       <div class="hp-value">${playerPower()}</div>
@@ -14661,7 +15109,7 @@ function renderSkillBar() {
       <span class="sb-key">2</span><span class="sb-icon">${MANA_POTION_SVG}</span><span class="sb-info">${pcd > 0 ? pcd : ''}</span>
     </button>`;
   let num = 0;
-  bar.innerHTML = healBtn + manaBtn + skills.map((s) => {
+  const skillsHtml = skills.map((s) => {
     const cd = skillCd(s.id);
     const ready = cd === 0 && player.mp >= s.mp && player.hp > 0;
     // Potions hold keys 1–2, so the first seven learned actives map to keys 3–9;
@@ -14677,6 +15125,18 @@ function renderSkillBar() {
       <span class="sb-key">${key}</span><span class="sb-icon">${dlIcon(s.icon,24)||''}</span><span class="sb-info">${cd > 0 ? cd : s.mp + 'MP'}</span>
     </button>`;
   }).join('');
+  // Desktop only: a TOWN button on the far right of the bar (the header's TOWN
+  // button moved here, keyed 0). Greyed when the gate is currently sealed.
+  // Hidden on touch — mobile keeps TOWN in the bottom control bar, unchanged.
+  let townBtn = '';
+  if (!touchUI()) {
+    const acc = townAccess();
+    const townTip = `<div class='ht-name'>🏰 Town</div><div class='ht-line'>Step through the gate to the safe hub — shops, forge, healer, stash.</div><div class='ht-sub'>press 0</div>`;
+    townBtn = `<button class="skillbar-btn town${acc.ok ? '' : ' disabled'}" ${hoverTip(townTip)} onclick="enterTown()">
+      <span class="sb-key">0</span><span class="sb-icon">${dlIcon('ui_gate',24) || '🏰'}</span><span class="sb-info">TOWN</span>
+    </button>`;
+  }
+  bar.innerHTML = healBtn + manaBtn + skillsHtml + townBtn;
 }
 
 // The potion flasks used by the skill-bar Health (red) and Mana (blue) buttons.
@@ -15301,6 +15761,7 @@ document.querySelectorAll('.dpad-btn').forEach(btn => {
 function handleEscape() {
   const close = (id, fn) => { const el = document.getElementById(id); if (el && el.classList.contains('open')) { fn(); return true; } return false; };
   if (close('version-overlay', closeVersion)) return true;
+  if (close('howto-overlay', closeHowTo)) return true;
   if (close('playtime-overlay', closePlayTime)) return true;
   if (close('autoloot-overlay', closeAutoLoot)) return true;
   if (close('death-overlay', closeDeath)) return true;
@@ -15399,7 +15860,7 @@ document.addEventListener('keydown', e => {
     const sk = list[parseInt(e.key, 10) - 3];
     if (sk) castSkillById(sk.id);
   }
-  if (e.key==='t'||e.key==='T')          enterTown();
+  if (e.key==='t'||e.key==='T'||e.key==='0') enterTown();   // 0 mirrors the skill-bar TOWN button
   if (e.key==='b'||e.key==='B'||e.key==='i'||e.key==='I') togglePanel();
 });
 
@@ -15649,6 +16110,12 @@ function loadGame() {
     }
     // Migrate saves that predate the deepest-floor tracker / town hub.
     if (player.maxFloor == null) player.maxFloor = data.dungeonLevel || 1;
+    // Migrate saves that predate the re-enterable-floor tracker (the Gate lock).
+    // Seed it to the deepest reached so existing heroes keep full access — the
+    // lock only starts biting on their next death.
+    if (player.gateFloor == null) player.gateFloor = player.maxFloor || 1;
+    // Defensive: never let the unlocked frontier claim to be deeper than reached.
+    player.gateFloor = Math.min(player.gateFloor, player.maxFloor || player.gateFloor);
     // Difficulty tiers: derive conquered-count from how deep an old (pre-tier,
     // uncapped) save had reached — passing floor 25 meant beating that tier's
     // boss, so floors 26+ → Normal cleared, 51+ → Hardened cleared, etc.
@@ -15731,7 +16198,44 @@ function loadGame() {
   }
 }
 
+// ── GRAVEYARD (fallen heroes) ───────────────────────────────────────────────
+// When a run ends (a New Run wipes the current hero) we tuck a summary of that
+// hero into a local "graveyard" so players can look back on past runs — the
+// class, name, level, deepest floor reached, gold and play-time. Newest first,
+// capped so the list can't grow without bound.
+const GRAVEYARD_KEY = 'dungeonLoot_graveyard_v1';
+const GRAVEYARD_MAX = 60;
+function loadGraveyard() {
+  try { const a = JSON.parse(localStorage.getItem(GRAVEYARD_KEY)); return Array.isArray(a) ? a : []; }
+  catch (e) { return []; }
+}
+function saveGraveyard(list) {
+  try { localStorage.setItem(GRAVEYARD_KEY, JSON.stringify(list.slice(0, GRAVEYARD_MAX))); } catch (e) {}
+}
+// Record the currently-loaded hero as a fallen run, if they actually got going.
+function recordFallenHero() {
+  if (typeof player !== 'object' || !player || !saveStarted({ player })) return;
+  const list = loadGraveyard();
+  // Don't double-record the same hero — replace any existing entry sharing this
+  // character id with the fresher snapshot.
+  const filtered = player.cid ? list.filter(e => e.cid !== player.cid) : list;
+  filtered.unshift({
+    cid: player.cid || null,
+    name: player.name || null,
+    cls: (player.class && CLASSES[player.class]) ? player.class : null,
+    asc: (player.ascension && typeof ASCENSIONS === 'object' && ASCENSIONS[player.ascension]) ? player.ascension : null,
+    level: player.level || 1,
+    floor: player.maxFloor || (typeof dungeonLevel === 'number' ? dungeonLevel : 1) || 1,
+    gold: player.maxGold || player.gold || 0,
+    playMs: player.playMs || 0,
+    ts: Date.now(),
+  });
+  saveGraveyard(filtered);
+}
+
 async function wipeSave() {
+  // The hero you're abandoning earns a headstone in the graveyard first.
+  recordFallenHero();
   // Clears the slot you're currently playing, then reloads into a fresh hero.
   // Latch _wipingSave first so the pagehide/visibilitychange autosaves that fire
   // during reload can't re-write the slot we're about to clear.
@@ -16701,9 +17205,51 @@ function refreshTitleToggles() {
   const zl = document.getElementById('t-zoom-lbl');
   if (zl) zl.textContent = 'Zoom: ' + (ZOOM_LABELS[zoomLevel] || 'Wide');
 }
+// ── ACHIEVEMENTS ── derived purely from the active hero's save state (deepest
+// floor, level, gold, difficulties conquered), so no event hooks are needed.
+// Each test(p) returns whether it's earned; the title shows them as badges.
+const ACHIEVEMENTS = [
+  { id: 'firststeps', name: 'First Steps', desc: 'Reach dungeon floor 2.',  svg: '<line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>', test: p => (p.maxFloor || 1) >= 2 },
+  { id: 'delver',     name: 'Delver',      desc: 'Reach floor 5.',          svg: '<polyline points="6 9 12 15 18 9"/><polyline points="6 4 12 10 18 4"/>', test: p => (p.maxFloor || 1) >= 5 },
+  { id: 'spelunker',  name: 'Spelunker',   desc: 'Reach floor 10.',         svg: '<polyline points="6 9 12 15 18 9"/><polyline points="6 4 12 10 18 4"/>', test: p => (p.maxFloor || 1) >= 10 },
+  { id: 'abyssal',    name: 'Abyss Walker',desc: 'Reach floor 20.',         svg: '<polyline points="6 9 12 15 18 9"/><polyline points="6 4 12 10 18 4"/>', test: p => (p.maxFloor || 1) >= 20 },
+  { id: 'seasoned',   name: 'Seasoned',    desc: 'Reach hero level 10.',    svg: '<polygon points="12 2 15 9 22 9 16.5 13.5 18.5 21 12 16.5 5.5 21 7.5 13.5 2 9 9 9"/>', test: p => (p.level || 1) >= 10 },
+  { id: 'veteran',    name: 'Veteran',     desc: 'Reach hero level 25.',    svg: '<polygon points="12 2 15 9 22 9 16.5 13.5 18.5 21 12 16.5 5.5 21 7.5 13.5 2 9 9 9"/>', test: p => (p.level || 1) >= 25 },
+  { id: 'hoarder',    name: 'Gold Hoarder',desc: 'Hold 2,000 gold at once.',svg: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/>', test: p => (p.gold || 0) >= 2000 },
+  { id: 'conqueror',  name: 'Conqueror',   desc: 'Conquer a difficulty.',   svg: '<circle cx="12" cy="8" r="6"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/>', test: p => (p.diffCleared || 0) >= 1 },
+  { id: 'champion',   name: 'Champion',    desc: 'Conquer all difficulties.',svg: '<path d="M3 18h18l-2-9-4 4-3-6-3 6-4-4z"/>', test: p => (p.diffCleared || 0) >= 3 },
+];
+function renderTitleAchievements() {
+  const wrap = document.getElementById('title-achievements');
+  if (!wrap) return;
+  const p = (typeof player === 'object' && player) || {};
+  if (!p.class) { wrap.style.display = 'none'; return; }  // nothing to show on a fresh save
+  let earned = 0;
+  const cells = ACHIEVEMENTS.map(a => {
+    const got = !!a.test(p); if (got) earned++;
+    const ic = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + a.svg + '</svg>';
+    return `<div class="ta-badge ${got ? 'earned' : 'locked'}" title="${a.name} — ${a.desc}"><span class="ta-ic">${ic}</span><span class="ta-nm">${a.name}</span></div>`;
+  }).join('');
+  wrap.innerHTML = `<div class="ta-head">Achievements <b>${earned}</b> / ${ACHIEVEMENTS.length}</div><div class="ta-row">${cells}</div>`;
+  wrap.style.display = '';
+}
 function showTitle() {
   const ov = document.getElementById('title-overlay');
   if (!ov) return;
+  // Seed the drifting-ember background once (decorative, behind the content).
+  const emb = document.getElementById('title-embers');
+  if (emb && !emb.childElementCount) {
+    let html = '';
+    for (let i = 0; i < 14; i++) {
+      const left = Math.round(Math.random() * 100);
+      const size = (2 + Math.random() * 2.5).toFixed(1);
+      const dur = (6 + Math.random() * 7).toFixed(1);
+      const delay = (Math.random() * 8).toFixed(1);
+      const drift = Math.round(-30 + Math.random() * 60);
+      html += `<span class="ember" style="left:${left}%;width:${size}px;height:${size}px;animation-duration:${dur}s;animation-delay:${delay}s;--drift:${drift}px"></span>`;
+    }
+    emb.innerHTML = html;
+  }
   // Crest is the DawnLike sword tile (atlas), with the emoji as a pre-load fallback.
   const crest = document.getElementById('title-crest');
   if (crest) { const ic = (typeof dlIcon === 'function') ? dlIcon('w_sword', 46) : ''; crest.innerHTML = ic || '⚔️'; }
@@ -16714,6 +17260,25 @@ function showTitle() {
   const newrun = document.getElementById('title-newrun');
   if (play) play.innerHTML = resuming ? '▶ CONTINUE' : '⚔️ ENTER THE DUNGEON';
   if (newrun) newrun.style.display = resuming ? '' : 'none';
+  // Hero / journey card — identity + how far this hero has delved.
+  const hero = document.getElementById('title-hero');
+  if (hero) {
+    if (resuming) {
+      const cls = (typeof CLASSES === 'object' && CLASSES[player.class]) || {};
+      const nm = escapeHtml(player.name || 'Adventurer');
+      const lvl = player.level || 1;
+      const deepest = player.maxFloor || 1;
+      const gold = fmtGold ? fmtGold(player.gold || 0) : (player.gold || 0);
+      hero.innerHTML =
+        `<div class="th-name" style="color:${cls.color || '#ffe9b0'}">${nm}</div>`
+        + `<div class="th-sub">Level ${lvl} ${cls.name || 'Hero'}</div>`
+        + `<div class="th-stats"><span>Deepest <b>Floor ${deepest}</b></span><span><b>${gold}</b>g</span></div>`;
+      hero.style.display = '';
+    } else {
+      hero.style.display = 'none';
+    }
+  }
+  renderTitleAchievements();
   refreshTitleToggles();
   ov.classList.add('open');
 }
@@ -16794,7 +17359,7 @@ log('🌍 Terrain tiles from "[LPC] Terrains" by bluecarrot16 & LPC contributors
 // Reflect any saved mute preference on the SOUND button, then arm the audio:
 // browsers won't let sound start until the player interacts, so the first
 // gesture resumes the context and kicks off the looping music.
-updateSoundButton();
+updateSoundButtons();
 updateZoomButton();
 ['pointerdown', 'keydown', 'touchstart'].forEach(ev =>
   window.addEventListener(ev, audioUnlock, { passive: true }));
