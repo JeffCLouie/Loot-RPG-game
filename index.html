@@ -802,6 +802,43 @@
   /* Subtle gold edge on a locked loot row so it reads at a glance. */
   .loot-item.locked { border-left-color: #c9a84a; }
 
+  /* ── LOOT GLOSSARY ── collapsible key to the short stat codes on loot rows. */
+  .loot-glossary {
+    margin: 10px 4px 4px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: #15151f;
+    font-size: 10px;
+  }
+  .loot-glossary > summary {
+    cursor: pointer;
+    padding: 7px 10px;
+    color: #c9a84a;
+    font-weight: bold;
+    list-style: none;
+    user-select: none;
+  }
+  .loot-glossary > summary::-webkit-details-marker { display: none; }
+  .loot-glossary > summary::before { content: '▸ '; }
+  .loot-glossary[open] > summary::before { content: '▾ '; }
+  .loot-glossary > summary:hover { color: #e8c267; }
+  .gl-body { padding: 0 10px 8px; }
+  .gl-sect {
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 9px;
+    margin: 8px 0 3px;
+  }
+  .gl-row { display: flex; gap: 8px; padding: 1px 0; line-height: 1.35; }
+  .gl-code {
+    flex: 0 0 42px;
+    color: #c9a84a;
+    font-weight: bold;
+    text-align: right;
+  }
+  .gl-mean { flex: 1; color: #bbb; min-width: 0; }
+
   .item-junk      { color: var(--junk); }
   .item-normal    { color: var(--normal); }
   .item-uncommon  { color: var(--uncommon); }
@@ -12740,6 +12777,26 @@ function setLootFilter(slot) {
   renderPanel();
 }
 
+// Collapsible key to the short stat/attribute codes that show on compact loot
+// rows (e.g. "+3 ATK · THN · +5 MIG"), so a new player can decode them without
+// hunting through tooltips. Built from STAT_SHORT/STAT_LABELS and ATTRIBUTES so
+// it can never drift out of sync with what the rows actually print.
+function lootGlossaryHTML() {
+  const statRows = Object.keys(STAT_SHORT).map(k =>
+    `<div class="gl-row"><span class="gl-code">${STAT_SHORT[k]}</span><span class="gl-mean">${STAT_LABELS[k] || k}</span></div>`
+  ).join('');
+  const attrRows = ATTR_KEYS.map(k => {
+    const a = ATTRIBUTES[k];
+    const name = a.label.replace(EMOJI_RE, '').trim();
+    return `<div class="gl-row"><span class="gl-code">${a.short}</span><span class="gl-mean">${name} — ${a.desc}</span></div>`;
+  }).join('');
+  return `<details class="loot-glossary"><summary>Stat abbreviations</summary>` +
+    `<div class="gl-body">` +
+    `<div class="gl-sect">Item stats</div>${statRows}` +
+    `<div class="gl-sect">Attributes</div>${attrRows}` +
+    `</div></details>`;
+}
+
 function renderPanel() {
   const el = document.getElementById('panel-content');
   if (currentTab === 'inv') {
@@ -12785,7 +12842,8 @@ function renderPanel() {
       });
     if (rows.length === 0) {
       el.innerHTML = strip + subtabs + '<div id="empty-panel">' +
-        (inventory.length === 0 ? 'No items yet.<br>Explore!' : 'Nothing here.') + '</div>';
+        (inventory.length === 0 ? 'No items yet.<br>Explore!' : 'Nothing here.') + '</div>' +
+        lootGlossaryHTML();
       return;
     }
     el.innerHTML = strip + subtabs + rows.map(({ item, i }) => {
@@ -12817,7 +12875,7 @@ function renderPanel() {
               : `<button class="row-btn locked-row-btn" ${hoverTip(`<div class='ht-name'>🔒 Can't Wield</div><div class='ht-line'>Your class can't wield this weapon.</div>`)} onclick="quickEquip(${i})">🔒</button>`)
           : ''}
       </div>`;
-    }).join('');
+    }).join('') + lootGlossaryHTML();
   } else if (currentTab === 'equip') {
     el.innerHTML = SLOT_KEYS.map(s => renderSlot(s, SLOTS[s].label)).join('') +
       `<div style="margin-top:8px;font-size:10px;color:#555">Tap EQUIP on any loot<br>item to gear up.</div>`;
