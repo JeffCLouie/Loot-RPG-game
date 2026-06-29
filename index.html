@@ -1976,10 +1976,10 @@
           <span class="action-icon">↻</span><span class="action-label">NEW RUN</span>
         </button>
         <button class="settings-item sound-action" onclick="toggleSound()">
-          <span class="action-icon" id="sound-icon">🔊</span><span class="action-label" id="sound-label">ON</span>
+          <span class="action-label" id="sound-label">ON</span>
         </button>
         <button class="settings-item zoom-action" onclick="toggleZoom()">
-          <span class="action-icon" id="zoom-icon">🔍</span><span class="action-label" id="zoom-label">WIDE</span>
+          <span class="action-label" id="zoom-label">WIDE</span>
         </button>
         <button class="settings-item unstuck-action" onclick="unstuck()" data-tip="<div class='ht-name'>🌀 Unstuck</div><div class='ht-line'>Warp to a random open spot elsewhere on the floor.</div><div class='ht-sub'>use if you get wedged in</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
           <span class="action-icon">🌀</span><span class="action-label">UNSTUCK</span>
@@ -1997,7 +1997,7 @@
           <span class="action-icon">📜</span><span class="action-label">VERSION</span>
         </button>
         <button class="settings-item" onclick="showPlayTime()">
-          <span class="action-icon">⏱️</span><span class="action-label">TIME</span>
+          <span class="action-label">TIME</span>
         </button>
         <!-- Opens the spectator stream (watch.html) where you can watch Claude
              play Dungeon Loot live. -->
@@ -2039,7 +2039,7 @@
        across every save slot plus a per-character breakdown. -->
   <div id="playtime-overlay" onclick="if(event.target===this)closePlayTime()">
     <div id="playtime-card">
-      <div class="version-head">⏱️ Time Played <button class="version-x" onclick="closePlayTime()">✕</button></div>
+      <div class="version-head">Time Played <button class="version-x" onclick="closePlayTime()">✕</button></div>
       <div id="playtime-total"></div>
       <div id="playtime-body"></div>
     </div>
@@ -2153,13 +2153,13 @@
     <button class="title-play" id="title-play" onclick="titlePlay()">⚔️ ENTER THE DUNGEON</button>
     <button class="title-play secondary" id="title-newrun" style="display:none" onclick="titleNewRun()">↻ Start a New Run</button>
     <div id="title-settings">
-      <button class="title-set-btn" onclick="titleSound()"><span class="tsb-ic" id="t-sound-ic">🔊</span><span class="tsb-lbl" id="t-sound-lbl">Sound: On</span></button>
-      <button class="title-set-btn" onclick="titleZoom()"><span class="tsb-ic">🔍</span><span class="tsb-lbl" id="t-zoom-lbl">Zoom</span></button>
+      <button class="title-set-btn" onclick="titleSound()"><span class="tsb-lbl" id="t-sound-lbl">Sound: On</span></button>
+      <button class="title-set-btn" onclick="titleZoom()"><span class="tsb-lbl" id="t-zoom-lbl">Zoom</span></button>
       <button class="title-set-btn" onclick="openAccount()"><span class="tsb-ic">☁️</span><span class="tsb-lbl">Cloud Save</span></button>
       <button class="title-set-btn" onclick="openSlots()"><span class="tsb-ic">💾</span><span class="tsb-lbl">Save Slots</span></button>
       <button class="title-set-btn" onclick="showLeaderboard()"><span class="tsb-ic" data-spr="ui_trophy"></span><span class="tsb-lbl">Leaderboards</span></button>
       <button class="title-set-btn" onclick="showVersionHistory()"><span class="tsb-ic">📜</span><span class="tsb-lbl">Version</span></button>
-      <button class="title-set-btn" onclick="showPlayTime()"><span class="tsb-ic">⏱️</span><span class="tsb-lbl">Time Played</span></button>
+      <button class="title-set-btn" onclick="showPlayTime()"><span class="tsb-lbl">Time Played</span></button>
     </div>
     <!-- Optional sign-in callout — updated by refreshAccountUi() to reflect login state. -->
     <div id="title-cloud" onclick="openAccount()"></div>
@@ -4202,22 +4202,22 @@ const ELITE_NAMES = ['Grok the Render','Vossk Bonechewer','Mauler','The Gloomfan
 // rewards. This is a gameplay layer on top of the purely-visual THEMES below.
 const FLOOR_MODS = [
   { id: 'normal', name: null,                     dmgMult: 1,    lootMult: 1,   eliteBonus: 0,    desc: '' },
-  { id: 'cursed', name: '🩸 Cursed Depths',        dmgMult: 1.3,  lootMult: 1.5, eliteBonus: 0.1,  desc: 'Enemies hit harder, but loot is richer.' },
-  { id: 'vault',  name: '💰 Treasure Vault',       dmgMult: 1.1,  lootMult: 2.2, eliteBonus: 0.05, desc: 'Treasure everywhere — and guards to match.' },
-  { id: 'silent', name: '🔇 Silent Halls',         dmgMult: 0.9,  lootMult: 1,   eliteBonus: 0,    desc: 'No merchant here, but the air feels calm.', noMerchant: true, forceFountain: true },
-  { id: 'swarm',  name: '🐝 Infested Floor',       dmgMult: 0.85, lootMult: 1.2, eliteBonus: 0,    desc: 'Crawling with weaker foes.', enemyMult: 1.8, hpMult: 0.7 },
-  { id: 'elite',  name: '⚔ Champions\' Ground',    dmgMult: 1.15, lootMult: 1.4, eliteBonus: 0.4,  desc: 'Elite monsters stalk these halls.' },
-  { id: 'goldrush', name: '🌟 Gold Rush',          dmgMult: 1,    lootMult: 1.2, eliteBonus: 0,    desc: 'Coins everywhere — foes spill extra gold.', goldMult: 2, goldPiles: 3 },
-  { id: 'haunted',  name: '👻 Haunted Halls',       dmgMult: 1.2,  lootMult: 1.3, eliteBonus: 0.15, desc: 'Restless spirits strike from the dark.' },
-  { id: 'brittle',  name: '🍃 Brittle Bones',       dmgMult: 1,    lootMult: 1,   eliteBonus: 0,    desc: 'Foes are frail — strike them down fast.', hpMult: 0.55 },
-  { id: 'bountiful',name: '🎁 Bountiful Floor',      dmgMult: 1.05, lootMult: 1.6, eliteBonus: 0,    desc: 'Chests hide around every corner.', chestBonus: 2 },
+  { id: 'cursed', name: 'Cursed Depths',        dmgMult: 1.3,  lootMult: 1.5, eliteBonus: 0.1,  desc: 'Enemies hit harder, but loot is richer.' },
+  { id: 'vault',  name: 'Treasure Vault',       dmgMult: 1.1,  lootMult: 2.2, eliteBonus: 0.05, desc: 'Treasure everywhere — and guards to match.' },
+  { id: 'silent', name: 'Silent Halls',         dmgMult: 0.9,  lootMult: 1,   eliteBonus: 0,    desc: 'No merchant here, but the air feels calm.', noMerchant: true, forceFountain: true },
+  { id: 'swarm',  name: 'Infested Floor',       dmgMult: 0.85, lootMult: 1.2, eliteBonus: 0,    desc: 'Crawling with weaker foes.', enemyMult: 1.8, hpMult: 0.7 },
+  { id: 'elite',  name: 'Champions\' Ground',    dmgMult: 1.15, lootMult: 1.4, eliteBonus: 0.4,  desc: 'Elite monsters stalk these halls.' },
+  { id: 'goldrush', name: 'Gold Rush',          dmgMult: 1,    lootMult: 1.2, eliteBonus: 0,    desc: 'Coins everywhere — foes spill extra gold.', goldMult: 2, goldPiles: 3 },
+  { id: 'haunted',  name: 'Haunted Halls',       dmgMult: 1.2,  lootMult: 1.3, eliteBonus: 0.15, desc: 'Restless spirits strike from the dark.' },
+  { id: 'brittle',  name: 'Brittle Bones',       dmgMult: 1,    lootMult: 1,   eliteBonus: 0,    desc: 'Foes are frail — strike them down fast.', hpMult: 0.55 },
+  { id: 'bountiful',name: 'Bountiful Floor',      dmgMult: 1.05, lootMult: 1.6, eliteBonus: 0,    desc: 'Chests hide around every corner.', chestBonus: 2 },
   // A floor that hard-counters the heal-on-AoE grind: foes are tougher and your
   // life-leech barely works here, so brute-forcing won't sustain you. The answer
   // is prep — a Mercy pact, burst skills, a healing bowl — not the same old loop.
-  { id: 'warded',   name: '🛡️ Warded Halls',         dmgMult: 1.15, lootMult: 1.6, eliteBonus: 0.1,  desc: 'Foes are warded against life-draining — your lifesteal barely bites. Burst them down or come prepared.', hpMult: 1.3, lifestealMult: 0.35, prepHint: true },
+  { id: 'warded',   name: 'Warded Halls',         dmgMult: 1.15, lootMult: 1.6, eliteBonus: 0.1,  desc: 'Foes are warded against life-draining — your lifesteal barely bites. Burst them down or come prepared.', hpMult: 1.3, lifestealMult: 0.35, prepHint: true },
   // A deliberate wall: a floor that may simply be beyond you right now. Rich if
   // you can survive it, lethal if you can't — turn back and grind if you must.
-  { id: 'nightmare',name: '💀 Nightmare Depths',     dmgMult: 1.7,  lootMult: 2.4, eliteBonus: 0.35, desc: 'Death itself stalks these halls. Turn back if you must.', hpMult: 1.45 },
+  { id: 'nightmare',name: 'Nightmare Depths',     dmgMult: 1.7,  lootMult: 2.4, eliteBonus: 0.35, desc: 'Death itself stalks these halls. Turn back if you must.', hpMult: 1.45 },
 ];
 let floorMod = FLOOR_MODS[0];
 
@@ -7034,7 +7034,7 @@ function renderCookingHTML() {
   }
   const remaining = RECIPES.length - found;
   if (remaining > 0) {
-    html += `<div class="recipe-row locked"><span class="food-emoji">❓</span><div class="food-info"><div class="food-name">${remaining} secret recipe${remaining === 1 ? '' : 's'} left to discover</div><div class="food-fx">Experiment with different topping combos to find them…</div></div></div>`;
+    html += `<div class="recipe-row locked"><span class="food-emoji">?</span><div class="food-info"><div class="food-name">${remaining} secret recipe${remaining === 1 ? '' : 's'} left to discover</div><div class="food-fx">Experiment with different topping combos to find them…</div></div></div>`;
   }
 
   return html;
@@ -7439,7 +7439,7 @@ function renderTrainer() {
     <div class="town-blurb">The trainer can unlearn your attributes, returning all ${spent} spent point${spent === 1 ? '' : 's'} to spend anew (you have ${player.attrPoints || 0} unspent).</div>
     ${rows}
     <div class="shop-row">
-      <span class="loot-icon">🔄</span>
+      <span class="loot-icon"></span>
       <div class="shop-row-info"><div class="shop-row-name">Respec Attributes</div>
         <div class="shop-row-sub">Refund every point spent above the base ${ATTR_BASE}</div></div>
       <span class="shop-price">${cost}g</span>
@@ -7749,7 +7749,7 @@ function renderEnchanter() {
       <button class="shop-buy-btn" onclick="enchantPick(${g.item.id})">WORK</button>
     </div>`;
   }).join('');
-  setTownContent(`<div class="town-blurb">The enchanter tinkers with your gear using ✨ <b>Glimmer</b> (and a little gold): <b>Augment</b> adds a missing property, <b>Reroll all</b> gambles every bonus property at once, and each property can be rerolled on its own — its <b>value</b> (🎲, same modifier, new number) or its <b>modifier</b> (🔄, swapped for another). Rarity sets how many properties a piece can hold. Blank pieces from the 🔨 Craftsman start here.</div>${rows}`);
+  setTownContent(`<div class="town-blurb">The enchanter tinkers with your gear using ✨ <b>Glimmer</b> (and a little gold): <b>Augment</b> adds a missing property, <b>Reroll all</b> gambles every bonus property at once, and each property can be rerolled on its own — its <b>value</b> (same modifier, new number) or its <b>modifier</b> (swapped for another). Rarity sets how many properties a piece can hold. Blank pieces from the 🔨 Craftsman start here.</div>${rows}`);
 }
 
 function enchantPick(id) { enchantSel = id; renderEnchanter(); }
@@ -7791,16 +7791,16 @@ function renderEnchantItem(item) {
     // Gear-style hover cards (title line + description), escaped for the attr.
     const esc = s => s.replace(/"/g, '&quot;');
     const valTip = esc(fixed
-      ? `<div class="ht-name">🎲 Reroll Value</div><div class="ht-line">${labelTag} has a fixed value (${rangeStr}) at this item level — nothing to reroll.</div>`
-      : `<div class="ht-name">🎲 Reroll Value</div><div class="ht-line">Keeps ${labelTag}, rolls a new number.</div><div class="ht-sub">Lands ${rangeStr} at ilvl ${item.ilvl} (now ${curVal < 0 ? '' : '+'}${curVal}).</div>`);
+      ? `<div class="ht-name">Reroll Value</div><div class="ht-line">${labelTag} has a fixed value (${rangeStr}) at this item level — nothing to reroll.</div>`
+      : `<div class="ht-name">Reroll Value</div><div class="ht-line">Keeps ${labelTag}, rolls a new number.</div><div class="ht-sub">Lands ${rangeStr} at ilvl ${item.ilvl} (now ${curVal < 0 ? '' : '+'}${curVal}).</div>`);
     const typeTip = esc(swaps.length
-      ? `<div class="ht-name">🔄 Reroll Modifier</div><div class="ht-line">Swaps ${labelTag} for a random other modifier this slot can hold:</div><div class="ht-sub">${swaps.join(', ')}</div>`
-      : `<div class="ht-name">🔄 Reroll Modifier</div><div class="ht-line">No other modifier is available — every type this slot can roll is already present.</div>`);
+      ? `<div class="ht-name">Reroll Modifier</div><div class="ht-line">Swaps ${labelTag} for a random other modifier this slot can hold:</div><div class="ht-sub">${swaps.join(', ')}</div>`
+      : `<div class="ht-name">Reroll Modifier</div><div class="ht-line">No other modifier is available — every type this slot can roll is already present.</div>`);
     return `<div class="shop-row"><div class="shop-row-info">
         <div class="shop-row-name" style="${color}">${curVal < 0 ? '' : '+'}${curVal} ${label}</div>
         <div class="shop-row-sub">rolls ${rangeStr} at ilvl ${item.ilvl}</div></div>
-      <span class="ench-tipwrap" data-tip="${valTip}" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()"><button class="shop-buy-btn ench-btn" ${canVal?'':'disabled'} onclick="enchantRerollValue(${item.id},'${kind}','${key}')">🎲 ${costLabel(valCost)}</button></span>
-      <span class="ench-tipwrap" data-tip="${typeTip}" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()"><button class="shop-buy-btn ench-btn" ${canType?'':'disabled'} onclick="enchantRerollType(${item.id},'${kind}','${key}')">🔄 ${costLabel(typeCost)}</button></span></div>`;
+      <span class="ench-tipwrap" data-tip="${valTip}" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()"><button class="shop-buy-btn ench-btn" ${canVal?'':'disabled'} onclick="enchantRerollValue(${item.id},'${kind}','${key}')">Value ${costLabel(valCost)}</button></span>
+      <span class="ench-tipwrap" data-tip="${typeTip}" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()"><button class="shop-buy-btn ench-btn" ${canType?'':'disabled'} onclick="enchantRerollType(${item.id},'${kind}','${key}')">Type ${costLabel(typeCost)}</button></span></div>`;
   };
 
   const statRows = Object.keys(item.stats).filter(k => !locked.includes(k)).map(k =>
@@ -7816,7 +7816,7 @@ function renderEnchantItem(item) {
   const canAug = canAddStat(item) || canAddAttr(item);
   const allCost = rerollAllCost(item);
   const augBtn = `<button class="shop-buy-btn" ${(canAug && canAfford(augCost))?'':'disabled'} onclick="enchantAugment(${item.id})">✨ Augment ${costLabel(augCost)}</button>`;
-  const allBtn = `<button class="shop-buy-btn" ${(canAfford(allCost) && (caps.stat+caps.attr)>0)?'':'disabled'} onclick="enchantRerollAll(${item.id})">🔄 Reroll all ${costLabel(allCost)}</button>`;
+  const allBtn = `<button class="shop-buy-btn" ${(canAfford(allCost) && (caps.stat+caps.attr)>0)?'':'disabled'} onclick="enchantRerollAll(${item.id})">Reroll all ${costLabel(allCost)}</button>`;
 
   // Why is Augment unavailable? Distinguish "rarity slots full" from "this slot
   // has no more modifier types to add" (the common, confusing case — e.g. a
@@ -7845,7 +7845,7 @@ function renderEnchantItem(item) {
     <div class="shop-row"><button class="shop-buy-btn" onclick="enchantBack()">← Back</button>
       <div class="shop-row-info item-${item.tier}" style="margin-left:8px"><div class="shop-row-name">${item.name}${craftedMark(item)}</div>
       <div class="shop-row-sub">${SLOTS[item.slot].label.replace(/^\S+\s/,'')} · ilvl ${item.ilvl} · ${statN}/${caps.stat} stats · ${attrN}/${caps.attr} attrs</div></div></div>
-    <div class="ench-legend">🎲 reroll value · 🔄 reroll modifier · hover a button for details</div>
+    <div class="ench-legend">Value rerolls the number · Type swaps the modifier · hover a button for details</div>
     ${lockRows}
     ${empty}${statRows}${attrRows}
     <div class="shop-row" style="margin-top:6px;gap:6px">${augBtn}${allBtn}</div>
@@ -7932,7 +7932,7 @@ function gambleRollIlvl() {
   return Math.max(1, gambleDeepest() + off);
 }
 
-function openGambler() { gambleLast = null; gambleSlot = null; openTownModal('🎲 Gambler'); renderGambler(); }
+function openGambler() { gambleLast = null; gambleSlot = null; openTownModal('Gambler'); renderGambler(); }
 
 function renderGambler() {
   const d = gambleDeepest();
@@ -13963,7 +13963,7 @@ function renderSlots() {
       ? `<button class="slot-btn current" disabled>● Playing</button>`
       : `<button class="slot-btn" onclick="activateSlot(${i})">▶ Load</button>`;
     const armed = slotDeleteArmed === i;
-    const delBtn = `<button class="slot-btn danger${armed ? ' armed' : ''}" onclick="deleteSlot(${i})">${armed ? 'Sure?' : '🗑'}</button>`;
+    const delBtn = `<button class="slot-btn danger${armed ? ' armed' : ''}" onclick="deleteSlot(${i})">${armed ? 'Sure?' : 'Del'}</button>`;
     html += `<div class="slot-row${isActive ? ' active' : ''}">
       <div class="slot-head">
         <span class="slot-num">SLOT ${i + 1}</span>${badge}
