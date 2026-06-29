@@ -5845,6 +5845,31 @@ function randomFloorTile(reach) {
   return null;
 }
 
+// Grow a roughly-organic blob of up to `size` connected floor tiles outward
+// from a seed, so hazards form cohesive pools instead of lonely single tiles.
+// Only spreads across plain floor (0) and stays inside the playable border.
+function growCluster(seed, size) {
+  const open = (x, y) => x >= 1 && y >= 1 && x < MAP_W - 1 && y < MAP_H - 1 && mapData[y][x] === 0;
+  if (!seed || !open(seed.x, seed.y)) return [];
+  const out = [seed], seen = new Set([seed.y + ',' + seed.x]);
+  const frontier = [seed];
+  const dirs = [[0, -1], [0, 1], [-1, 0], [1, 0]];
+  while (out.length < size && frontier.length) {
+    const fi = rnd(0, frontier.length - 1), f = frontier[fi];
+    for (let s = dirs.length - 1; s > 0; s--) { const j = rnd(0, s); const t = dirs[s]; dirs[s] = dirs[j]; dirs[j] = t; }
+    let grew = false;
+    for (const [dx, dy] of dirs) {
+      const nx = f.x + dx, ny = f.y + dy, key = ny + ',' + nx;
+      if (seen.has(key) || !open(nx, ny)) continue;
+      seen.add(key); const c = { x: nx, y: ny };
+      out.push(c); frontier.push(c); grew = true;
+      if (out.length >= size) break;
+    }
+    if (!grew) frontier.splice(fi, 1); // dead end — stop expanding from here
+  }
+  return out;
+}
+
 // Carve a sealed treasure vault out of solid rock, reachable only through a
 // locked door — and scatter its key somewhere on the floor.
 function tryBuildVault(reach) {
@@ -5972,10 +5997,15 @@ function generateMap() {
   // has no floor above, so it gets none — use TOWN to leave the first floor.
   if (dungeonLevel > 1) mapData[startPos.y][startPos.x] = entryStair;
 
-  // ── LAVA (passable, burns) ──
-  if (dungeonLevel >= 2 && Math.random() < 0.5) {
-    const n = rnd(2, 5);
-    for (let i = 0; i < n; i++) { const c = randomFloorTile(reach); if (c) mapData[c.y][c.x] = 7; }
+  // ── LAVA (passable, burns) ── pooled into a couple of cohesive patches
+  // rather than scattered single tiles.
+  if (dungeonLevel >= 2 && Math.random() < 0.4) {
+    const pools = rnd(1, 2);
+    for (let p = 0; p < pools; p++) {
+      const seed = randomFloorTile(reach);
+      if (!seed) break;
+      for (const c of growCluster(seed, rnd(3, 7))) mapData[c.y][c.x] = 7;
+    }
   }
   // ── SPIKE TRAPS (passable, stabs) ──
   if (Math.random() < 0.6) {
