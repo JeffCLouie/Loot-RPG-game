@@ -1637,7 +1637,7 @@
   #title-achievements .ta-head { font-size: 11px; color: #b9a98a; letter-spacing: 1px; margin-bottom: 9px; }
   #title-achievements .ta-head b { color: var(--gold); }
   #title-achievements .ta-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 9px; }
-  .ta-badge { display: flex; flex-direction: column; align-items: center; gap: 3px; width: 56px; }
+  .ta-badge { display: flex; flex-direction: column; align-items: center; gap: 3px; width: 56px; cursor: help; }
   .ta-badge .ta-ic { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
     border: 1px solid var(--frame); background: #1b160f; color: var(--gold); }
   .ta-badge.earned .ta-ic { box-shadow: 0 0 10px rgba(255,190,90,0.35); }
@@ -17049,7 +17049,13 @@ function renderTitleAchievements() {
   const cells = ACHIEVEMENTS.map(a => {
     const got = !!a.test(p); if (got) earned++;
     const ic = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + a.svg + '</svg>';
-    return `<div class="ta-badge ${got ? 'earned' : 'locked'}" title="${a.name} — ${a.desc}"><span class="ta-ic">${ic}</span><span class="ta-nm">${a.name}</span></div>`;
+    // Reuse the game's shared hover/long-press tooltip (data-tip + showHoverTip)
+    // so the badges read with the same styled card as the HUD and shop tips.
+    const status = got
+      ? `<div class='ht-sub' style='color:var(--gold)'>✓ Unlocked</div>`
+      : `<div class='ht-sub'>🔒 Locked</div>`;
+    const tip = `<div class='ht-name'>${a.name}</div><div class='ht-line'>${a.desc}</div>${status}`;
+    return `<div class="ta-badge ${got ? 'earned' : 'locked'}" data-tip="${tip}" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()"><span class="ta-ic">${ic}</span><span class="ta-nm">${a.name}</span></div>`;
   }).join('');
   wrap.innerHTML = `<div class="ta-head">Achievements <b>${earned}</b> / ${ACHIEVEMENTS.length}</div><div class="ta-row">${cells}</div>`;
   wrap.style.display = '';
