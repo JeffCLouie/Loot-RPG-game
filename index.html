@@ -4684,7 +4684,7 @@ const ASCENSIONS = {
   berserker: { base:'warrior', name:'Berserker', icon:'sk_asc_berserker', color:'#e0533a',
     blurb:'A frenzied juggernaut — the lower your health, the deadlier you become.',
     tree: buildTree([
-      [ {id:'b_rage',name:'Undying Rage',icon:'sk_b_rage',t:'passive',fx:{zeal:0.04,lifesteal:0.015},desc:'Up to +4% damage as HP drops, heal 1.5% of damage per rank.'},
+      [ {id:'b_rage',name:'Undying Rage',icon:'sk_b_rage',t:'passive',fx:{zeal:0.04,lifesteal:0.015},trigger:{on:'lowhp',effect:{buff:{id:'dmgUp',dur:3,mag:0.4},charge:'fury'}},desc:'Up to +4% damage as HP drops, heal 1.5% of damage per rank; dropping below 25% HP erupts in fury (+40% damage and a Fury charge).'},
         {id:'b_frenzy',name:'Frenzy',icon:'sk_b_frenzy',t:'active',mp:18,cd:5,cast:{shape:'self',buff:[{id:'dmgUp',dur:6,mag:0.7},{id:'critUp',dur:6,mag:0.2}]},desc:'Work into a killing frenzy.'} ],
       [ {id:'b_bloodbath',name:'Bloodbath',icon:'sk_b_bloodbath',t:'active',mp:24,cd:5,cast:{shape:'nova',radius:2,wpn:2.2,lifesteal:0.45},desc:'Drench the area in blood, healing massively.'},
         {id:'b_thickskin',name:'Berserker Hide',icon:'sk_b_thickskin',t:'passive',fx:{dmgTaken:0.02,maxHpPct:0.03},desc:'-2% damage taken and +3% HP per rank.'} ],
@@ -4694,7 +4694,7 @@ const ASCENSIONS = {
   guardian: { base:'warrior', name:'Guardian', icon:'sk_asc_guardian', color:'#5a8fd0',
     blurb:'An immovable bulwark that punishes attackers and shields allies.',
     tree: buildTree([
-      [ {id:'g_fortress',name:'Fortress',icon:'sk_g_fortress',t:'passive',fx:{dmgTaken:0.025,block:1.5},desc:'-2.5% damage taken and +1.5% block per rank.'},
+      [ {id:'g_fortress',name:'Fortress',icon:'sk_g_fortress',t:'passive',fx:{dmgTaken:0.025,block:1.5},trigger:{on:'block',effect:{charge:'guard',damage:{flat:12,perLvl:1}}},desc:'-2.5% damage taken and +1.5% block per rank; blocking smites the attacker and builds a Guard charge.'},
         {id:'g_taunt',name:'Iron Wall',icon:'sk_g_taunt',t:'active',mp:16,cd:6,cast:{shape:'self',buff:[{id:'defUp',dur:6,mag:0.5},{id:'thorns',dur:6,mag:12}]},desc:'Brace as an iron wall: halve damage, reflect blows.'} ],
       [ {id:'g_aegis',name:'Aegis Charge',icon:'sk_g_aegis',t:'active',mp:20,cd:5,cast:{shape:'blast',range:5,radius:2,wpn:1.6,status:{effect:'stun',dur:2,chance:1},buff:{id:'shield',dur:5,mag:70}},desc:'Charge in, stun, and raise a shield.'},
         {id:'g_retribution',name:'Retribution',icon:'sk_g_retribution',t:'passive',fx:{reflect:0.08,dr:1.0},desc:'Reflect 8% of melee damage and +1% DR per rank.'} ],
@@ -4709,7 +4709,7 @@ const ASCENSIONS = {
         {id:'as_mark',name:'Marked for Death',icon:'sk_as_mark',t:'active',mp:20,cd:5,cast:{shape:'bolt',range:7,wpn:4.5,crit:true,status:{effect:'vuln',dur:6,chance:1}},desc:'A colossal crit that marks the foe to take +35% from all damage.'} ],
       [ {id:'as_shroud',name:'Death Shroud',icon:'sk_as_shroud',t:'active',mp:18,cd:7,cast:{shape:'self',buff:[{id:'critUp',dur:6,mag:0.35},{id:'dmgUp',dur:6,mag:0.4}]},desc:'Cloak yourself in lethal intent.'},
         {id:'as_venomblade',name:'Venom Mastery',icon:'sk_as_venomblade',t:'passive',fx:{lowHpDmg:0.05,pen:0.03},desc:'+5% damage to wounded foes and +3% pen per rank.'} ],
-      [ {id:'as_deathblossom',name:'Death Blossom',icon:'sk_as_deathblossom',t:'active',mp:30,cd:7,cast:{shape:'nova',radius:3,wpn:2.6,crit:true,execute:0.3,status:{effect:'poison',dur:5,chance:1}},desc:'A whirlwind of poisoned crits that finishes the wounded.'},
+      [ {id:'as_deathblossom',name:'Death Blossom',icon:'sk_as_deathblossom',t:'active',mp:30,cd:7,cast:{shape:'nova',radius:3,wpn:2.6,crit:true,execute:0.3,detonate:3,status:{effect:'poison',dur:5,chance:1}},desc:'A whirlwind of poisoned crits that finishes the wounded — and DETONATES any foe Marked for Death, bursting everything around it.'},
         {id:'as_perfect',name:'Perfect Strike',icon:'sk_as_perfect',t:'passive',fx:{critDmg:0.1,dmgDealt:0.015},desc:'+10% crit damage and +1.5% damage per rank.'} ],
     ], null, 'assassin') },
   shadowdancer: { base:'rogue', name:'Shadowdancer', icon:'sk_asc_shadowdancer', color:'#9a7bce',
@@ -4727,8 +4727,8 @@ const ASCENSIONS = {
     blurb:'A master of fire who reduces whole rooms to ash.',
     tree: buildTree([
       [ {id:'py_mastery',name:'Fire Mastery',icon:'sk_py_mastery',t:'passive',fx:{spell:0.04,critDmg:0.05},desc:'+4% spell damage and +5% crit damage per rank.'},
-        {id:'py_immolate',name:'Immolation',icon:'sk_py_immolate',t:'active',mp:22,cd:4,cast:{shape:'nova',radius:3,spell:1.6,status:{effect:'burn',dur:4,chance:1}},desc:'Erupt in flame, leaving everything near you burning.'} ],
-      [ {id:'py_meteor',name:'Cinder Storm',icon:'sk_py_meteor',t:'active',mp:28,cd:6,cast:{shape:'blast',range:8,radius:3,spell:2.0,status:{effect:'burn',dur:4,chance:0.9}},desc:'A storm of cinders rains on a far area, setting it ablaze.'},
+        {id:'py_immolate',name:'Immolation',icon:'sk_py_immolate',t:'active',mp:22,cd:4,cast:{shape:'nova',radius:3,spell:1.6,detonate:2.5,status:{effect:'burn',dur:4,chance:1}},desc:'Erupt in flame, burning all around — and DETONATING marked foes in a chain of explosions.'} ],
+      [ {id:'py_meteor',name:'Cinder Storm',icon:'sk_py_meteor',t:'active',mp:28,cd:6,cast:{shape:'blast',range:8,radius:3,spell:2.0,status:{effect:'vuln',dur:4,chance:1}},desc:'A storm of cinders rains on a far area, marking everything caught for +35% damage — set them up, then Immolate to combust them.'},
         {id:'py_kindle',name:'Inner Flame',icon:'sk_py_kindle',t:'passive',fx:{spell:0.045,maxMpPct:0.03},desc:'+4.5% spell damage and +3% MP per rank.'} ],
       [ {id:'py_phoenix',name:'Phoenix',icon:'sk_py_phoenix',t:'active',mp:34,cd:11,cast:{shape:'summon',summon:{kind:'elemental',count:1,ttl:24,strong:true}},desc:'Summon a blazing phoenix to incinerate foes.'},
         {id:'py_conflagration',name:'Conflagration',icon:'sk_py_conflagration',t:'passive',fx:{spell:0.05,critDmg:0.06},desc:'+5% spell damage and +6% crit damage per rank.'} ],
@@ -4751,7 +4751,7 @@ const ASCENSIONS = {
         {id:'cr_smite',name:'Divine Storm',icon:'sk_cr_smite',t:'active',mp:24,cd:5,cast:{shape:'nova',radius:3,spell:1.7,heal:{flat:25,perLevel:2}},desc:'A storm of holy power that heals you.'} ],
       [ {id:'cr_lance',name:'Heaven\'s Lance',icon:'➡️',t:'active',mp:22,cd:4,cast:{shape:'line',range:7,spell:2.2},desc:'A lance of light pierces all in a line.'},
         {id:'cr_valor',name:'Valor',icon:'sk_cr_valor',t:'passive',fx:{dmgTaken:0.02,maxHpPct:0.025},desc:'-2% damage taken and +2.5% HP per rank.'} ],
-      [ {id:'cr_judgment',name:'Final Judgment',icon:'sk_cr_judgment',t:'active',mp:36,cd:9,cast:{shape:'nova',radius:4,spell:2.4,heal:{flat:40,perLevel:3},execute:0.25,status:{effect:'stun',dur:1,chance:0.6}},desc:'Pass final judgment on all around you, slaying the wounded.'},
+      [ {id:'cr_judgment',name:'Final Judgment',icon:'sk_cr_judgment',t:'active',mp:36,cd:9,cast:{shape:'nova',radius:4,spell:2.4,heal:{flat:40,perLevel:3},execute:0.25,detonate:2.5,status:{effect:'stun',dur:1,chance:0.6}},desc:'Pass final judgment on all around you, slaying the wounded and DETONATING any marked (Condemned) foes.'},
         {id:'cr_avatar',name:'Avatar of Justice',icon:'sk_cr_avatar',t:'passive',fx:{dmgDealt:0.02,spell:0.03},desc:'+2% damage and +3% spell power per rank.'} ],
     ], null, 'crusader') },
   sentinel: { base:'templar', name:'Sentinel', icon:'sk_asc_sentinel', color:'#cfe0ff',
@@ -4984,6 +4984,7 @@ function applyCastMods(node, cast) {
     if (m.wpn)      c.wpn = (c.wpn || 0) + m.wpn;
     if (m.spell)    c.spell = (c.spell || 0) + m.spell;
     if (m.status)   c.status = m.status;
+    if (m.detonate) c.detonate = (c.detonate || 0) + m.detonate; // "...now detonates marks"
     if (m.toLine && c.shape === 'bolt') c.shape = 'line';
   }
   return c;
@@ -12661,6 +12662,21 @@ function resolveCast(node, rank) {
       }
       i++;
     }
+  }
+
+  // ── HARMONIZE: detonate marks ── a detonating cast explodes any MARKED (vuln)
+  // foe it hits, bursting nearby enemies and consuming the mark. Set the mark up
+  // with one skill (status:{effect:'vuln'}), pop it with another for a chain combo.
+  if (c.detonate && targets.length) {
+    let boomed = false;
+    for (const e of targets.slice()) {
+      if (e.dead || !statusEffects.some(s => s.target === e && s.effect === 'vuln')) continue;
+      const burst = c.spell ? skillSpellDamage(e, c, c.detonate, rank) : skillPhysDamage(e, c.detonate, rank);
+      for (const o of enemiesNear(c.detRadius || 1, e.x, e.y)) { if (!o.dead) { total += burst; dealDamage(o, burst, true); spawnFloatingText(o.x, o.y, `💥${burst}`, '#ff8a3a'); } }
+      statusEffects = statusEffects.filter(s => !(s.target === e && s.effect === 'vuln')); // consume the mark
+      spawnParticles(e.x, e.y, '#ff8a3a', 14, 0.13); boomed = true;
+    }
+    if (boomed) { screenFlash('#ff8a3a'); sfx('boss'); }
   }
 
   if (c.lifesteal && total > 0) {
