@@ -12748,6 +12748,10 @@ function renderPanel() {
       .map((item, i) => ({ item, i }))
       .filter(({ item }) => lootFilter === 'all' || cat(item) === lootFilter)
       .sort((a, b) => {
+        // Items the class can't wield sink to the very bottom of the list.
+        const wa = (a.item.slot && !canEquipItem(a.item)) ? 1 : 0;
+        const wb = (b.item.slot && !canEquipItem(b.item)) ? 1 : 0;
+        if (wa !== wb) return wa - wb;
         const oa = a.item.slot in slotOrder ? slotOrder[a.item.slot] : 99;
         const ob = b.item.slot in slotOrder ? slotOrder[b.item.slot] : 99;
         return oa - ob;
