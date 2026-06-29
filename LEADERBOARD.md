@@ -1,7 +1,8 @@
 # Global Leaderboards
 
 Dungeon Loot has a global leaderboard shared across **everyone who plays** —
-ranking heroes by **furthest floor**, **highest level**, and **most gold**.
+ranking heroes by **furthest floor**, **highest level**, **most gold**, and
+**highest Power**.
 
 The game is still a single self-contained `index.html`. The leaderboard talks
 directly to a free [Supabase](https://supabase.com) project over its REST API.
@@ -40,8 +41,12 @@ create table if not exists public.leaderboard (
   max_floor    int  not null default 1,
   level        int  not null default 1,
   gold         int  not null default 0,
+  power        int  not null default 1,
   updated_at   timestamptz not null default now()
 );
+
+-- If you created the table before the Power board existed, add the column:
+alter table public.leaderboard add column if not exists power int not null default 1;
 
 alter table public.leaderboard enable row level security;
 
@@ -51,8 +56,8 @@ create policy "public update" on public.leaderboard for update using (true) with
 ```
 
 That's all the backend needs. Each character upserts a single row keyed by its
-name; the three boards are just that table sorted by `max_floor`, `level`, or
-`gold`.
+name; the four boards are just that table sorted by `max_floor`, `level`,
+`gold`, or `power`.
 
 ## Rotating the key
 
