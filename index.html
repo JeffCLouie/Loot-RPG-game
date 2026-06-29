@@ -4399,7 +4399,11 @@ function buySkill(id) {
   if (hpGain > 0) gains.push(`+${hpGain} max HP`);
   if (mpGain > 0) gains.push(`+${mpGain} max MP`);
   const gainStr = gains.length ? ` (${gains.join(', ')})` : '';
-  log(`✨ Learned ${node.name}${(node.max || 1) > 1 ? ` (rank ${newRank}/${node.max})` : ''}${summary ? ` — now ${summary}.` : '.'}${gainStr}`, 'important');
+  // Milestone rank reached? Shout the power spike + the perk it unlocks.
+  const ms = node.type === 'active' && SKILL_MILESTONES.find(m => m.rank === newRank);
+  const msStr = ms ? ` ${ms.pips} Milestone — power spike + ${ms.perk}!` : '';
+  if (ms) screenFlash('#ffd27a');
+  log(`✨ Learned ${node.name}${(node.max || 1) > 1 ? ` (rank ${newRank}/${node.max})` : ''}${summary ? ` — now ${summary}.` : '.'}${gainStr}${msStr}`, 'important');
   updateBars(); renderPanel(); renderSkillBar(); saveGame();
 }
 
@@ -11384,8 +11388,10 @@ function castSkillById(id) {
   if (isPlayerStunned()) { log('You are stunned and can\'t cast!'); return; }
   const cd = skillCd(id);
   if (cd > 0) { log(`⏳ ${sk.name} is recharging (${cd} more turn${cd === 1 ? '' : 's'}).`); return; }
-  // Mana Cost Reduction % (gear) lowers the price of every cast.
-  const mpCost = Math.max(1, Math.round(sk.mp * (1 - Math.min(0.6, totalStat('MCR') / 100))));
+  // Mana Cost Reduction % (gear) lowers the price of every cast; a rank-3 skill
+  // gets the ✦ Empowered discount on top.
+  const msMcr = skillRank(id) >= 3 ? 0.15 : 0;
+  const mpCost = Math.max(1, Math.round(sk.mp * (1 - Math.min(0.6, totalStat('MCR') / 100) - msMcr)));
   if (player.mp < mpCost) { log(`💧 Not enough mana for ${sk.name} — need ${mpCost} MP.`); return; }
 
   if (!runActiveSkill(id)) return; // no valid target / nothing to do
@@ -11396,8 +11402,10 @@ function castSkillById(id) {
   // AFTER runEnemyTurn so this very turn doesn't immediately tick it down.
   runEnemyTurn();
   moveQuestEntities();
-  // Cooldown Reduction % (gear) shortens the recharge (never below 1 turn).
-  setSkillCd(id, Math.max(1, Math.round(sk.cd * (1 - Math.min(0.6, totalStat('CDR') / 100)))));
+  // Cooldown Reduction % (gear) shortens the recharge (never below 1 turn); a
+  // rank-7 skill gets the ✦✦ Honed reduction on top.
+  const msCdr = skillRank(id) >= 7 ? 0.20 : 0;
+  setSkillCd(id, Math.max(1, Math.round(sk.cd * (1 - Math.min(0.6, totalStat('CDR') / 100) - msCdr))));
   updateBars();
   renderSkillBar();
   draw();
@@ -11457,9 +11465,35 @@ function spellBase(flat, perLevel) {
 // by rank, applies damage / status / heal / buff / summon, and returns true if it
 // fired (false = nothing to do, so castSkillById refunds the turn and mana).
 
-// Magnitudes grow ~12% per rank; status chance/duration and summon counts grow
-// more slowly, so a rank-10 skill is strong but not absurd.
-function rankScale(rank) { return 1 + 0.12 * ((rank || 1) - 1); }
+// ── ACTIVE-SKILL MILESTONES ──
+// Pouring points into one active pays off in jumps, not just a slow drip: ranks
+// 3 / 7 / 10 each grant a power spike PLUS a signature perk. Kept generic so it
+// applies to every data-driven active:
+//   ✦   rank 3  Empowered — extra power, casts cost less mana
+//   ✦✦  rank 7  Honed     — extra power, shorter cooldown
+//   ✦✦✦ rank 10 Mastered  — extra power, wider reach / more targets
+const SKILL_MILESTONES = [
+  { rank: 3,  pips: '✦',   perk: 'cheaper casts' },
+  { rank: 7,  pips: '✦✦',  perk: 'shorter cooldown' },
+  { rank: 10, pips: '✦✦✦', perk: 'wider reach' },
+];
+// Cumulative milestone power bump, layered on top of the steady per-rank growth.
+function milestonePower(rank) {
+  let b = 0;
+  if (rank >= 3) b += 0.15;
+  if (rank >= 7) b += 0.20;
+  if (rank >= 10) b += 0.30;
+  return b;
+}
+// Milestone pips earned so far (for the node popover rank readout).
+function milestonePips(rank) { let p = ''; for (const m of SKILL_MILESTONES) if (rank >= m.rank) p = m.pips; return p; }
+// The next milestone the skill is climbing toward (null once all are reached).
+function nextMilestone(rank) { return SKILL_MILESTONES.find(m => rank < m.rank) || null; }
+
+// Magnitudes grow ~12% per rank, with extra power-spikes at the milestone ranks;
+// status chance/duration and summon counts grow more slowly, so a rank-10 skill
+// is strong but not absurd.
+function rankScale(rank) { return (1 + 0.12 * ((rank || 1) - 1)) * (1 + milestonePower(rank)); }
 
 // Base physical magnitude for weapon actives (a normal swing's raw number, plus
 // any flat ATK passives), before per-skill multiplier and modifiers.
@@ -11530,7 +11564,17 @@ function chainTargets(first, n, range) {
 
 // The heart of the system: resolve one active node at a given rank.
 function resolveCast(node, rank) {
-  const c = node.cast; if (!c) return false;
+  let c = node.cast; if (!c) return false;
+  // ✦✦✦ Mastered (rank 10): the same cast, but reaching further and catching more
+  // foes — radius, range, chain length, target count and multi-hits all step up.
+  if (rank >= 10) {
+    c = Object.assign({}, c);
+    if (c.radius) c.radius += 1;
+    if (c.range)  c.range  += 1;
+    if (c.chain)  c.chain  += 1;
+    if (c.count)  c.count  += 1;
+    if (c.repeat) c.repeat += 1;
+  }
   const rs = rankScale(rank);
   let targets = [], center = { x: player.x, y: player.y };
 
@@ -13202,7 +13246,8 @@ function renderSkills(el) {
   if (sn) {
     const rank = skillRank(sn.id);
     const typeTxt = sn.type === 'active' ? `⚡ ACTIVE · ${sn.mp}MP · ${sn.cd}cd · ${castShapeLabel(sn.cast)}` : 'PASSIVE';
-    const rankTxt = ` <span style="color:#e8c267">${rank}/${sn.max}</span>`;
+    const pips = sn.type === 'active' ? milestonePips(rank) : '';
+    const rankTxt = ` <span style="color:#e8c267">${rank}/${sn.max}${pips ? ' ' + pips : ''}</span>`;
     const reqRows = [];
     if ((sn.lvl || 1) > 1) {
       const ok = (player.level || 1) >= sn.lvl;
@@ -13316,6 +13361,12 @@ function skillRankUpRows(node, rank) {
       const curN = Math.min(8, base + Math.floor(((rank || 1) - 1) / 4));
       const nextN = Math.min(8, base + Math.floor((rank + 1 - 1) / 4));
       if (rank === 0 || nextN > curN) rows.push(['minions', rank > 0 ? `${curN} → <b>${nextN}</b>` : `<b>${nextN}</b>`]);
+    }
+    // Dangle the next milestone as a goal — and flag it when the next point hits it.
+    const nm = nextMilestone(rank);
+    if (nm) {
+      const hit = (rank + 1) === nm.rank;
+      rows.push([`${nm.pips} rank ${nm.rank}`, hit ? `<b>power + ${nm.perk}!</b>` : nm.perk]);
     }
   }
   return rows;
