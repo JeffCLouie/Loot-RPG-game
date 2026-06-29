@@ -5091,10 +5091,14 @@ let player = { x: 5, y: 5, facing: 'left', hp: 100, maxHp: 100, mp: 60, maxMp: 6
   // food buff (set when a bowl is eaten, counts down per floor in tickBuffs).
   ingredients: {}, pantry: [], discoveredRecipes: [], foodBuff: null };
 let inventory = [];
-// The town STASH — a safe vault, completely separate from your character. Gold
-// and gear kept here are never spent at merchants and never lost on death; the
-// stash is only accessible from the Vault in town.
-let stash = { gold: 0, items: [] };
+// The town STASH — a safe vault, completely separate from your character, and
+// SHARED across every save slot: gold and gear banked by one hero can be
+// withdrawn by any other hero on this device (and, when signed in, on any device
+// on the account). It lives in its own localStorage key (STASH_KEY) rather than
+// inside each character's save, is never spent at merchants or lost on death, and
+// is only reachable from the Vault in town. `ts` is the last-write time, used to
+// pick the newest copy when syncing.
+let stash = { gold: 0, items: [], ts: 0 };
 let equipped = { head: null, chest: null, hands: null, legs: null, weapon: null, offhand: null, ring: null, amulet: null };
 let groundItems = []; // chests on the floor: { x, y } — loot is rolled when opened
 // Death drop: when you fall, your whole bag is left as a recoverable grave on the
@@ -5977,6 +5981,7 @@ document.addEventListener('click', (e) => {
 
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
+  { date: '2026-06-29', size: 'medium', v: 'Shared stash', by: 'Claude', notes: ['The town Vault is now shared across all of your save slots — gold or gear banked by one hero can be withdrawn by any other, so it doubles as account-wide storage you can pass loot between characters with.', 'Signed in? The shared stash also syncs to your account and follows you across devices.', 'Anything your existing heroes had banked is merged into the shared pool automatically, so nothing is lost.'] },
   { date: '2026-06-29', size: 'big', v: 'Auto-loot & bag selling', by: 'ASuiter89', notes: ['New ♻️ AUTO-LOOT setting (off by default): pick, per rarity, whether dropped gear is kept, auto-scrapped into materials, or auto-sold for gold — so the loot drawer stops clogging with junk.', 'Sell and Scrap now live on the bag itself: tap any loot item for per-piece Sell/Scrap buttons, or use the Sell all / Scrap all bar at the top of the LOOT drawer — no need to visit a vendor.', 'The Merchant is now buy-only and the Craftsman is forge-only; selling and salvaging moved onto the bag.', 'On top of the new difficulty gating, rarer crafting materials drop a little less often from kills — scrapping unwanted loot is a steady way to stock the high end.'] },
   { date: '2026-06-29', size: 'big', v: 'Dungeon difficulties', by: 'Claude', notes: ['Conquer the floor-25 guardian to unlock the next, deadlier difficulty at the town Dungeon Gate: Normal → Hardened → Brutal → Endless, each the same 25 floors but more powerful and bathed in deepening red.', 'Endless mode restarts at floor 1 (as deep as floor 76), rolls random bosses, has no floor cap and ramps ever harder.', 'Death penalties grow per tier — gentle on Normal, ruinous in Endless — and each difficulty conquered leaves a permanent stat scar.', 'Rarer crafting materials are gated by tier: Glimmer (Hardened), Core (Brutal), Chaos Orbs (Endless only).', 'The leaderboard now shows the difficulty with the floor and ranks harder runs above easier ones.'] },
   { date: '2026-06-29', size: 'small', v: 'Healer charges a fee', by: 'Claude', notes: ['A full rest & cure at the town healer is no longer free — it now costs gold that climbs steeply (about 28% per level) the stronger you get: a few coins early, a brutal gold sink at high levels, capped at 100k.', 'The free, cooldown-gated Health and Mana potions are unchanged, so you can still recover mid-run without paying.'] },
@@ -8200,7 +8205,7 @@ function stashDepositGold(amt) {
   stash.gold = (stash.gold || 0) + amt;
   sfx('buy');
   log(`🏦 Deposited ${amt}g into the vault. (${stash.gold}g stored)`, 'loot');
-  updateBars(); renderStash(); saveGame();
+  updateBars(); renderStash(); saveGame(); saveStash();
 }
 function stashWithdrawGold(amt) {
   amt = Math.min(stashGoldAmount(amt), stash.gold || 0);
@@ -8209,7 +8214,7 @@ function stashWithdrawGold(amt) {
   player.gold += amt;
   sfx('buy');
   log(`🏦 Withdrew ${amt}g from the vault. (${stash.gold}g stored)`, 'loot');
-  updateBars(); renderStash(); saveGame();
+  updateBars(); renderStash(); saveGame(); saveStash();
 }
 function stashDepositItem(i) {
   const item = inventory[i];
@@ -8218,7 +8223,7 @@ function stashDepositItem(i) {
   stash.items.push(item);
   sfx('equip');
   log(`🏦 Stored ${logItem(item)} in the vault.`);
-  renderStash(); renderPanel(); saveGame();
+  renderStash(); renderPanel(); saveGame(); saveStash();
 }
 function stashWithdrawItem(i) {
   const item = stash.items[i];
@@ -8228,7 +8233,7 @@ function stashWithdrawItem(i) {
   recordWardrobe(item);
   sfx('equip');
   log(`🏦 Took ${logItem(item)} from the vault.`);
-  renderStash(); renderPanel(); saveGame();
+  renderStash(); renderPanel(); saveGame(); saveStash();
 }
 
 // ── TRAINER — respec spent attribute points ──
@@ -15095,6 +15100,72 @@ function newCid() {
   return 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
 function saveCid(d) { return (d && d.player && d.player.cid) || null; }
+
+// ── Shared stash (account-wide vault) ───────────────────────────────────────
+// The stash is shared across EVERY save slot rather than living inside each
+// character's save: deposit gold or gear with one hero and any other hero can
+// withdraw it. It's persisted under its own localStorage key, and — for signed-
+// in players — mirrored to a dedicated cloud row (STASH_CLOUD_SLOT) so the pool
+// follows the account across devices. `ts` is the last-write time; sync keeps
+// whichever copy is newest (last-writer-wins, matching how per-slot saves
+// reconcile).
+const STASH_KEY = 'dungeonLoot_stash_v1';
+const STASH_CLOUD_SLOT = -1; // sentinel "slot" for the shared stash's cloud row — never a real character
+function freshStash() { return { gold: 0, items: [], ts: 0 }; }
+// Coerce an arbitrary parsed blob into a clean { gold, items, ts } stash.
+function sanitizeStash(d) {
+  const s = freshStash();
+  if (d && typeof d === 'object') {
+    s.gold = Math.max(0, Math.floor(d.gold) || 0);
+    s.items = (Array.isArray(d.items) ? d.items : []).filter(it => it && it.slot);
+    s.ts = Math.max(0, Math.floor(d.ts) || 0);
+  }
+  return s;
+}
+// Re-stamp icons and ensure an attrs block on every stashed item — the same
+// healing the bag/equipped gear gets in loadGame().
+function healStashItems() {
+  stash.items.forEach(it => { if (it.slot) it.icon = itemIcon(it); if (!it.attrs) it.attrs = {}; });
+}
+// Write the shared stash to its own key (no cloud push — callers decide that).
+function writeStashLocal() { try { localStorage.setItem(STASH_KEY, JSON.stringify(stash)); } catch (e) {} }
+// Persist after a player-driven change: stamp the write time, save locally, and
+// mirror to the account (debounced) when signed in.
+function saveStash() { stash.ts = Date.now(); writeStashLocal(); cloudScheduleStash(); }
+// One-time migration for saves made before the stash was shared: fold every
+// slot's old embedded stash into a single pool (sum gold, gather items) so no
+// banked gold or gear is lost. Carries the newest source save's ts so a freshly
+// migrated device doesn't out-rank a cloud stash that already holds real activity.
+function migrateLegacyStashes() {
+  const merged = freshStash();
+  for (const i of allLocalSlotIndices()) {
+    let raw; try { raw = localStorage.getItem(slotKey(i)); } catch (e) { continue; }
+    if (!raw) continue;
+    try {
+      const d = JSON.parse(raw);
+      const s = d && d.stash;
+      if (s && typeof s === 'object') {
+        merged.gold += Math.max(0, Math.floor(s.gold) || 0);
+        if (Array.isArray(s.items)) merged.items.push(...s.items.filter(it => it && it.slot));
+      }
+      merged.ts = Math.max(merged.ts, Math.floor(d && d.ts) || 0);
+    } catch (e) {}
+  }
+  return merged;
+}
+// Load the shared stash into the global `stash`. The first run after the upgrade
+// has no STASH_KEY yet, so we migrate the old per-character stashes into it.
+function loadStash() {
+  let raw; try { raw = localStorage.getItem(STASH_KEY); } catch (e) {}
+  if (raw) {
+    try { stash = sanitizeStash(JSON.parse(raw)); } catch (e) { stash = freshStash(); }
+  } else {
+    stash = migrateLegacyStashes();
+    writeStashLocal(); // persist so the migration only ever runs once
+  }
+  healStashItems();
+}
+
 function saveGame() {
   if (_wipingSave || _switchingSlot) return; // a slot switch / wipe is mid-flight — don't clobber the target slot
   // Don't create a save for a hero who hasn't begun (no class / no progress).
@@ -15105,8 +15176,10 @@ function saveGame() {
   if (!player.cid) player.cid = newCid();
   try {
     const data = {
+      // The stash is shared across every slot, so it is NOT part of a character's
+      // save — it's persisted separately by saveStash() under STASH_KEY.
       player, inventory, equipped, dungeonLevel, buffs, pact,
-      inTown, dungeonReturn, stash, graveSite,
+      inTown, dungeonReturn, graveSite,
       ts: Date.now(),
     };
     localStorage.setItem(slotKey(activeSlot), JSON.stringify(data));
@@ -15215,12 +15288,9 @@ function loadGame() {
       : null;
     graveMarker = null;
     inventory = (data.inventory || []).filter(it => it && it.slot); // drop legacy typeKey-only items
-    // Restore the town stash, tolerating saves that predate it.
-    stash = { gold: 0, items: [] };
-    if (data.stash && typeof data.stash === 'object') {
-      stash.gold = Math.max(0, Math.floor(data.stash.gold) || 0);
-      stash.items = (data.stash.items || []).filter(it => it && it.slot);
-    }
+    // The town stash is shared across every save slot, so it is NOT restored from
+    // this character's save. loadStash() (called once at boot) loads it from its
+    // own key and folds any per-character stashes from older saves into the pool.
     // Rebuild equipped into the new 7-slot shape; salvage any still-valid pieces into the bag.
     // Off-hand is additive: old saves simply have no off-hand, so it defaults null
     // and the salvage loop below routes any unknown-slot gear safely to the bag.
@@ -15244,12 +15314,10 @@ function loadGame() {
     // any chosen cosmetic. Gear without a recognised key heals on next access.
     inventory.forEach(it => { if (it.slot) it.icon = itemIcon(it); });
     Object.values(equipped).forEach(it => { if (it && it.slot) it.icon = itemIcon(it); });
-    stash.items.forEach(it => { if (it.slot) it.icon = itemIcon(it); });
     // Older items predate attribute affixes — give them an empty attrs block so
     // the affix/enchant code can treat every item uniformly.
     inventory.forEach(it => { if (it && !it.attrs) it.attrs = {}; });
     Object.values(equipped).forEach(it => { if (it && !it.attrs) it.attrs = {}; });
-    stash.items.forEach(it => { if (it && !it.attrs) it.attrs = {}; });
     for (const slot of VISUAL_SLOTS) {
       const seen = new Set();
       player.wardrobe[slot] = (player.wardrobe[slot] || [])
@@ -15869,9 +15937,72 @@ async function cloudDeleteSlot(slot) {
     });
   } catch (e) {}
 }
-// Synchronous best-effort flush of the active slot on tab-hide / unload.
+// Synchronous best-effort flush of the active slot (and the shared stash) on
+// tab-hide / unload.
 function cloudFlush() {
-  if (cloudEnabled() && authState.user) { try { cloudPushSlot(activeSlot, { keepalive: true }); } catch (e) {} }
+  if (cloudEnabled() && authState.user) {
+    try { cloudPushSlot(activeSlot, { keepalive: true }); } catch (e) {}
+    try { cloudPushStash({ keepalive: true }); } catch (e) {}
+  }
+}
+
+// ── Shared-stash cloud sync ─────────────────────────────────────────────────
+// The shared stash mirrors to one dedicated row per account (STASH_CLOUD_SLOT),
+// separate from the per-character slot rows. cloudReconcile() ignores it (it
+// isn't a started character save), so stashReconcile() handles it on its own:
+// newest `ts` wins, matching the per-slot last-writer-wins model.
+let cloudStashTimer = null;
+function cloudScheduleStash() {
+  if (!cloudEnabled() || !authState.user) return;
+  if (cloudStashTimer) return;
+  cloudStashTimer = setTimeout(() => { cloudStashTimer = null; cloudPushStash(); }, 3500);
+}
+// Upsert the shared stash into its dedicated cloud row. Best-effort.
+async function cloudPushStash(opts) {
+  opts = opts || {};
+  if (!cloudEnabled() || !authState.user) return false;
+  if (!opts.keepalive) await ensureToken();
+  try {
+    const res = await fetch(LB_SUPABASE_URL + '/rest/v1/saves?on_conflict=user_id,slot', {
+      method: 'POST',
+      headers: cloudRestHeaders({ 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
+      body: JSON.stringify({
+        user_id: authState.user.id, slot: STASH_CLOUD_SLOT, data: stash,
+        updated_at: new Date(stash.ts || Date.now()).toISOString(),
+      }),
+      keepalive: !!opts.keepalive,
+    });
+    return res.ok;
+  } catch (e) { return false; }
+}
+// Merge this device's shared stash with the account's. Newest ts wins; a missing
+// cloud row (or a strictly-older one) just pushes ours up. Best-effort — any
+// failure (including a build whose DB rejects the sentinel slot) simply leaves
+// the fully-working local stash untouched.
+async function stashReconcile() {
+  if (!cloudEnabled() || !authState.user) return;
+  if (!await ensureToken()) return;
+  let rows;
+  try {
+    const res = await fetch(LB_SUPABASE_URL + '/rest/v1/saves?select=data&user_id=eq.' + authState.user.id + '&slot=eq.' + STASH_CLOUD_SLOT, { headers: cloudRestHeaders() });
+    if (!res.ok) return;
+    rows = await res.json();
+  } catch (e) { return; }
+  const cloud = (rows && rows[0]) ? sanitizeStash(rows[0].data) : null;
+  const localTs = stash.ts || 0;
+  if (cloud && cloud.ts > localTs) {
+    // Cloud copy is newer — adopt it locally and refresh the Vault if it's open.
+    stash = cloud;
+    writeStashLocal();
+    healStashItems();
+    const ov = document.getElementById('town-overlay');
+    const title = document.getElementById('town-title');
+    if (ov && ov.classList.contains('open') && title && title.textContent === '🏦 Stash Vault') renderStash();
+  } else if (!cloud || localTs > cloud.ts) {
+    // Ours is newer, or the cloud has no stash yet — push ours up.
+    await cloudPushStash();
+  }
+  // Equal ts → treat as identical, nothing to do.
 }
 
 // ── Reconcile (sync) ────────────────────────────────────────────────────────
@@ -15984,6 +16115,7 @@ async function cloudReconcile() {
 async function cloudBootSync() {
   if (!cloudEnabled() || !authState.user) return;
   const r = await cloudReconcile();
+  await stashReconcile(); // sync the shared stash too (writes STASH_KEY before any reload)
   let alreadyReloaded = false;
   try { alreadyReloaded = sessionStorage.getItem(CLOUD_BOOT_RELOADED) === '1'; } catch (e) {}
   if (r.activeChanged && !alreadyReloaded) {
@@ -16097,6 +16229,7 @@ async function doLogin() {
     acctStatus('Signed in ✓ Syncing your saves…', 'ok');
     try { saveGame(); } catch (e) {}   // persist the current local game before merging
     await cloudReconcile();
+    await stashReconcile();            // merge the shared stash with the account's
     _switchingSlot = true;             // don't let the teardown save overwrite a pulled-newer slot
     location.reload();
   } catch (e) { acctStatus('Network error — please try again.', 'err'); }
@@ -16115,6 +16248,7 @@ async function doSignup() {
       acctStatus('Account created ✓ Syncing your saves…', 'ok');
       try { saveGame(); } catch (e) {}
       await cloudReconcile();
+      await stashReconcile();          // merge the shared stash with the account's
       _switchingSlot = true;           // don't let the teardown save overwrite a pulled-newer slot
       location.reload();
     } else {
@@ -16139,6 +16273,7 @@ async function doSyncNow() {
   acctStatus('Syncing…', 'busy');
   try { saveGame(); } catch (e) {}
   const r = await cloudReconcile();
+  await stashReconcile();
   if (r.activeChanged) { _switchingSlot = true; location.reload(); return; }
   acctStatus('Synced ✓ Everything is up to date.', 'ok');
 }
@@ -16227,6 +16362,10 @@ function titleSound() { toggleSound(); refreshTitleToggles(); }
 function titleZoom() { toggleZoom(); refreshTitleToggles(); }
 
 const hadSave = loadGame();
+// Load the account-wide shared stash (and, on first run, migrate any older
+// per-character stashes into the pool). It lives outside the save slots, so it
+// loads even when the active slot is empty.
+loadStash();
 // Resume in town if that's where the save left off; otherwise build the floor.
 if (inTown) { buildTown(); openTownHub(); } else generateMap();
 draw();
