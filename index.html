@@ -751,6 +751,13 @@
   .skillbar-btn.town .sb-key { color: #bfe6a8; }
   .skillbar-btn.town:active { background: #335a2a; }
   .skillbar-btn.town.disabled { background: #20271c; border-color: #34402f; color: #7a8a6c; }
+  /* Town portal charging: a swirling cyan pulse while the gate opens over a few turns. */
+  @keyframes portalCharging {
+    0%,100% { box-shadow: 0 0 6px rgba(110,200,255,0.5);  border-color: #6ec8ff; }
+    50%     { box-shadow: 0 0 15px rgba(150,220,255,0.95); border-color: #b8e6ff; }
+  }
+  .skillbar-btn.town.channeling { border-color: #6ec8ff; background: #1c3550; color: #d6ecff; animation: portalCharging 1s ease-in-out infinite; }
+  .action-btn.town-action.channeling { animation: portalCharging 1s ease-in-out infinite; }
 
   #panel-content { flex: 1; overflow-y: auto; padding: 6px; }
   #panel-content::-webkit-scrollbar { width: 4px; }
@@ -5192,28 +5199,12 @@ let floorMod = FLOOR_MODS[0];
 // sealed until the floor's hostiles are dealt with. `floorCleared` latches true
 // once the condition is met (a late mimic popping out won't re-seal you in).
 let floorCleared = false;
-// ── TOWN GATE ACCESS ── (you can't just bail to town whenever you like)
-// You may step through the town gate only when you're (#3) not in combat,
-// (#5) either on a freshly entered floor you haven't engaged or one you've
-// cleared, and (#4) the gate has finished recharging since your last visit.
-let floorEngaged = false;        // latches true once you provoke this floor's foes
-let lastTownLeaveAt = 0;         // timestamp (ms) you last stepped out of town
-const TOWN_GATE_CD_MS = 60000;   // gate recharge between town trips
-const TOWN_COMBAT_RANGE = 6;     // a foe this close (or nearer) counts as "in combat"
-// Any living, non-fleeing foe within range is actively threatening you.
-function inCombatNearby() {
-  return (enemies || []).some(e => !e.dead && !e.isGoblin &&
-    Math.max(Math.abs(e.x - player.x), Math.abs(e.y - player.y)) <= TOWN_COMBAT_RANGE);
-}
-// Resolve whether the town gate is usable right now, with a reason if not.
-function townAccess() {
-  if (inTown) return { ok: true };
-  if (inCombatNearby()) return { ok: false, reason: "You can't slip away to town with enemies bearing down on you." };
-  if (floorEngaged && !floorCleared) return { ok: false, reason: 'Clear the floor before retreating to town.' };
-  const left = TOWN_GATE_CD_MS - (Date.now() - lastTownLeaveAt);
-  if (left > 0) return { ok: false, reason: `The town gate is still recharging — ${Math.ceil(left / 1000)}s.` };
-  return { ok: true };
-}
+// ── TOWN GATE ACCESS ──
+// The town gate is no longer locked behind a combat / cooldown check — it's always
+// clickable. The restriction lives in the CHANNEL instead (see the TOWN PORTAL
+// section): opening the gate takes a few turns, and a hit mid-channel collapses it.
+// So you can begin a portal anywhere, but you still can't blink away while a pack is
+// actively beating on you.
 // Fleeing treasure goblins don't block the exit — they're a bonus chase. Every
 // other living foe (mobs, elites, bosses, quest hordes, mimics) counts.
 function hostilesRemaining() {
@@ -5281,7 +5272,7 @@ function showConquest(tier, firstTime) {
   log(`🏆 You conquered the ${thisName} dungeon!`, 'important');
 }
 function closeConquest() { const ov = document.getElementById('conquest-overlay'); if (ov) ov.classList.remove('open'); }
-function conquestToTown() { closeConquest(); enterTown(); }
+function conquestToTown() { closeConquest(); warpToTown(); }
 
 function rollFloorMod() {
   // First two floors are always normal so players learn the ropes.
@@ -6332,6 +6323,7 @@ document.addEventListener('click', (e) => {
 
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
+  { date: '2026-06-29', size: 'medium', v: 'Channeled town portal', by: 'Claude', notes: ['The town gate is no longer locked out while you’re in combat or on a cooldown — it’s clickable any time. Instead, opening it now CHANNELS a portal over 3 turns.', 'Hold out those 3 turns without being hit and the gate opens; take a single blow from a foe mid-channel and the half-formed portal shatters, so you have to start it again.', 'You can move, fight or wait while it charges — a swirling portal and a countdown over your hero show how many turns are left. Tap TOWN again to let the portal fade.'] },
   { date: '2026-06-29', size: 'medium', v: 'Every action costs a turn', by: 'Claude', notes: ['Anything you do on a floor now passes a turn, so the world keeps moving even when you can’t. Bumping a wall, the map edge, deep water, a locked door or sealed stairs all tick the clock just like the Wait button.', 'Walking into a boss’s wall of force now passes a turn too, so the barriers pinning you in crumble on their own — no more mashing the Wait button to escape the Rat King’s cage.', 'Being stunned no longer freezes the dungeon: a wasted action still lets foes act while the stun wears off. Drinking from a fountain, touching a shrine and cracking open a chest underfoot are all turns as well.'] },
   { date: '2026-06-29', size: 'big', v: 'Diablo-2-style loot drops', by: 'ASuiter89', notes: ['Loot rarity is rebalanced so you stop drowning in high-end gear: instead of rolling the rarity table several times and keeping the rarest (which buried you in oranges), each drop now makes one independent check per tier from rarest down, so a baseline drop is ~50% normal, ~21% junk, ~19% uncommon, ~6% rare, ~2% epic, ~0.6% legendary, ~0.15% unique.', 'Magic Find, your Luck and deeper floors still raise the odds — but with Diablo-2-style diminishing returns that barely move legendary/unique and hard per-tier caps, so stacking Magic Find now floods you with greens and blues rather than legendaries.', 'Tougher foes drop MORE items, not just luckier ones: every kill makes a number of independent “picks” (ordinary foes 1, elites 3, bosses 5), each either dropping nothing or one item — so a boss sprays a pile of loot while a trash mob mostly drops nothing. Elites and bosses are still guaranteed at least one piece.'] },
   { date: '2026-06-29', size: 'small', v: 'Tidier Settings menu', by: 'Claude', notes: ['The ⚙️ Settings menu is now one consistent style — every row shares the same neutral tile instead of the old jumble of red, blue and green buttons.', 'Sound, Zoom and Time gained icons, and every row’s icon now sits in the same fixed cell so the labels line up cleanly.', 'Only meaningful states still colour: New Run flashes red when armed to wipe, and Sound dims when muted.'] },
@@ -7331,7 +7323,7 @@ function generateMap() {
   // A floor you've already cleared stays open: backtracking here via the gate or
   // the up-stairs never re-imposes an unlock condition.
   floorCleared = false;
-  floorEngaged = false;
+  portalCharge = 0;   // a fresh floor cancels any half-formed town portal
   if (player.clearedFloors && player.clearedFloors[dungeonLevel]) {
     floorCleared = true;
   } else if (hostilesRemaining() === 0) {
@@ -7874,20 +7866,64 @@ function buyPact(i, floors) {
 // TOWN  (safe hub with NPC services + dungeon gate)
 // ══════════════════════════════════════════
 
-// Warp to town from anywhere in the dungeon, opening the town hub MENU. Dungeon
-// progress is untouched — re-enter through the Dungeon Gate to drop back in on
-// any floor you've reached, so you can backtrack to grind levels and gear.
-// (If you're already in town, this just reopens the hub menu.)
-function enterTown() {
+// ── TOWN PORTAL ──
+// The town gate is always usable, but it doesn't whisk you away instantly: opening
+// the portal CHANNELS over a few turns. Each turn you go untouched it charges; the
+// moment a foe lands a blow on you mid-channel, the portal collapses and you have to
+// start it over. So you can bail to town from anywhere — but not while a pack is
+// actively wailing on you.
+let portalCharge = 0;                 // turns of channel left before the gate opens; 0 = idle
+const PORTAL_CHANNEL_TURNS = 3;       // turns to fully open the portal
+function portalChanneling() { return portalCharge > 0; }
+
+// The TOWN button / hotkey / floor-1 up-stair entry point. In town it just reopens
+// the hub menu; in the dungeon it begins the channel, or cancels one already underway.
+function startPortalChannel() {
   if (inTown) { openTownHub(); return; }
-  const acc = townAccess();
-  if (!acc.ok) { log('🏰 ' + acc.reason); sfx('denied'); return; }
+  if (portalCharge > 0) {             // a second tap lets the half-formed portal fade
+    portalCharge = 0;
+    log('🌀 You let the town portal fade.');
+    sfx('denied');
+    updateBars(); renderSkillBar(); draw();
+    return;
+  }
+  portalCharge = PORTAL_CHANNEL_TURNS;
+  log(`🌀 You begin opening a town portal — hold out ${PORTAL_CHANNEL_TURNS} turns without being hit.`, 'important');
+  sfx('teleport');
+  updateBars(); renderSkillBar(); draw();
+}
+
+// The guarded TOWN button / hotkey handler (re-entrancy wrapper installed below).
+function enterTown() { startPortalChannel(); }
+
+// Run once at the end of every dungeon turn. With a channel active: a hit this turn
+// shatters it; otherwise it charges, and on the final tick the gate opens for real.
+function advancePortalChannel(hpBefore) {
+  if (portalCharge <= 0) return;
+  if (player.hp < hpBefore) {          // took a hit while channeling → it breaks
+    portalCharge = 0;
+    log('💥 A blow shatters your half-formed town portal!', 'important');
+    sfx('denied');
+    return;
+  }
+  portalCharge--;
+  if (portalCharge <= 0) { warpToTown(); return; }
+  log(`🌀 The town portal swirls — ${portalCharge} turn${portalCharge === 1 ? '' : 's'} to go.`);
+}
+
+// Whisk the hero to town and open the hub MENU. Dungeon progress is untouched —
+// re-enter through the Dungeon Gate to drop back in on any floor you've reached, so
+// you can backtrack to grind levels and gear. Reached when a channel finishes, and
+// used directly by the post-conquest "Return to Town" button (no channel there).
+function warpToTown() {
+  portalCharge = 0;
+  if (inTown) { openTownHub(); return; }
   closeShop(); closeMystic(); closeTown();
   dungeonReturn = dungeonLevel;
   bossHazards = [];
   buildTown();
   sfx('stairs');
-  log('🏰 You step through a shimmering gate into the safety of town.', 'important');
+  log('🏰 The portal opens and you step through into the safety of town.', 'important');
   log('Pick a service from the menu. The 🌀 Dungeon Gate takes you back below.');
   updateBars();
   openTownHub();
@@ -8072,7 +8108,6 @@ function townBack() {
 function leaveTown() {
   if (!inTown) { closeTown(); return; }
   const f = Math.max(1, dungeonReturn || player.maxFloor || dungeonLevel || 1);
-  lastTownLeaveAt = Date.now();
   enterDungeonAt(f);
 }
 
@@ -11320,6 +11355,30 @@ function draw() {
   // its equipped weapon type at its side.
   drawHeroSprite(px, py, tw, th, scale);
 
+  // Town-portal channel: a DawnLike swirling-portal tile pulses over the hero while
+  // the gate charges, with the remaining-turn count floating above so the progress
+  // (and the "don't get hit" stakes) read at a glance.
+  if (portalChanneling()) {
+    const pulse = 0.55 + 0.35 * Math.sin(Date.now() / 180);
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, Math.min(1, pulse));
+    if (!(spriteReady && drawSpriteC('feat_portal', px + tw / 2, py + th / 2, tw))) {
+      drawEmoji('🌀', px + tw / 2, py + th / 2, tw * 0.8);
+    }
+    ctx.restore();
+    ctx.save();
+    ctx.font = `bold ${Math.round(tw * 0.34)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const ny = py - th * 0.18;
+    ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+    ctx.lineWidth = 3;
+    ctx.strokeText(portalCharge, px + tw / 2, ny);
+    ctx.fillStyle = '#bfe8ff';
+    ctx.fillText(portalCharge, px + tw / 2, ny);
+    ctx.restore();
+  }
+
   // Player status effects are surfaced as full-screen coloured halos (see
   // updateHaloVignette), not as little icons over the hero sprite.
 
@@ -11897,8 +11956,10 @@ function move(dx, dy) {
   // is one you've already been through), so there's never an unlock condition.
   if (tile === 12) {
     // On floor 1 of a difficulty there's no floor above — the "up" stair is the
-    // way back to TOWN (same access rules as the town gate).
-    if (displayFloor() === 1) { player.x = nx; player.y = ny; enterTown(); return; }
+    // way back to TOWN, so reaching it opens a town portal (same channel as the
+    // TOWN button). Call the unguarded helper directly: move() is already inside
+    // the re-entrancy guard, so the wrapped enterTown() would no-op here.
+    if (displayFloor() === 1) { player.x = nx; player.y = ny; startPortalChannel(); return; }
     dungeonLevel--;
     statusEffects = [];
     tickBuffs();
@@ -13057,11 +13118,13 @@ function minionAttack(m, e, ranged) {
 // Run every nearby living enemy's turn once, bailing if the floor changes
 // mid-turn (e.g. a death warps you to the previous floor and rebuilds it).
 function runEnemyTurn() {
+  // Snapshot HP before the foes (and any boss hazards) act so the town-portal
+  // channel can tell whether the hero took a hit this turn — a hit breaks it.
+  const portalHpBefore = player.hp;
   // Every passed turn (move, attack, or skill) ticks down active-skill cooldowns
   // and any transient combat buffs (War Cry, Sanctuary, …).
   if (player.skillCds) for (const k in player.skillCds) if (player.skillCds[k] > 0) player.skillCds[k]--;
   if (player.potionCd > 0) player.potionCd--;
-  if (!floorEngaged && inCombatNearby()) floorEngaged = true;
   for (const k in combatBuffs) { const b = combatBuffs[k]; if (b && b.t > 0) { b.t--; if (b.t <= 0) delete combatBuffs[k]; } }
   // Summoned minions act on the hero's turn — before foes, so they can soak and
   // strike — then count down their lifespan.
@@ -13073,6 +13136,9 @@ function runEnemyTurn() {
     if (dist <= 8) enemyMove(e);
   });
   if (floorSerial === serial) tickBossHazards();
+  // Charge (or shatter) a town portal the hero is channelling, now that every foe
+  // and hazard has had its swing this turn.
+  advancePortalChannel(portalHpBefore);
   // The shared potion cooldown (and every active-skill cooldown) was just ticked
   // above, so refresh the skill bar here — the one place every turn-passing action
   // funnels through. Without this, plain moves / melee swings / waiting decrement
@@ -14181,14 +14247,19 @@ function updateBars() {
     }
   }
 
-  // Town gate: grey it out (with the reason in the tooltip) when you can't leave.
+  // Town gate: always usable now — tapping it opens a town portal that charges over
+  // a few turns. Show the countdown on the button (and a cyan pulse) while it opens.
   const townBtn = document.querySelector('.town-action');
   if (townBtn) {
-    const acc = townAccess();
-    townBtn.classList.toggle('disabled', !acc.ok);
-    townBtn.dataset.tip = acc.ok
-      ? "<div class='ht-name'>🏰 Town</div><div class='ht-line'>Step through the gate to the safe hub — shops, forge, healer, stash.</div>"
-      : "<div class='ht-name'>🏰 Town</div><div class='ht-line'>" + acc.reason + "</div>";
+    const ch = portalChanneling();
+    townBtn.classList.remove('disabled');
+    townBtn.classList.toggle('channeling', ch);
+    const lbl = townBtn.querySelector('.action-label');
+    // Keep the two parts on one line (nbsp) so the countdown never wraps to a lone row.
+    if (lbl) lbl.textContent = ch ? `TOWN ${portalCharge}` : 'TOWN';
+    townBtn.dataset.tip = ch
+      ? `<div class='ht-name'>🌀 Town Portal</div><div class='ht-line'>Opening… hold ${portalCharge} more turn${portalCharge === 1 ? '' : 's'} without being hit. Tap again to cancel.</div>`
+      : "<div class='ht-name'>🏰 Town Portal</div><div class='ht-line'>Open a portal to the safe hub. It charges over a few turns and breaks if you're hit.</div>";
   }
 
   // The danger halo (low HP + status effects) refreshes immediately here, and
@@ -14947,14 +15018,17 @@ function renderSkillBar() {
     </button>`;
   }).join('');
   // Desktop only: a TOWN button on the far right of the bar (the header's TOWN
-  // button moved here, keyed 0). Greyed when the gate is currently sealed.
-  // Hidden on touch — mobile keeps TOWN in the bottom control bar, unchanged.
+  // button moved here, keyed 0). Always usable — opening it channels a town portal
+  // over a few turns, so while it's charging the button shows the countdown and a
+  // cyan pulse. Hidden on touch — mobile keeps TOWN in the bottom control bar.
   let townBtn = '';
   if (!touchUI()) {
-    const acc = townAccess();
-    const townTip = `<div class='ht-name'>🏰 Town</div><div class='ht-line'>Step through the gate to the safe hub — shops, forge, healer, stash.</div><div class='ht-sub'>press 0</div>`;
-    townBtn = `<button class="skillbar-btn town${acc.ok ? '' : ' disabled'}" ${hoverTip(townTip)} onclick="enterTown()">
-      <span class="sb-key">0</span><span class="sb-icon">${dlIcon('ui_gate',24) || '🏰'}</span><span class="sb-info">TOWN</span>
+    const ch = portalChanneling();
+    const townTip = ch
+      ? `<div class='ht-name'>🌀 Town Portal</div><div class='ht-line'>Opening… hold ${portalCharge} more turn${portalCharge === 1 ? '' : 's'} without being hit.</div><div class='ht-sub'>press 0 to cancel</div>`
+      : `<div class='ht-name'>🏰 Town Portal</div><div class='ht-line'>Open a portal to the safe hub. It charges over a few turns and breaks if you're hit.</div><div class='ht-sub'>press 0</div>`;
+    townBtn = `<button class="skillbar-btn town${ch ? ' channeling' : ''}" ${hoverTip(townTip)} onclick="enterTown()">
+      <span class="sb-key">0</span><span class="sb-icon">${dlIcon('ui_gate',24) || '🏰'}</span><span class="sb-info">${ch ? portalCharge : 'TOWN'}</span>
     </button>`;
   }
   bar.innerHTML = healBtn + manaBtn + skillsHtml + townBtn;
@@ -17219,7 +17293,7 @@ function pulseLoop(ts) {
   const hasShrine = Object.keys(shrineData).length > 0;
   const juicing = particles.length || tracers.length || Date.now() < shakeUntil;
   const liquid = mapData.some(row => row && row.some(t => t === 6 || t === 7));
-  if ((inTown || merchant || mystic || hasFountain || hasShrine || quest || graveMarker || floatingTexts.length || statusEffects.length || hasElite || juicing || liquid || floorCleared) && ts - lastPulse > 30) { lastPulse = ts; draw(); }
+  if ((inTown || merchant || mystic || hasFountain || hasShrine || quest || graveMarker || floatingTexts.length || statusEffects.length || hasElite || juicing || liquid || floorCleared || portalChanneling()) && ts - lastPulse > 30) { lastPulse = ts; draw(); }
   // Animate the danger halo every frame — it's a DOM overlay, so it must keep
   // pulsing even when the canvas is idle (e.g. standing still at low HP).
   updateHaloVignette();
