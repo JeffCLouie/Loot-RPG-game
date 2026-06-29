@@ -11502,6 +11502,13 @@ function runEnemyTurn() {
     if (dist <= 8) enemyMove(e);
   });
   if (floorSerial === serial) tickBossHazards();
+  // The shared potion cooldown (and every active-skill cooldown) was just ticked
+  // above, so refresh the skill bar here — the one place every turn-passing action
+  // funnels through. Without this, plain moves / melee swings / waiting decrement
+  // the cooldown in state but leave the bar showing a stale number (or greyed out
+  // as "not ready" when it has actually recharged), since those paths only call
+  // draw(), never renderSkillBar().
+  renderSkillBar();
 }
 
 // ── ENEMY AI ──
