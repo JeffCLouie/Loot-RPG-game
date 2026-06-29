@@ -1168,18 +1168,23 @@
   .class-card .cc-detail { font-size: 9px; color: #8a7d63; line-height: 1.5; }
 
   /* ── CHARACTER NAME + LEADERBOARD + SAVE SLOTS overlays (share the class-overlay look) ── */
-  #name-overlay, #lb-overlay, #slots-overlay, #account-overlay {
+  #name-overlay, #lb-overlay, #slots-overlay, #account-overlay, #newrun-overlay {
     position: fixed; inset: 0; background: rgba(0,0,0,0.85);
     display: none; align-items: center; justify-content: center;
     z-index: 410; padding: 16px;
   }
-  #name-overlay.open, #lb-overlay.open, #slots-overlay.open, #account-overlay.open { display: flex; }
-  #name-modal, #lb-modal, #slots-modal, #account-modal {
+  #name-overlay.open, #lb-overlay.open, #slots-overlay.open, #account-overlay.open, #newrun-overlay.open { display: flex; }
+  #name-modal, #lb-modal, #slots-modal, #account-modal, #newrun-modal {
     background: #16120c; border: 2px solid #9f7a3f; border-radius: 10px;
     width: 100%; max-width: 400px; max-height: 88vh; overflow-y: auto;
     -webkit-overflow-scrolling: touch; padding: 16px;
     box-shadow: 0 0 30px rgba(255,200,100,0.3);
   }
+  /* New-run confirmation sits above the title overlay. */
+  #newrun-overlay { z-index: 460; }
+  #newrun-modal { max-width: 360px; }
+  .ov-btn.danger { background: #2b1512; border-color: #7a3a2c; color: #e0997f; }
+  .ov-btn.danger:active { background: #3a1e16; }
 
   /* Save-slot rows: each holds a character summary (or "empty") plus actions. */
   .slot-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
@@ -2208,9 +2213,25 @@
 <div id="slots-overlay" onclick="if(event.target===this)closeSlots()">
   <div id="slots-modal">
     <span class="ov-title">💾 Save Slots</span>
-    <div class="ov-sub">Keep a few heroes on the go. Load a slot to play it, or start a new adventure in an empty one — your current game is saved automatically.</div>
+    <div class="ov-sub">Keep as many heroes as you like. Load a slot to play it, or start a new adventure in a fresh slot — your current game is saved automatically.</div>
     <div class="slot-list" id="slot-list"></div>
     <div class="lb-foot"><button class="ov-btn" onclick="closeSlots()">Close</button></div>
+  </div>
+</div>
+
+<!-- New Run confirmation (title screen). Starting a new run reuses the CURRENT
+     save slot and wipes the hero in it, so we confirm and point players at Save
+     Slots if they actually want a second character in a fresh slot. -->
+<div id="newrun-overlay" onclick="if(event.target===this)closeNewRun()">
+  <div id="newrun-modal">
+    <span class="ov-title">↻ Start a New Run?</span>
+    <div class="ov-sub">This starts over <b>in your current save slot</b> (<span id="newrun-slot">Slot 1</span>) and <b>permanently deletes</b> the hero saved there. This can't be undone.</div>
+    <div class="ov-sub">Want to keep this hero and start a <i>second</i> one? Use <b>Save Slots</b> and pick a fresh slot instead — nothing gets wiped.</div>
+    <button class="ov-btn" onclick="openSlotsFromNewRun()">💾 Open Save Slots</button>
+    <div class="lb-foot" style="display:flex;gap:8px;">
+      <button class="ov-btn acct-btn-alt" onclick="closeNewRun()">Cancel</button>
+      <button class="ov-btn danger" onclick="confirmTitleNewRun()">Wipe &amp; Start Over</button>
+    </div>
   </div>
 </div>
 
@@ -5350,7 +5371,7 @@ function showPlayTime() {
   const bodyEl = document.getElementById('playtime-body');
   const rows = [];
   let total = 0;
-  for (let i = 0; i < SLOT_COUNT; i++) {
+  for (const i of allLocalSlotIndices()) {
     const s = slotSummary(i);
     if (!s) continue;
     // Prefer the live in-memory counter for the slot we're actively playing.
@@ -13596,13 +13617,36 @@ const SAVE_KEY = 'dungeonLoot_save_v1';
 // original single-save key so any existing game is adopted as the first slot
 // with no migration; the rest get a suffixed key. The active slot is the one
 // that auto-saves and loads, and is remembered across reloads.
-const SLOT_COUNT = 10;
 const ACTIVE_SLOT_KEY = 'dungeonLoot_activeSlot';
 function slotKey(i) { return i === 0 ? SAVE_KEY : SAVE_KEY + '_s' + i; }
+// Save slots are unbounded — addressed by index 0, 1, 2, … The slots menu shows
+// every occupied slot plus one fresh "New Game" row, so there's no fixed cap.
+// Scan localStorage for every slot key that currently holds a save.
+function allLocalSlotIndices() {
+  const out = [];
+  try {
+    for (let k = 0; k < localStorage.length; k++) {
+      const key = localStorage.key(k);
+      if (key === SAVE_KEY) out.push(0);
+      else if (key && key.indexOf(SAVE_KEY + '_s') === 0) {
+        const n = parseInt(key.slice((SAVE_KEY + '_s').length), 10);
+        if (n > 0 && Number.isFinite(n)) out.push(n);
+      }
+    }
+  } catch (e) {}
+  out.sort((a, b) => a - b);
+  return out;
+}
+// Lowest slot index not present in the given Set of used indices.
+function lowestFreeSlot(used) {
+  let i = 0;
+  while (used.has(i)) i++;
+  return i;
+}
 let activeSlot = (function () {
   try {
     const n = parseInt(localStorage.getItem(ACTIVE_SLOT_KEY), 10);
-    if (n >= 0 && n < SLOT_COUNT) return n;
+    if (n >= 0) return n;
   } catch (e) {}
   return 0;
 })();
@@ -13628,12 +13672,22 @@ function saveStarted(d) {
   const p = d.player;
   return !!(p.class || (p.level > 1) || (p.maxFloor > 1) || (p.gold > 0));
 }
+// Stable per-character id, minted once when a hero is first saved. Lets cloud
+// sync tell "a newer version of this character" apart from "a different
+// character that happens to share a slot index", so conflicting heroes relocate
+// to free slots instead of overwriting each other.
+function newCid() {
+  return 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+function saveCid(d) { return (d && d.player && d.player.cid) || null; }
 function saveGame() {
   if (_wipingSave || _switchingSlot) return; // a slot switch / wipe is mid-flight — don't clobber the target slot
   // Don't create a save for a hero who hasn't begun (no class / no progress).
   // This is the "save file before the game is even started" that otherwise gets
   // stamped with a fresh ts and pushed over real cloud saves on a new device.
   if (!saveStarted({ player })) return;
+  // Give every started hero a stable id the first time it's saved.
+  if (!player.cid) player.cid = newCid();
   try {
     const data = {
       player, inventory, equipped, dungeonLevel, buffs, pact,
@@ -13905,7 +13959,7 @@ function slotTimeAgo(ts) {
 // reload is the simplest reliable reset — init() rebuilds all state from the
 // chosen slot (or starts a fresh hero if it's empty).
 function activateSlot(i) {
-  if (i < 0 || i >= SLOT_COUNT || i === activeSlot) return;
+  if (i < 0 || i === activeSlot) return;
   // Flush the hero we're leaving into ITS OWN slot first — activeSlot still
   // points at it here, so this lands in the right place and preserves the latest
   // progress. THEN freeze saves so the unload autosaves that fire during reload
@@ -13937,24 +13991,18 @@ function closeSlots() {
 function renderSlots() {
   const list = document.getElementById('slot-list');
   if (!list) return;
+  // Show every slot that holds a real character, then one trailing row to spin up
+  // a fresh hero. Slots are unbounded, so the list grows as you add heroes. If the
+  // active slot is a brand-new unsaved hero it has no summary yet — it becomes the
+  // trailing "new" row rather than a duplicate entry.
+  const occupied = allLocalSlotIndices().filter(i => slotSummary(i));
+  const used = new Set(occupied);
+  const freshSlot = slotSummary(activeSlot) ? lowestFreeSlot(used) : activeSlot;
   let html = '';
-  for (let i = 0; i < SLOT_COUNT; i++) {
+  for (const i of occupied) {
     const s = slotSummary(i);
     const isActive = i === activeSlot;
     const badge = isActive ? '<span class="slot-badge">PLAYING</span>' : '';
-    if (!s) {
-      // Empty slot — offer to start a fresh hero here.
-      html += `<div class="slot-row empty${isActive ? ' active' : ''}">
-        <div class="slot-head">
-          <span class="slot-num">SLOT ${i + 1}</span>${badge}
-          <span class="slot-name muted">Empty</span>
-        </div>
-        <div class="slot-actions">
-          <button class="slot-btn" onclick="newGameInSlot(${i})">＋ New Game</button>
-        </div>
-      </div>`;
-      continue;
-    }
     const icon = s.cls ? CLASSES[s.cls].icon : '🧙';
     const who = escapeHtml(s.name || 'Adventurer');
     const where = s.inTown ? 'In Town' : ('Floor ' + s.floor);
@@ -13974,6 +14022,18 @@ function renderSlots() {
       <div class="slot-actions">${playBtn}${delBtn}</div>
     </div>`;
   }
+  // One trailing row to start a brand-new hero in the next free slot.
+  const newActive = freshSlot === activeSlot;
+  const newBadge = newActive ? '<span class="slot-badge">PLAYING</span>' : '';
+  html += `<div class="slot-row empty${newActive ? ' active' : ''}">
+    <div class="slot-head">
+      <span class="slot-num">SLOT ${freshSlot + 1}</span>${newBadge}
+      <span class="slot-name muted">${newActive ? 'Empty' : 'New Character'}</span>
+    </div>
+    <div class="slot-actions">
+      <button class="slot-btn" onclick="newGameInSlot(${freshSlot})">＋ New Game</button>
+    </div>
+  </div>`;
   list.innerHTML = html;
 }
 
@@ -13981,7 +14041,7 @@ function renderSlots() {
 // wiped first (the slot list only shows ＋ New Game on empty slots, so this
 // path is reached on empties), then we boot into it — init() shows name entry.
 async function newGameInSlot(i) {
-  if (i < 0 || i >= SLOT_COUNT) return;
+  if (i < 0) return;
   // Preserve the hero we're leaving in its own slot first — unless we're starting
   // fresh in the slot we're currently playing, in which case that hero is being
   // discarded on purpose.
@@ -14361,10 +14421,15 @@ function cloudFlush() {
 }
 
 // ── Reconcile (sync) ────────────────────────────────────────────────────────
-// Pull every cloud slot, then per slot take whichever side has the newer save
-// (by the save's own `ts`): cloud-newer is written into the local cache, and
-// local-newer (or cloud-missing) is pushed up. Returns { activeChanged } so the
-// caller can reload into a freshly-pulled active slot.
+// Merge this device's slots with the account so NOTHING is ever overwritten by a
+// different character. The cloud's slot layout is the shared source of truth: a
+// hero is identified by its stable id (cid, or its slot index for legacy saves
+// made before ids). Same id on both sides → keep the newer version at the cloud's
+// slot. A hero the cloud doesn't have yet (a different character that happens to
+// collide on a slot index) is appended to the lowest free slot and pushed up, so
+// e.g. signing in on a second device with its own slots 1–2 lands them in slots
+// 3–4 and the cloud ends up holding all four. Returns { activeChanged } so the
+// caller can reload when the active slot's contents moved.
 async function cloudReconcile() {
   const result = { activeChanged: false };
   if (!cloudEnabled() || !authState.user) return result;
@@ -14375,35 +14440,85 @@ async function cloudReconcile() {
     if (!res.ok) throw new Error('HTTP ' + res.status);
     rows = await res.json();
   } catch (e) { return result; }
-  const cloud = {};
-  (rows || []).forEach(r => { if (r && typeof r.slot === 'number' && r.data) cloud[r.slot] = r.data; });
-  const uploads = [];
-  for (let i = 0; i < SLOT_COUNT; i++) {
-    let local = null;
-    try { const raw = localStorage.getItem(slotKey(i)); if (raw) local = JSON.parse(raw); } catch (e) {}
-    const c = cloud[i];
-    const cts = (c && c.ts) || 0;
-    const lts = (local && local.ts) || 0;
-    const cStarted = saveStarted(c);
-    const lStarted = saveStarted(local);
-    const pullCloud = () => {
-      try { localStorage.setItem(slotKey(i), JSON.stringify(c)); if (i === activeSlot) result.activeChanged = true; } catch (e) {}
-    };
-    if (cStarted && !lStarted) {
-      // Cloud has a real character but this device's slot is blank/unstarted —
-      // always take the cloud copy, no matter how fresh the local ts looks. This
-      // is the fix for a new device clobbering existing account saves.
-      pullCloud();
-    } else if (lStarted && !cStarted) {
-      // This device has the only real save for the slot — push it up.
-      uploads.push(cloudPushSlot(i));
-    } else if (c && cts > lts) {
-      // Both real (or both blank): cloud holds the newer save — pull it down.
-      pullCloud();
-    } else if (local && lStarted && lts > cts) {
-      // Both real: local is the newer save — push it up.
-      uploads.push(cloudPushSlot(i));
+
+  // Started saves on each side, keyed by slot index (blank/unstarted are ignored).
+  const cloud = {}, local = {};
+  (rows || []).forEach(r => { if (r && typeof r.slot === 'number' && saveStarted(r.data)) cloud[r.slot] = r.data; });
+  const localSlots = allLocalSlotIndices();
+  localSlots.forEach(i => {
+    try { const raw = localStorage.getItem(slotKey(i)); if (raw) { const d = JSON.parse(raw); if (saveStarted(d)) local[i] = d; } } catch (e) {}
+  });
+
+  const idOf = (d, slot) => saveCid(d) ? ('cid:' + saveCid(d)) : ('slot:' + slot);
+
+  // 1) Anchor every cloud character at its cloud slot.
+  const assign = {};         // final layout: slot -> chosen save data
+  const cloudIds = {};       // identity key -> cloud slot
+  for (const s of Object.keys(cloud).map(Number)) {
+    assign[s] = cloud[s];
+    cloudIds[idOf(cloud[s], s)] = s;
+  }
+
+  // 2) Fold in each local character. Same id as a cloud char → keep the newer
+  //    version at the cloud's slot. A legacy (id-less) cloud save in the same
+  //    slot is treated as an older copy of the same hero. Anything else is a new
+  //    character for the account and gets appended to the lowest free slot.
+  const used = new Set(Object.keys(assign).map(Number));
+  const localDest = {};      // local slot -> where that hero ended up
+  const newcomers = [];
+  for (const i of localSlots) {
+    const l = local[i];
+    if (!l) continue;
+    const key = idOf(l, i);
+    if (key in cloudIds) {
+      const cs = cloudIds[key];
+      localDest[i] = cs;
+      if ((l.ts || 0) > (assign[cs].ts || 0)) assign[cs] = l;
+    } else if (!saveCid(l) && cloud[i]) {
+      // Local is a legacy (id-less) save, so its slot index is its only identity.
+      // The cloud's save in this same slot is the same hero carried forward (it may
+      // have gained an id on another device since). Newest wins; either way the
+      // cloud's id is carried onto the result so the hero is never duplicated.
+      localDest[i] = i;
+      if ((l.ts || 0) > (cloud[i].ts || 0)) {
+        if (saveCid(cloud[i]) && l.player) l.player.cid = saveCid(cloud[i]);
+        assign[i] = l;
+      }
+    } else {
+      newcomers.push(i);
     }
+  }
+  for (const i of newcomers) {
+    const slot = lowestFreeSlot(used);
+    used.add(slot);
+    assign[slot] = local[i];
+    localDest[i] = slot;
+  }
+
+  // 3) Apply. Cloud characters never move, so no cloud row is ever deleted — we
+  //    only add or update. Write the local cache first (cloudPushSlot reads it),
+  //    clear stale local copies left behind by a moved hero, then push any slot
+  //    whose cloud copy differs.
+  const sameSave = (a, b) => !!a && !!b && (a.ts || 0) === (b.ts || 0) && saveCid(a) === saveCid(b);
+  const assignedSlots = new Set(Object.keys(assign).map(Number));
+  for (const i of localSlots) {
+    if (local[i] && !assignedSlots.has(i)) {
+      try { localStorage.removeItem(slotKey(i)); if (i === activeSlot) result.activeChanged = true; } catch (e) {}
+    }
+  }
+  const uploads = [];
+  for (const i of assignedSlots) {
+    const occ = assign[i];
+    if (!sameSave(local[i], occ)) {
+      try { localStorage.setItem(slotKey(i), JSON.stringify(occ)); if (i === activeSlot) result.activeChanged = true; } catch (e) {}
+    }
+    if (!sameSave(cloud[i], occ)) uploads.push(cloudPushSlot(i));
+  }
+  // If the hero we're actively playing moved to a new slot, follow it so the
+  // reload lands back on that character rather than an emptied slot.
+  if (localDest[activeSlot] != null && localDest[activeSlot] !== activeSlot) {
+    try { localStorage.setItem(ACTIVE_SLOT_KEY, String(localDest[activeSlot])); } catch (e) {}
+    result.activeChanged = true;
   }
   try { await Promise.all(uploads); } catch (e) {}
   return result;
@@ -14635,7 +14750,23 @@ function titlePlay() {
   if (!player.name && !player.class) showNameEntry();
   else if (!player.class) showClassPick();
 }
-function titleNewRun() { closeTitle(); wipeSave(); }   // wipeSave() reloads into a fresh hero
+// New Run from the title screen wipes the CURRENT save slot, so confirm first
+// (mirrors the in-game Settings ▸ New Run guard) and point players at Save Slots
+// if they actually want a second hero in a fresh slot.
+function titleNewRun() {
+  const ov = document.getElementById('newrun-overlay');
+  if (!ov) { wipeSave(); return; }
+  const label = document.getElementById('newrun-slot');
+  if (label) {
+    const s = slotSummary(activeSlot);
+    const who = s ? (s.name || 'Adventurer') : null;
+    label.textContent = 'Slot ' + (activeSlot + 1) + (who ? ' · ' + who : '');
+  }
+  ov.classList.add('open');
+}
+function closeNewRun() { const ov = document.getElementById('newrun-overlay'); if (ov) ov.classList.remove('open'); }
+function openSlotsFromNewRun() { closeNewRun(); openSlots(); }
+function confirmTitleNewRun() { closeNewRun(); closeTitle(); wipeSave(); }   // wipeSave() reloads into a fresh hero
 function titleSound() { toggleSound(); refreshTitleToggles(); }
 function titleZoom() { toggleZoom(); refreshTitleToggles(); }
 
