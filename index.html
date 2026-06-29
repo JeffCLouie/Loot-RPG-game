@@ -1614,6 +1614,18 @@
     background: #221a10; color: #d9b87a; box-shadow: none;
   }
   .title-play.secondary:active { background: #2f2415; }
+  /* Achievement showcase — a wrapping row of progress badges (earned = gold). */
+  #title-achievements { margin-top: 18px; padding-top: 16px; border-top: 1px solid #2a2113; }
+  #title-achievements .ta-head { font-size: 11px; color: #b9a98a; letter-spacing: 1px; margin-bottom: 9px; }
+  #title-achievements .ta-head b { color: var(--gold); }
+  #title-achievements .ta-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 9px; }
+  .ta-badge { display: flex; flex-direction: column; align-items: center; gap: 3px; width: 56px; }
+  .ta-badge .ta-ic { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    border: 1px solid var(--frame); background: #1b160f; color: var(--gold); }
+  .ta-badge.earned .ta-ic { box-shadow: 0 0 10px rgba(255,190,90,0.35); }
+  .ta-badge.locked .ta-ic { color: #4d483f; border-color: #2a2620; background: #15120c; }
+  .ta-badge .ta-nm { font-size: 8px; line-height: 1.15; text-align: center; color: #9a8f70; }
+  .ta-badge.earned .ta-nm { color: #d9c39a; }
   /* Settings grid — mirrors the ⚙️ dropdown's actions as tappable tiles. */
   #title-settings {
     display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
@@ -2573,6 +2585,8 @@
     <div id="title-hero" style="display:none"></div>
     <button class="title-play" id="title-play" onclick="titlePlay()">⚔️ ENTER THE DUNGEON</button>
     <button class="title-play secondary" id="title-newrun" style="display:none" onclick="titleNewRun()">↻ Start a New Run</button>
+    <!-- Achievement showcase — progress badges, filled by renderTitleAchievements(). -->
+    <div id="title-achievements" style="display:none"></div>
     <div id="title-settings">
       <button class="title-set-btn" onclick="showHowTo()"><span class="tsb-ic"><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 1 1 4.4 3.4c-.8.5-1.5 1.1-1.5 2.1"/><line x1="12" y1="17" x2="12" y2="17.01"/></svg></span><span class="tsb-lbl">How to Play</span></button>
       <button class="title-set-btn" onclick="openAccount()"><span class="tsb-ic"><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg></span><span class="tsb-lbl">Cloud Save</span></button>
@@ -16895,6 +16909,34 @@ function refreshTitleToggles() {
   const zl = document.getElementById('t-zoom-lbl');
   if (zl) zl.textContent = 'Zoom: ' + (ZOOM_LABELS[zoomLevel] || 'Wide');
 }
+// ── ACHIEVEMENTS ── derived purely from the active hero's save state (deepest
+// floor, level, gold, difficulties conquered), so no event hooks are needed.
+// Each test(p) returns whether it's earned; the title shows them as badges.
+const ACHIEVEMENTS = [
+  { id: 'firststeps', name: 'First Steps', desc: 'Reach dungeon floor 2.',  svg: '<line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>', test: p => (p.maxFloor || 1) >= 2 },
+  { id: 'delver',     name: 'Delver',      desc: 'Reach floor 5.',          svg: '<polyline points="6 9 12 15 18 9"/><polyline points="6 4 12 10 18 4"/>', test: p => (p.maxFloor || 1) >= 5 },
+  { id: 'spelunker',  name: 'Spelunker',   desc: 'Reach floor 10.',         svg: '<polyline points="6 9 12 15 18 9"/><polyline points="6 4 12 10 18 4"/>', test: p => (p.maxFloor || 1) >= 10 },
+  { id: 'abyssal',    name: 'Abyss Walker',desc: 'Reach floor 20.',         svg: '<polyline points="6 9 12 15 18 9"/><polyline points="6 4 12 10 18 4"/>', test: p => (p.maxFloor || 1) >= 20 },
+  { id: 'seasoned',   name: 'Seasoned',    desc: 'Reach hero level 10.',    svg: '<polygon points="12 2 15 9 22 9 16.5 13.5 18.5 21 12 16.5 5.5 21 7.5 13.5 2 9 9 9"/>', test: p => (p.level || 1) >= 10 },
+  { id: 'veteran',    name: 'Veteran',     desc: 'Reach hero level 25.',    svg: '<polygon points="12 2 15 9 22 9 16.5 13.5 18.5 21 12 16.5 5.5 21 7.5 13.5 2 9 9 9"/>', test: p => (p.level || 1) >= 25 },
+  { id: 'hoarder',    name: 'Gold Hoarder',desc: 'Hold 2,000 gold at once.',svg: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/>', test: p => (p.gold || 0) >= 2000 },
+  { id: 'conqueror',  name: 'Conqueror',   desc: 'Conquer a difficulty.',   svg: '<circle cx="12" cy="8" r="6"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/>', test: p => (p.diffCleared || 0) >= 1 },
+  { id: 'champion',   name: 'Champion',    desc: 'Conquer all difficulties.',svg: '<path d="M3 18h18l-2-9-4 4-3-6-3 6-4-4z"/>', test: p => (p.diffCleared || 0) >= 3 },
+];
+function renderTitleAchievements() {
+  const wrap = document.getElementById('title-achievements');
+  if (!wrap) return;
+  const p = (typeof player === 'object' && player) || {};
+  if (!p.class) { wrap.style.display = 'none'; return; }  // nothing to show on a fresh save
+  let earned = 0;
+  const cells = ACHIEVEMENTS.map(a => {
+    const got = !!a.test(p); if (got) earned++;
+    const ic = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + a.svg + '</svg>';
+    return `<div class="ta-badge ${got ? 'earned' : 'locked'}" title="${a.name} — ${a.desc}"><span class="ta-ic">${ic}</span><span class="ta-nm">${a.name}</span></div>`;
+  }).join('');
+  wrap.innerHTML = `<div class="ta-head">Achievements <b>${earned}</b> / ${ACHIEVEMENTS.length}</div><div class="ta-row">${cells}</div>`;
+  wrap.style.display = '';
+}
 function showTitle() {
   const ov = document.getElementById('title-overlay');
   if (!ov) return;
@@ -16940,6 +16982,7 @@ function showTitle() {
       hero.style.display = 'none';
     }
   }
+  renderTitleAchievements();
   refreshTitleToggles();
   ov.classList.add('open');
 }
