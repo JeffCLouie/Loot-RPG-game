@@ -4380,36 +4380,36 @@ function buildTree(rows, kind, ascId) {
 const SKILL_TREES = {
   warrior: {
     passive: buildTree([
-      [ {id:'w_p00',name:'Hardiness',icon:'sk_w_hardiness',root:true,fx:{maxHpPct:0.03},desc:'Increases your maximum health.'},
-        {id:'w_p01',name:'Bloodthirst',icon:'sk_w_bloodlust',root:true,fx:{lifesteal:0.01},cfx:{lifesteal:0.015},cond:'lowhp',desc:'Grants lifesteal, increased while wounded below half health (cond lowhp).'},
-        {id:'w_p02',name:'Heavy Hands',icon:'sk_w_brawn',root:true,fx:{dmgDealt:0.012},cfx:{dmgDealt:0.022},cond:'2h',desc:'Increases damage, sharply more while wielding a two-handed weapon (cond 2h).'},
-        {id:'w_p03',name:'Keen Eye',icon:'sk_w_focus',root:true,fx:{crit:0.008},desc:'Increases critical strike chance.'},
-        {id:'w_p04',name:'Shield Drill',icon:'sk_w_shieldwall',root:true,fx:{block:1},cfx:{block:1.5},cond:'shield',desc:'Increases block chance, more while a shield is equipped (cond shield).'} ],
-      [ {id:'w_p10',name:'Iron Skin',icon:'sk_w_ironskin',req:['w_p00'],fx:{dmgTaken:0.015},desc:'Reduces all damage taken.'},
-        {id:'w_p11',name:'Rending Wounds',icon:'sk_w_rage',req:['w_p01'],fx:{dmgDealt:0.012},cfx:{lowHpDmg:0.035},cond:'lowhp',desc:'Increases damage, amplified while wounded below half health (cond lowhp).'},
-        {id:'w_p12',name:'Cleaver',icon:'sk_w_cleaver',req:['w_p02'],fx:{critDmg:0.05},cfx:{critDmg:0.075},cond:'2h',desc:'Increases critical damage, amplified with a two-handed weapon (cond 2h).'},
-        {id:'w_p13',name:'Precision',icon:'sk_w_temper',req:['w_p03'],fx:{critDmg:0.06},desc:'Increases critical damage.'},
-        {id:'w_p14',name:'Thick Hide',icon:'sk_w_thickhide',req:['w_p04'],fx:{dmgTaken:0.013},cfx:{dmgTaken:0.018},cond:'shield',desc:'Reduces damage taken, more while a shield is equipped (cond shield).'} ],
-      [ {id:'w_p20',name:'Recovery',icon:'sk_w_recovery',req:['w_p10'],fx:{hpRegen:1.5},desc:'Restores health each turn.'},
-        {id:'w_p21',name:'Sanguine Fervor',icon:'sk_w_sanguine',req:['w_p11'],fx:{lifesteal:0.012},cfx:{zeal:0.03},cond:'lowhp',desc:'Grants lifesteal and damage that scales with missing health (cond lowhp).'},
-        {id:'w_p22',name:'Brutality',icon:'sk_w_brutality',req:['w_p12'],reqAny:['w_p11'],fx:{dmgDealt:0.015},cfx:{dmgDealt:0.025},cond:'2h',desc:'Increases damage, greatly more with a two-handed weapon (cond 2h).'},
-        {id:'w_p23',name:'Executioner',icon:'sk_w_executioner',req:['w_p13'],fx:{lowHpDmg:0.035},desc:'Deals more damage to wounded foes.'},
-        {id:'w_p24',name:'Spiked Boss',icon:'sk_w_spikes',req:['w_p14'],fx:{reflect:0.04},cfx:{reflect:0.05},cond:'shield',desc:'Reflects melee damage, more while a shield is equipped (cond shield).'} ],
-      [ {id:'w_p30',name:'Juggernaut',icon:'sk_w_juggernaut',req:['w_p20'],fx:{maxHpPct:0.035,dr:0.6},desc:'Greatly increases maximum health and adds armor.'},
-        {id:'w_p31',name:'Bloodlust',icon:'sk_w_bloodlust',req:['w_p21'],fx:{lifesteal:0.013},cfx:{lowHpDmg:0.04},cond:'lowhp',desc:'Increases lifesteal, with extra damage on wounded foes (cond lowhp).'},
-        {id:'w_p32',name:'Crushing Blows',icon:'sk_w_crushing',req:['w_p22'],fx:{dmgDealt:0.015,pen:0.02},cfx:{dmgDealt:0.025},cond:'2h',desc:'Increases damage and penetration, far more with a two-handed weapon (cond 2h).'},
-        {id:'w_p33',name:'Warlord',icon:'sk_w_warlord',req:['w_p23'],reqAny:['w_p22'],fx:{crit:0.008,critDmg:0.06},desc:'Increases critical chance and critical damage.'},
-        {id:'w_p34',name:'Resilience',icon:'sk_w_resilience',req:['w_p24'],fx:{dodge:0.01},cfx:{block:1.5},cond:'shield',desc:'Increases dodge, with extra block while a shield is equipped (cond shield).'} ],
-      [ {id:'w_p40',name:'Bulwark',icon:'sk_w_bulwark',req:['w_p30'],fx:{maxHpPct:0.04,dmgTaken:0.018},desc:'Greatly increases max health and damage reduction.'},
-        {id:'w_p41',name:'Berserker\'s Pact',icon:'sk_w_berserkersoul',req:['w_p31'],fx:{dmgDealt:0.022,lifesteal:0.014,dmgTaken:-0.014},cfx:{lowHpDmg:0.04},cond:'lowhp',desc:'Greatly increases damage and lifesteal, even more while below half health, but you take more damage (cond lowhp).'},
-        {id:'w_p42',name:'Titanic Might',icon:'sk_w_titanic',req:['w_p32'],fx:{critDmg:0.06},cfx:{critDmg:0.08,pen:0.02},cond:'2h',desc:'Greatly increases critical damage and penetration with a two-handed weapon (cond 2h).'},
-        {id:'w_p43',name:'Conqueror',icon:'sk_w_conqueror',req:['w_p33'],fx:{critDmg:0.07,lowHpDmg:0.035},desc:'Increases critical damage and damage to wounded foes.'},
-        {id:'w_p44',name:'Shield Wall',icon:'sk_w_shieldwall',req:['w_p34'],fx:{dmgTaken:0.014},cfx:{block:1.5,dr:1},cond:'shield',desc:'Greatly increases block and damage reduction while a shield is equipped (cond shield).'} ],
-      [ {id:'w_p50',name:'Immortal',icon:'sk_w_immortal',req:['w_p40'],pts:{tree:'passive',n:12},fx:{maxHpPct:0.04,hpRegen:2,dmgDealt:-0.012},desc:'Massively increases max health and regeneration but slightly lowers your damage; spend 12 points in this tree first.'},
-        {id:'w_p51',name:'Undying Rage',icon:'sk_w_fury',req:['w_p41'],pts:{tree:'passive',n:12},fx:{zeal:0.035,lifesteal:0.015},cfx:{lowHpDmg:0.04},cond:'lowhp',desc:'Surges damage and lifesteal as your health drops, exploding below half health (cond lowhp); spend 12 points in this tree first.'},
-        {id:'w_p52',name:'Titan\'s Grip',icon:'sk_w_titanic',req:['w_p42'],pts:{tree:'passive',n:12},cfx:{dmgDealt:0.022},cond:'2h',flag:'titangrip',unlock:'titangrip',desc:'Lets you wield an off-hand even with a two-handed weapon and adds damage while wielding a two-hander (cond 2h); spend 12 points in this tree first.'},
-        {id:'w_p53',name:'Avatar of War',icon:'sk_w_avatarwar',req:['w_p43'],pts:{tree:'passive',n:12},fx:{critDmg:0.08,lowHpDmg:0.04,pen:0.02},desc:'Massively increases critical damage, execute power, and penetration; spend 12 points in this tree first.'},
-        {id:'w_p54',name:'Living Aegis',icon:'sk_w_livingaegis',req:['w_p44'],pts:{tree:'passive',n:12},fx:{dmgTaken:0.014},cfx:{block:1.5,reflect:0.05},cond:'shield',flag:'aegis',unlock:'aegis',desc:'Raises your block chance cap to 75% and reflects damage while a shield is equipped (cond shield).'} ]
+      [ {id:'w_p00',name:'Toughened',icon:'sk_w_hardiness',root:true,fx:{maxHpPct:0.03},desc:'+3% maximum health per rank.'},
+        {id:'w_p01',name:'Bloodscent',icon:'sk_w_bloodlust',root:true,charge:{id:'fury',max:5,fx:{dmgDealt:0.04}},trigger:{on:'kill',effect:{charge:'fury'}},fx:{dmgDealt:0.006},desc:'Defines FURY (+4% damage per stack, max 5). Slaying a foe grants a Fury charge. +0.6% damage per rank.'},
+        {id:'w_p02',name:'Heavy Hands',icon:'sk_w_brawn',root:true,fx:{dmgDealt:0.01},cfx:{dmgDealt:0.022},cond:'2h',desc:'+1% damage per rank, +2.2% more while wielding a two-handed weapon.'},
+        {id:'w_p03',name:'Keen Eye',icon:'sk_w_focus',root:true,fx:{crit:0.008},desc:'+0.8% critical strike chance per rank.'},
+        {id:'w_p04',name:'Shield Guard',icon:'sk_w_shieldwall',root:true,charge:{id:'guard',max:5,fx:{dr:1}},trigger:{on:'block',effect:{charge:'guard'}},fx:{block:0.6},desc:'Defines GUARD (+1% damage reduction per stack, max 5). Blocking a hit grants a Guard charge. +0.6% block per rank.'} ],
+      [ {id:'w_p10',name:'Iron Skin',icon:'sk_w_ironskin',req:['w_p00'],fx:{dmgTaken:0.015},desc:'-1.5% damage taken per rank.'},
+        {id:'w_p11',name:'Rampage',icon:'sk_w_rage',req:['w_p01'],trigger:{on:'kill',effect:{buff:{id:'dmgUp',dur:3,mag:0.15}}},fx:{dmgDealt:0.008},desc:'+0.8% damage per rank; a kill grants +15% damage for 3 turns.'},
+        {id:'w_p12',name:'Cleaving Force',icon:'sk_w_cleaver',req:['w_p02'],cfx:{dmgDealt:0.025},cond:'2h',mod:{skill:'w_a02',radius:1},desc:'+2.5% damage with a two-hander per rank; your Cleave strikes a wider area.'},
+        {id:'w_p13',name:'Bloodletter',icon:'sk_w_temper',req:['w_p03'],trigger:{on:'crit',effect:{charge:'fury'}},fx:{critDmg:0.05},desc:'+5% crit damage per rank; critical hits grant a Fury charge.'},
+        {id:'w_p14',name:'Bulwark Stance',icon:'sk_w_thickhide',req:['w_p04'],fx:{dr:0.7},cfx:{dr:1},cond:'shield',desc:'+0.7% damage reduction per rank, +1% more with a shield.'} ],
+      [ {id:'w_p20',name:'Last Wind',icon:'sk_w_recovery',req:['w_p10'],trigger:{on:'lowhp',effect:{buff:{id:'shield',dur:3,mag:45},chance:0.5}},fx:{hpRegen:1.5},desc:'+1.5 HP regen per rank; falling below 25% HP may raise a protective shield.'},
+        {id:'w_p21',name:'Blood Frenzy',icon:'sk_w_sanguine',req:['w_p11'],fx:{lifesteal:0.008},cfx:{lifesteal:0.015},cond:'lowhp',desc:'Heal 0.8% of damage per rank, +1.5% more while below half health.'},
+        {id:'w_p22',name:'Brutality',icon:'sk_w_brutality',req:['w_p12'],fx:{critDmg:0.05},cfx:{critDmg:0.075},cond:'2h',desc:'+5% crit damage per rank, +7.5% more with a two-hander.'},
+        {id:'w_p23',name:'Executioner',icon:'sk_w_executioner',req:['w_p13'],fx:{lowHpDmg:0.04},desc:'+4% damage to wounded foes per rank.'},
+        {id:'w_p24',name:'Spite',icon:'sk_w_spikes',req:['w_p14'],fx:{reflect:0.04},cfx:{reflect:0.05},cond:'shield',trigger:{on:'block',effect:{damage:{flat:6,perLvl:0.5}}},desc:'Reflect 4% of melee per rank (+5% with a shield); blocking smites the attacker.'} ],
+      [ {id:'w_p30',name:'Juggernaut',icon:'sk_w_juggernaut',req:['w_p20'],fx:{maxHpPct:0.035,dr:0.6},desc:'+3.5% max HP and +0.6% damage reduction per rank.'},
+        {id:'w_p31',name:'Unquenchable',icon:'sk_w_bloodlust',req:['w_p21'],trigger:{on:'kill',effect:{charge:'fury',amt:2}},fx:{lifesteal:0.01},desc:'Heal 1% of damage per rank; kills now grant 2 Fury charges.'},
+        {id:'w_p32',name:'Crushing Blows',icon:'sk_w_crushing',req:['w_p22'],fx:{dmgDealt:0.015,pen:0.02},cfx:{dmgDealt:0.025},cond:'2h',desc:'+1.5% damage & +2% pen per rank, +2.5% more with a two-hander.'},
+        {id:'w_p33',name:'Battle Trance',icon:'sk_w_warlord',req:['w_p23'],reqAny:['w_p13'],charge:{id:'fury',max:5,fx:{crit:0.015,critDmg:0.02}},fx:{crit:0.006},desc:'Each Fury charge ALSO grants +1.5% crit and +2% crit damage. +0.6% crit per rank.'},
+        {id:'w_p34',name:'Aegis Training',icon:'sk_w_shieldwall',req:['w_p24'],fx:{block:1,dr:0.6},cfx:{block:1.5},cond:'shield',desc:'+1% block & +0.6% DR per rank, +1.5% block with a shield.'} ],
+      [ {id:'w_p40',name:'Immovable',icon:'sk_w_bulwark',req:['w_p30'],fx:{maxHpPct:0.04,dmgTaken:0.016},desc:'+4% max HP and -1.6% damage taken per rank.'},
+        {id:'w_p41',name:'Carnage',icon:'sk_w_rage',req:['w_p31'],fx:{dmgDealt:0.015},cfx:{lowHpDmg:0.04},cond:'lowhp',desc:'+1.5% damage per rank, +4% vs wounded foes while below half health.'},
+        {id:'w_p42',name:'Titanic Might',icon:'sk_w_titanic',req:['w_p32'],fx:{critDmg:0.04},cfx:{critDmg:0.08,pen:0.02},cond:'2h',desc:'+4% crit damage per rank, +8% crit damage & +2% pen with a two-hander.'},
+        {id:'w_p43',name:'Killing Spree',icon:'sk_w_focus',req:['w_p33'],trigger:{on:'kill',effect:{buff:{id:'critUp',dur:3,mag:0.15}}},fx:{crit:0.008},desc:'+0.8% crit per rank; kills grant +15% crit for 3 turns.'},
+        {id:'w_p44',name:'Shield Wall',icon:'sk_w_bulwark',req:['w_p34'],fx:{dmgTaken:0.014},cfx:{block:1.5,dr:1},cond:'shield',desc:'-1.4% damage taken per rank; +1.5% block & +1% DR with a shield.'} ],
+      [ {id:'w_p50',name:'Juggernaut’s Resolve',icon:'sk_w_immortal',req:['w_p40'],keystone:true,pts:{tree:'passive',n:12},fx:{maxHpPct:0.2},trigger:{on:'lowhp',effect:{buff:{id:'defUp',dur:2,mag:0.4},chance:1}},desc:'KEYSTONE: +20% maximum health; dropping below 25% HP grants 40% damage reduction for 2 turns.'},
+        {id:'w_p51',name:'Berserker’s Pact',icon:'sk_w_berserkersoul',req:['w_p41'],keystone:true,pts:{tree:'passive',n:12},fx:{dmgDealt:0.25,lifesteal:0.12,dmgTaken:-0.12},cfx:{lowHpDmg:0.4},cond:'lowhp',desc:'KEYSTONE: +25% damage and 12% lifesteal (and +40% vs wounded foes while below half HP) — but you take 12% more damage.'},
+        {id:'w_p52',name:'Titan’s Grip',icon:'sk_w_titanic',req:['w_p42'],keystone:true,pts:{tree:'passive',n:12},flag:'titangrip',unlock:'titangrip',cfx:{dmgDealt:0.15},cond:'2h',desc:'KEYSTONE: wield an off-hand even with a two-handed weapon (its stats count 60%); +15% damage with a two-hander.'},
+        {id:'w_p53',name:'Bloodbath',icon:'sk_w_avatarwar',req:['w_p43'],keystone:true,pts:{tree:'passive',n:12},charge:{id:'fury',max:8,fx:{dmgDealt:0.03}},trigger:{on:'kill',effect:{heal:0.1}},desc:'KEYSTONE: Fury cap +3 and each charge grants +3% more damage; kills heal 10% maximum HP.'},
+        {id:'w_p54',name:'Living Aegis',icon:'sk_w_livingaegis',req:['w_p44'],keystone:true,pts:{tree:'passive',n:12},flag:'aegis',unlock:'aegis',cfx:{block:15,reflect:0.3},cond:'shield',trigger:{on:'block',effect:{damage:{flat:10,perLvl:1}}},desc:'KEYSTONE: your block-chance cap rises to 75%; with a shield, +15% block and 30% reflect, and blocking smites the attacker.'} ]
     ], 'passive'),
     active: buildTree([
       [ {id:'w_a00',name:'Brace',icon:'sk_wa_brace',root:true,mp:8,cd:4,cast:{shape:'self',buff:[{id:'shield',dur:5,mag:50},{id:'defUp',dur:5,mag:0.25}]},desc:'Hunker down for a defensive shield and damage reduction.'},
@@ -4429,17 +4429,17 @@ const SKILL_TREES = {
         {id:'w_a24',name:'Shield Charge',icon:'sk_wa_charge',req:['w_a14'],mp:12,cd:6,cast:{shape:'blast',range:5,radius:2,wpn:1.6,status:{effect:'stun',dur:2,chance:1},buff:[{id:'shield',dur:5,mag:70}]},desc:'Charge a foe to stun it and raise a protective shield.'} ],
       [ {id:'w_a30',name:'Warstomp',icon:'sk_wa_warstomp',req:['w_a20'],mp:14,cd:6,cast:{shape:'nova',radius:3,wpn:1.6,knockback:2,status:{effect:'stun',dur:2,chance:0.8}},desc:'Stomp the earth to knock back and stun all around you.'},
         {id:'w_a31',name:'Blood Frenzy',icon:'sk_wa_warcry',req:['w_a21'],mp:14,cd:7,cast:{shape:'self',buff:[{id:'dmgUp',dur:7,mag:0.4},{id:'lifestealUp',dur:7,mag:0.15}]},desc:'Enter a rage boosting damage and lifesteal as you fight.'},
-        {id:'w_a32',name:'Whirlwind',icon:'sk_wa_whirl',req:['w_a22'],mp:15,cd:5,cast:{shape:'nova',radius:2,wpn:1.7,repeat:2},desc:'Spin furiously, striking everything around you twice.'},
+        {id:'w_a32',name:'Whirlwind',icon:'sk_wa_whirl',req:['w_a22'],mp:15,cd:5,syn:{skill:'w_p22',per:0.05},cast:{shape:'nova',radius:2,wpn:1.7,repeat:2},desc:'Spin furiously, striking everything around you twice.'},
         {id:'w_a33',name:'Hook',icon:'sk_wa_hook',req:['w_a23'],mp:12,cd:5,cast:{shape:'bolt',range:7,wpn:2,pull:true,crit:true,status:{effect:'vuln',dur:3,chance:1}},desc:'Yank a distant foe to you with a vicious crit.'},
         {id:'w_a34',name:'Rally',icon:'sk_wa_rally',req:['w_a24'],mp:14,cd:7,cast:{shape:'self',buff:[{id:'shield',dur:8,mag:120},{id:'thorns',dur:8,mag:50},{id:'defUp',dur:8,mag:0.3}]},desc:'Plant a banner granting a shield and reflective thorns.'} ],
       [ {id:'w_a40',name:'Unbreakable',icon:'sk_wa_brace',req:['w_a30'],mp:20,cd:9,cast:{shape:'self',buff:[{id:'shield',dur:8,mag:180},{id:'defUp',dur:8,mag:0.5},{id:'regen',dur:8,mag:12}]},desc:'Become a living wall with an immense shield and regeneration.'},
         {id:'w_a41',name:'Reaping Swing',icon:'sk_wa_reaping',req:['w_a31'],mp:18,cd:5,cast:{shape:'cleave',wpn:2.2,lifesteal:0.3,execute:0.3},desc:'A wide reaping cleave that drains life and executes the weak.'},
-        {id:'w_a42',name:'Colossus Smash',icon:'sk_wa_colossus',req:['w_a32'],mp:18,cd:7,cast:{shape:'nova',radius:3,wpn:2.6,status:{effect:'vuln',dur:4,chance:1},knockback:2},desc:'A devastating shockwave that shatters and stuns all foes.'},
+        {id:'w_a42',name:'Colossus Smash',icon:'sk_wa_colossus',req:['w_a32'],mp:18,cd:7,syn:{skill:'w_p32',per:0.05},cast:{shape:'nova',radius:3,wpn:2.6,status:{effect:'vuln',dur:4,chance:1},knockback:2},desc:'A devastating shockwave that shatters and stuns all foes.'},
         {id:'w_a43',name:'Executioner\'s Strike',icon:'sk_wa_impale',req:['w_a33'],mp:16,cd:6,cast:{shape:'line',range:6,wpn:2.6,crit:true,execute:0.35,status:{effect:'vuln',dur:3,chance:1}},desc:'A guaranteed-crit line that pierces and executes wounded foes.'},
         {id:'w_a44',name:'Bulwark Aura',icon:'sk_wa_banner',req:['w_a34'],mp:18,cd:8,cast:{shape:'self',buff:[{id:'shield',dur:9,mag:160},{id:'thorns',dur:9,mag:70},{id:'dodgeUp',dur:9,mag:0.2}]},desc:'Raise an aura granting a vast shield and heavy thorns.'} ],
       [ {id:'w_a50',name:'Avatar',icon:'sk_wa_avatar',req:['w_a40'],mp:30,cd:12,cast:{shape:'self',buff:[{id:'shield',dur:10,mag:260},{id:'defUp',dur:10,mag:0.6},{id:'dmgUp',dur:10,mag:0.5},{id:'regen',dur:10,mag:16}]},desc:'Transform into an unstoppable titan with a colossal shield and surging power.'},
         {id:'w_a51',name:'Apocalypse',icon:'sk_wa_apocalypse',req:['w_a41'],mp:28,cd:8,cast:{shape:'melee',wpn:2.4,repeat:3,lifesteal:0.35,execute:0.3},desc:'A storm of bloody strikes hitting three times, draining heavy life and executing the wounded.'},
-        {id:'w_a52',name:'Cataclysm',icon:'sk_wa_cataclysm',req:['w_a42'],mp:34,cd:11,cast:{shape:'nova',radius:4,wpn:3.4,knockback:2,status:{effect:'stun',dur:3,chance:0.8}},desc:'A titanic two-handed quake that obliterates everything around you.'},
+        {id:'w_a52',name:'Cataclysm',icon:'sk_wa_cataclysm',req:['w_a42'],mp:34,cd:11,syn:{skill:'w_p42',per:0.04},cast:{shape:'nova',radius:4,wpn:3.4,knockback:2,status:{effect:'stun',dur:3,chance:0.8}},desc:'A titanic two-handed quake that obliterates everything around you.'},
         {id:'w_a53',name:'Decapitate',icon:'sk_wa_titanleap',req:['w_a43'],mp:24,cd:9,cast:{shape:'blast',range:7,radius:2,wpn:3,crit:true,execute:0.4,status:{effect:'vuln',dur:4,chance:1}},desc:'Leap to a foe with a guaranteed crit that executes all but bosses.'},
         {id:'w_a54',name:'War Machine',icon:'sk_wa_warmachine',req:['w_a44'],mp:30,cd:12,cast:{shape:'self',buff:[{id:'shield',dur:12,mag:300},{id:'thorns',dur:12,mag:110},{id:'defUp',dur:12,mag:0.5},{id:'regen',dur:12,mag:18}]},desc:'Become an impregnable fortress with an immense shield, thorns, and relentless regeneration.'} ]
     ], 'active'),
@@ -4803,7 +4803,9 @@ function skillBonus(key) {
     if (n.fx && n.fx[key]) sum += n.fx[key] * r;
     if (n.cfx && n.cfx[key] && condMet(n.cond)) sum += n.cfx[key] * r;
   }
-  return sum;
+  // Active combat charges (Frenzy/Power/…) feed the SAME formulas: their per-stack
+  // bonus × current stacks rides on top of the flat/conditional passives.
+  return sum + chargeBonus(key);
 }
 // Total ranks spent in a given tree of the current class (for "spend N points
 // here to unlock" keystone gates).
@@ -4859,6 +4861,104 @@ function dualWieldMult() {
     }
   }
   return 0;
+}
+// ══════════════════════════════════════════
+// SKILL ENGINE — charges · triggers · synergies · transforms · keystones
+// The mechanics layer that makes passives game-changing instead of stat bumps.
+// A skill node may carry, beyond fx/cfx:
+//   charge:{id,max,fx}         defines a stacking combat charge (per-stack fx)
+//   trigger:{on,effect,chance} fires on a combat event (kill/crit/dodge/block/hit/lowhp/cast)
+//   syn:[{skill,per}]          D2 synergy: this ACTIVE's damage +per × hard points in `skill`
+//   mod:{skill,...}            transform a specific ACTIVE's cast (pierce/radius/pull/status/…)
+//   kflag:'name'               a keystone rule-flag read at a specific combat site
+// ══════════════════════════════════════════
+// Transient combat charges — generated by triggered passives, spent as bonuses.
+// Not saved; wiped on floor enter / death so they're a per-fight resource.
+let skillCharges = {};
+function chargeCount(id) { return skillCharges[id] || 0; }
+function clearCharges() { skillCharges = {}; }
+// Is charge `id` defined by an owned node? (Charges only exist if their notable is
+// learned.) Multiple nodes may define the same charge — each adds its own per-stack
+// fx (a synergy), and the highest declared `max` sets the cap.
+function chargeMax(id) {
+  let max = 0;
+  for (const n of classSkillTree()) if (n.charge && n.charge.id === id && skillRank(n.id) > 0) max = Math.max(max, n.charge.max || 5);
+  return max;
+}
+function gainCharge(id, amt) {
+  const max = chargeMax(id); if (!max) return;
+  const before = skillCharges[id] || 0;
+  skillCharges[id] = Math.min(max, before + (amt || 1));
+  if (skillCharges[id] > before) spawnFloatingText(player.x, player.y - 0.3, `${id.toUpperCase()} ${skillCharges[id]}`, '#ffd27a');
+}
+// Charge bonuses folded into a passive key: each owned charge node adds its
+// per-stack fx × current (capped) stacks. This is how charges feed combat.
+function chargeBonus(key) {
+  let sum = 0;
+  if (!player.skills) return 0;
+  for (const n of classSkillTree()) {
+    if (n.charge && n.charge.fx && n.charge.fx[key] && skillRank(n.id) > 0) {
+      sum += n.charge.fx[key] * Math.min(n.charge.max || 5, chargeCount(n.charge.id));
+    }
+  }
+  return sum;
+}
+// Transient "primed" flags (e.g. next hit is a guaranteed crit), set by triggers.
+let skillPrimed = {};
+// Fire every owned triggered passive listening for `event`. ctx may carry {enemy}.
+function fireSkillTrigger(event, ctx) {
+  if (!player.skills) return;
+  for (const n of classSkillTree()) {
+    const t = n.trigger;
+    if (!t || t.on !== event || skillRank(n.id) < 1) continue;
+    const fx = t.effect || {};
+    if (fx.chance != null && Math.random() >= fx.chance) continue;
+    if (fx.charge) gainCharge(fx.charge, fx.amt || 1);
+    if (fx.buff) applyBuff(fx.buff.id, fx.buff.dur, fx.buff.mag);
+    if (fx.heal) { const got = Math.min(player.maxHp - player.hp, Math.round(player.maxHp * fx.heal)); if (got > 0) { player.hp += got; spawnFloatingText(player.x, player.y, `+${got}`, '#7fffaa'); } }
+    if (fx.mana) { const got = Math.min(player.maxMp - player.mp, Math.round(player.maxMp * fx.mana)); if (got > 0) { player.mp += got; } }
+    if (fx.nextCrit) skillPrimed.crit = true;
+    if (fx.damage && ctx && ctx.enemy && !ctx.enemy.dead) {
+      const d = Math.max(1, Math.round((fx.damage.flat || 0) + player.level * (fx.damage.perLvl || 0)));
+      dealDamage(ctx.enemy, d, false); spawnFloatingText(ctx.enemy.x, ctx.enemy.y, `${d}`, '#ffcc66');
+    }
+  }
+}
+// D2-style synergy multiplier for an ACTIVE: 1 + Σ(per × hard points in `skill`).
+function synergyMult(node) {
+  if (!node || !node.syn) return 1;
+  let m = 1;
+  for (const s of (Array.isArray(node.syn) ? node.syn : [node.syn])) m += (s.per || 0) * skillRank(s.skill);
+  return m;
+}
+// Keystone rule-flag — true if any owned node declares it (read at specific sites).
+function keystoneFlag(name) {
+  for (const n of classSkillTree()) if (n.kflag === name && skillRank(n.id) > 0) return true;
+  return false;
+}
+// Apply owned skill TRANSFORMS to an active's cast (returns a copy), letting a
+// passive reshape a specific ability. Each mod targets one active by id.
+function applyCastMods(node, cast) {
+  let c = cast;
+  for (const n of classSkillTree()) {
+    const m = n.mod;
+    if (!m || skillRank(n.id) < 1 || (m.skill && m.skill !== node.id)) continue;
+    c = Object.assign({}, c);
+    if (m.radius)   c.radius = (c.radius || 0) + m.radius;
+    if (m.range)    c.range = (c.range || 0) + m.range;
+    if (m.repeat)   c.repeat = (c.repeat || 1) + m.repeat;
+    if (m.chain)    c.chain = (c.chain || 0) + m.chain;
+    if (m.pull)     c.pull = true;
+    if (m.knockback)c.knockback = (c.knockback || 0) + m.knockback;
+    if (m.lifesteal)c.lifesteal = (c.lifesteal || 0) + m.lifesteal;
+    if (m.execute)  c.execute = Math.max(c.execute || 0, m.execute);
+    if (m.crit)     c.crit = true;
+    if (m.wpn)      c.wpn = (c.wpn || 0) + m.wpn;
+    if (m.spell)    c.spell = (c.spell || 0) + m.spell;
+    if (m.status)   c.status = m.status;
+    if (m.toLine && c.shape === 'bolt') c.shape = 'line';
+  }
+  return c;
 }
 // Spell-damage multiplier from spell passives + gear + transient spell buffs.
 function spellPowerMult() { return 1 + skillBonus('spell') + buffMag('spellUp') + totalStat('SPELLPWR') / 100; }
@@ -9120,8 +9220,8 @@ function drawTownNpcs(offX, offY, tw, th, scale) {
 
 function spawnEnemies() {
   enemies = [];
-  // Summoned minions and transient combat buffs don't carry between floors.
-  minions = []; combatBuffs = {};
+  // Summoned minions, transient combat buffs and skill charges don't carry between floors.
+  minions = []; combatBuffs = {}; clearCharges();
   const isBossFloor = dungeonLevel % 5 === 0;
   let count = isBossFloor
     ? 1 + Math.min(9, Math.floor(dungeonLevel / 5))   // boss + minions, capped so deep Endless boss floors aren't a wall of 40 foes
@@ -11788,6 +11888,7 @@ function applyIncomingMods(dmg) {
   if (Math.random() < Math.min(blockCap, (totalStat('BLOCK') + skillBonus('block')) / 100)) {
     dmg = Math.max(1, Math.round(dmg * 0.5));
     spawnFloatingText(player.x, player.y - 0.3, 'BLOCK', '#cfe0ff');
+    fireSkillTrigger('block', {}); // on-block procs (e.g. retaliate, gain a charge)
   }
   const dr = Math.min(0.6, (totalStat('DR') + skillBonus('dr')) / 100);
   if (dr > 0) dmg = Math.max(1, Math.round(dmg * (1 - dr)));
@@ -11877,7 +11978,9 @@ function adjacentEnemies(e) {
 // retaliation rather than a bigger one-shot. Crit damage scales with gear CRITDMG.
 // Returns { dmg, isCrit }.
 function rollPlayerHit(e) {
-  const isCrit = Math.random() < playerCritChance();
+  // A primed crit (e.g. from on-dodge "your next hit crits") is consumed here.
+  const isCrit = skillPrimed.crit || Math.random() < playerCritChance();
+  if (skillPrimed.crit) skillPrimed.crit = false;
   let dmg = getWeaponDamage() + player.level * 2 + totalStat('ATK') + attrDamage() + skillBonus('atkFlat');
   const hitDivisor = e.isBoss ? 9 : (e.isElite ? 6 : 4);
   const hitCap = Math.max(1, Math.floor(e.maxHp / hitDivisor));
@@ -11944,6 +12047,7 @@ function onEnemyDefeated(e) {
   // Summoned minions are pure threat — they drop NO XP, gold or loot, so a
   // summoner boss can't be farmed by killing the fodder it spawns endlessly.
   if (e.minion) { sfx('kill'); updateFloorClear(); return; }
+  fireSkillTrigger('kill', { enemy: e }); // on-kill procs: charges, heals, frenzy…
   const label = enemyLabel(e);
   const xpMult = e.isBoss ? 5 : (e.isElite ? 2 : 1);
   const goldMult = e.isBoss ? 3 : (e.isElite ? 2 : 1);
@@ -12083,6 +12187,9 @@ function attackEnemy(e, opts = {}) {
     if (h.isCrit) anyCrit = true;
     dealtTotal += d;
     dealDamage(target, d, h.isCrit);
+    // On-hit / on-crit procs (charges, primes, bleeds…). Fire after the blow lands.
+    fireSkillTrigger('hit', { enemy: target });
+    if (h.isCrit) fireSkillTrigger('crit', { enemy: target });
   };
 
   if (style === 'flurry') {
@@ -12232,12 +12339,19 @@ function castSkillById(id) {
   // Mana Cost Reduction % (gear) lowers the price of every cast; a rank-3 skill
   // gets the ✦ Empowered discount on top.
   const msMcr = skillRank(id) >= 3 ? 0.15 : 0;
-  const mpCost = Math.max(1, Math.round(sk.mp * (1 - Math.min(0.6, totalStat('MCR') / 100) - msMcr)));
-  if (player.mp < mpCost) { log(`💧 Not enough mana for ${sk.name} — need ${mpCost} MP.`); return; }
+  const cost = Math.max(1, Math.round(sk.mp * (1 - Math.min(0.6, totalStat('MCR') / 100) - msMcr)));
+  // Blood Pact keystone: skills are paid in LIFE, not mana — a martyr's bargain
+  // that frees your whole mana pool but bleeds you with every cast.
+  const bloodPact = keystoneFlag('bloodpact');
+  if (bloodPact) {
+    if (player.hp <= cost) { log(`🩸 Not enough life for a blood-cast of ${sk.name} — need ${cost} HP.`); return; }
+  } else if (player.mp < cost) { log(`💧 Not enough mana for ${sk.name} — need ${cost} MP.`); return; }
 
   if (!runActiveSkill(id)) return; // no valid target / nothing to do
 
-  player.mp -= mpCost;
+  if (bloodPact) { player.hp = Math.max(1, player.hp - cost); spawnFloatingText(player.x, player.y, `-${cost}`, '#ff5a6a'); }
+  else player.mp -= cost;
+  fireSkillTrigger('cast', {}); // on-cast procs
   updateBars();
   // The cast costs a turn: foes act and escorts trail along. Set the cooldown
   // AFTER runEnemyTurn so this very turn doesn't immediately tick it down.
@@ -12406,7 +12520,9 @@ function chainTargets(first, n, range) {
 
 // The heart of the system: resolve one active node at a given rank.
 function resolveCast(node, rank) {
-  let c = node.cast; if (!c) return false;
+  if (!node.cast) return false;
+  // Owned passives can TRANSFORM this ability (pierce, extra radius, pull, status…).
+  let c = applyCastMods(node, node.cast);
   // ✦✦✦ Mastered (rank 10): the same cast, but reaching further and catching more
   // foes — radius, range, chain length, target count and multi-hits all step up.
   if (rank >= 10) {
@@ -12417,6 +12533,8 @@ function resolveCast(node, rank) {
     if (c.count)  c.count  += 1;
     if (c.repeat) c.repeat += 1;
   }
+  // D2 synergy: this ability's damage scales with hard points in related skills.
+  const synM = synergyMult(node);
   const rs = rankScale(rank);
   let targets = [], center = { x: player.x, y: player.y };
 
@@ -12500,8 +12618,8 @@ function resolveCast(node, rank) {
       if (e.dead) { i++; continue; }
       const falloff = (c.shape === 'chain') ? Math.pow(0.7, i) : 1;
       let dmg = 0;
-      if (c.wpn) dmg = skillPhysDamage(e, c.wpn * falloff, rank, c.crit);
-      else if (c.spell) dmg = skillSpellDamage(e, c, c.spell * falloff, rank);
+      if (c.wpn) dmg = skillPhysDamage(e, c.wpn * falloff * synM, rank, c.crit);
+      else if (c.spell) dmg = skillSpellDamage(e, c, c.spell * falloff * synM, rank);
       // Execute: a wounded, non-boss foe is finished outright; bosses just bleed extra.
       if (c.execute && dmg > 0) {
         if (!e.isBoss && e.hp <= e.maxHp * c.execute) dmg = Math.max(dmg, e.hp);
@@ -12913,6 +13031,7 @@ function enemyAttackPlayer(e) {
   if (rollDodge()) {
     spawnFloatingText(player.x, player.y, 'DODGE', '#9fe8ff');
     log(`💨 ${HERO} dodges ${enemyLabel(e)}!`);
+    fireSkillTrigger('dodge', { enemy: e }); // on-dodge procs (e.g. prime a crit)
     return;
   }
   let raw = Math.round(e.dmg * rnd(80, 120) / 100);
@@ -12924,6 +13043,7 @@ function enemyAttackPlayer(e) {
   spawnFloatingText(player.x, player.y, `${dmg}`, '#ff3344');
   if (dmg > 0) { spawnParticles(player.x, player.y, '#d22a3a', 6, 0.07); addShake(4); }
   log(`${enemyLabel(e)} attacks ${HERO} for ${dmg}!`);
+  if (player.hp > 0 && player.hp <= player.maxHp * 0.25) fireSkillTrigger('lowhp', { enemy: e });
   if (player.hp <= player.maxHp * 0.25) screenFlash('#cc0000');
   if (e.bossAbility === 'lifesteal') bossLifesteal(e, dmg);
   // Retribution (Templar passive): reflect part of a melee blow back at the foe.
@@ -12944,6 +13064,7 @@ function enemyRangedAttack(e) {
   if (rollDodge()) {
     spawnFloatingText(player.x, player.y, 'DODGE', '#9fe8ff');
     log(`💨 ${HERO} sidesteps ${enemyLabel(e)}'s bolt!`);
+    fireSkillTrigger('dodge', { enemy: e });
     return;
   }
   let raw = Math.round(e.dmg * rnd(75, 110) / 100);
@@ -12960,6 +13081,7 @@ function enemyRangedAttack(e) {
   log(`✨ ${enemyLabel(e)} strikes ${HERO} from afar for ${dmg}!`);
   // Even a non-critical hit from off-screen gets a soft flash so a ranged
   // attacker chipping you from across the room never goes unsignalled.
+  if (player.hp > 0 && player.hp <= player.maxHp * 0.25) fireSkillTrigger('lowhp', { enemy: e });
   if (player.hp <= player.maxHp * 0.25) screenFlash('#cc0000');
   else screenFlash('rgba(180,40,40,0.18)');
   tryBossStatusProc(e);
@@ -13383,7 +13505,7 @@ function handleDeath() {
   inventory = [];
   graveMarker = null; // re-placed when that floor is next generated
   statusEffects = statusEffects.filter(s => s.target !== 'player');
-  player.skillCds = {}; combatBuffs = {}; minions = []; bossHazards = []; // revived fresh — skills ready again
+  player.skillCds = {}; combatBuffs = {}; minions = []; bossHazards = []; clearCharges(); // revived fresh — skills ready again
   sfx('death');
   screenFlash('#cc0000');
   // Knocked back deeper the harder the tier — but never out of the difficulty you
