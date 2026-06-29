@@ -275,6 +275,17 @@
   .death-btn { background: #b3303a; border: 1px solid #ff6472; color: #fff; font-family: 'Courier New', monospace; font-size: 13px; letter-spacing: 1px; padding: 9px 22px; border-radius: 8px; cursor: pointer; }
   .death-btn:active { background: #ff4452; }
 
+  /* ── DIFFICULTY CONQUEST ── shown when a finite dungeon difficulty is cleared. */
+  #conquest-overlay { position: fixed; inset: 0; background: rgba(20,6,8,0.82); z-index: 480; display: none; align-items: center; justify-content: center; padding: 20px; }
+  #conquest-overlay.open { display: flex; animation: deathFade 0.4s ease; }
+  #conquest-card { background: linear-gradient(180deg, #2c1a10, #1a0d09); border: 2px solid var(--gold); border-radius: 12px; max-width: 340px; width: 100%; padding: 22px 18px; text-align: center; box-shadow: 0 0 44px rgba(255,170,60,0.45); }
+  #conquest-title { color: var(--gold); font-size: 22px; font-weight: bold; letter-spacing: 2px; text-shadow: 0 0 12px rgba(255,180,70,0.6); margin-bottom: 14px; }
+  #conquest-body { display: flex; flex-direction: column; gap: 9px; margin-bottom: 16px; }
+  .conquest-line { font-size: 12.5px; color: #f3e4cf; line-height: 1.5; }
+  .conquest-scar { color: #ff9b8a; }
+  .conquest-btn { background: #6a4a1c; border: 1px solid var(--gold); color: #fff2d6; font-family: 'Courier New', monospace; font-size: 13px; letter-spacing: 1px; padding: 9px 22px; border-radius: 8px; cursor: pointer; }
+  .conquest-btn:active { background: #8a6326; }
+
   /* ── VERSION HISTORY POPUP ── */
   #version-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 400; display: none; align-items: center; justify-content: center; padding: 16px; }
   #version-overlay.open { display: flex; }
@@ -1561,6 +1572,20 @@
   }
   .gate-floor:active { background: #5a4520; }
   .gate-floor.current { border-color: var(--gold); color: var(--gold); }
+  /* Difficulty tier picker at the top of the Dungeon Gate. */
+  .gate-diffs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 8px; }
+  .gate-diff {
+    padding: 9px 0; border: 1px solid var(--border); border-radius: 5px;
+    background: #221a10; color: #d9c79a; font-family: 'Courier New', monospace;
+    font-weight: bold; font-size: 12px; cursor: pointer; -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  .gate-diff:active { background: #5a4520; }
+  .gate-diff.sel { background: #2e2212; }
+  .gate-diff.locked { opacity: 0.4; cursor: not-allowed; }
+  .gate-tier-blurb { font-size: 11px; opacity: 0.92; margin: 2px 0 8px; }
+  /* The small coloured difficulty tag shown beside the floor number in the HUD. */
+  .floor-diff { font-size: 9px; font-weight: bold; margin-left: 4px; letter-spacing: 0.3px; vertical-align: middle; }
 
   /* Crafting materials — the compact wallet strip (bag + town) and the
      Craftsman's slot/base/rarity pickers. */
@@ -2089,7 +2114,7 @@
       <span id="mp-text" style="font-size:10px">60/60</span>
     </div>
   </div>
-  <div class="hud-item" id="floor-hud" data-tip="<div class='ht-name'>🗺️ Dungeon Depth</div><div class='ht-line'>The floor you're on. Each floor down is tougher — but the loot gets richer too.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">🗺️ <span class="hud-val" id="floor-num">1</span></div>
+  <div class="hud-item" id="floor-hud" data-tip="<div class='ht-name'>🗺️ Dungeon Depth</div><div class='ht-line'>The floor you're on, and the difficulty tier. Each floor down is tougher — but the loot gets richer too. Conquer floor 25 to unlock the next, deadlier difficulty.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">🗺️ <span class="hud-val" id="floor-num">1</span><span class="floor-diff" id="floor-diff"></span></div>
   <div class="hud-item" id="level-hud" data-tip="<div class='ht-name'>⭐ Hero Level</div><div class='ht-line'>Fill the XP bar by slaying foes to level up. Each level boosts your stats and grants an attribute point.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">Lv <span class="hud-val" id="level-num">1</span>
     <div class="xp-track"><div class="xp-fill" id="xp-bar" style="width:0%"></div></div>
   </div>
@@ -2211,6 +2236,15 @@
       <div class="death-title">💀 YOU DIED</div>
       <div id="death-penalties"></div>
       <button class="death-btn" onclick="closeDeath()">Continue</button>
+    </div>
+  </div>
+
+  <!-- Difficulty conquered — shown when a finite dungeon's floor-25 boss falls. -->
+  <div id="conquest-overlay">
+    <div id="conquest-card">
+      <div id="conquest-title">Difficulty Conquered!</div>
+      <div id="conquest-body"></div>
+      <button class="conquest-btn" onclick="conquestToTown()">🏰 Return to Town</button>
     </div>
   </div>
 
@@ -2351,7 +2385,7 @@
     </div>
     <!-- Optional sign-in callout — updated by refreshAccountUi() to reflect login state. -->
     <div id="title-cloud" onclick="openAccount()"></div>
-    <div id="title-credit">Pixel art from the DawnLike tileset by DragonDePlatino &amp; DawnBringer (CC-BY 4.0).</div>
+    <div id="title-credit">Pixel art from the DawnLike tileset by DragonDePlatino &amp; DawnBringer (CC-BY&nbsp;4.0).<br>Terrain tiles from &ldquo;[LPC] Terrains&rdquo; by bluecarrot16 &amp; LPC contributors (CC-BY-SA&nbsp;4.0).</div>
   </div>
 </div>
 
@@ -2442,7 +2476,8 @@ const MAP_W = 20, MAP_H = 20;
 
 // Each equipment slot, with the base item names that roll for it.
 const SLOTS = {
-  weapon: { label: '⚔ Weapon', names: ['Sword','Axe','Dagger','Staff','Bow','Mace','Spear','Scythe'] },
+  weapon: { label: '⚔ Weapon', names: ['Shortsword','Arming Sword','Rapier','Greatsword','Claymore','Hatchet','War Axe','Greataxe','Battleaxe','Dagger','Stiletto','Kris','Mace','Morningstar','Maul','Spear','Halberd','Pike','Staff','Wand','Shortbow','Longbow','Scythe','War Scythe'] },
+  offhand:{ label: '🛡 Off-Hand', names: ['Buckler','Kite Shield','Tower Shield','Tome','Focus','Quiver','Parrying Dagger'] },
   head:   { label: '🪖 Head',   names: ['Helm','Cap','Crown','Hood','Circlet'] },
   chest:  { label: '👕 Chest',  names: ['Chestplate','Robe','Cuirass','Tunic','Mail'] },
   hands:  { label: '🧤 Hands',  names: ['Gauntlets','Gloves','Bracers','Grips'] },
@@ -2453,7 +2488,7 @@ const SLOTS = {
 const SLOT_KEYS = Object.keys(SLOTS);
 
 // Roll weights for which slot a dropped item belongs to.
-const SLOT_WEIGHTS = { weapon:22, chest:15, head:13, hands:13, legs:13, ring:12, amulet:12 };
+const SLOT_WEIGHTS = { weapon:22, chest:15, head:13, hands:13, legs:13, ring:12, amulet:12, offhand:11 };
 
 // ── AFFIX SYSTEM ──
 // Beyond its headline (weapon DMG / armor DEF), an item carries up to a
@@ -2485,13 +2520,16 @@ const TIER_AFFIX_CAPS = {
 // slot's own headline (weapon DMG, armor DEF/ATK) is never listed here, since the
 // headline already occupies that stat and would only waste a pool slot.
 const SLOT_AFFIX_POOLS = {
-  weapon: { stats: ['ATK','CRIT','CRITDMG','IDMG','DBLSTRIKE','CLEAVE','BOSSDMG','EXEC','PEN','LEECH','MPLEECH','SPELLPWR'], attrs: ['might','agility','spirit'] },
+  weapon: { stats: ['ATK','CRIT','CRITDMG','IDMG','DBLSTRIKE','CLEAVE','BOSSDMG','EXEC','PEN','LEECH','MPLEECH','SPELLPWR','BLEED','STUNPWR'], attrs: ['might','agility','spirit'] },
   head:   { stats: ['HP','MP','REGEN','CRIT','CRITDMG','SPD','MAGICFIND','XPGAIN','SPELLPWR','CDR','MCR','DODGE','MPKILL','MATFIND'], attrs: ['vitality','spirit','luck'] },
   chest:  { stats: ['HP','REGEN','MP','DR','BLOCK','THORNS','HPKILL','DODGE','MAGICFIND'], attrs: ['vitality','spirit','luck'] },
   hands:  { stats: ['CRIT','CRITDMG','IDMG','DBLSTRIKE','SPD','PEN','LEECH','EXEC','CDR','CLEAVE','BLOCK','THORNS'], attrs: ['might','agility','spirit'] },
   legs:   { stats: ['SPD','HP','REGEN','DODGE','DR','BLOCK','MP','GOLDFIND','XPGAIN','HPKILL'], attrs: ['agility','vitality','luck'] },
   ring:   { stats: ['CRIT','CRITDMG','ATK','IDMG','LEECH','MPLEECH','GOLDFIND','MAGICFIND','MATFIND','HP','MP','DEF','DBLSTRIKE','BOSSDMG','EXEC','PEN','MCR','MPKILL','CLEAVE'], attrs: ['might','agility','luck','spirit','vitality'] },
   amulet: { stats: ['MP','HP','REGEN','SPELLPWR','CDR','MCR','MPLEECH','MPKILL','HPKILL','THORNS','MAGICFIND','DR','ATK','DEF','BOSSDMG','GOLDFIND','XPGAIN','MATFIND'], attrs: ['spirit','luck','vitality','might','agility'] },
+  // Off-hands: defensive layers + caster utility. A shield's BLOCK headline already
+  // flows through totalStat('BLOCK') into combat, so it needs no special-casing.
+  offhand:{ stats: ['BLOCK','DR','THORNS','HP','REGEN','MP','SPELLPWR','CDR','MCR','CRIT','DODGE'], attrs: ['vitality','spirit','luck'] },
 };
 
 // ── ITEM BASE PROFILES ──
@@ -2528,8 +2566,94 @@ const BASE_STATS = {
   // jewelry — each base's signature innate stat (drawn from its slot pool)
   Ring: { innate: 'CRIT' }, Band: { innate: 'HP' }, Signet: { innate: 'GOLDFIND' }, Loop: { innate: 'MP' },
   Amulet: { innate: 'MP' }, Pendant: { innate: 'HP' }, Necklace: { innate: 'SPELLPWR' }, Talisman: { innate: 'MAGICFIND' }, Charm: { innate: 'REGEN' },
+  // off-hands — `off` family decides which headline an off-hand carries: shields
+  // bring DEF + a flat BLOCK %, caster off-hands bring Spell Power, ranged/dual
+  // off-hands bring a little Attack (the parry blade also blocks). See applyBaseStats.
+  Buckler:        { off:'shield', def:0.7, block:8 },
+  'Kite Shield':  { off:'shield', def:1.0, block:12 },
+  'Tower Shield': { off:'shield', def:1.4, block:18 },
+  Tome:           { off:'caster', spellpwr:1.4 },
+  Focus:          { off:'caster', spellpwr:1.0 },
+  Quiver:         { off:'ranged', atk:1.1 },
+  'Parrying Dagger': { off:'dual', atk:0.8, block:6 },
 };
 function baseProfile(name) { return BASE_STATS[name] || {}; }
+
+// ── WEAPON SUB-TYPES ──
+// A second layer UNDER the eight weapon categories (Sword, Axe, …): each category
+// splits into distinct sub-types that share the category's class restriction,
+// style and icon but roll their OWN damage profile, reach, attack style and affix
+// bias — so a one-handed Rapier (fast, crit, reach) and a two-handed Greatsword
+// (slow, heavy, cleaving) both read as "Sword" to the class lock yet play nothing
+// alike. `hands` is 1 or 2 (a two-hander forgoes the off-hand slot unless Titan's
+// Grip is learned). `dmg`/`spread` scale the headline exactly like BASE_STATS, so
+// the category baselines below match the old per-category numbers (no balance
+// reset). `style`/`range` override the category defaults; `bias` weights which
+// affixes the sub-type tends to roll (a weight, never an exclusion — every weapon
+// can still roll anything in its slot pool). Bias keys must live in the weapon
+// affix pool. Icons reuse the category's existing art (no new sprites).
+const WEAPON_SUBTYPES = {
+  // Swords
+  'Shortsword':  { cat:'Sword',  hands:1, dmg:0.92, spread:0.30, style:'flurry', range:1, bias:{ DBLSTRIKE:4, CRIT:3 } },
+  'Arming Sword':{ cat:'Sword',  hands:1, dmg:1.00, spread:0.40, style:'slash',  range:1, bias:{ IDMG:3, ATK:3 } },
+  'Rapier':      { cat:'Sword',  hands:1, dmg:0.85, spread:0.22, style:'thrust', range:2, bias:{ CRIT:4, CRITDMG:3, PEN:3 } },
+  'Greatsword':  { cat:'Sword',  hands:2, dmg:1.85, spread:0.70, style:'cleave', range:1, bias:{ CLEAVE:4, BOSSDMG:3, IDMG:3 } },
+  'Claymore':    { cat:'Sword',  hands:2, dmg:1.70, spread:1.00, style:'reap',   range:1, bias:{ CRITDMG:4, EXEC:3, LEECH:3 } },
+  // Axes
+  'Hatchet':     { cat:'Axe',    hands:1, dmg:1.00, spread:0.55, style:'flurry', range:1, bias:{ DBLSTRIKE:4, ATK:3 } },
+  'War Axe':     { cat:'Axe',    hands:1, dmg:1.15, spread:0.70, style:'cleave', range:1, bias:{ CLEAVE:4, IDMG:3 } },
+  'Greataxe':    { cat:'Axe',    hands:2, dmg:2.00, spread:1.10, style:'cleave', range:1, bias:{ CLEAVE:4, BOSSDMG:3, IDMG:3 } },
+  'Battleaxe':   { cat:'Axe',    hands:2, dmg:1.80, spread:0.90, style:'reap',   range:1, bias:{ EXEC:4, CRITDMG:3 } },
+  // Daggers
+  'Dagger':      { cat:'Dagger', hands:1, dmg:0.72, spread:0.18, style:'flurry', range:1, bias:{ CRIT:4, DBLSTRIKE:3 } },
+  'Stiletto':    { cat:'Dagger', hands:1, dmg:0.68, spread:0.14, style:'thrust', range:1, bias:{ PEN:4, CRIT:3 } },
+  'Kris':        { cat:'Dagger', hands:1, dmg:0.78, spread:0.30, style:'flurry', range:1, bias:{ LEECH:4, BLEED:4 } },
+  // Maces
+  'Mace':        { cat:'Mace',   hands:1, dmg:1.10, spread:0.40, style:'crush',  range:1, bias:{ IDMG:3, BOSSDMG:2 } },
+  'Morningstar': { cat:'Mace',   hands:1, dmg:1.18, spread:0.55, style:'crush',  range:1, bias:{ BOSSDMG:4, IDMG:3 } },
+  'Maul':        { cat:'Mace',   hands:2, dmg:1.95, spread:0.60, style:'crush',  range:1, bias:{ STUNPWR:5, BOSSDMG:3 } },
+  // Spears
+  'Spear':       { cat:'Spear',  hands:1, dmg:1.00, spread:0.35, style:'thrust', range:2, bias:{ PEN:3, CRIT:3 } },
+  'Halberd':     { cat:'Spear',  hands:2, dmg:1.75, spread:0.55, style:'cleave', range:2, bias:{ CLEAVE:4, IDMG:3 } },
+  'Pike':        { cat:'Spear',  hands:2, dmg:1.65, spread:0.45, style:'thrust', range:3, bias:{ PEN:4, BOSSDMG:3 } },
+  // Staves (caster)
+  'Staff':       { cat:'Staff',  hands:2, dmg:0.85, spread:0.30, style:'bolt',   range:4, bias:{ SPELLPWR:4, MPLEECH:2 } },
+  'Wand':        { cat:'Staff',  hands:1, dmg:0.70, spread:0.25, style:'bolt',   range:4, bias:{ SPELLPWR:4, CRIT:2 } },
+  // Bows (ranged)
+  'Shortbow':    { cat:'Bow',    hands:2, dmg:0.88, spread:0.45, style:'shot',   range:4, bias:{ DBLSTRIKE:4, CRIT:2 } },
+  'Longbow':     { cat:'Bow',    hands:2, dmg:0.98, spread:0.70, style:'shot',   range:5, bias:{ CRITDMG:4, BOSSDMG:3 } },
+  // Scythes
+  'Scythe':      { cat:'Scythe', hands:2, dmg:1.10, spread:0.65, style:'reap',   range:1, bias:{ LEECH:4, EXEC:3 } },
+  'War Scythe':  { cat:'Scythe', hands:2, dmg:1.80, spread:0.80, style:'reap',   range:2, bias:{ CLEAVE:3, LEECH:3 } },
+};
+// Sub-type keys sorted longest-first so a name match prefers the most specific
+// ("War Axe" beats "Axe", "Arming Sword" beats any bare word).
+const SUBTYPE_KEYS = Object.keys(WEAPON_SUBTYPES).sort((a, b) => b.length - a.length);
+// The sub-type carried by an item's name (longest match wins), or null for a
+// legacy bare-category weapon ("Ancient Sword of Power" → null, resolved by the
+// category fallback in weaponBaseType).
+function weaponSubType(item) {
+  const nm = (item && item.name) || '';
+  for (const s of SUBTYPE_KEYS) if (nm.includes(s)) return s;
+  return null;
+}
+function subTypeData(name) { return WEAPON_SUBTYPES[name] || null; }
+// Resolve the weapon CATEGORY (Sword, Axe, …) from a sub-type or bare name.
+function weaponCategoryOf(name) {
+  const d = WEAPON_SUBTYPES[name];
+  if (d) return d.cat;
+  return WEAPON_STYLES[name] ? name : null; // already a category, or unknown
+}
+// How many hands a weapon (item or base-name) needs: two-handers forgo off-hands.
+function weaponHandsOf(nameOrItem) {
+  const name = typeof nameOrItem === 'string' ? nameOrItem
+    : (nameOrItem ? weaponSubType(nameOrItem) : null);
+  const d = name && WEAPON_SUBTYPES[name];
+  return d ? d.hands : 1; // legacy bare weapons count as one-handed
+}
+function isTwoHander(item) {
+  return !!(item && item.slot === 'weapon' && weaponHandsOf(item) === 2);
+}
 // Apply a base's headline (and jewelry innate) stats onto a fresh item's stats
 // object. Shared by the Forge's blank pieces and generateItem's drops so both
 // honour the base. Records any innate jewelry stat on item.baseStats so the
@@ -2538,13 +2662,39 @@ function applyBaseStats(item, baseName, lvl, mult, dmgMult, opts = {}) {
   const bp = baseProfile(baseName);
   const slot = item.slot;
   if (slot === 'weapon') {
-    const base = Math.max(1, Math.floor((2 + lvl * 1.2) * dmgMult * (bp.dmg || 1)));
-    const spread = Math.max(1, Math.floor(base * (bp.spread != null ? bp.spread : 0.4)));
+    // Damage profile comes from the weapon SUB-TYPE (Greatsword vs Rapier); a
+    // legacy bare-category name falls back to its BASE_STATS category baseline.
+    const sd = WEAPON_SUBTYPES[baseName] || BASE_STATS[weaponCategoryOf(baseName)] || bp;
+    const dm = sd.dmg != null ? sd.dmg : 1;
+    const sp = sd.spread != null ? sd.spread : 0.4;
+    const base = Math.max(1, Math.floor((2 + lvl * 1.2) * dmgMult * dm));
+    const spread = Math.max(1, Math.floor(base * sp));
     item.stats.DMG = `${base}-${base + spread}`;
   } else if (slot === 'head' || slot === 'chest' || slot === 'hands' || slot === 'legs') {
     const slotDef = { chest: 1.3, legs: 1.0, head: 0.8, hands: 0.7 }[slot];
     item.stats.DEF = Math.max(1, Math.floor((1 + lvl) * mult * slotDef * (bp.def || 1)));
     if (slot === 'hands') item.stats.ATK = Math.max(1, Math.floor((1 + lvl * 0.35) * mult * 0.6 * (bp.atk || 1)));
+  } else if (slot === 'offhand') {
+    // Off-hands carry a headline shaped by their family (see BASE_STATS `off`):
+    // shields → DEF + a flat BLOCK %, casters → Spell Power, ranged/dual → Attack
+    // (the parry blade also blocks). The family is remembered on item.off so combat
+    // (dual-wield, etc.) can read it without re-resolving by name.
+    const off = bp.off || 'shield';
+    item.off = off;
+    if (off === 'shield') {
+      item.stats.DEF = Math.max(1, Math.floor((1 + lvl) * mult * 0.7 * (bp.def || 1)));
+      item.stats.BLOCK = bp.block || 8;
+      item.baseStats = ['DEF', 'BLOCK'];
+    } else if (off === 'caster') {
+      const r = affixStatRange('SPELLPWR', lvl, mult);
+      const sv = opts.fixed ? Math.round((r.min + r.max) / 2) : rnd(r.min, r.max);
+      item.stats.SPELLPWR = Math.max(1, Math.round(sv * (bp.spellpwr || 1)));
+      item.baseStats = ['SPELLPWR'];
+    } else { // ranged (quiver) / dual (parry blade)
+      item.stats.ATK = Math.max(1, Math.floor((1 + lvl * 0.35) * mult * 0.6 * (bp.atk || 1)));
+      if (bp.block) { item.stats.BLOCK = bp.block; item.baseStats = ['ATK', 'BLOCK']; }
+      else item.baseStats = ['ATK'];
+    }
   } else if (bp.innate) {
     // ring / amulet: bake in the base's signature stat and mark it protected.
     // opts.fixed → use the band's midpoint so the Forge preview is deterministic
@@ -2581,8 +2731,13 @@ const ITEM_ICONS = {
   Ring:'ring', Band:'ring', Signet:'ring', Loop:'ring',
   // amulet
   Amulet:'amulet', Pendant:'amulet', Necklace:'amulet', Talisman:'talisman', Charm:'orb',
+  // off-hands — reuse EXISTING DawnLike atlas tiles (no new sprites): shields use
+  // the shield tile, caster off-hands an orb, the quiver a bow, the parry blade a
+  // dagger. These are atlas keys (resolved via the iconMarkup→dlIcon fallback).
+  Buckler:'a_shield', 'Kite Shield':'a_shield', 'Tower Shield':'a_shield',
+  Tome:'ic_orb', Focus:'ic_orb', Quiver:'w_bow', 'Parrying Dagger':'w_dagger',
 };
-const SLOT_ICONS = { head:'helm', chest:'chestplate', hands:'gloves', legs:'legs', weapon:'sword', ring:'ring', amulet:'amulet' };
+const SLOT_ICONS = { head:'helm', chest:'chestplate', hands:'gloves', legs:'legs', weapon:'sword', ring:'ring', amulet:'amulet', offhand:'a_shield' };
 
 // Vector geometry for every icon key, in a 0-100 box. Each icon is a list of
 // [path, material] LAYERS, so loot looks like a real object: a sword is a steel
@@ -2650,7 +2805,13 @@ function matColor(m) { return MATERIALS[m] || m; }
 // through, so the same call sites render both.
 function iconMarkup(val, color, frame = true) {
   const layers = ICON_PATHS[val];
-  if (!layers) return val || '';
+  if (!layers) {
+    // Not a vector key. If it's a DawnLike atlas key (off-hands reuse 'a_shield',
+    // 'ic_orb', 'w_bow', 'w_dagger' — no new sprites), render it from the existing
+    // atlas. Otherwise pass the raw value through (legacy emoji).
+    const dl = (val && SPRITE_IDX[val] !== undefined) ? dlIcon(val, 30) : '';
+    return dl || val || '';
+  }
   const c = color || ICON_EMPTY_COLOR;
   const paths = layers.map(([d, m]) => {
     const f = matColor(m);
@@ -3116,10 +3277,24 @@ const VISUAL_SLOTS = ['head','chest','weapon'];
 // saved items are matched by the base word in their name, falling back to a
 // generic per-slot icon (or a potion flask for non-gear).
 function iconKeyFromName(name, slot) {
+  // A weapon's name may carry a sub-type (Greatsword) that has no icon of its own;
+  // it reuses its category's existing art (no new sprites for sub-types).
+  if (slot === 'weapon') {
+    for (const s of SUBTYPE_KEYS) if ((name || '').includes(s)) return ITEM_ICONS[WEAPON_SUBTYPES[s].cat] || 'sword';
+  }
   for (const base of Object.keys(ITEM_ICONS)) {
     if (new RegExp('\\b' + base + '\\b').test(name || '')) return ITEM_ICONS[base];
   }
   return SLOT_ICONS[slot] || 'amulet';
+}
+// The icon key for a freshly rolled/forged base. Weapon sub-types inherit their
+// category's icon; everything else maps its base name straight through.
+function iconForBase(slot, baseName) {
+  if (slot === 'weapon') {
+    const cat = weaponCategoryOf(baseName);
+    return ITEM_ICONS[cat] || ITEM_ICONS[baseName] || SLOT_ICONS[slot] || 'sword';
+  }
+  return ITEM_ICONS[baseName] || SLOT_ICONS[slot] || 'amulet';
 }
 // Potions (and other slotless items) keep their emoji flask.
 function potionIcon(item) { return /\bMana\b/i.test((item && item.name) || '') ? '🔷' : '🧪'; }
@@ -3127,7 +3302,9 @@ function itemIcon(item) {
   if (!item) return '';
   // Trust a stored icon only if it's a known vector key; otherwise re-resolve by
   // name so gear saved under the old emoji system heals to the right vector icon.
-  if (item.icon && ICON_PATHS[item.icon]) return item.icon;
+  // Trust a stored vector key, or a DawnLike atlas key (off-hands reuse atlas
+  // tiles like 'a_shield' since they have no vector icon); else re-resolve by name.
+  if (item.icon && (ICON_PATHS[item.icon] || SPRITE_IDX[item.icon] !== undefined)) return item.icon;
   if (!item.slot) return potionIcon(item);
   return iconKeyFromName(item.name, item.slot);
 }
@@ -3170,10 +3347,10 @@ const TIERS = {
 // and Chaos Orbs the premium "top end" material (legendary crafts & big reforges).
 // They live on player.materials and are saved with the player.
 const CRAFT_MATERIALS = {
-  scrap:   { emoji: '🔩', name: 'Scrap',     color: '#c0a06a', desc: 'Common. The bulk material for crafting any item.' },
-  core:    { emoji: '🔆', name: 'Core',      color: '#ffb24b', desc: 'Rare. Needed to craft higher-rarity items.' },
-  glimmer: { emoji: '✨', name: 'Glimmer',   color: '#7fd0ff', desc: 'The Enchanter\'s fuel for adding & rerolling modifiers.' },
-  chaos:   { emoji: '🌀', name: 'Chaos Orb', color: '#c87bff', desc: 'Very rare. Powers legendary crafts & big reforges.' },
+  scrap:   { emoji: '🔩', name: 'Scrap',     color: '#c0a06a', desc: 'Common. The bulk material for crafting any item. Drops on every difficulty.' },
+  core:    { emoji: '🔆', name: 'Core',      color: '#ffb24b', desc: 'Rare. Needed to craft higher-rarity items. Only found on Brutal difficulty and deeper.' },
+  glimmer: { emoji: '✨', name: 'Glimmer',   color: '#7fd0ff', desc: 'The Enchanter\'s fuel for adding & rerolling modifiers. Only found on Hardened difficulty and deeper.' },
+  chaos:   { emoji: '🌀', name: 'Chaos Orb', color: '#c87bff', desc: 'Very rare. Powers legendary crafts & big reforges. Only found in Endless mode.' },
 };
 const CRAFT_MAT_KEYS = Object.keys(CRAFT_MATERIALS);
 
@@ -3251,20 +3428,23 @@ const STAT_LABELS = { ATK:'Attack', DEF:'Defense', SPD:'Speed', LCK:'Fortune', H
   IDMG:'Increased Dmg %', DBLSTRIKE:'Double Strike %', CLEAVE:'Cleave %', BOSSDMG:'Dmg vs Bosses %',
   EXEC:'Execute %', PEN:'Armor Pen %', GOLDFIND:'Gold Find %', XPGAIN:'XP Gain %',
   MAGICFIND:'Magic Find %', MATFIND:'Material Find %', SPELLPWR:'Spell Power %',
-  CDR:'Cooldown Reduc %', MCR:'Mana Cost Reduc %' };
+  CDR:'Cooldown Reduc %', MCR:'Mana Cost Reduc %',
+  // ── weapon-flavour stats ── BLEED chance to open a bleeding wound (a DoT);
+  // STUNPWR raises crushing weapons' stun chance & duration.
+  BLEED:'Bleed Chance %', STUNPWR:'Stun Power %' };
 // Short codes for the compact one-line item summary (the tooltip/enchanter use the
 // full STAT_LABELS above). Anything missing falls back to its raw key.
 const STAT_SHORT = { ATK:'ATK', DEF:'DEF', SPD:'SPD', LCK:'FOR', HP:'HP', MP:'MP', CRIT:'CRIT',
   CRITDMG:'CDMG', REGEN:'REG', LEECH:'LCH', MPLEECH:'MLC', HPKILL:'HoK', MPKILL:'MoK',
   THORNS:'THN', DR:'DR', BLOCK:'BLK', DODGE:'DGE', IDMG:'IDMG', DBLSTRIKE:'2X', CLEAVE:'CLV',
   BOSSDMG:'vsB', EXEC:'EXE', PEN:'PEN', GOLDFIND:'GF', XPGAIN:'XP', MAGICFIND:'MF', MATFIND:'MTF',
-  SPELLPWR:'SP', CDR:'CDR', MCR:'MCR' };
+  SPELLPWR:'SP', CDR:'CDR', MCR:'MCR', BLEED:'BLD', STUNPWR:'STN' };
 // Stats whose value is a percentage — shown with a trailing % and consumed as /100
 // throughout combat. (CRIT/CRITDMG were always percentages; they're listed too so
 // the compact line shows their unit.)
 const PCT_STATS = new Set(['CRIT','CRITDMG','LEECH','MPLEECH','DR','BLOCK','DODGE','IDMG',
   'DBLSTRIKE','CLEAVE','BOSSDMG','EXEC','PEN','GOLDFIND','XPGAIN','MAGICFIND','MATFIND',
-  'SPELLPWR','CDR','MCR']);
+  'SPELLPWR','CDR','MCR','BLEED','STUNPWR']);
 const HERO = '🧙';
 
 // ── POWER & ATTRIBUTES ──
@@ -3275,7 +3455,7 @@ const STAT_POWER_WEIGHTS = { ATK:3, DEF:2, SPD:2, LCK:2, HP:1, MP:1, CRIT:4, CRI
   // New stats weighted by rough combat value per point so item Power stays sane.
   LEECH:5, MPLEECH:3, HPKILL:1, MPKILL:1, THORNS:1, DR:6, BLOCK:4, DODGE:5, IDMG:4, DBLSTRIKE:5,
   CLEAVE:2, BOSSDMG:2, EXEC:2, PEN:2, GOLDFIND:1, XPGAIN:1, MAGICFIND:2, MATFIND:1, SPELLPWR:3,
-  CDR:4, MCR:3 };
+  CDR:4, MCR:3, BLEED:3, STUNPWR:2 };
 // Per-point power weight of a raised attribute carried on an item (e.g. +13 Might).
 const ATTR_POWER_WEIGHT = 6;
 // A small flat nudge per rarity — kept low on purpose so an item's power is
@@ -3358,8 +3538,77 @@ function depthThreat(level) {
   // The growth term climbs twice as fast as the original /15 curve, so every
   // floor's threat multiplier above the floor-1 baseline is doubled.
   const d = Math.max(0, (level || 1) - 1);
-  return 1 + Math.pow(d, 1.2) / 7.5;
+  // Endless mode ramps a touch steeper than the raw depth continuation; a no-op
+  // (×1) for the three finite difficulties (see endlessBite below).
+  return (1 + Math.pow(d, 1.2) / 7.5) * endlessBite();
 }
+
+// ── DUNGEON DIFFICULTY TIERS ──────────────────────────────────────────────
+// The dungeon is 25 floors long, but a run doesn't end there. `dungeonLevel` is
+// a SINGLE continuous depth counter that simply keeps climbing across tiers:
+//   floors  1–25  → Normal    (tier 1)
+//   floors 26–50  → Hardened  (tier 2)  — the same 25 floors, but more powerful
+//   floors 51–75  → Brutal    (tier 3)  — harder still
+//   floors 76+    → Endless   (tier 4)  — no cap, random bosses, ramps further
+// Because depth stays continuous, every existing power/loot formula keeps
+// working untouched — a Hardened floor 1 (dungeonLevel 26) is simply "as deep as
+// floor 26", a smooth continuation rather than a jarring reset. What DOES reset
+// per tier is the DISPLAYED floor number and the visual theme, so each
+// difficulty replays the same 25-floor dungeon — just tougher and redder.
+const FLOORS_PER_DIFF = 25;
+const FINITE_DEPTH = FLOORS_PER_DIFF * 3; // last floor of the third (Brutal) tier
+const DIFFS = [
+  { n: 1, key: 'normal',   name: 'Normal',   color: '#bfe3ff', tint: 0.00 },
+  { n: 2, key: 'hardened', name: 'Hardened', color: '#ffb38a', tint: 0.08 },
+  { n: 3, key: 'brutal',   name: 'Brutal',   color: '#ff8366', tint: 0.14 },
+  { n: 4, key: 'endless',  name: 'Endless',  color: '#ff5a78', tint: 0.20 },
+];
+// Difficulty tier (1–4) of a continuous depth; everything past the third tier is
+// Endless.
+function diffOf(dl) { return Math.min(4, Math.floor(((dl || 1) - 1) / FLOORS_PER_DIFF) + 1); }
+function currentDifficulty() { return diffOf(dungeonLevel); }
+function diffMeta(dl) { return DIFFS[diffOf(dl) - 1]; }
+function isEndless() { return dungeonLevel > FINITE_DEPTH; }
+// The floor number shown to the player. Finite tiers cycle 1–25; Endless keeps
+// climbing (1, 2, 3 … unbounded) from its own floor 1.
+function displayFloor(dl) {
+  dl = (dl == null ? dungeonLevel : dl);
+  if (dl > FINITE_DEPTH) return dl - FINITE_DEPTH;
+  return ((dl - 1) % FLOORS_PER_DIFF) + 1;
+}
+// The last floor of a FINITE difficulty (its boss floor 25). Endless never ends.
+function isLastFiniteFloor() { return dungeonLevel <= FINITE_DEPTH && displayFloor() === FLOORS_PER_DIFF; }
+// A short "Normal · Floor 3" label for logs and the HUD.
+function floorLabel(dl) {
+  dl = (dl == null ? dungeonLevel : dl);
+  return `${DIFFS[diffOf(dl) - 1].name} · Floor ${displayFloor(dl)}`;
+}
+// Endless mode ramps a touch steeper than the raw depth continuation, creeping
+// up the deeper you push. A no-op (×1) for the three finite difficulties.
+function endlessBite() {
+  if (dungeonLevel <= FINITE_DEPTH) return 1;
+  return 1 + Math.min(0.6, (dungeonLevel - FINITE_DEPTH) * 0.006);
+}
+
+// ── DIFFICULTY PROGRESSION STATE ──
+// How many finite tiers the hero has fully conquered (beaten the floor-25 boss
+// of): 0 none, 1 Normal, 2 Hardened, 3 Brutal. The next tier up is then unlocked
+// at the town Dungeon Gate, and Endless opens once Brutal (3) is conquered.
+function diffClearedCount() { return Math.max(0, Math.min(3, player.diffCleared || 0)); }
+function frontierDiff() { return Math.min(4, diffClearedCount() + 1); }
+// Conquering each difficulty leaves a permanent scar: a stacking debuff to the
+// hero's max HP and the damage they deal, so deeper tiers keep biting even as
+// gear climbs. Multiplicative, ~6% per tier conquered (so Endless heroes fight
+// at ~83% of their raw power).
+function diffDebuffMult() { return Math.pow(0.94, diffClearedCount()); }
+
+// ── MATERIAL GATING ──
+// Rarer crafting materials only turn up once you're delving a hard enough tier:
+// Scrap anywhere, Glimmer from Hardened, Core from Brutal, Chaos Orbs only in
+// Endless. Salvaging in town uses the tier you'll return to.
+const MATERIAL_MIN_DIFF = { scrap: 1, glimmer: 2, core: 3, chaos: 4 };
+function activeDifficulty() { return inTown ? diffOf(Math.max(1, dungeonReturn || 1)) : currentDifficulty(); }
+function materialUnlocked(k) { return activeDifficulty() >= (MATERIAL_MIN_DIFF[k] || 1); }
 
 // Total power of a single item: weighted sum of its stats + a rarity bonus.
 function itemPower(item) {
@@ -3434,6 +3683,7 @@ function baseMaxHp() {
   let hp = player.level*8 + totalAttr('vitality') * ATTR_FX.hpPerVit + totalStat('HP');
   if (player.class === 'templar') hp = hp * 1.20; // Templar: hardier body
   hp = hp * (1 + skillBonus('maxHpPct') + foodFx('maxHpPct')); // skills + a hearty bowl of ramen
+  hp = hp * diffDebuffMult();   // permanent scar from each difficulty conquered
   return Math.max(1, Math.round(hp));
 }
 function baseMaxMp() {
@@ -3741,6 +3991,8 @@ const WEAPON_STYLES = {
 function weaponStyle() {
   const w = equipped.weapon;
   if (!w || !w.name) return 'fist';
+  const sub = weaponSubType(w);
+  if (sub) return WEAPON_SUBTYPES[sub].style;
   for (const base of Object.keys(WEAPON_STYLES)) {
     if (new RegExp('\\b' + base + '\\b').test(w.name)) return WEAPON_STYLES[base];
   }
@@ -3769,8 +4021,21 @@ const WEAPON_STYLE_DESC = {
   thrust: 'Reaches an extra tile, striking without reprisal',
   reap:   'Wide arc that heals you for part of the hit',
 };
-// The reach of a base, or of an item's resolved weapon type.
-function weaponRange(base) { return WEAPON_RANGE[base] || 1; }
+// The reach of a base/sub-type, or of an item's resolved weapon type. A sub-type
+// (Pike, Rapier) carries its own reach; a bare category falls back to the table.
+function weaponRange(base) {
+  if (WEAPON_SUBTYPES[base]) return WEAPON_SUBTYPES[base].range;
+  return WEAPON_RANGE[base] || 1;
+}
+// The reach of an actual item, resolving its sub-type first (so a Pike reaches 3
+// even though its 'thrust' style's category default is 2). Used by combat.
+function weaponRangeOf(item) {
+  if (!item) return 1;
+  const sub = weaponSubType(item);
+  if (sub) return WEAPON_SUBTYPES[sub].range;
+  const cat = weaponBaseType(item);
+  return (cat && WEAPON_RANGE[cat]) || 1;
+}
 // A tiny horizontal map of a weapon's reach: the gold tile is you, each red tile
 // ahead is a square it can strike, so the reach reads at a glance. Shared by the
 // weapon tooltip and the Forge preview.
@@ -3833,6 +4098,10 @@ function playerClass() { return player.class ? CLASSES[player.class] : null; }
 // weapon. Drives class equip restrictions.
 function weaponBaseType(item) {
   if (!item || !item.name) return null;
+  // New items carry a sub-type word → resolve its category directly.
+  const sub = weaponSubType(item);
+  if (sub) return WEAPON_SUBTYPES[sub].cat;
+  // Legacy bare-category weapons ("Ancient Sword of Power") keep the old match.
   for (const base of Object.keys(WEAPON_STYLES)) {
     if (new RegExp('\\b' + base + '\\b').test(item.name)) return base;
   }
@@ -3854,7 +4123,10 @@ function canEquipItem(item) {
 function classCanUseWeaponBase(base) {
   const cls = playerClass();
   if (!cls) return true;            // a classless hero has no weapon restriction
-  return cls.weapons.includes(base);
+  // `base` may be a sub-type (Greatsword) or a bare category (Sword) — the class
+  // lock is keyed by category, so resolve sub-types down to their category first.
+  const cat = weaponCategoryOf(base) || base;
+  return cls.weapons.includes(cat);
 }
 
 // Combat passives keyed off the chosen class — now also folding in any damage
@@ -3870,10 +4142,16 @@ function classDmgTakenMult() {
   return Math.max(0.1, base * (1 - skillBonus('dmgTaken')));
 }
 
-// ── SKILL TREES (v3) ──
+// ── SKILL TREES (v4) ──
 // Each class has a separate PASSIVE tree and ACTIVE tree, 30 nodes each, laid out
-// in 6 bands (rows) of 5. Every node maxes at rank 10; a node gated behind a
-// prerequisite only needs that prereq at rank 1 to unlock (D2-style banding).
+// in 6 bands (rows) of 5. Every node maxes at rank 10. The PASSIVE trees are now a
+// branching DAG, not straight ladders: nodes link via `req` (ALL prereqs) and
+// `reqAny` (any-of merges), and many carry a CONDITIONAL bonus — `cfx` that only
+// applies while its `cond` is true (e.g. "+damage with a two-handed weapon", "+block
+// with a shield"). A few are build-defining keystones that flip a `flag`/`unlock`
+// (Titan's Grip → off-hand with a 2H weapon, Dual Mastery → off-hand swing, Aegis →
+// raise the block cap) or pair power with a real cost (negative fx). See skillBonus
+// (folds cfx), condMet (evaluates conds), skillFlag, and pointsInTree (pts gates).
 // Ascending (see ASCENSIONS) unlocks a focused specialization "PATH" tree.
 const SKILL_POINTS_PER_LEVEL = 1;
 // Every hero begins with one skill point to spend, so a fresh character can
@@ -3900,10 +4178,15 @@ function buildTree(rows, kind, ascId) {
     row.forEach((n, c) => {
       n.band = b; n.col = c;
       n.type = n.t || kind; delete n.t;
-      n.max = 10;
+      // Keystones are single-rank build-definers; everything else ranks to 10.
+      n.max = n.keystone ? 1 : (n.max || 10);
       if (ascId) n.asc = ascId;
       n.lvl = (ascId ? ASC_BANDS : SKILL_BANDS)[b];
-      if (!n.req && b > 0) {
+      // Auto-link a node to the one directly above it ONLY when it declares no
+      // explicit prerequisite of its own. A DAG node uses `req` (AND of all) and/or
+      // `reqAny` (OR of any), and a `root:true` node opens with no prereq at all —
+      // that's what turns the old straight ladders into a branching web.
+      if (!n.req && !n.reqAny && !n.root && b > 0) {
         const prev = rows[b - 1];
         const parent = prev[Math.min(c, prev.length - 1)];
         n.req = [parent.id];
@@ -3933,36 +4216,36 @@ function buildTree(rows, kind, ascId) {
 const SKILL_TREES = {
   warrior: {
     passive: buildTree([
-      [ {id:'w_brawn',name:'Brawn',icon:'sk_w_brawn',fx:{atkFlat:2},desc:'+2 attack power per rank.'},
-        {id:'w_hardiness',name:'Hardiness',icon:'sk_w_hardiness',fx:{maxHpPct:0.02},desc:'+2% max HP per rank.'},
-        {id:'w_temper',name:'Temper',icon:'sk_w_temper',fx:{dmgTaken:0.012},desc:'-1.2% damage taken per rank.'},
-        {id:'w_bloodlust',name:'Bloodlust',icon:'sk_w_bloodlust',fx:{lifesteal:0.01},desc:'Heal 1% of damage dealt per rank.'},
-        {id:'w_fury',name:'Fury',icon:'sk_w_fury',fx:{dmgDealt:0.012},desc:'+1.2% damage dealt per rank.'} ],
-      [ {id:'w_ironskin',name:'Iron Skin',icon:'sk_w_ironskin',fx:{dmgTaken:0.012},desc:'-1.2% damage taken per rank.'},
-        {id:'w_thickhide',name:'Thick Hide',icon:'sk_w_thickhide',fx:{dr:0.8},desc:'+0.8% damage reduction per rank.'},
-        {id:'w_cleaver',name:'Cleaver',icon:'sk_w_cleaver',fx:{dmgDealt:0.012},desc:'+1.2% damage dealt per rank.'},
-        {id:'w_vitalsurge',name:'Vital Surge',icon:'sk_w_vitalsurge',fx:{maxHpPct:0.025},desc:'+2.5% max HP per rank.'},
-        {id:'w_recovery',name:'Recovery',icon:'sk_w_recovery',fx:{hpRegen:1},desc:'+1 HP regen per turn per rank.'} ],
-      [ {id:'w_juggernaut',name:'Juggernaut',icon:'sk_w_juggernaut',fx:{maxHpPct:0.025},desc:'+2.5% max HP per rank.'},
-        {id:'w_shieldwall',name:'Shield Wall',icon:'sk_w_shieldwall',fx:{block:1.2},desc:'+1.2% block chance per rank.'},
-        {id:'w_brutality',name:'Brutality',icon:'sk_w_brutality',fx:{atkFlat:3},desc:'+3 attack power per rank.'},
-        {id:'w_rage',name:'Rage',icon:'sk_w_rage',fx:{dmgDealt:0.015},desc:'+1.5% damage dealt per rank.'},
-        {id:'w_spikes',name:'Spiked Armor',icon:'sk_w_spikes',fx:{reflect:0.03},desc:'Reflect 3% of melee damage per rank.'} ],
-      [ {id:'w_unstoppable',name:'Unstoppable',icon:'sk_w_unstoppable',fx:{dmgTaken:0.014},desc:'-1.4% damage taken per rank.'},
-        {id:'w_focus',name:'Battle Focus',icon:'sk_w_focus',fx:{crit:0.006},desc:'+0.6% crit chance per rank.'},
-        {id:'w_executioner',name:'Executioner',icon:'sk_w_executioner',fx:{lowHpDmg:0.03},desc:'+3% damage to wounded foes per rank.'},
-        {id:'w_sanguine',name:'Sanguine',icon:'sk_w_sanguine',fx:{lifesteal:0.012},desc:'Heal 1.2% of damage dealt per rank.'},
-        {id:'w_resilience',name:'Resilience',icon:'sk_w_resilience',fx:{maxHpPct:0.03},desc:'+3% max HP per rank.'} ],
-      [ {id:'w_titanic',name:'Titanic',icon:'sk_w_titanic',fx:{maxHpPct:0.03,atkFlat:2},desc:'+3% max HP and +2 attack per rank.'},
-        {id:'w_crushing',name:'Crushing Blows',icon:'sk_w_crushing',fx:{critDmg:0.05},desc:'+5% crit damage per rank.'},
-        {id:'w_warlord',name:'Warlord',icon:'sk_w_warlord',fx:{dmgDealt:0.018},desc:'+1.8% damage dealt per rank.'},
-        {id:'w_bulwark',name:'Bulwark',icon:'sk_w_bulwark',fx:{dmgTaken:0.016},desc:'-1.6% damage taken per rank.'},
-        {id:'w_spoils',name:'Spoils of War',icon:'sk_w_spoils',fx:{goldFind:5},desc:'+5% gold found per rank.'} ],
-      [ {id:'w_immortal',name:'Immortal',icon:'sk_w_immortal',fx:{maxHpPct:0.04,hpRegen:2},desc:'+4% max HP and +2 regen per rank.'},
-        {id:'w_berserkersoul',name:'Berserker Soul',icon:'sk_w_berserkersoul',fx:{dmgDealt:0.025},desc:'+2.5% damage dealt per rank.'},
-        {id:'w_conqueror',name:'Conqueror',icon:'sk_w_conqueror',fx:{atkFlat:4,dmgDealt:0.012},desc:'+4 attack and +1.2% damage per rank.'},
-        {id:'w_livingaegis',name:'Living Aegis',icon:'sk_w_livingaegis',fx:{dmgTaken:0.02,reflect:0.05},desc:'-2% damage taken, reflect 5% per rank.'},
-        {id:'w_avatarwar',name:'Avatar of War',icon:'sk_w_avatarwar',fx:{dmgDealt:0.02,critDmg:0.05},desc:'+2% damage and +5% crit damage per rank.'} ],
+      [ {id:'w_brawn',name:'Brawn',icon:'sk_w_brawn',fx:{atkFlat:3},desc:'Adds flat attack power to every blow you land.'},
+        {id:'w_hardiness',name:'Hardiness',icon:'sk_w_hardiness',fx:{dmgTaken:0.014},desc:'Toughens your body to reduce all incoming damage.'},
+        {id:'w_temper',name:'Temper',icon:'sk_w_temper',fx:{dmgDealt:0.015},desc:'Hones your edge to deal more damage with every strike.'},
+        {id:'w_bloodlust',name:'Bloodlust',icon:'sk_w_bloodlust',fx:{lifesteal:0.012},desc:'Drains a fraction of the damage you deal back as health.'},
+        {id:'w_fury',name:'Fury',icon:'sk_w_fury',fx:{crit:0.008},desc:'Sharpens your instincts to land more critical hits.'} ],
+      [ {id:'w_ironskin',name:'Iron Skin',icon:'sk_w_ironskin',fx:{dr:0.7},cfx:{dr:1},cond:'shield',req:['w_hardiness'],desc:'Grants flat damage reduction, increased while a shield is equipped.'},
+        {id:'w_thickhide',name:'Thick Hide',icon:'sk_w_thickhide',fx:{maxHpPct:0.03},reqAny:['w_brawn','w_hardiness'],desc:'Bolsters your maximum health.'},
+        {id:'w_cleaver',name:'Cleaver',icon:'sk_w_cleaver',fx:{dmgDealt:0.012},cfx:{dmgDealt:0.022},cond:'2h',reqAny:['w_temper','w_brawn'],desc:'Boosts your damage, sharply more while wielding a two-handed weapon.'},
+        {id:'w_vitalsurge',name:'Vital Surge',icon:'sk_w_vitalsurge',fx:{lifesteal:0.01},cfx:{lifesteal:0.015},cond:'lowhp',req:['w_bloodlust'],desc:'Increases the health you steal, more so while wounded below half health.'},
+        {id:'w_recovery',name:'Recovery',icon:'sk_w_recovery',fx:{hpRegen:1.2},reqAny:['w_bloodlust','w_fury'],desc:'Regenerates health each turn.'} ],
+      [ {id:'w_juggernaut',name:'Juggernaut',icon:'sk_w_juggernaut',fx:{dr:0.6,maxHpPct:0.02},req:['w_ironskin'],desc:'Adds flat damage reduction and bonus max health.'},
+        {id:'w_shieldwall',name:'Shield Wall',icon:'sk_w_shieldwall',fx:{block:1},cfx:{block:1.5},cond:'shield',reqAny:['w_ironskin','w_thickhide'],desc:'Raises your block chance, far more while a shield is equipped.'},
+        {id:'w_brutality',name:'Brutality',icon:'sk_w_brutality',fx:{critDmg:0.05},cfx:{critDmg:0.075},cond:'2h',req:['w_cleaver'],desc:'Increases critical damage, amplified while wielding a two-handed weapon.'},
+        {id:'w_rage',name:'Rage',icon:'sk_w_rage',fx:{zeal:0.025},cfx:{lowHpDmg:0.04},cond:'lowhp',reqAny:['w_vitalsurge','w_cleaver'],desc:'Your damage scales with your missing health.'},
+        {id:'w_spikes',name:'Spikes',icon:'sk_w_spikes',fx:{reflect:0.03},cfx:{reflect:0.05},cond:'shield',reqAny:['w_recovery','w_thickhide'],desc:'Reflects a portion of melee damage back, increased with a shield equipped.'} ],
+      [ {id:'w_unstoppable',name:'Unstoppable',icon:'sk_w_unstoppable',fx:{pen:0.02},req:['w_juggernaut'],desc:'Improves armor penetration so your hits bypass enemy defenses.'},
+        {id:'w_focus',name:'Battle Focus',icon:'sk_w_focus',fx:{block:1},cfx:{crit:0.009},cond:'shield',reqAny:['w_shieldwall','w_juggernaut'],desc:'Increases block chance and grants extra crit while wielding a shield.'},
+        {id:'w_executioner',name:'Executioner',icon:'sk_w_executioner',fx:{lowHpDmg:0.035},cfx:{dmgDealt:0.025},cond:'style:cleave',reqAny:['w_brutality','w_rage'],desc:'Deals greatly increased damage to wounded foes, more with a cleaving style.'},
+        {id:'w_sanguine',name:'Sanguine',icon:'sk_w_sanguine',fx:{lifesteal:0.012,hpRegen:1},req:['w_rage'],desc:'Boosts lifesteal and heals more each turn.'},
+        {id:'w_resilience',name:'Resilience',icon:'sk_w_resilience',fx:{dodge:0.01},cfx:{dmgTaken:0.018},cond:'lowhp',reqAny:['w_spikes','w_recovery'],desc:'Increases dodge, with extra damage reduction while below half health.'} ],
+      [ {id:'w_titanic',name:'Titanic Might',icon:'sk_w_titanic',fx:{atkFlat:3,maxHpPct:0.025},req:['w_unstoppable'],desc:'Grants flat attack and bonus max health for a towering frame.'},
+        {id:'w_crushing',name:'Crushing Blows',icon:'sk_w_crushing',fx:{dmgDealt:0.015},cfx:{dmgDealt:0.025},cond:'2h',reqAny:['w_brutality','w_focus'],desc:'Increases damage, greatly more while wielding a two-handed weapon.'},
+        {id:'w_warlord',name:'Warlord',icon:'sk_w_warlord',fx:{atkFlat:3},cfx:{dmgDealt:0.024},cond:'style:crush',req:['w_executioner'],desc:'Adds flat attack with bonus crushing-style damage.'},
+        {id:'w_bulwark',name:'Bulwark',icon:'sk_w_bulwark',fx:{dr:0.6},cfx:{block:1.5},cond:'shield',reqAny:['w_resilience','w_focus','w_sanguine'],desc:'Grants damage reduction and block, far more with a shield equipped.'},
+        {id:'w_spoils',name:'Spoils of War',icon:'sk_w_spoils',fx:{goldFind:4,magicFind:3},reqAny:['w_resilience','w_sanguine'],desc:'Increases gold and magic find from slain foes.'} ],
+      [ {id:'w_immortal',name:'Immortal',icon:'sk_w_immortal',fx:{maxHpPct:0.035,hpRegen:1.5},req:['w_titanic'],desc:'Vastly raises max health and regenerates health each turn.'},
+        {id:'w_berserkersoul',name:'Berserker\'s Pact',icon:'sk_w_berserkersoul',fx:{dmgDealt:0.022,dmgTaken:-0.014},cfx:{dmgDealt:0.03},cond:'lowhp',req:['w_warlord'],desc:'Greatly increases your damage, even more while below half health, but you take more damage in return.'},
+        {id:'w_conqueror',name:'Titan\'s Grip',icon:'sk_w_conqueror',cfx:{dmgDealt:0.022},cond:'2h',req:['w_crushing'],pts:{tree:'passive',n:12},flag:'titangrip',unlock:'titangrip',desc:'Lets you wield an off-hand even with a two-handed weapon (off-hand stats count 60%), and adds damage while wielding a two-hander.'},
+        {id:'w_livingaegis',name:'Living Aegis',icon:'sk_w_livingaegis',fx:{dmgTaken:0.014},cfx:{block:1.5,reflect:0.05},cond:'shield',req:['w_bulwark'],flag:'aegis',unlock:'aegis',desc:'Raises your Block chance cap to 75% and reflects damage while a shield is equipped.'},
+        {id:'w_avatarwar',name:'Avatar of War',icon:'sk_w_avatarwar',fx:{dmgDealt:0.02,dmgTaken:0.012},reqAny:['w_warlord','w_spoils'],pts:{tree:'passive',n:10},desc:'A capstone that boosts damage dealt and reduces all damage taken.'} ]
     ], 'passive'),
     active: buildTree([
       [ {id:'wa_cleave',name:'Cleave',icon:'sk_wa_cleave',mp:10,cd:2,cast:{shape:'cleave',wpn:1.4},desc:'Strike every adjacent foe.'},
@@ -4000,36 +4283,36 @@ const SKILL_TREES = {
 
   rogue: {
     passive: buildTree([
-      [ {id:'r_precision',name:'Precision',icon:'sk_r_precision',fx:{crit:0.007},desc:'+0.7% crit chance per rank.'},
-        {id:'r_evasion',name:'Evasion',icon:'sk_r_evasion',fx:{dodge:0.009},desc:'+0.9% dodge per rank.'},
-        {id:'r_finesse',name:'Finesse',icon:'sk_r_finesse',fx:{atkFlat:2},desc:'+2 attack power per rank.'},
-        {id:'r_venom',name:'Venom',icon:'sk_r_venom',fx:{dmgDealt:0.012},desc:'+1.2% damage dealt per rank.'},
-        {id:'r_quick',name:'Quickness',icon:'sk_r_quick',fx:{dodge:0.008},desc:'+0.8% dodge per rank.'} ],
-      [ {id:'r_lethality',name:'Lethality',icon:'sk_r_lethality',fx:{critDmg:0.05},desc:'+5% crit damage per rank.'},
-        {id:'r_shadows',name:'Shadows',icon:'sk_r_shadows',fx:{dodge:0.01},desc:'+1% dodge per rank.'},
-        {id:'r_opportunist',name:'Opportunist',icon:'sk_r_opportunist',fx:{lowHpDmg:0.03},desc:'+3% damage to wounded foes per rank.'},
-        {id:'r_toxins',name:'Toxins',icon:'sk_r_toxins',fx:{dmgDealt:0.012},desc:'+1.2% damage dealt per rank.'},
-        {id:'r_fleet',name:'Fleet Foot',icon:'sk_r_fleet',fx:{dodge:0.01},desc:'+1% dodge per rank.'} ],
-      [ {id:'r_deadly',name:'Deadly Aim',icon:'sk_r_deadly',fx:{crit:0.008},desc:'+0.8% crit chance per rank.'},
-        {id:'r_cloak',name:'Cloaked',icon:'sk_r_cloak',fx:{dmgTaken:0.012},desc:'-1.2% damage taken per rank.'},
-        {id:'r_savagery',name:'Savagery',icon:'sk_r_savagery',fx:{critDmg:0.06},desc:'+6% crit damage per rank.'},
-        {id:'r_corrosion',name:'Corrosion',icon:'sk_r_corrosion',fx:{pen:0.02},desc:'+2% armor penetration per rank.'},
-        {id:'r_thief',name:'Cutpurse',icon:'sk_r_thief',fx:{goldFind:5},desc:'+5% gold found per rank.'} ],
-      [ {id:'r_assassinate',name:'Assassinate',icon:'sk_r_assassinate',fx:{lowHpDmg:0.035},desc:'+3.5% damage to wounded foes per rank.'},
-        {id:'r_phantom',name:'Phantom',icon:'sk_r_phantom',fx:{dodge:0.012},desc:'+1.2% dodge per rank.'},
-        {id:'r_exposeweak',name:'Expose Weakness',icon:'sk_r_exposeweak',fx:{critDmg:0.06},desc:'+6% crit damage per rank.'},
-        {id:'r_lifesteal',name:'Bloodletting',icon:'sk_r_lifesteal',fx:{lifesteal:0.012},desc:'Heal 1.2% of damage dealt per rank.'},
-        {id:'r_scavenger',name:'Scavenger',icon:'sk_r_scavenger',fx:{magicFind:3},desc:'+3% magic find per rank.'} ],
-      [ {id:'r_killer',name:'Cold Killer',icon:'sk_r_killer',fx:{crit:0.009,critDmg:0.04},desc:'+0.9% crit and +4% crit damage per rank.'},
-        {id:'r_untouch',name:'Untouchable',icon:'sk_r_untouch',fx:{dodge:0.013},desc:'+1.3% dodge per rank.'},
-        {id:'r_butcher',name:'Butcher',icon:'sk_r_butcher',fx:{dmgDealt:0.018},desc:'+1.8% damage dealt per rank.'},
-        {id:'r_plague',name:'Plaguebearer',icon:'sk_r_plague',fx:{lowHpDmg:0.04},desc:'+4% damage to wounded foes per rank.'},
-        {id:'r_xp',name:'Cunning',icon:'sk_r_xp',fx:{xpGain:4},desc:'+4% XP gain per rank.'} ],
-      [ {id:'r_perfectkill',name:'Perfect Kill',icon:'sk_r_perfectkill',fx:{critDmg:0.08},desc:'+8% crit damage per rank.'},
-        {id:'r_ghostwalk',name:'Ghostwalk',icon:'sk_r_ghostwalk',fx:{dodge:0.015,dmgTaken:0.012},desc:'+1.5% dodge and -1.2% damage taken per rank.'},
-        {id:'r_deathdealer',name:'Death Dealer',icon:'sk_r_deathdealer',fx:{dmgDealt:0.022},desc:'+2.2% damage dealt per rank.'},
-        {id:'r_venomlord',name:'Venom Lord',icon:'sk_r_venomlord',fx:{dmgDealt:0.015,pen:0.02},desc:'+1.5% damage and +2% pen per rank.'},
-        {id:'r_apex',name:'Apex Predator',icon:'sk_r_apex',fx:{crit:0.01,critDmg:0.05},desc:'+1% crit and +5% crit damage per rank.'} ],
+      [ {id:'r_precision',name:'Precision',icon:'sk_r_precision',fx:{atkFlat:3},cfx:{crit:0.008},cond:'1h',desc:'Sharpens your aim for a flat increase to attack power, plus extra critical strike chance with one-handed weapons.'},
+        {id:'r_evasion',name:'Evasion',icon:'sk_r_evasion',fx:{dodge:0.01},desc:'Trains your reflexes to slip past blows, increasing your dodge chance.'},
+        {id:'r_finesse',name:'Finesse',icon:'sk_r_finesse',fx:{dmgDealt:0.012},cfx:{pen:0.02},cond:'finesse',desc:'Hones graceful swordplay, granting bonus damage and extra armor penetration while wielding a rapier or stiletto.'},
+        {id:'r_venom',name:'Venom',icon:'sk_r_venom',fx:{dmgDealt:0.012},cfx:{dmgDealt:0.018},cond:'bleedwpn',desc:'Coats your blades, dealing bonus damage with bleed weapons.'},
+        {id:'r_quick',name:'Quickness',icon:'sk_r_quick',fx:{dodge:0.008,mpRegen:1},desc:'Improves your footwork for a small dodge bonus and faster mana recovery.'} ],
+      [ {id:'r_lethality',name:'Lethality',icon:'sk_r_lethality',fx:{critDmg:0.05},req:['r_precision'],desc:'Channels killer instinct into greater critical strike damage.'},
+        {id:'r_shadows',name:'One With Shadows',icon:'sk_r_shadows',fx:{dodge:0.01,dr:0.6},req:['r_evasion'],desc:'Melds you into the darkness, increasing dodge chance and granting slight damage reduction.'},
+        {id:'r_opportunist',name:'Opportunist',icon:'sk_r_opportunist',fx:{lowHpDmg:0.03},cfx:{crit:0.009},cond:'style:thrust',reqAny:['r_finesse','r_precision'],desc:'Exploits openings for bonus damage against wounded foes, with extra critical chance on thrusting strikes.'},
+        {id:'r_toxins',name:'Virulent Toxins',icon:'sk_r_toxins',fx:{dmgDealt:0.012},cfx:{lifesteal:0.013},cond:'bleedwpn',req:['r_venom'],desc:'Deepens your poisons, leeching life back as you strike with bleed weapons.'},
+        {id:'r_fleet',name:'Fleet-Footed',icon:'sk_r_fleet',fx:{dodge:0.012},reqAny:['r_quick','r_evasion'],desc:'Lightens your step for added dodge chance.'} ],
+      [ {id:'r_deadly',name:'Deadly Focus',icon:'sk_r_deadly',fx:{crit:0.008,dmgDealt:0.012},req:['r_lethality'],desc:'Concentrates every strike for greater critical chance and damage dealt.'},
+        {id:'r_cloak',name:'Cloak of Night',icon:'sk_r_cloak',fx:{dodge:0.01,dr:0.8},reqAny:['r_shadows','r_fleet'],desc:'Wraps you in gloom for dodge chance and stronger damage reduction.'},
+        {id:'r_savagery',name:'Savagery',icon:'sk_r_savagery',fx:{zeal:0.025},cfx:{lowHpDmg:0.04},cond:'lowhp',req:['r_opportunist'],desc:'Fights harder as wounds mount, scaling your damage with your missing health.'},
+        {id:'r_corrosion',name:'Duelist\'s Edge',icon:'sk_r_corrosion',fx:{pen:0.02},cfx:{pen:0.02,crit:0.009},cond:'finesse',reqAny:['r_finesse','r_toxins'],desc:'Masters the rapier and stiletto, granting armor penetration always and extra penetration and critical chance with finesse weapons.'},
+        {id:'r_thief',name:'Cutpurse',icon:'sk_r_thief',fx:{goldFind:5},reqAny:['r_fleet','r_quick'],desc:'Lifts coin from your marks, increasing gold found.'} ],
+      [ {id:'r_assassinate',name:'Assassinate',icon:'sk_r_assassinate',fx:{critDmg:0.06,lowHpDmg:0.03},req:['r_deadly'],desc:'Strikes for the kill, boosting critical damage and damage against wounded foes.'},
+        {id:'r_phantom',name:'Phantom Step',icon:'sk_r_phantom',fx:{dodge:0.013},reqAny:['r_cloak','r_shadows'],desc:'Phases through attacks for greater dodge chance.'},
+        {id:'r_exposeweak',name:'Expose Weakness',icon:'sk_r_exposeweak',fx:{pen:0.02,lowHpDmg:0.03},reqAny:['r_savagery','r_corrosion'],desc:'Finds the chinks in armor, granting armor penetration and bonus damage against wounded foes.'},
+        {id:'r_lifesteal',name:'Bloodletter',icon:'sk_r_lifesteal',fx:{lifesteal:0.01},cfx:{lifesteal:0.015,dmgDealt:0.02},cond:'bleedwpn',reqAny:['r_corrosion','r_toxins'],desc:'Reopens every wound, leeching life and dealing bonus damage while using bleed weapons.'},
+        {id:'r_scavenger',name:'Scavenger',icon:'sk_r_scavenger',fx:{magicFind:3,goldFind:4},req:['r_thief'],desc:'Sniffs out hidden treasure, increasing magic find and gold found.'} ],
+      [ {id:'r_killer',name:'Cold-Blooded Killer',icon:'sk_r_killer',fx:{crit:0.008},cfx:{dmgDealt:0.022},cond:'1h',req:['r_assassinate'],desc:'Embraces ruthlessness for greater critical chance and damage dealt with one-handed weapons.'},
+        {id:'r_untouch',name:'Untouchable',icon:'sk_r_untouch',fx:{dodge:0.012,reflect:0.03},reqAny:['r_phantom','r_cloak'],desc:'Becomes nearly impossible to hit, adding dodge chance and reflecting a portion of melee damage.'},
+        {id:'r_butcher',name:'Butcher',icon:'sk_r_butcher',fx:{crit:0.008},cfx:{critDmg:0.07},cond:'style:flurry',reqAny:['r_exposeweak','r_assassinate'],desc:'Carves through enemies for higher critical chance and critical damage on flurry strikes.'},
+        {id:'r_plague',name:'Plaguebearer',icon:'sk_r_plague',fx:{dmgDealt:0.015},cfx:{dmgDealt:0.022,lifesteal:0.013},cond:'bleedwpn',reqAny:['r_lifesteal','r_exposeweak'],desc:'Spreads festering rot, dealing bonus damage and healing from bleed weapons.'},
+        {id:'r_xp',name:'Quick Study',icon:'sk_r_xp',fx:{xpGain:4},reqAny:['r_scavenger','r_thief'],desc:'Learns from every kill, increasing experience gained.'} ],
+      [ {id:'r_perfectkill',name:'Lethal Edge',icon:'sk_r_perfectkill',fx:{crit:0.01,critDmg:0.08,maxHpPct:-0.03},req:['r_killer'],pts:{tree:'passive',n:12},desc:'Pushes lethality to the brink, vastly increasing critical chance and critical damage at the cost of your own maximum health.'},
+        {id:'r_ghostwalk',name:'Ghostwalk',icon:'sk_r_ghostwalk',fx:{dodge:0.015,dr:0.6},reqAny:['r_untouch','r_phantom'],desc:'Drifts like a specter for the greatest dodge chance and slight damage reduction.'},
+        {id:'r_deathdealer',name:'Death Dealer',icon:'sk_r_deathdealer',fx:{crit:0.01,critDmg:0.07,lowHpDmg:0.04},reqAny:['r_butcher','r_killer'],pts:{tree:'passive',n:10},desc:'Turns you into an instrument of death with massive critical chance, critical damage, and bonus damage against wounded foes.'},
+        {id:'r_venomlord',name:'Venomlord',icon:'sk_r_venomlord',fx:{dmgDealt:0.015},cfx:{lifesteal:0.015,dmgDealt:0.025},cond:'bleedwpn',reqAny:['r_plague','r_lifesteal'],pts:{tree:'passive',n:8},desc:'Becomes a master of poisons, granting heavy lifesteal and bonus damage while wielding bleed weapons.'},
+        {id:'r_apex',name:'Dual Mastery',icon:'sk_r_apex',fx:{crit:0.008},cfx:{crit:0.009},cond:'dualoff',reqAny:['r_butcher','r_killer'],flag:'dualwield',unlock:'dualwield',desc:'Masters two-blade fighting so a parrying-dagger off-hand grants a bonus off-hand strike each attack, with extra critical chance while dual-wielding.'} ]
     ], 'passive'),
     active: buildTree([
       [ {id:'ra_backstab',name:'Backstab',icon:'sk_ra_backstab',mp:10,cd:2,cast:{shape:'melee',wpn:2.0,crit:true},desc:'A guaranteed critical on one foe.'},
@@ -4069,34 +4352,34 @@ const SKILL_TREES = {
     passive: buildTree([
       [ {id:'m_arcane',name:'Arcane Mind',icon:'sk_m_arcane',fx:{maxMpPct:0.03,mpRegen:1},desc:'+3% max MP and +1 MP regen per rank.'},
         {id:'m_spellpower',name:'Spell Power',icon:'sk_m_spellpower',fx:{spell:0.02},desc:'+2% spell damage per rank.'},
-        {id:'m_focus',name:'Focus',icon:'sk_m_focus',fx:{crit:0.006},desc:'+0.6% crit chance per rank.'},
-        {id:'m_ward',name:'Ward',icon:'sk_m_ward',fx:{manaShield:0.03},desc:'Absorb 3% of hits with MP per rank.'},
-        {id:'m_glass',name:'Glass Body',icon:'sk_m_glass',fx:{dodge:0.008},desc:'+0.8% dodge per rank.'} ],
-      [ {id:'m_pyromancy',name:'Pyromancy',icon:'sk_m_pyromancy',fx:{spell:0.02},desc:'+2% spell damage per rank.'},
-        {id:'m_cryomancy',name:'Cryomancy',icon:'sk_m_cryomancy',fx:{spell:0.02},desc:'+2% spell damage per rank.'},
-        {id:'m_attunement',name:'Attunement',icon:'sk_m_attunement',fx:{maxMpPct:0.03,mpRegen:1},desc:'+3% max MP and +1 MP regen per rank.'},
-        {id:'m_manashield',name:'Mana Shield',icon:'sk_m_manashield',fx:{manaShield:0.03},desc:'Absorb 3% of hits with MP per rank.'},
-        {id:'m_haste',name:'Quickcast',icon:'sk_m_haste',fx:{spell:0.018},desc:'+1.8% spell damage per rank.'} ],
-      [ {id:'m_combustion',name:'Combustion',icon:'sk_m_combustion',fx:{spell:0.025},desc:'+2.5% spell damage per rank.'},
-        {id:'m_frostbite',name:'Frostbite',icon:'sk_m_frostbite',fx:{spell:0.025},desc:'+2.5% spell damage per rank.'},
-        {id:'m_conduit',name:'Conduit',icon:'sk_m_conduit',fx:{maxMpPct:0.04},desc:'+4% max MP per rank.'},
-        {id:'m_runeskin',name:'Rune Skin',icon:'sk_m_runeskin',fx:{dmgTaken:0.013},desc:'-1.3% damage taken per rank.'},
-        {id:'m_arcanecrit',name:'Arcane Edge',icon:'sk_m_arcanecrit',fx:{critDmg:0.05},desc:'+5% crit damage per rank.'} ],
-      [ {id:'m_inferno',name:'Inferno',icon:'sk_m_inferno',fx:{spell:0.03},desc:'+3% spell damage per rank.'},
-        {id:'m_blizzard',name:'Permafrost',icon:'sk_m_blizzard',fx:{spell:0.03},desc:'+3% spell damage per rank.'},
-        {id:'m_overflow',name:'Mana Overflow',icon:'sk_m_overflow',fx:{maxMpPct:0.04,mpRegen:1},desc:'+4% max MP and +1 regen per rank.'},
-        {id:'m_barrier',name:'Arcane Barrier',icon:'sk_m_barrier',fx:{manaShield:0.035},desc:'Absorb 3.5% of hits with MP per rank.'},
-        {id:'m_magicfind',name:'Treasure Sense',icon:'sk_m_magicfind',fx:{magicFind:3},desc:'+3% magic find per rank.'} ],
-      [ {id:'m_archmage',name:'Archmage',icon:'sk_m_archmage',fx:{spell:0.035},desc:'+3.5% spell damage per rank.'},
-        {id:'m_elementalist',name:'Elementalist',icon:'sk_m_elementalist',fx:{spell:0.03,critDmg:0.04},desc:'+3% spell and +4% crit damage per rank.'},
-        {id:'m_wellspring',name:'Wellspring',icon:'sk_m_wellspring',fx:{maxMpPct:0.05,mpRegen:2},desc:'+5% max MP and +2 regen per rank.'},
-        {id:'m_aegis',name:'Spell Aegis',icon:'sk_m_aegis',fx:{manaShield:0.04,maxMpPct:0.02},desc:'+4% absorb and +2% max MP per rank.'},
-        {id:'m_scholar',name:'Scholar',icon:'sk_m_scholar',fx:{xpGain:4},desc:'+4% XP gain per rank.'} ],
-      [ {id:'m_omniscience',name:'Omniscience',icon:'sk_m_omniscience',fx:{spell:0.04,crit:0.008},desc:'+4% spell and +0.8% crit per rank.'},
-        {id:'m_avatarmagic',name:'Avatar of Magic',icon:'sk_m_avatarmagic',fx:{spell:0.045},desc:'+4.5% spell damage per rank.'},
-        {id:'m_infinite',name:'Infinite Well',icon:'sk_m_infinite',fx:{maxMpPct:0.06,mpRegen:2},desc:'+6% max MP and +2 regen per rank.'},
-        {id:'m_immortalward',name:'Immortal Ward',icon:'sk_m_immortalward',fx:{manaShield:0.05,dmgTaken:0.012},desc:'+5% absorb and -1.2% damage taken per rank.'},
-        {id:'m_ascendant',name:'Ascendant',icon:'sk_m_ascendant',fx:{spell:0.04,critDmg:0.06},desc:'+4% spell and +6% crit damage per rank.'} ],
+        {id:'m_focus',name:'Mental Focus',icon:'sk_m_focus',fx:{crit:0.007},desc:'+0.7% crit chance per rank.'},
+        {id:'m_ward',name:'Mage Armor',icon:'sk_m_ward',fx:{dr:0.7},desc:'+0.7% damage reduction per rank.'},
+        {id:'m_glass',name:'Glass Cannon',icon:'sk_m_glass',fx:{spell:0.04,dmgDealt:0.015,maxHpPct:-0.03},desc:'KEYSTONE: +4% spell damage and +1.5% damage dealt, but -3% max HP per rank.'} ],
+      [ {id:'m_pyromancy',name:'Pyromancy',icon:'sk_m_pyromancy',fx:{spell:0.025},req:['m_spellpower'],desc:'+2.5% spell damage per rank.'},
+        {id:'m_cryomancy',name:'Cryomancy',icon:'sk_m_cryomancy',fx:{spell:0.02},cfx:{lowHpDmg:0.03},cond:'lowhp',req:['m_spellpower'],desc:'+2% spell damage, and +1.5% extra against wounded foes per rank.'},
+        {id:'m_attunement',name:'Attunement',icon:'sk_m_attunement',fx:{maxMpPct:0.04},reqAny:['m_arcane','m_focus'],desc:'+4% max MP per rank.'},
+        {id:'m_manashield',name:'Mana Shield',icon:'sk_m_manashield',fx:{manaShield:0.035},req:['m_ward'],desc:'+3.5% mana shield absorb per rank.'},
+        {id:'m_haste',name:'Arcane Haste',icon:'sk_m_haste',fx:{mpRegen:1,crit:0.006},reqAny:['m_focus','m_glass'],desc:'+1 MP regen and +0.6% crit per rank.'} ],
+      [ {id:'m_combustion',name:'Combustion',icon:'sk_m_combustion',fx:{critDmg:0.04},cfx:{critDmg:0.06},cond:'wand',req:['m_pyromancy'],desc:'+0.04 crit damage, and +6% spell crit damage while wielding a wand per rank.'},
+        {id:'m_frostbite',name:'Frostbite',icon:'sk_m_frostbite',fx:{spell:0.03},cfx:{lowHpDmg:0.04},cond:'lowhp',req:['m_cryomancy'],desc:'+3% spell damage, and +4% extra against wounded foes per rank.'},
+        {id:'m_conduit',name:'Arcane Conduit',icon:'sk_m_conduit',fx:{spell:0.03},cfx:{spell:0.04},cond:'nooffhand',reqAny:['m_attunement','m_pyromancy','m_cryomancy'],desc:'+3% spell damage, and +2.5% extra while wielding a two-handed staff per rank.'},
+        {id:'m_runeskin',name:'Runeskin',icon:'sk_m_runeskin',fx:{dr:0.6},cfx:{manaShield:0.03},cond:'casteroff',reqAny:['m_manashield','m_attunement'],desc:'+1.2% damage reduction, and +3% mana shield with a tome or focus equipped per rank.'},
+        {id:'m_arcanecrit',name:'Arcane Edge',icon:'sk_m_arcanecrit',fx:{critDmg:0.05},cfx:{crit:0.008},cond:'fullhp',req:['m_haste'],desc:'+5% crit damage, and +0.8% crit chance while above 90% HP per rank.'} ],
+      [ {id:'m_inferno',name:'Inferno',icon:'sk_m_inferno',fx:{spell:0.035},req:['m_combustion'],desc:'+3.5% spell damage per rank.'},
+        {id:'m_blizzard',name:'Blizzard',icon:'sk_m_blizzard',fx:{spell:0.03},cfx:{lowHpDmg:0.04},cond:'lowhp',reqAny:['m_frostbite','m_conduit'],desc:'+3% spell damage, and +5% damage dealt to wounded foes per rank.'},
+        {id:'m_overflow',name:'Mana Overflow',icon:'sk_m_overflow',fx:{maxMpPct:0.05},cfx:{spell:0.045},cond:'nooffhand',reqAny:['m_conduit','m_runeskin'],desc:'+5% max MP, and +0.045 spell damage while wielding a two-handed staff per rank.'},
+        {id:'m_barrier',name:'Arcane Bulwark',icon:'sk_m_barrier',fx:{manaShield:0.04},cfx:{spell:0.035},cond:'casteroff',req:['m_runeskin'],desc:'+4% mana shield, and +3.5% spell damage with a tome or focus equipped per rank.'},
+        {id:'m_magicfind',name:'Arcane Insight',icon:'sk_m_magicfind',fx:{magicFind:3,xpGain:4},reqAny:['m_arcanecrit','m_haste'],desc:'+3% magic find and +4% XP gain per rank.'} ],
+      [ {id:'m_archmage',name:'Archmage',icon:'sk_m_archmage',fx:{spell:0.04,critDmg:0.05},req:['m_inferno'],desc:'+4% spell damage and +0.05 crit damage per rank.'},
+        {id:'m_elementalist',name:'Elementalist',icon:'sk_m_elementalist',fx:{spell:0.045},reqAny:['m_inferno','m_blizzard'],desc:'+4.5% spell damage per rank.'},
+        {id:'m_wellspring',name:'Wellspring',icon:'sk_m_wellspring',fx:{maxMpPct:0.06,mpRegen:2},req:['m_overflow'],desc:'+6% max MP and +2 MP regen per rank.'},
+        {id:'m_aegis',name:'Aegis',icon:'sk_m_aegis',fx:{manaShield:0.05},cfx:{manaShield:0.05},cond:'casteroff',reqAny:['m_barrier','m_overflow'],desc:'+5% mana shield, and +0.05 mana shield with a tome or focus equipped per rank.'},
+        {id:'m_scholar',name:'Scholar of Secrets',icon:'sk_m_scholar',fx:{crit:0.01},cfx:{critDmg:0.07},cond:'fullhp',req:['m_magicfind'],desc:'+0.01 crit chance, and +0.07 crit damage while above 90% HP per rank.'} ],
+      [ {id:'m_omniscience',name:'Omniscience',icon:'sk_m_omniscience',fx:{spell:0.045,dmgDealt:0.025,maxHpPct:-0.03},req:['m_archmage'],pts:{tree:'passive',n:10},desc:'KEYSTONE: +4.5% spell damage and +2.5% damage dealt, but -3% max HP per rank.'},
+        {id:'m_avatarmagic',name:'Avatar of Magic',icon:'sk_m_avatarmagic',fx:{spell:0.04},cfx:{lowHpDmg:0.04},cond:'lowhp',reqAny:['m_elementalist','m_archmage'],pts:{tree:'passive',n:9},desc:'+4% spell damage, and +6% extra damage to wounded foes per rank.'},
+        {id:'m_infinite',name:'Infinite Wellspring',icon:'sk_m_infinite',fx:{maxMpPct:0.06,manaShield:0.05},reqAny:['m_wellspring','m_aegis'],pts:{tree:'passive',n:10},desc:'+6% max MP and +5% mana shield per rank.'},
+        {id:'m_immortalward',name:'Immortal Ward',icon:'sk_m_immortalward',fx:{manaShield:0.05,dr:1},req:['m_aegis'],pts:{tree:'passive',n:8},desc:'+5% mana shield and +1.5% damage reduction per rank.'},
+        {id:'m_ascendant',name:'Spellblade',icon:'sk_m_ascendant',fx:{spell:0.02},cfx:{spell:0.045},cond:'wand',reqAny:['m_scholar','m_arcanecrit'],pts:{tree:'passive',n:12},desc:'+2% spell damage, and +4.5% spell damage channeled through a wand per rank.'} ]
     ], 'passive'),
     active: buildTree([
       [ {id:'ma_firebolt',name:'Firebolt',icon:'sk_ma_firebolt',mp:8,cd:1,cast:{shape:'bolt',range:6,spell:1.0,flat:14,perLvl:2.5},desc:'A bolt of fire on the nearest foe.'},
@@ -4134,36 +4417,36 @@ const SKILL_TREES = {
 
   templar: {
     passive: buildTree([
-      [ {id:'t_vigor',name:'Divine Vigor',icon:'sk_t_vigor',fx:{maxHpPct:0.025,hpRegen:1},desc:'+2.5% max HP and +1 regen per rank.'},
-        {id:'t_aegis',name:'Aegis',icon:'sk_t_aegis',fx:{dmgTaken:0.013},desc:'-1.3% damage taken per rank.'},
-        {id:'t_zeal',name:'Zeal',icon:'sk_t_zeal',fx:{zeal:0.02},desc:'Up to +2% damage as HP drops, per rank.'},
-        {id:'t_faith',name:'Faith',icon:'sk_t_faith',fx:{spell:0.02},desc:'+2% spell damage per rank.'},
-        {id:'t_temperance',name:'Temperance',icon:'sk_t_temperance',fx:{maxMpPct:0.025},desc:'+2.5% max MP per rank.'} ],
-      [ {id:'t_devotion',name:'Devotion',icon:'sk_t_devotion',fx:{maxHpPct:0.025,hpRegen:1},desc:'+2.5% max HP and +1 regen per rank.'},
-        {id:'t_retribution',name:'Retribution',icon:'sk_t_retribution',fx:{reflect:0.04},desc:'Reflect 4% of melee damage per rank.'},
-        {id:'t_consecration',name:'Consecration',icon:'sk_t_consecration',fx:{dmgDealt:0.013},desc:'+1.3% damage dealt per rank.'},
-        {id:'t_blessing',name:'Blessing',icon:'sk_t_blessing',fx:{spell:0.02},desc:'+2% spell (healing) power per rank.'},
-        {id:'t_resolve',name:'Resolve',icon:'sk_t_resolve',fx:{dr:0.8},desc:'+0.8% damage reduction per rank.'} ],
-      [ {id:'t_sanctity',name:'Sanctity',icon:'sk_t_sanctity',fx:{maxHpPct:0.03},desc:'+3% max HP per rank.'},
-        {id:'t_thornsaura',name:'Holy Thorns',icon:'sk_t_thornsaura',fx:{reflect:0.05},desc:'Reflect 5% of melee damage per rank.'},
-        {id:'t_fervor',name:'Fervor',icon:'sk_t_fervor',fx:{zeal:0.025},desc:'Up to +2.5% damage as HP drops, per rank.'},
-        {id:'t_radiance',name:'Radiance',icon:'sk_t_radiance',fx:{spell:0.025},desc:'+2.5% spell power per rank.'},
-        {id:'t_block',name:'Bastion',icon:'sk_t_block',fx:{block:1.3},desc:'+1.3% block chance per rank.'} ],
-      [ {id:'t_bulwark',name:'Bulwark',icon:'sk_t_bulwark',fx:{dmgTaken:0.015,maxHpPct:0.02},desc:'-1.5% damage taken, +2% HP per rank.'},
-        {id:'t_vengeance',name:'Vengeance',icon:'sk_t_vengeance',fx:{reflect:0.05,dmgDealt:0.01},desc:'Reflect 5% and +1% damage per rank.'},
-        {id:'t_crusade',name:'Crusade',icon:'sk_t_crusade',fx:{dmgDealt:0.016},desc:'+1.6% damage dealt per rank.'},
-        {id:'t_sacred',name:'Sacred Light',icon:'sk_t_sacred',fx:{spell:0.03},desc:'+3% spell power per rank.'},
-        {id:'t_lifebond',name:'Lifebond',icon:'sk_t_lifebond',fx:{lifesteal:0.012,hpRegen:1},desc:'Heal 1.2% of damage and +1 regen per rank.'} ],
-      [ {id:'t_indomitable',name:'Indomitable',icon:'sk_t_indomitable',fx:{maxHpPct:0.035,dmgTaken:0.012},desc:'+3.5% HP and -1.2% damage taken per rank.'},
-        {id:'t_judgewrath',name:"Judge's Wrath",icon:'⚖️',fx:{dmgDealt:0.018},desc:'+1.8% damage dealt per rank.'},
-        {id:'t_zealot',name:'Zealot',icon:'sk_t_zealot',fx:{zeal:0.03,crit:0.005},desc:'Up to +3% damage as HP drops, +0.5% crit per rank.'},
-        {id:'t_seraph',name:'Seraphic',icon:'sk_t_seraph',fx:{spell:0.035,maxMpPct:0.02},desc:'+3.5% spell and +2% MP per rank.'},
-        {id:'t_almsgiver',name:'Almsgiver',icon:'sk_t_almsgiver',fx:{goldFind:5},desc:'+5% gold found per rank.'} ],
-      [ {id:'t_immortal',name:'Eternal',icon:'sk_t_immortal',fx:{maxHpPct:0.04,hpRegen:2},desc:'+4% max HP and +2 regen per rank.'},
-        {id:'t_divinewrath',name:'Divine Wrath',icon:'sk_t_divinewrath',fx:{dmgDealt:0.022,spell:0.02},desc:'+2.2% damage and +2% spell per rank.'},
-        {id:'t_paragon',name:'Paragon',icon:'sk_t_paragon',fx:{zeal:0.035,dmgDealt:0.012},desc:'Up to +3.5% as HP drops, +1.2% damage per rank.'},
-        {id:'t_archon',name:'Archon Ward',icon:'sk_t_archon',fx:{dmgTaken:0.02,reflect:0.05},desc:'-2% damage taken, reflect 5% per rank.'},
-        {id:'t_avatarlight',name:'Avatar of Light',icon:'sk_t_avatarlight',fx:{spell:0.04,hpRegen:2},desc:'+4% spell power and +2 regen per rank.'} ],
+      [ {id:'t_vigor',name:'Divine Vigor',icon:'sk_t_vigor',fx:{maxHpPct:0.025,hpRegen:1},desc:'Grants +2.5% max HP and +1 HP regen per rank.'},
+        {id:'t_aegis',name:'Aegis of Faith',icon:'sk_t_aegis',fx:{dmgTaken:0.013},cfx:{dmgTaken:0.018},cond:'shield',desc:'Reduces all damage taken by 1.3% per rank, and an extra amount while a shield is equipped.'},
+        {id:'t_zeal',name:'Zeal',icon:'sk_t_zeal',fx:{zeal:0.02},desc:'Deals up to +2% more damage as your HP drops per rank.'},
+        {id:'t_faith',name:'Faith',icon:'sk_t_faith',fx:{spell:0.02},desc:'Increases spell and healing power by 2% per rank.'},
+        {id:'t_temperance',name:'Temperance',icon:'sk_t_temperance',fx:{maxMpPct:0.025,mpRegen:1},desc:'Grants +2.5% max MP and +1 MP regen per rank.'} ],
+      [ {id:'t_devotion',name:'Devotion',icon:'sk_t_devotion',fx:{maxHpPct:0.025,hpRegen:1},req:['t_vigor'],desc:'Grants +2.5% max HP and +1 HP regen per rank.'},
+        {id:'t_retribution',name:'Retribution',icon:'sk_t_retribution',fx:{reflect:0.04},cfx:{reflect:0.05},cond:'shield',reqAny:['t_aegis','t_vigor'],desc:'Reflects 4% of melee damage back at attackers per rank, plus more while a shield is equipped.'},
+        {id:'t_consecration',name:'Consecration',icon:'sk_t_consecration',fx:{dmgDealt:0.013},cfx:{dmgDealt:0.02},cond:'style:crush',req:['t_zeal'],desc:'Increases damage dealt by 1.3% per rank, and more while wielding a crushing weapon.'},
+        {id:'t_blessing',name:'Blessing',icon:'sk_t_blessing',fx:{spell:0.02},cfx:{hpRegen:1.5},cond:'fullhp',reqAny:['t_faith','t_zeal'],desc:'Increases spell and healing power by 2% per rank, and grants +1 HP regen while above 90% HP.'},
+        {id:'t_resolve',name:'Resolve',icon:'sk_t_resolve',fx:{dr:0.8},cfx:{dr:1},cond:'shield',reqAny:['t_temperance','t_faith'],desc:'Grants +0.8% damage reduction per rank, increased while a shield is equipped.'} ],
+      [ {id:'t_sanctity',name:'Sanctity',icon:'sk_t_sanctity',fx:{maxHpPct:0.03},cfx:{lifesteal:0.015},cond:'lowhp',req:['t_devotion'],desc:'Grants +3% max HP per rank, and heals 1.2% of damage dealt while wounded below 50% HP.'},
+        {id:'t_thornsaura',name:'Holy Thorns',icon:'sk_t_thornsaura',fx:{reflect:0.05},cfx:{reflect:0.05},cond:'shield',reqAny:['t_retribution','t_consecration'],desc:'Reflects 5% of melee damage per rank, increased while a shield is equipped.'},
+        {id:'t_fervor',name:'Fervor',icon:'sk_t_fervor',fx:{zeal:0.025},cfx:{lowHpDmg:0.035},cond:'lowhp',req:['t_zeal'],desc:'Deals up to +2.5% more damage as HP drops per rank, and an extra burst while below 50% HP.'},
+        {id:'t_radiance',name:'Radiance',icon:'sk_t_radiance',fx:{spell:0.025},cfx:{mpRegen:1.5},cond:'casteroff',req:['t_blessing'],desc:'Increases spell and healing power by 2.5% per rank, plus MP regen while wielding a focus or tome.'},
+        {id:'t_block',name:'Bastion',icon:'sk_t_block',fx:{block:1.3},cfx:{block:1.5},cond:'shield',reqAny:['t_resolve','t_blessing'],desc:'Grants +1.3% block chance per rank, increased while a shield is equipped.'} ],
+      [ {id:'t_bulwark',name:'Bulwark',icon:'sk_t_bulwark',fx:{dmgTaken:0.015,maxHpPct:0.02},cfx:{block:1.2},cond:'shield',reqAny:['t_sanctity','t_block'],desc:'Reduces damage taken by 1.5% and grants +2% max HP per rank, with extra block while a shield is equipped.'},
+        {id:'t_vengeance',name:'Vengeance',icon:'sk_t_vengeance',fx:{reflect:0.05,dmgDealt:0.01},cfx:{reflect:0.05},cond:'shield',req:['t_thornsaura'],desc:'Reflects 5% of melee damage and deals +1% damage per rank, with more reflect while a shield is equipped.'},
+        {id:'t_crusade',name:'Crusade',icon:'sk_t_crusade',fx:{dmgDealt:0.016},cfx:{dmgDealt:0.024},cond:'cat:Mace',reqAny:['t_fervor','t_thornsaura'],desc:'Increases damage dealt by 1.6% per rank, and more while wielding a mace or other crushing weapon.'},
+        {id:'t_sacred',name:'Sacred Light',icon:'sk_t_sacred',fx:{spell:0.03},cfx:{lifesteal:0.015},cond:'fullhp',reqAny:['t_radiance','t_fervor'],desc:'Increases spell and healing power by 3% per rank, plus lifesteal while above 90% HP.'},
+        {id:'t_lifebond',name:'Lifebond',icon:'sk_t_lifebond',fx:{lifesteal:0.012,hpRegen:1},cfx:{lifesteal:0.015},cond:'1h',reqAny:['t_block','t_radiance'],desc:'Heals 1.2% of damage dealt and grants +1 HP regen per rank, increased while wielding a one-handed weapon.'} ],
+      [ {id:'t_indomitable',name:'Indomitable',icon:'sk_t_indomitable',fx:{maxHpPct:0.035,dmgTaken:0.012},cfx:{dmgTaken:0.018},cond:'shield',req:['t_bulwark'],desc:'Grants +3.5% max HP and -1.2% damage taken per rank, with extra reduction while a shield is equipped.'},
+        {id:'t_judgewrath',name:'Martyr\'s Wrath',icon:'⚖️',fx:{dmgDealt:0.022,reflect:0.05,dmgTaken:-0.012},reqAny:['t_vengeance','t_bulwark'],desc:'Deals +2.2% damage and reflects 5% of melee damage per rank, but you take 1.2% more damage in exchange.'},
+        {id:'t_zealot',name:'Zealot',icon:'sk_t_zealot',fx:{zeal:0.03,crit:0.005},cfx:{lowHpDmg:0.04},cond:'lowhp',reqAny:['t_crusade','t_fervor'],desc:'Deals up to +3% more damage as HP drops and +0.5% crit per rank, with bonus damage on wounded foes.'},
+        {id:'t_seraph',name:'Seraphic',icon:'sk_t_seraph',fx:{spell:0.035,maxMpPct:0.02},cfx:{hpRegen:2},cond:'fullhp',req:['t_sacred'],desc:'Increases spell power by 3.5% and max MP by 2% per rank, plus HP regen while above 90% HP.'},
+        {id:'t_almsgiver',name:'Almsgiver',icon:'sk_t_almsgiver',fx:{goldFind:5,magicFind:3},cfx:{magicFind:4},cond:'shield',reqAny:['t_lifebond','t_sacred'],desc:'Grants +5% gold and +3% magic find per rank, plus extra magic find while a shield is equipped.'} ],
+      [ {id:'t_immortal',name:'Eternal Bastion',icon:'sk_t_immortal',fx:{maxHpPct:0.04,hpRegen:2,dmgTaken:0.01},req:['t_indomitable'],pts:{tree:'passive',n:12},desc:'Grants +4% max HP, +2 HP regen, and -1% damage taken per rank; spend 12 points in this tree first.'},
+        {id:'t_divinewrath',name:'Divine Wrath',icon:'sk_t_divinewrath',fx:{dmgDealt:0.022,spell:0.02},cfx:{dmgDealt:0.025},cond:'style:crush',reqAny:['t_judgewrath','t_zealot'],desc:'Increases damage dealt by 2.2% and spell power by 2% per rank, with bonus damage while wielding a crushing weapon.'},
+        {id:'t_paragon',name:'Paragon of Zeal',icon:'sk_t_paragon',fx:{zeal:0.035,dmgDealt:0.012},cfx:{zeal:0.05},cond:'lowhp',reqAny:['t_zealot','t_judgewrath'],pts:{tree:'passive',n:12},desc:'Deals up to +3.5% more damage as HP drops and +1.2% damage per rank, surging while below 50% HP; spend 12 points in this tree first.'},
+        {id:'t_archon',name:'Archon Aegis',icon:'sk_t_archon',cfx:{block:1.5,dr:1},cond:'shield',req:['t_bulwark'],flag:'aegis',unlock:'aegis',desc:'While a shield is equipped, gain +1.5% block and +1% damage reduction per rank; raises your Block chance cap to 75%.'},
+        {id:'t_avatarlight',name:'Avatar of Light',icon:'sk_t_avatarlight',fx:{spell:0.04,hpRegen:2},cfx:{lifesteal:0.015},cond:'fullhp',reqAny:['t_seraph','t_almsgiver'],pts:{tree:'passive',n:14},desc:'Increases spell and healing power by 4% and grants +2 HP regen per rank, with lifesteal while above 90% HP; spend 14 points in this tree first.'} ]
     ], 'passive'),
     active: buildTree([
       [ {id:'ta_smite',name:'Holy Smite',icon:'sk_ta_smite',mp:10,cd:2,cast:{shape:'bolt',range:5,spell:1.0,heal:{pctDmg:0.4}},desc:'Smite a foe and heal for part of it.'},
@@ -4341,14 +4624,77 @@ function skillTreeFor(view) {
 function classSkillTree() { const t = classTrees(); return t.passive.concat(t.active, ascTree()); }
 function skillNode(id) { return classSkillTree().find(n => n.id === id) || null; }
 function skillRank(id) { return (player.skills && player.skills[id]) || 0; }
-// Sum a passive bonus key across every owned node rank (both trees + path).
+// Sum a passive bonus key across every owned node rank (both trees + path). A
+// node's always-on `fx` always counts; its CONDITIONAL `cfx` counts only while its
+// `cond` is currently true (e.g. "+damage WHILE wielding a two-hander"). Because
+// cfx reuses the SAME bonus keys the combat formulas already read, a conditional
+// passive needs zero new combat hooks — it just feeds the existing consumers.
 function skillBonus(key) {
   if (!player.skills) return 0;
   let sum = 0;
   for (const n of classSkillTree()) {
-    if (n.type === 'passive' && n.fx && n.fx[key]) sum += n.fx[key] * skillRank(n.id);
+    if (n.type !== 'passive') continue;
+    const r = skillRank(n.id);
+    if (!r) continue;
+    if (n.fx && n.fx[key]) sum += n.fx[key] * r;
+    if (n.cfx && n.cfx[key] && condMet(n.cond)) sum += n.cfx[key] * r;
   }
   return sum;
+}
+// Total ranks spent in a given tree of the current class (for "spend N points
+// here to unlock" keystone gates).
+function pointsInTree(kind) {
+  const t = classTrees();
+  const arr = kind === 'active' ? t.active : kind === 'path' ? ascTree() : t.passive;
+  return arr.reduce((s, n) => s + skillRank(n.id), 0);
+}
+// Is a build-defining FLAG on? True when any owned node declares it via `flag` or
+// `unlock`. This is the one extra hook the genuinely-new mechanics read (Titan's
+// Grip, Dual Mastery, Aegis cap, …) — cheap: only called behind a guard.
+function skillFlag(name) {
+  if (!player || !player.skills) return false;
+  for (const n of classSkillTree()) {
+    if (skillRank(n.id) > 0 && (n.flag === name || n.unlock === name)) return true;
+  }
+  return false;
+}
+// Evaluate a named CONDITION for a conditional passive against the live loadout /
+// hero state. Data-driven (a string key, never a closure in save data) so cond
+// passives stay cheap and serialization-safe. Unknown conds are simply false.
+function condMet(cond) {
+  if (!cond) return true;
+  const w = equipped.weapon, o = equipped.offhand;
+  switch (cond) {
+    case '2h':       return isTwoHander(w);
+    case '1h':       return !!w && !isTwoHander(w);
+    case 'freehand': return !!w && !isTwoHander(w) && !o;   // a 1H weapon and no off-hand
+    case 'offhand':  return !!o;
+    case 'nooffhand':return !o;
+    case 'shield':   return !!o && o.off === 'shield';
+    case 'casteroff':return !!o && o.off === 'caster';
+    case 'dualoff':  return !!o && o.off === 'dual';
+    case 'wand':     return weaponSubType(w) === 'Wand';
+    case 'finesse':  { const s = weaponSubType(w); return s === 'Rapier' || s === 'Stiletto'; }
+    case 'bleedwpn': return totalStat('BLEED') > 0;
+    case 'lowhp':    return !!player.maxHp && player.hp < player.maxHp * 0.5;
+    case 'fullhp':   return !!player.maxHp && player.hp >= player.maxHp * 0.9;
+    default:
+      if (cond.indexOf('style:') === 0) return weaponStyle() === cond.slice(6);
+      if (cond.indexOf('cat:') === 0)   return weaponBaseType(w) === cond.slice(4);
+      return false;
+  }
+}
+// The bonus off-hand swing fraction granted by Dual Mastery (0 if not unlocked or
+// no parry-blade off-hand equipped), scaling with the unlocking node's rank.
+function dualWieldMult() {
+  if (!equipped.offhand || equipped.offhand.off !== 'dual') return 0;
+  for (const n of classSkillTree()) {
+    if (n.flag === 'dualwield' || n.unlock === 'dualwield') {
+      const r = skillRank(n.id);
+      if (r > 0) return 0.22 + 0.02 * r;   // rank 1 → 24%, rank 10 → 42%
+    }
+  }
+  return 0;
 }
 // Spell-damage multiplier from spell passives + gear + transient spell buffs.
 function spellPowerMult() { return 1 + skillBonus('spell') + buffMag('spellUp') + totalStat('SPELLPWR') / 100; }
@@ -4357,7 +4703,11 @@ function skillReqMet(node) {
   if (!node) return false;
   if (node.asc && player.ascension !== node.asc) return false;
   if (player.level < (node.lvl || 1)) return false;
+  // `req` = ALL of these prerequisites (AND); `reqAny` = at least ONE (OR), which
+  // is how two branches merge into a shared node; `pts` = spend N points in a tree.
   if (node.req) for (const rid of node.req) if (skillRank(rid) < 1) return false;
+  if (node.reqAny && node.reqAny.length && !node.reqAny.some(rid => skillRank(rid) >= 1)) return false;
+  if (node.pts && pointsInTree(node.pts.tree) < node.pts.n) return false;
   return true;
 }
 function skillMaxed(node) { return skillRank(node.id) >= (node.max || 1); }
@@ -4492,18 +4842,64 @@ function updateFloorClear() {
   if (!floorCleared && hostilesRemaining() === 0) {
     floorCleared = true;
     if (player.clearedFloors) player.clearedFloors[dungeonLevel] = true;
-    log('🔓 The floor is clear — the stairs down unseal!', 'important');
-    sfx('stairs');
+    if (isLastFiniteFloor()) {
+      // The end of a finite difficulty — there are no stairs down. Conquering it
+      // unlocks the next tier (chosen back in town) and brands a permanent scar.
+      sfx('bosskill');
+      conquerDifficulty();
+    } else {
+      log('🔓 The floor is clear — the stairs down unseal!', 'important');
+      sfx('stairs');
+    }
     updateBars();
   }
 }
 // A short, themed description of what bars the stairs on this floor.
 function clearConditionLabel() {
   const n = hostilesRemaining();
+  if (isLastFiniteFloor()) return 'Slay the final guardian to conquer this difficulty — then return to town for the next one.';
   if (dungeonLevel % 5 === 0) return 'Slay the floor guardian and its minions to descend.';
   if (n === 0) return 'The way down is already open.';
   return `Defeat all ${n} foes on this floor to unseal the stairs down.`;
 }
+
+// ── DIFFICULTY CONQUEST ──
+// Beating a finite tier's floor-25 boss conquers that difficulty: it unlocks the
+// next tier at the town Dungeon Gate and brands the hero with a permanent stat
+// scar. Re-clearing an already-conquered tier just nods to it.
+function conquerDifficulty() {
+  const tier = currentDifficulty();              // 1, 2 or 3
+  const firstTime = (player.diffCleared || 0) < tier;
+  if (firstTime) {
+    player.diffCleared = tier;
+    recomputeMaxStats();                          // bank the new permanent HP scar
+    lbScheduleSubmit();
+  }
+  saveGame();
+  showConquest(tier, firstTime);
+}
+function showConquest(tier, firstTime) {
+  const thisName = DIFFS[tier - 1].name;
+  const next = DIFFS[tier];                       // the newly opened tier (Hardened→…→Endless)
+  const titleEl = document.getElementById('conquest-title');
+  const bodyEl = document.getElementById('conquest-body');
+  if (titleEl) titleEl.textContent = firstTime ? `${thisName} Conquered!` : `${thisName} — already conquered`;
+  const lines = [];
+  if (firstTime) {
+    lines.push(`<div class="conquest-line">You slew the final guardian and cleared every floor of the <b style="color:${DIFFS[tier-1].color}">${thisName}</b> dungeon.</div>`);
+    if (next) lines.push(`<div class="conquest-line">🔓 <b style="color:${next.color}">${next.name}</b> difficulty is now open — choose it at the town <b>🌀 Dungeon&nbsp;Gate</b>. The dungeon resets to floor&nbsp;1, far deadlier${next.key === 'endless' ? ', with no preset bosses and no floor&nbsp;cap' : ''}.</div>`);
+    const pct = Math.round((1 - diffDebuffMult()) * 100);
+    lines.push(`<div class="conquest-line conquest-scar">⚔️ The triumph leaves a permanent scar — your max HP and the damage you deal are now reduced by <b>${pct}%</b> in total.</div>`);
+  } else {
+    lines.push(`<div class="conquest-line">You've bested the ${thisName} guardian before. Harder tiers await at the town <b>🌀 Dungeon&nbsp;Gate</b>.</div>`);
+  }
+  if (bodyEl) bodyEl.innerHTML = lines.join('');
+  const ov = document.getElementById('conquest-overlay');
+  if (ov) ov.classList.add('open');
+  log(`🏆 You conquered the ${thisName} dungeon!`, 'important');
+}
+function closeConquest() { const ov = document.getElementById('conquest-overlay'); if (ov) ov.classList.remove('open'); }
+function conquestToTown() { closeConquest(); enterTown(); }
 
 function rollFloorMod() {
   // First two floors are always normal so players learn the ropes.
@@ -4582,6 +4978,9 @@ let player = { x: 5, y: 5, facing: 'left', hp: 100, maxHp: 100, mp: 60, maxMp: 6
   // Deepest dungeon floor reached — the Dungeon Gate in town lets you re-enter
   // on any floor up to this, so you can backtrack to grind levels and gear.
   maxFloor: 1,
+  // Finite difficulty tiers conquered (0–3). Drives Dungeon-Gate unlocks and the
+  // permanent per-tier stat debuff.
+  diffCleared: 0,
   // Floors the player has already cleared of foes, keyed by floor number. Once a
   // floor is here its stairs never re-seal — backtracking via the Dungeon Gate or
   // the up-stairs drops you onto an already-open floor with no unlock conditions.
@@ -4620,7 +5019,7 @@ let inventory = [];
 // and gear kept here are never spent at merchants and never lost on death; the
 // stash is only accessible from the Vault in town.
 let stash = { gold: 0, items: [] };
-let equipped = { head: null, chest: null, hands: null, legs: null, weapon: null, ring: null, amulet: null };
+let equipped = { head: null, chest: null, hands: null, legs: null, weapon: null, offhand: null, ring: null, amulet: null };
 let groundItems = []; // chests on the floor: { x, y } — loot is rolled when opened
 // Death drop: when you fall, your whole bag is left as a recoverable grave on the
 // floor where you died. `graveSite` is the persistent record { floor, items, gold };
@@ -5501,6 +5900,8 @@ document.addEventListener('click', (e) => {
 
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
+  { date: '2026-06-29', size: 'big', v: 'Dungeon difficulties', by: 'Claude', notes: ['Conquer the floor-25 guardian to unlock the next, deadlier difficulty at the town Dungeon Gate: Normal → Hardened → Brutal → Endless, each the same 25 floors but more powerful and bathed in deepening red.', 'Endless mode restarts at floor 1 (as deep as floor 76), rolls random bosses, has no floor cap and ramps ever harder.', 'Death penalties grow per tier — gentle on Normal, ruinous in Endless — and each difficulty conquered leaves a permanent stat scar.', 'Rarer crafting materials are gated by tier: Glimmer (Hardened), Core (Brutal), Chaos Orbs (Endless only).', 'The leaderboard now shows the difficulty with the floor and ranks harder runs above easier ones.'] },
+  { date: '2026-06-29', size: 'small', v: 'Healer charges a fee', by: 'Claude', notes: ['A full rest & cure at the town healer is no longer free — it now costs gold that climbs steeply (about 28% per level) the stronger you get: a few coins early, a brutal gold sink at high levels, capped at 100k.', 'The free, cooldown-gated Health and Mana potions are unchanged, so you can still recover mid-run without paying.'] },
   { date: '2026-06-29', size: 'medium', v: 'Power leaderboard', by: 'Claude', notes: ['The global leaderboards now have a fourth board ranking heroes by their highest Power ever reached, alongside Furthest floor, Level and Gold.'] },
   { date: '2026-06-29', size: 'big', v: 'Paper-doll gear screen', by: 'Jeff Louie', notes: ['The GEAR tab is now a Diablo-2-style equipment doll: each slot is a framed cell laid out around a faint hero body, with worn pieces ringed in their rarity colour. Tap a slot for its tooltip, ✕ to unequip.'] },
   { date: '2026-06-29', size: 'small', v: 'Monochrome UI symbols', by: 'Jeff Louie', notes: ['Menu and HUD emoji that aren’t game icons now render as flat single-colour symbols instead of colourful emoji (and the title-screen setting icons no longer vanish). The colourful pixel-art game icons are unchanged.'] },
@@ -6217,14 +6618,21 @@ function generateMap() {
   const climbing = arrivalDir === 'up' && dungeonLevel > 1;
   const farStair = climbing ? 12 : 2;   // the way onward
   const entryStair = climbing ? 2 : 12; // the way back, under your feet
-  let best = null, bestD = -1;
-  for (let t = 0; t < 80; t++) {
-    const c = randomFloorTile(reach); if (!c) break;
-    const d = Math.abs(c.x - player.x) + Math.abs(c.y - player.y);
-    if (d > bestD) { bestD = d; best = c; }
+  // The last floor of a finite difficulty (its boss floor 25) is the END of that
+  // dungeon — there are no stairs down. Conquer the guardian, then return to town
+  // and pick the next difficulty at the Dungeon Gate. (Endless never ends, so it
+  // always has its onward stairs.)
+  const noOnward = isLastFiniteFloor() && farStair === 2;
+  if (!noOnward) {
+    let best = null, bestD = -1;
+    for (let t = 0; t < 80; t++) {
+      const c = randomFloorTile(reach); if (!c) break;
+      const d = Math.abs(c.x - player.x) + Math.abs(c.y - player.y);
+      if (d > bestD) { bestD = d; best = c; }
+    }
+    if (best) mapData[best.y][best.x] = farStair;
+    else mapData[player.y][Math.min(MAP_W-2, player.x+1)] = farStair; // safety fallback
   }
-  if (best) mapData[best.y][best.x] = farStair;
-  else mapData[player.y][Math.min(MAP_W-2, player.x+1)] = farStair; // safety fallback
 
   // ── ENTRY STAIR ── back the way you came. It sits on the entry tile (where you
   // arrive), so walking back onto it returns you to the previous floor. Floor 1
@@ -6390,6 +6798,8 @@ function generateMap() {
   } else if (hostilesRemaining() === 0) {
     floorCleared = true;
     if (player.clearedFloors) player.clearedFloors[dungeonLevel] = true;
+  } else if (isLastFiniteFloor()) {
+    log(`👑 The dungeon's final guardian holds this floor. ${clearConditionLabel()}`, 'important');
   } else {
     log(`🔒 The stairs down are sealed. ${clearConditionLabel()}`, 'important');
   }
@@ -7183,7 +7593,7 @@ function openTownHub() {
   const gateTile =
     `<button class="town-menu-btn tm-gate" onclick="openTownService('gate')">
        <span class="tm-icon">${dlIcon('feat_portal') || '🌀'}</span>
-       <span class="tm-text"><span class="tm-name">Dungeon Gate</span><span class="tm-desc">Descend to floor ${gateFloor}, or pick another</span></span>
+       <span class="tm-text"><span class="tm-name">Dungeon Gate</span><span class="tm-desc">Back to ${floorLabel(gateFloor)}, or pick a difficulty</span></span>
      </button>`;
   setTownContent(`<div class="town-blurb">A safe haven away from the dungeon. Pick a service, then take the Dungeon Gate when you're ready to delve again.</div><div class="town-menu">${tiles}${gateTile}</div>`);
 }
@@ -7447,8 +7857,9 @@ function renderForge() {
   const baseBtns = names.map(n => {
     const locked = isWeapon && !classCanUseWeaponBase(n);
     const cls = `forge-opt${n === forgeBase ? ' on' : ''}${locked ? ' forge-opt-locked' : ''}`;
+    const hand = isWeapon ? ` <span style="opacity:.55;font-size:9px">${weaponHandsOf(n) === 2 ? '2H' : '1H'}</span>` : '';
     const reach = isWeapon ? ` <span style="opacity:.6;font-size:9px">⟷${weaponRange(n)}</span>` : '';
-    return `<button class="${cls}" ${locked ? 'disabled' : `onclick="forgeSelectBase('${n}')"`}>${n}${reach}${locked ? ' 🔒' : ''}</button>`;
+    return `<button class="${cls}" ${locked ? 'disabled' : `onclick="forgeSelectBase('${n.replace(/'/g, "\\'")}')"`}>${n}${hand}${reach}${locked ? ' 🔒' : ''}</button>`;
   }).join('');
   const tierBtns = CRAFT_TIERS.map(t => {
     const caps = TIER_AFFIX_CAPS[t] || { stat: 0, attr: 0 };
@@ -7468,7 +7879,7 @@ function renderForge() {
   const cls = playerClass();
   let baseHint = '';
   if (isWeapon) {
-    const style = WEAPON_STYLES[forgeBase];
+    const style = WEAPON_SUBTYPES[forgeBase] ? WEAPON_SUBTYPES[forgeBase].style : WEAPON_STYLES[forgeBase];
     baseHint = `<div style="padding:1px 2px 3px">${weaponRangeGridHTML(forgeBase)}` +
       (WEAPON_STYLE_DESC[style] ? `<div style="color:#9a8d70;font-size:9px;margin-top:3px;font-style:italic">${WEAPON_STYLE_DESC[style]}</div>` : '') +
       (cls ? `<div style="color:#8a7d63;font-size:9px;margin-top:3px">🔒 bases are weapons your ${cls.name} can't wield</div>` : '') +
@@ -7510,7 +7921,7 @@ function craftBlankItem(slot, tier, baseName) {
   const item = {
     id: Math.random(), name: 'Crafted ' + baseName, tier, slot, ilvl: lvl,
     stats: {}, attrs: {}, value, crafted: true, flavor: 'Forged by your own hand.',
-    icon: ITEM_ICONS[baseName] || SLOT_ICONS[slot],
+    icon: iconForBase(slot, baseName),
   };
   // The base shapes the headline (weapon DMG / armor DEF) and gives jewelry its
   // innate signature stat, so picking a base at the Forge has a real effect.
@@ -7546,10 +7957,14 @@ function salvageRanges(item) {
   const sLo = Math.max(1, Math.round((1 + rank) * lf));
   const sHi = Math.max(sLo + 1, Math.round((3 + rank * 2) * lf));
   r.push({ key: 'scrap', lo: sLo, hi: sHi });       // every piece gives scrap
-  if (rank >= 2) r.push({ key: 'glimmer', lo: 1, hi: 1 + Math.floor(rank / 2) }); // uncommon+
-  if (rank >= 3) r.push({ key: 'core',    lo: 1, hi: rank - 1 });                 // rare+
-  if (rank >= 5) r.push({ key: 'chaos',   lo: 1, hi: 2 });                        // legendary+ guaranteed
-  else if (rank >= 4) r.push({ key: 'chaos', lo: 0, hi: 1 });                     // epic: a lucky chance
+  // Rarer salvage is gated by the difficulty you're delving (Glimmer→Hardened,
+  // Core→Brutal, Chaos→Endless), matching how those materials drop from foes.
+  if (rank >= 2 && materialUnlocked('glimmer')) r.push({ key: 'glimmer', lo: 1, hi: 1 + Math.floor(rank / 2) }); // uncommon+
+  if (rank >= 3 && materialUnlocked('core'))    r.push({ key: 'core',    lo: 1, hi: rank - 1 });                 // rare+
+  if (materialUnlocked('chaos')) {
+    if (rank >= 5) r.push({ key: 'chaos',   lo: 1, hi: 2 });                       // legendary+ guaranteed
+    else if (rank >= 4) r.push({ key: 'chaos', lo: 0, hi: 1 });                    // epic: a lucky chance
+  }
   return r;
 }
 // Roll the actual materials gained from salvaging one item.
@@ -7637,26 +8052,42 @@ function toggleLockCraft(i) {
 }
 
 // ── HEALER — rest to full HP/MP and cure ailments ──
+// A full rest is no longer free: the healer charges a fee that climbs
+// exponentially with the hero's level (~28% per level), so it's pocket change
+// while you're weak but a steep gold sink once you're powerful. The fee is
+// capped at 100k so it never becomes absurd (the cap is reached around level
+// 39). The free, cooldown-gated Health/Mana potions remain the cheap mid-fight
+// option.
+function healCost() {
+  const lvl = player.level || 1;
+  return Math.min(100000, Math.round(10 * Math.pow(1.28, lvl - 1)));
+}
 function openHealer() { openTownModal('⛑️ Healer'); renderHealer(); }
 function renderHealer() {
   const full = player.hp >= player.maxHp && player.mp >= player.maxMp;
+  const cost = healCost();
+  const afford = player.gold >= cost;
   setTownContent(`
-    <div class="town-blurb">The healer mends your wounds and cleanses any lingering curse before you head back down.</div>
+    <div class="town-blurb">The healer mends your wounds and cleanses any lingering curse before you head back down — for a fee that grows with your legend.</div>
     <div class="shop-row">
       <span class="loot-icon">❤️</span>
       <div class="shop-row-info"><div class="shop-row-name">Full Rest &amp; Cure</div>
         <div class="shop-row-sub">Restore all HP/MP and clear poison &amp; curses</div></div>
-      <span class="shop-price">Free</span>
-      <button class="shop-buy-btn" ${full ? 'disabled' : ''} onclick="restHeal()">REST</button>
+      <span class="shop-price">${cost}g</span>
+      <button class="shop-buy-btn" ${(full || !afford) ? 'disabled' : ''} onclick="restHeal()">REST</button>
     </div>
+    ${(!full && !afford) ? `<div class="town-blurb" style="color:var(--hp)">You can't cover the ${cost}g fee — earn more gold, or quaff a free potion instead.</div>` : ''}
     <div class="town-blurb" style="opacity:0.8">Need a quick top-up mid-fight? Quaff a Health (Q) or Mana (E) potion — they're a skill now, free to use but share a 3-turn cooldown.</div>`);
 }
 function restHeal() {
   if (player.hp >= player.maxHp && player.mp >= player.maxMp) return;
+  const cost = healCost();
+  if (player.gold < cost) { log(`Not enough gold — the healer charges ${cost}g for a full rest.`); return; }
+  player.gold -= cost;
   player.hp = player.maxHp; player.mp = player.maxMp;
   statusEffects = statusEffects.filter(s => s.target !== 'player');
   sfx('potion');
-  log('⛑️ The healer restores you to full and cleanses every ailment.', 'loot');
+  log(`⛑️ The healer restores you to full and cleanses every ailment for ${cost}g.`, 'loot');
   updateBars(); renderHealer(); saveGame();
 }
 
@@ -8188,30 +8619,79 @@ function renderEnchantItem(item) {
     ${poolPanel}`);
 }
 
-// ── DUNGEON GATE — choose any reached floor to re-enter ──
-function openGate() { openTownModal('🌀 Dungeon Gate'); renderGate(); }
+// ── DUNGEON GATE — choose a difficulty, then a floor, to re-enter ──
+// Each finite difficulty you conquer (its floor-25 boss) unlocks the next at the
+// Gate; Endless opens once Brutal falls. You can revisit any floor of a tier
+// you've reached to grind levels and gear before pushing deeper.
+let gateDiff = 0; // tier selected in the Gate UI; 0 = default to the frontier
+function openGate() { gateDiff = 0; openTownModal('🌀 Dungeon Gate'); renderGate(); }
+// Deepest DISPLAYED floor the hero may re-enter for a given tier.
+function tierFloorCap(d) {
+  const dc = diffClearedCount();
+  if (d <= dc) return FLOORS_PER_DIFF;                 // conquered → replay any floor
+  if (d === dc + 1) {                                  // the frontier tier you're still pushing
+    if (d <= 3) return Math.max(1, Math.min(FLOORS_PER_DIFF, (player.maxFloor || 1) - dc * FLOORS_PER_DIFF));
+    return Math.max(1, (player.maxFloor || 1) - FINITE_DEPTH); // Endless frontier
+  }
+  return 0;                                            // still locked
+}
+function selectGateDiff(d) { gateDiff = d; renderGate(); }
 function renderGate() {
-  const maxF = Math.max(1, player.maxFloor || 1);
+  const front = frontierDiff();
+  if (!gateDiff) gateDiff = front;
+  gateDiff = Math.max(1, Math.min(front, gateDiff));
+  // Tier picker — one chip per difficulty, still-locked ones greyed out.
+  let tabs = '';
+  for (let d = 1; d <= 4; d++) {
+    const meta = DIFFS[d - 1];
+    const unlocked = d <= front;
+    const cls = `gate-diff${d === gateDiff ? ' sel' : ''}${unlocked ? '' : ' locked'}`;
+    const style = (d === gateDiff && unlocked) ? ` style="border-color:${meta.color};color:${meta.color}"` : '';
+    tabs += `<button class="${cls}"${style} ${unlocked ? `onclick="selectGateDiff(${d})"` : 'disabled'}>${meta.name}${unlocked ? '' : ' 🔒'}</button>`;
+  }
+  // Floor picker for the selected tier. Endless can run very deep, so only the
+  // most recent stretch of floors is listed (no thousand-button grids).
+  const cap = tierFloorCap(gateDiff);
+  const startF = (gateDiff === 4 && cap > 40) ? cap - 39 : 1;
   let buttons = '';
-  for (let f = 1; f <= maxF; f++) {
-    const deepest = f === maxF;
-    buttons += `<button class="gate-floor ${f === dungeonReturn ? 'current' : ''}" onclick="enterDungeonAt(${f})">${f}${deepest ? ' ▾' : ''}</button>`;
+  for (let f = startF; f <= cap; f++) {
+    const dl = (gateDiff - 1) * FLOORS_PER_DIFF + f;
+    const deepest = f === cap;
+    buttons += `<button class="gate-floor ${dl === dungeonReturn ? 'current' : ''}" onclick="enterDungeonAt(${gateDiff},${f})">${f}${deepest ? ' ▾' : ''}</button>`;
+  }
+  const meta = DIFFS[gateDiff - 1];
+  const conquered = diffClearedCount() >= gateDiff;
+  let blurb;
+  if (gateDiff === 4) {
+    blurb = 'Endless: the dungeon never ends. Floors climb from 1 forever, bosses are random, and the threat keeps ramping. Death here bites hardest.';
+  } else {
+    const flavour = gateDiff === 1 ? 'as it was meant to be played' : 'the same 25 floors, far tougher and bloodier';
+    const tail = conquered ? 'Conquered — drop in on any floor to grind.' : `Deepest reached: floor ${cap} of 25.`;
+    blurb = `${meta.name}: ${flavour}. ${tail}`;
   }
   setTownContent(`
-    <div class="town-blurb">Step back into the dungeon on any floor you've reached (deepest: ${maxF}). Lower floors are great for grinding levels and gear before pushing deeper.</div>
+    <div class="town-blurb">Choose a difficulty, then a floor. Conquer each one's floor-25 guardian to unlock the next.</div>
+    <div class="gate-diffs">${tabs}</div>
+    <div class="town-blurb gate-tier-blurb" style="color:${meta.color}">${blurb}</div>
     <div class="gate-grid">${buttons}</div>`);
 }
-function enterDungeonAt(f) {
-  const maxF = Math.max(1, player.maxFloor || 1);
-  f = Math.max(1, Math.min(maxF, f));
+function enterDungeonAt(diff, floor) {
+  // Back-compat: a single argument is a continuous depth (leaveTown re-enters you
+  // exactly where you left off).
+  if (floor == null) { const dl = Math.max(1, Math.round(diff) || 1); diff = diffOf(dl); floor = displayFloor(dl); }
+  const front = frontierDiff();
+  diff = Math.max(1, Math.min(front, Math.round(diff) || 1));
+  floor = Math.max(1, Math.min(tierFloorCap(diff) || 1, Math.round(floor) || 1));
   closeTown();
-  dungeonLevel = f;
+  dungeonLevel = (diff - 1) * FLOORS_PER_DIFF + floor;
+  player.maxFloor = Math.max(player.maxFloor || 1, dungeonLevel);
   statusEffects = [];
   player.x = 5; player.y = 5;
+  arrivalDir = 'down';
   generateMap();   // clears inTown and builds the chosen floor
   maybeFloorEvent();
   sfx('stairs');
-  log(`🌀 You step through the gate onto dungeon floor ${f}.`, 'important');
+  log(`🌀 You step through the gate into ${floorLabel()}.`, 'important');
   updateBars(); draw(); saveGame();
 }
 
@@ -8473,7 +8953,7 @@ function spawnEnemies() {
   minions = []; combatBuffs = {};
   const isBossFloor = dungeonLevel % 5 === 0;
   let count = isBossFloor
-    ? 1 + Math.floor(dungeonLevel / 5)
+    ? 1 + Math.min(9, Math.floor(dungeonLevel / 5))   // boss + minions, capped so deep Endless boss floors aren't a wall of 40 foes
     : Math.min(3 + Math.floor(dungeonLevel * 0.7), 10);
   // Some floor modifiers crowd the level with extra foes.
   if (!isBossFloor && floorMod.enemyMult) count = Math.round(count * floorMod.enemyMult);
@@ -8520,8 +9000,12 @@ function spawnEnemies() {
     } while ((mapData[ey][ex] !== 0 || (ex === player.x && ey === player.y) || getEnemyAt(ex,ey)) && tries < 100);
     if (tries < 100) {
       if (isBossFloor && i === 0) {
-        const bossIdx = Math.min(Math.floor(dungeonLevel / 5) - 1, BOSSES.length - 1);
-        const boss = BOSSES[bossIdx];
+        // Finite tiers keep their fixed guardian per floor (5→Rat King … 25→All-
+        // Seer), so each difficulty replays the same boss ladder. Endless has no
+        // preset bosses — it rolls one at random from the pool on every boss floor.
+        const boss = isEndless()
+          ? pick(BOSSES)
+          : BOSSES[Math.max(0, Math.min(Math.floor(displayFloor() / 5) - 1, BOSSES.length - 1))];
         // Big bosses need an open N×N block; fall back to a single tile if the
         // floor is too cramped to fit one.
         let bsize = boss.size || 1;
@@ -8762,6 +9246,7 @@ const AFFIX_CURVES = {
   BOSSDMG:{pct:0.4,cap:18}, EXEC:{pct:0.3,cap:15}, PEN:{pct:0.5,cap:25}, GOLDFIND:{pct:0.7,cap:35},
   XPGAIN:{pct:0.5,cap:25}, MAGICFIND:{pct:0.4,cap:20}, MATFIND:{pct:0.6,cap:30}, SPELLPWR:{pct:0.3,cap:15},
   CDR:{pct:0.12,cap:6}, MCR:{pct:0.16,cap:8},
+  BLEED:{pct:0.3,cap:15}, STUNPWR:{pct:0.5,cap:25},
 };
 function affixStatRange(stat, lvl, mult) {
   // Crit chance / Fortune: small numbers, kept on a tight band (and capped) so a
@@ -8896,7 +9381,7 @@ function generateItem(rolls = 1, ilvl = null, forceTier = null, forceSlot = null
   let value = Math.round(baseValue * (1 + lvl * 0.12));
 
   const item = { id: Math.random(), name, tier, slot, ilvl: lvl, stats, attrs, value,
-    flavor: pick(FLAVOR[tier]), icon: ITEM_ICONS[baseName] || SLOT_ICONS[slot] };
+    flavor: pick(FLAVOR[tier]), icon: iconForBase(slot, baseName) };
 
   // Headline stat by slot, shaped by the rolled base (Axe hits harder than a
   // Dagger, plate guards more than a robe) — and a jewelry base's innate stat.
@@ -8941,7 +9426,8 @@ function rollBaseName(slot) {
   if (slot === 'weapon') {
     const cls = playerClass();
     if (cls && cls.weapons && cls.weapons.length) {
-      const usable = names.filter(n => cls.weapons.includes(n));
+      // names are sub-types now; the class lock is by category, so resolve first.
+      const usable = names.filter(n => cls.weapons.includes(weaponCategoryOf(n)));
       if (usable.length) return Math.random() < 0.85 ? pick(usable) : pick(names);
     }
   }
@@ -9056,7 +9542,9 @@ const THEMES = [
     brickA:'#6a3a4a', brickB:'#241820', mortar:'#161016', crack:'#ff7a3a',
     seam:'#1e161e', speckle:'#5a3a44', accent:'rgba(255,120,50,0.28)', stairsGlow:'#ff9a4b' },
 ];
-function currentTheme() { return THEMES[(dungeonLevel - 1) % THEMES.length]; }
+// Themed by the DISPLAYED floor, so each difficulty replays the same visual
+// progression (floor 1 always looks like floor 1) — only the red wash deepens.
+function currentTheme() { return THEMES[(displayFloor() - 1) % THEMES.length]; }
 
 // Rounded-rect helper (older canvases lack ctx.roundRect).
 function roundRectPath(x, y, w, h, r) {
@@ -10348,6 +10836,17 @@ function draw() {
     ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   }
 
+  // Difficulty wash: each harder dungeon tier bleeds a little more red into the
+  // world — subtle on Hardened, oppressive (but still readable) in Endless. Town
+  // is a safe haven, so it stays untinted.
+  if (!inTown) {
+    const dTint = diffMeta().tint;
+    if (dTint > 0) {
+      ctx.fillStyle = `rgba(196,22,28,${dTint})`;
+      ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    }
+  }
+
   // Painterly vignette: a warm overhead light fading to shadowed edges, for
   // that Golden Sun / Tactics diorama feel.
   const cw = ctx.canvas.width, ch = ctx.canvas.height;
@@ -10538,6 +11037,15 @@ function tryBossStatusProc(e) {
 function tryPlayerStatusProc(e) {
   const w = equipped.weapon;
   if (!w) return;
+  // Bleed (gear stat): a chance to open a bleeding wound — a poison-style damage-
+  // over-time — on hit. Unlike the epic+ proc below this fires at ANY rarity, so a
+  // bleed-rolled Kris bleeds even as a rare. Reuses the existing poison effect.
+  const bleed = totalStat('BLEED');
+  if (bleed > 0 && !e.dead && Math.random() < bleed / 100) {
+    applyStatusEffect(e, 'poison', 3, 'player');
+    const label = e.isBoss ? e.name : e.type;
+    log(`🩸 Your ${w.name} opens a bleeding wound on ${label}!`, 'loot');
+  }
   const tierOrder = Object.keys(TIERS);
   const tierIdx = tierOrder.indexOf(w.tier);
   if (tierIdx >= 4 && Math.random() < 0.15) {
@@ -10837,7 +11345,7 @@ function move(dx, dy) {
     statusEffects = [];
     tickBuffs();
     sfx('stairs');
-    log(`Ascended to dungeon level ${dungeonLevel}. You return to ${currentTheme().name}.`, 'important');
+    log(`Ascended to ${floorLabel()}. You return to ${currentTheme().name}.`, 'important');
     player.x = 5; player.y = 5;
     arrivalDir = 'up';   // spawn on the stairs DOWN that lead back the way you came
     generateMap();
@@ -10870,12 +11378,19 @@ function move(dx, dy) {
       }
       quest = null;
     }
+    // Defensive: finite tiers have no stairs down on their last floor, so this
+    // can't normally fire there — but never let a stray stair punch past the cap.
+    if (isLastFiniteFloor()) {
+      log(`👑 This is the deepest floor of the ${diffMeta().name} dungeon — conquer its guardian, then take the next difficulty from town.`, 'important');
+      sfx('click');
+      return;
+    }
     dungeonLevel++;
     player.maxFloor = Math.max(player.maxFloor || 1, dungeonLevel);
     statusEffects = [];
     tickBuffs();
     sfx('stairs');
-    log(`Descended to dungeon level ${dungeonLevel}! You enter ${currentTheme().name}.`, 'important');
+    log(`Descended to ${floorLabel()}! You enter ${currentTheme().name}.`, 'important');
     player.x = 5; player.y = 5;
     generateMap();
     tickPact();   // floor just entered keeps the pact, then it counts down
@@ -11038,12 +11553,17 @@ function getWeaponDamage() {
   return rnd(1, 3); // bare fists
 }
 
-// Sum a flat stat (ATK, DEF, etc.) across all equipped gear.
+// Sum a flat stat (ATK, DEF, etc.) across all equipped gear. Titan's Grip lets you
+// wield an off-hand alongside a two-hander, but at a cost: its stats count for 60%.
+// The guard is cheap (the rare 2H+off-hand combo) so skillFlag is rarely hit.
 function totalStat(name) {
   let sum = 0;
+  const tgPenalty = (equipped.offhand && isTwoHander(equipped.weapon) && skillFlag('titangrip')) ? 0.6 : 1;
   for (const slot of SLOT_KEYS) {
     const it = equipped[slot];
-    if (it && typeof it.stats[name] === 'number') sum += it.stats[name];
+    if (it && typeof it.stats[name] === 'number') {
+      sum += (slot === 'offhand' && tgPenalty !== 1) ? Math.round(it.stats[name] * tgPenalty) : it.stats[name];
+    }
   }
   return sum;
 }
@@ -11066,7 +11586,10 @@ function mitigateDamage(raw, lvl) {
 // halve it, then a flat Damage Reduction %. Both are capped so they can't make the
 // hero untouchable. Returns the final HP damage (≥1).
 function applyIncomingMods(dmg) {
-  if (Math.random() < Math.min(0.6, (totalStat('BLOCK') + skillBonus('block')) / 100)) {
+  // Block chance is normally capped at 60%; the Aegis keystone raises that ceiling
+  // to 75% (its whole point), letting a dedicated shield build wall off more hits.
+  const blockCap = skillFlag('aegis') ? 0.75 : 0.6;
+  if (Math.random() < Math.min(blockCap, (totalStat('BLOCK') + skillBonus('block')) / 100)) {
     dmg = Math.max(1, Math.round(dmg * 0.5));
     spawnFloatingText(player.x, player.y - 0.3, 'BLOCK', '#cfe0ff');
   }
@@ -11166,6 +11689,7 @@ function rollPlayerHit(e) {
   if (buffs.power) dmg = Math.round(dmg * 1.5);
   if (foodFx('dmgPct')) dmg = Math.round(dmg * (1 + foodFx('dmgPct'))); // ramen damage buff
   dmg = Math.round(dmg * classDmgDealtMult()); // Warrior + damage passives
+  if (diffClearedCount()) dmg = Math.round(dmg * diffDebuffMult()); // permanent per-tier scar
   const dmgUp = buffMag('dmgUp'); // War Cry / Frenzy / Avatar self-buffs
   if (dmgUp > 0) dmg = Math.round(dmg * (1 + dmgUp));
   // Increased Damage % (gear): a flat multiplier on every hit.
@@ -11276,10 +11800,12 @@ function onEnemyDefeated(e) {
   }
   // ── Crafting materials ── a second currency that fuels the Craftsman and
   // Enchanter. Scrap is common, Glimmer uncommon, Core rare, Chaos Orb very
-  // rare; elites and bosses drop more and unlock the rarer materials.
+  // rare; elites and bosses drop more. The rarer materials are also gated behind
+  // difficulty: Glimmer needs Hardened, Core needs Brutal, Chaos only Endless —
+  // so pushing into deadlier tiers is the only way to fuel top-end crafting.
   {
     const gained = {};
-    const add = (k, n) => { if (n > 0) gained[k] = (gained[k] || 0) + n; };
+    const add = (k, n) => { if (n > 0 && materialUnlocked(k)) gained[k] = (gained[k] || 0) + n; };
     const big = e.isBoss ? 3 : (e.isElite ? 2 : 1);
     // Material Find % (gear) boosts the odds of every crafting-material drop.
     const matMult = lootMult * (1 + totalStat('MATFIND') / 100);
@@ -11397,6 +11923,16 @@ function attackEnemy(e, opts = {}) {
     }
   }
 
+  // Dual Mastery (passive unlock): a parry-blade off-hand lands a bonus off-hand
+  // strike for a fraction of weapon damage every swing — the dual-wield fantasy
+  // delivered through the off-hand slot rather than a second weapon slot.
+  const dwm = (!ranged && !e.dead) ? dualWieldMult() : 0;
+  if (dwm > 0) {
+    const before = dealtTotal;
+    swing(e, dwm);
+    if (dealtTotal > before) spawnFloatingText(e.x, e.y - 0.3, `↺${dealtTotal - before}`, '#a9e0ff');
+  }
+
   // Cleave % (gear): splash a slice of the damage dealt onto adjacent foes (on top
   // of any weapon cleave above), so even a single-target weapon can hit a crowd.
   const clv = totalStat('CLEAVE') / 100;
@@ -11409,10 +11945,15 @@ function attackEnemy(e, opts = {}) {
     });
   }
 
-  // Crush (Mace): heavy blows have a good chance to stun a surviving foe.
-  if (style === 'crush' && !e.dead && Math.random() < 0.5) {
-    applyStatusEffect(e, 'stun', 1, 'player');
-    log(`🔨 ${label} is stunned by the blow!`, 'important');
+  // Crush (Mace): heavy blows have a good chance to stun a surviving foe. Stun
+  // Power % (gear, biased onto Mauls) raises both the chance and the duration, so a
+  // crushing build can reliably lock a target down.
+  if (style === 'crush' && !e.dead) {
+    const stunPwr = totalStat('STUNPWR');
+    if (Math.random() < 0.5 + stunPwr / 100) {
+      applyStatusEffect(e, 'stun', stunPwr >= 15 ? 2 : 1, 'player');
+      log(`🔨 ${label} is stunned by the blow!`, 'important');
+    }
   }
 
   // Reap (Scythe): siphon a quarter of all damage dealt back as health.
@@ -11440,7 +11981,7 @@ function tryRangedAttack(dx, dy) {
   if (dx === 0 && dy === 0) return false;
   if (getEnemyAt(player.x + dx, player.y + dy)) return false; // adjacent → normal melee
   const style = weaponStyle();
-  const range = STYLE_RANGE[style] || 1;
+  const range = weaponRangeOf(equipped.weapon) || STYLE_RANGE[style] || 1;
   if (range < 2) return false;            // melee-only weapons can't poke at range
   const mpCost = style === 'bolt' ? 4 : 0; // the Staff's bolt spends a little mana
   if (mpCost && player.mp < mpCost) return false;
@@ -11610,6 +12151,7 @@ function applyOffenseMods(dmg, e, forceCrit, isSpell) {
   if (buffs.power) dmg *= 1.5;
   if (foodFx('dmgPct')) dmg *= (1 + foodFx('dmgPct')); // ramen damage buff
   if (!isSpell) dmg *= classDmgDealtMult();
+  dmg *= diffDebuffMult(); // permanent per-tier scar — applies to weapon actives AND spells
   const du = buffMag('dmgUp'); if (du) dmg *= (1 + du);
   const idmg = totalStat('IDMG'); if (idmg && !isSpell) dmg *= (1 + idmg / 100);
   const bd = totalStat('BOSSDMG'); if (bd && e && (e.isBoss || e.isElite)) dmg *= (1 + bd / 100);
@@ -12623,11 +13165,16 @@ function handleDeath() {
     updateBars(); renderPanel(); saveGame(); draw();
     return;
   }
-  // The cost of dying: half your gold as the healer's fee, and a quarter of your
-  // progress toward the next level. Your equipped gear is untouched.
-  const lostGold = Math.floor(player.gold / 2);
+  // The cost of dying scales with the dungeon difficulty: gentle on Normal so the
+  // early game forgives a stumble, escalating to brutal in Endless where a fall
+  // costs every coin and most of a level. Your equipped gear is always untouched.
+  const dTier = currentDifficulty();
+  const GOLD_FRAC = [0.5, 0.65, 0.8, 1.0][dTier - 1];
+  const XP_FRAC   = [0.25, 0.4, 0.6, 0.9][dTier - 1];
+  const KNOCK     = [1, 2, 3, 5][dTier - 1];
+  const lostGold = Math.floor(player.gold * GOLD_FRAC);
   player.gold -= lostGold;
-  const lostXp = Math.min(player.xp, Math.round(xpForLevel(player.level) * 0.25));
+  const lostXp = Math.min(player.xp, Math.round(xpForLevel(player.level) * XP_FRAC));
   player.xp = Math.max(0, player.xp - lostXp);
   // Your bag isn't destroyed — it's dropped as a grave on the floor you fell on,
   // ready to be reclaimed if you fight your way back. Any earlier unclaimed grave
@@ -12643,9 +13190,12 @@ function handleDeath() {
   player.skillCds = {}; combatBuffs = {}; minions = []; bossHazards = []; // revived fresh — skills ready again
   sfx('death');
   screenFlash('#cc0000');
-  // Knocked back: the Dungeon Gate returns you a floor shallower than you fell.
+  // Knocked back deeper the harder the tier — but never out of the difficulty you
+  // fell in (Endless floors you at its own floor 1 rather than spilling you back
+  // into an easier dungeon).
   const fellOn = dungeonLevel;
-  dungeonReturn = Math.max(1, dungeonLevel - 1);
+  const tierBase = (dTier - 1) * FLOORS_PER_DIFF + 1;
+  dungeonReturn = Math.max(tierBase, dungeonLevel - KNOCK);
   closeShop(); closeMystic(); closeTown();
   buildTown();     // clears inTown=false → true and resets town state
   openTownHub();   // drop the player into the town menu
@@ -12653,7 +13203,7 @@ function handleDeath() {
   player.hp = Math.max(1, Math.round(player.maxHp * 0.5));
   player.mp = Math.round(player.maxMp * 0.5);
   showDeathScreen(lostGold, lostXp, dungeonReturn, lostBag, (graveSite ? fellOn : 0));
-  log(`💀 ${player.name || HERO} was SLAIN on floor ${fellOn}! Lost ${lostGold}g${lostXp ? ` and ${lostXp} XP` : ''}${lostBag ? `, and dropped your bag (${lostBag}) — reclaim it on floor ${fellOn}` : ''} — revived weakened in town.`, 'important');
+  log(`💀 ${player.name || HERO} was SLAIN on ${floorLabel(fellOn)}! Lost ${lostGold}g${lostXp ? ` and ${lostXp} XP` : ''}${lostBag ? `, and dropped your bag (${lostBag}) — reclaim it on ${floorLabel(fellOn)}` : ''} — revived weakened in town.`, 'important');
   recomputeMaxStats();
   updateBars();
   renderPanel();
@@ -12669,9 +13219,9 @@ function showDeathScreen(lostGold, lostXp, returnFloor, lostBag, graveFloor) {
       `💰 Lost ${lostGold} gold (the healer's fee)`,
       lostXp ? `✦ Lost ${lostXp} XP` : null,
       `🛡️ Kept all your equipped gear`,
-      (lostBag && graveFloor) ? `🪦 Your bag (${lostBag} item${lostBag === 1 ? '' : 's'}) lies on floor ${graveFloor} — go reclaim it` : null,
+      (lostBag && graveFloor) ? `🪦 Your bag (${lostBag} item${lostBag === 1 ? '' : 's'}) lies on ${floorLabel(graveFloor)} — go reclaim it` : null,
       `❤️ Revived at half health & mana`,
-      `⬇️ Re-enter at floor ${returnFloor}`,
+      `⬇️ Re-enter at ${floorLabel(returnFloor)}`,
       `💡 Stuck? Bank gear at the Vault, cook a bowl, strike a pact, or forge gear before diving back.`,
     ].filter(Boolean);
     el.innerHTML = lines.map(t => `<div class="death-pen">${t}</div>`).join('');
@@ -12892,7 +13442,10 @@ function updateBars() {
 
   // Header HUD: current floor, level + XP progress, enemies remaining.
   const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-  setText('floor-num', dungeonLevel);
+  setText('floor-num', displayFloor());
+  // Difficulty tag beside the floor number, coloured per tier.
+  const fd = document.getElementById('floor-diff');
+  if (fd) { const dm = diffMeta(); fd.textContent = dm.name; fd.style.color = dm.color; }
   setText('level-num', player.level);
   const xpBar = document.getElementById('xp-bar');
   if (xpBar) xpBar.style.width = Math.min(100, player.xp / xpForLevel(player.level) * 100) + '%';
@@ -13216,6 +13769,7 @@ function renderHero(el) {
     ['BLOCK','a_shield','Block'], ['SPELLPWR','ic_orb','Spell power'], ['CDR','ic_wand','Cooldown reduc'],
     ['MCR','ui_mp','Mana cost reduc'], ['GOLDFIND','ic_money','Gold find'], ['XPGAIN','scroll','XP gain'],
     ['MAGICFIND','chest','Magic find'], ['MATFIND','mat_scrap','Material find'],
+    ['BLEED','ic_heart','Bleed chance'], ['STUNPWR','ic_stun','Stun power'],
   ];
   const extRows = EXT.map(([k, sp, name]) => {
     const t = totalStat(k);
@@ -13323,12 +13877,15 @@ function renderSkills(el) {
   const { cols, bands } = treeDims(tree);
   const byId = {}; tree.forEach(n => byId[n.id] = n);
 
-  // Branch connectors (one per node→prerequisite within this tree).
+  // Branch connectors (one per node→prerequisite within this tree). Both hard
+  // prerequisites (req) and any-of merges (reqAny) draw a line, so the DAG's
+  // cross-links and branch joins are all visible — not just a straight ladder.
   let lines = '';
   for (const n of tree) {
-    if (!n.req) continue;
+    const reqs = [...(n.req || []), ...(n.reqAny || [])];
+    if (!reqs.length) continue;
     const p = nodePos(n, cols, bands);
-    for (const rid of n.req) {
+    for (const rid of reqs) {
       const q = byId[rid]; if (!q) continue;
       const a = nodePos(q, cols, bands);
       const x1 = (a[0] * 100).toFixed(1), y1 = (a[1] * 100).toFixed(1);
@@ -13387,6 +13944,20 @@ function renderSkills(el) {
       const rn = byId[rid] || skillNode(rid); const ok = skillRank(rid) >= 1;
       reqRows.push(`<span class="${ok ? 'rqok' : 'rqno'}">${ok ? '✓' : '🔒'} ${rn ? rn.name : rid}</span>`);
     }
+    // OR-merge prerequisite: any one of these unlocks the node.
+    if (sn.reqAny && sn.reqAny.length) {
+      const names = sn.reqAny.map(rid => (byId[rid] || skillNode(rid) || {}).name || rid);
+      const ok = sn.reqAny.some(rid => skillRank(rid) >= 1);
+      reqRows.push(`<span class="${ok ? 'rqok' : 'rqno'}">${ok ? '✓' : '🔒'} Any: ${names.join(' / ')}</span>`);
+    }
+    // "Spend N points in this tree" gate for deep keystones.
+    if (sn.pts) {
+      const have = pointsInTree(sn.pts.tree);
+      const ok = have >= sn.pts.n;
+      reqRows.push(`<span class="${ok ? 'rqok' : 'rqno'}">${ok ? '✓' : '🔒'} ${sn.pts.n} pts in ${sn.pts.tree} tree (${have}/${sn.pts.n})</span>`);
+    }
+    // Build-defining unlock badge so a keystone reads as more than a stat node.
+    if (sn.unlock || sn.flag) reqRows.unshift(`<span class="rqok" style="color:#e8c267">★ Build-defining</span>`);
     // "On rank up" preview — the concrete buff the next point buys.
     let ruHtml = '';
     if (!skillMaxed(sn)) {
@@ -13464,23 +14035,52 @@ const FX_LABELS = {
   magicFind: ['magic find', 'pct'],  xpGain:    ['XP gain', 'pct'],
 };
 // Format a single fx magnitude into a signed, human string (e.g. "+1.2%", "+2").
+// A negative magnitude (a keystone trade-off, e.g. Glass Cannon's −HP) flips the
+// sign so the cost reads honestly.
 function fmtFxVal(kind, v) {
-  const sign = kind === 'fracNeg' ? '−' : '+';
-  if (kind === 'flat') return `${sign}${Math.round(v * 10) / 10}`;
-  const pct = kind === 'pct' ? v : v * 100;
+  let sign = kind === 'fracNeg' ? '−' : (v < 0 ? '−' : '+');
+  const a = Math.abs(v);
+  if (kind === 'flat') return `${sign}${Math.round(a * 10) / 10}`;
+  const pct = kind === 'pct' ? a : a * 100;
   return `${sign}${Math.round(pct * 10) / 10}%`;
+}
+// Human text for a conditional passive's trigger, shown after its bonus.
+const COND_LABELS = {
+  '2h':'with a 2H weapon', '1h':'with a 1H weapon', 'freehand':'with a free hand',
+  'offhand':'with an off-hand', 'nooffhand':'with no off-hand', 'shield':'with a shield',
+  'casteroff':'with a caster off-hand', 'dualoff':'with a parry off-hand',
+  'wand':'with a wand', 'finesse':'with a rapier/stiletto', 'bleedwpn':'with a bleed weapon',
+  'lowhp':'below 50% HP', 'fullhp':'above 90% HP',
+};
+function condLabel(c) {
+  if (!c) return '';
+  if (COND_LABELS[c]) return COND_LABELS[c];
+  if (c.indexOf('style:') === 0) return `with ${c.slice(6)} weapons`;
+  if (c.indexOf('cat:') === 0) return `with a ${c.slice(4)}`;
+  return c;
 }
 // Build the "On rank up" preview rows: the concrete buff each point buys, shown
 // as current total → next-rank total. Returns [] when there's nothing to preview.
 function skillRankUpRows(node, rank) {
   const rows = [];
-  if (node.type === 'passive' && node.fx) {
-    for (const k of Object.keys(node.fx)) {
+  if (node.type === 'passive' && (node.fx || node.cfx)) {
+    if (node.fx) for (const k of Object.keys(node.fx)) {
       const meta = FX_LABELS[k] || [k, 'frac'];
       const per = node.fx[k];
       const cur = fmtFxVal(meta[1], per * rank);
       const next = fmtFxVal(meta[1], per * (rank + 1));
       rows.push([meta[0], rank > 0 ? `${cur} → <b>${next}</b>` : `<b>${next}</b>`]);
+    }
+    // Conditional bonuses read with their trigger so the trade-off is legible.
+    if (node.cfx) {
+      const cl = condLabel(node.cond);
+      for (const k of Object.keys(node.cfx)) {
+        const meta = FX_LABELS[k] || [k, 'frac'];
+        const per = node.cfx[k];
+        const cur = fmtFxVal(meta[1], per * rank);
+        const next = fmtFxVal(meta[1], per * (rank + 1));
+        rows.push([`${meta[0]} ${cl}`, rank > 0 ? `${cur} → <b>${next}</b>` : `<b>${next}</b>`]);
+      }
     }
   } else if (node.type === 'active' && node.cast) {
     const cur = Math.round(rankScale(rank || 1) * 100);
@@ -13503,10 +14103,11 @@ function skillRankUpRows(node, rank) {
 }
 // Plain-text "new total" summary at a given rank, for the level-up log line.
 function skillTotalSummary(node, rank) {
-  if (node.type === 'passive' && node.fx) {
-    return Object.keys(node.fx)
-      .map(k => { const m = FX_LABELS[k] || [k, 'frac']; return `${m[0]} ${fmtFxVal(m[1], node.fx[k] * rank)}`; })
-      .join(', ');
+  if (node.type === 'passive' && (node.fx || node.cfx)) {
+    const parts = [];
+    if (node.fx) for (const k of Object.keys(node.fx)) { const m = FX_LABELS[k] || [k, 'frac']; parts.push(`${m[0]} ${fmtFxVal(m[1], node.fx[k] * rank)}`); }
+    if (node.cfx) { const cl = condLabel(node.cond); for (const k of Object.keys(node.cfx)) { const m = FX_LABELS[k] || [k, 'frac']; parts.push(`${m[0]} ${fmtFxVal(m[1], node.cfx[k] * rank)} ${cl}`); } }
+    return parts.join(', ');
   }
   if (node.type === 'active' && node.cast) {
     let s = `effect power ${Math.round(rankScale(rank) * 100)}%`;
@@ -13701,6 +14302,12 @@ function dollSprite(slot, item) {
     if (!item) return 'w_sword';
     return DOLL_WEAPON_ATLAS[item.icon] || DOLL_WEAPON_ATLAS[iconKeyFromName(item.name, 'weapon')] || 'w_sword';
   }
+  if (slot === 'offhand') {
+    // Off-hand items already store an existing atlas key (a_shield / ic_orb /
+    // w_bow / w_dagger); render that, defaulting to the shield tile when empty.
+    if (item && SPRITE_IDX[item.icon] !== undefined) return item.icon;
+    return 'a_shield';
+  }
   return DOLL_SLOT_ATLAS[slot] || 'a_amulet';
 }
 // One equipment frame. `item` may be null (empty slot — dim placeholder sprite).
@@ -13730,9 +14337,9 @@ function renderPaperdoll() {
   // Grid laid out like a body: weapon|head|amulet / hands|chest|ring / -|legs|-.
   const blank = '<div class="pd-cell"></div>';
   const cells = [
-    renderDollSlot('weapon'), renderDollSlot('head'),  renderDollSlot('amulet'),
-    renderDollSlot('hands'),  renderDollSlot('chest'), renderDollSlot('ring'),
-    blank,                    renderDollSlot('legs'),  blank,
+    renderDollSlot('weapon'),  renderDollSlot('head'),  renderDollSlot('amulet'),
+    renderDollSlot('hands'),   renderDollSlot('chest'), renderDollSlot('ring'),
+    renderDollSlot('offhand'), renderDollSlot('legs'),  blank,
   ].join('');
   return `<div class="paperdoll">${bodyHTML}${cells}
     <div class="pd-hint">Tap a slot for details · ✕ to unequip · EQUIP loot from the LOOT tab</div>
@@ -13748,6 +14355,17 @@ function quickEquip(i) {
   if (!canEquipItem(item)) {
     const cls = playerClass();
     log(`🔒 A ${cls.name} can't wield that — ${cls.name}s use ${cls.weapons.join(', ')}.`);
+    return;
+  }
+  // Two-handers and off-hands share the same hands: a 2H weapon leaves none free
+  // for an off-hand, and vice versa — unless the Titan's Grip passive is learned.
+  if (slot === 'weapon' && isTwoHander(item) && equipped.offhand && !skillFlag('titangrip')) {
+    inventory.push(equipped.offhand);
+    equipped.offhand = null;
+    log('🔒 Your two-handed weapon needs both hands — off-hand stowed.');
+  }
+  if (slot === 'offhand' && isTwoHander(equipped.weapon) && !skillFlag('titangrip')) {
+    log('🔒 A two-handed weapon leaves no hand free for an off-hand — learn Titan\'s Grip to wield both.');
     return;
   }
   if (equipped[slot]) inventory.push(equipped[slot]); // swap old back into bag
@@ -13903,13 +14521,20 @@ function itemCardHTML(item, opts = {}) {
     statRows.push(`<div class="tt-stat" style="color:#e6c34a">+${v} ${ATTRIBUTES[k].label}</div>`);
   }
   const stats = statRows.join('') || '<div class="tt-stat" style="color:#666">No bonuses</div>';
-  // Weapons show their reach (a little tile grid) and how the base swings.
+  // Weapons show their sub-type, hand requirement, reach (a little tile grid) and
+  // how they swing. Sub-types carry their own style/reach (a Pike reaches 3, a
+  // Rapier thrusts) while still reading as their category for the class lock.
   let weaponLine = '';
   if (item.slot === 'weapon') {
+    const sub = weaponSubType(item);
     const base = weaponBaseType(item);
-    const style = base ? WEAPON_STYLES[base] : null;
-    if (base) {
-      weaponLine = `<div style="margin-top:5px">${weaponRangeGridHTML(base)}</div>` +
+    // Sub-type → its own style/range key; legacy bare weapons → category.
+    const styleKey = sub || base;
+    const style = sub ? WEAPON_SUBTYPES[sub].style : (base ? WEAPON_STYLES[base] : null);
+    if (styleKey) {
+      const hands = weaponHandsOf(item) === 2 ? '2H' : '1H';
+      const subTag = sub ? `<div style="color:#cdbf9a;font-size:10px;margin-top:4px"><b>${sub}</b> · <span style="color:#9a8d70">${hands}${base && base !== sub ? ' ' + base : ''}</span></div>` : '';
+      weaponLine = subTag + `<div style="margin-top:4px">${weaponRangeGridHTML(styleKey)}</div>` +
         (WEAPON_STYLE_DESC[style] ? `<div style="color:#9a8d70;font-size:9px;margin-top:2px;font-style:italic">${WEAPON_STYLE_DESC[style]}</div>` : '');
     }
   }
@@ -14438,6 +15063,10 @@ function loadGame() {
     }
     // Migrate saves that predate the deepest-floor tracker / town hub.
     if (player.maxFloor == null) player.maxFloor = data.dungeonLevel || 1;
+    // Difficulty tiers: derive conquered-count from how deep an old (pre-tier,
+    // uncapped) save had reached — passing floor 25 meant beating that tier's
+    // boss, so floors 26+ → Normal cleared, 51+ → Hardened cleared, etc.
+    if (player.diffCleared == null) player.diffCleared = Math.max(0, Math.min(3, Math.floor(((player.maxFloor || 1) - 1) / FLOORS_PER_DIFF)));
     // Migrate saves that predate character names / global leaderboards. A null
     // name is fine — the init flow prompts for one on the next load.
     if (player.name === undefined) player.name = null;
@@ -14464,7 +15093,9 @@ function loadGame() {
       stash.items = (data.stash.items || []).filter(it => it && it.slot);
     }
     // Rebuild equipped into the new 7-slot shape; salvage any still-valid pieces into the bag.
-    const freshEquipped = { head:null, chest:null, hands:null, legs:null, weapon:null, ring:null, amulet:null };
+    // Off-hand is additive: old saves simply have no off-hand, so it defaults null
+    // and the salvage loop below routes any unknown-slot gear safely to the bag.
+    const freshEquipped = { head:null, chest:null, hands:null, legs:null, weapon:null, offhand:null, ring:null, amulet:null };
     const old = data.equipped || {};
     Object.values(old).forEach(it => {
       if (it && it.slot && freshEquipped.hasOwnProperty(it.slot) && !freshEquipped[it.slot]) {
@@ -14673,7 +15304,7 @@ function renderSlots() {
     const badge = isActive ? '<span class="slot-badge">PLAYING</span>' : '';
     const icon = s.cls ? CLASSES[s.cls].icon : '🧙';
     const who = escapeHtml(s.name || 'Adventurer');
-    const where = s.inTown ? 'In Town' : ('Floor ' + s.floor);
+    const where = s.inTown ? 'In Town' : lbFloorLabel(s.floor);
     const time = slotTimeAgo(s.ts);
     const playBtn = isActive
       ? `<button class="slot-btn current" disabled>● Playing</button>`
@@ -14787,8 +15418,16 @@ const LB_SUPABASE_KEY = 'sb_publishable_SxnH6A4uxqZq5ZW_PqUeLQ_9ZKd4WfV'; // ano
 
 const LB_LOCAL_KEY = 'dungeonLoot_leaderboard_v1';
 // The three ranked boards: which stored column each sorts by and how to show it.
+// Decode a stored max_floor (a CONTINUOUS depth) into a difficulty-aware label
+// like "Normal 25" or "Endless 82". Because the stored value keeps climbing
+// across tiers, sorting the board by max_floor naturally ranks harder runs above
+// easier ones (Endless 1 = depth 76 outranks Normal 25 = depth 25).
+function lbFloorLabel(v) {
+  v = Math.max(1, Math.floor(Number(v) || 1));
+  return `${DIFFS[diffOf(v) - 1].name} ${displayFloor(v)}`;
+}
 const LB_SORTS = {
-  floor: { col: 'max_floor', fmt: v => 'Floor ' + v },
+  floor: { col: 'max_floor', fmt: lbFloorLabel },
   level: { col: 'level',     fmt: v => 'Lv ' + v },
   gold:  { col: 'gold',      fmt: v => v + 'g' },
   power: { col: 'power',     fmt: v => '⚡' + v },
