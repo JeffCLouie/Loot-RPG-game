@@ -2348,7 +2348,7 @@
       <div class="bar-track"><div class="bar-fill hp-fill" id="hp-bar" style="width:100%"></div></div>
       <span id="hp-text" style="font-size:10px">100</span>
     </div>
-    <div class="stat-bar" data-tip="<div class='ht-name' style='color:var(--mp)'>🔷 Mana (MP)</div><div class='ht-line'>Spent to cast class skills and spells. Regenerates over time and refills when you level up.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
+    <div class="stat-bar" data-tip="<div class='ht-name' style='color:var(--mp)'>🔷 Mana (MP)</div><div class='ht-line'>Spent to cast class skills and spells. Regenerates slowly over time and partly recovers when you level up.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
       <span style="color:var(--mp);font-size:11px;font-weight:bold;text-shadow:0 0 5px var(--mp)">MP</span>
       <div class="bar-track"><div class="bar-fill mp-fill" id="mp-bar" style="width:100%"></div></div>
       <span id="mp-text" style="font-size:10px">60/60</span>
@@ -2820,12 +2820,12 @@ const TIER_AFFIX_CAPS = {
 // slot's own headline (weapon DMG, armor DEF/ATK) is never listed here, since the
 // headline already occupies that stat and would only waste a pool slot.
 const SLOT_AFFIX_POOLS = {
-  weapon: { stats: ['ATK','CRIT','CRITDMG','IDMG','DBLSTRIKE','CLEAVE','BOSSDMG','EXEC','PEN','LEECH','MPLEECH','SPELLPWR','BLEED','STUNPWR'], attrs: ['might','agility','spirit'] },
+  weapon: { stats: ['ATK','ACC','CRIT','CRITDMG','IDMG','DBLSTRIKE','CLEAVE','BOSSDMG','EXEC','PEN','LEECH','MPLEECH','SPELLPWR','BLEED','STUNPWR'], attrs: ['might','agility','spirit'] },
   head:   { stats: ['HP','MP','REGEN','CRIT','CRITDMG','SPD','MAGICFIND','XPGAIN','SPELLPWR','CDR','MCR','DODGE','MPKILL','MATFIND'], attrs: ['vitality','spirit','luck'] },
   chest:  { stats: ['HP','REGEN','MP','DR','BLOCK','THORNS','HPKILL','DODGE','MAGICFIND'], attrs: ['vitality','spirit','luck'] },
-  hands:  { stats: ['CRIT','CRITDMG','IDMG','DBLSTRIKE','SPD','PEN','LEECH','EXEC','CDR','CLEAVE','BLOCK','THORNS'], attrs: ['might','agility','spirit'] },
+  hands:  { stats: ['CRIT','ACC','CRITDMG','IDMG','DBLSTRIKE','SPD','PEN','LEECH','EXEC','CDR','CLEAVE','BLOCK','THORNS'], attrs: ['might','agility','spirit'] },
   legs:   { stats: ['SPD','HP','REGEN','DODGE','DR','BLOCK','MP','GOLDFIND','XPGAIN','HPKILL'], attrs: ['agility','vitality','luck'] },
-  ring:   { stats: ['CRIT','CRITDMG','ATK','IDMG','LEECH','MPLEECH','GOLDFIND','MAGICFIND','MATFIND','HP','MP','DEF','DBLSTRIKE','BOSSDMG','EXEC','PEN','MCR','MPKILL','CLEAVE'], attrs: ['might','agility','luck','spirit','vitality'] },
+  ring:   { stats: ['CRIT','ACC','CRITDMG','ATK','IDMG','LEECH','MPLEECH','GOLDFIND','MAGICFIND','MATFIND','HP','MP','DEF','DBLSTRIKE','BOSSDMG','EXEC','PEN','MCR','MPKILL','CLEAVE'], attrs: ['might','agility','luck','spirit','vitality'] },
   amulet: { stats: ['MP','HP','REGEN','SPELLPWR','CDR','MCR','MPLEECH','MPKILL','HPKILL','THORNS','MAGICFIND','DR','ATK','DEF','BOSSDMG','GOLDFIND','XPGAIN','MATFIND'], attrs: ['spirit','luck','vitality','might','agility'] },
   // Off-hands: defensive layers + caster utility. A shield's BLOCK headline already
   // flows through totalStat('BLOCK') into combat, so it needs no special-casing.
@@ -2983,7 +2983,11 @@ function applyBaseStats(item, baseName, lvl, mult, dmgMult, opts = {}) {
     item.off = off;
     if (off === 'shield') {
       item.stats.DEF = Math.max(1, Math.floor((1 + lvl) * mult * 0.7 * (bp.def || 1)));
-      item.stats.BLOCK = bp.block || 8;
+      // Block headline is a RATING that scales with item level, so a shield keeps
+      // pace with the rising block-opposition as you descend (a flat low-level
+      // shield would fade to nothing deep). The effective block % is rating vs
+      // depth (see blockChanceVs).
+      item.stats.BLOCK = Math.max(2, Math.round((bp.block || 8) * (1 + lvl * 0.15)));
       item.baseStats = ['DEF', 'BLOCK'];
     } else if (off === 'caster') {
       const r = affixStatRange('SPELLPWR', lvl, mult);
@@ -2992,7 +2996,7 @@ function applyBaseStats(item, baseName, lvl, mult, dmgMult, opts = {}) {
       item.baseStats = ['SPELLPWR'];
     } else { // ranged (quiver) / dual (parry blade)
       item.stats.ATK = Math.max(1, Math.floor((1 + lvl * 0.35) * mult * 0.6 * (bp.atk || 1)));
-      if (bp.block) { item.stats.BLOCK = bp.block; item.baseStats = ['ATK', 'BLOCK']; }
+      if (bp.block) { item.stats.BLOCK = Math.max(2, Math.round(bp.block * (1 + lvl * 0.15))); item.baseStats = ['ATK', 'BLOCK']; }
       else item.baseStats = ['ATK'];
     }
   } else if (bp.innate) {
@@ -3776,12 +3780,12 @@ const STAT_NAMES = ['ATK','DEF','SPD','LCK','HP','MP','CRIT','CRITDMG','REGEN'];
 // "Fortune" so it never reads as the new Luck *attribute*; it no longer rolls on
 // new gear and survives only on older items.
 const STAT_LABELS = { ATK:'Attack', DEF:'Defense', SPD:'Speed', LCK:'Fortune', HP:'Max HP',
-  MP:'Max MP', CRIT:'Crit %', CRITDMG:'Crit Dmg %', REGEN:'Regen', DMG:'Damage',
+  MP:'Max MP', CRIT:'Crit Rating', CRITDMG:'Crit Dmg %', REGEN:'Regen', DMG:'Damage', ACC:'Accuracy',
   // ── new stats ── leech & on-kill sustain, defensive layers, offensive %s,
   // utility/economy %s, and caster %s. Percent stats carry a "%" in their label
   // so every display (tooltip, enchanter, hero pane) reads correctly for free.
   LEECH:'Life Leech %', MPLEECH:'Mana Leech %', HPKILL:'Life on Kill', MPKILL:'Mana on Kill',
-  THORNS:'Thorns', DR:'Damage Reduction %', BLOCK:'Block %', DODGE:'Dodge %',
+  THORNS:'Thorns', DR:'Damage Reduction', BLOCK:'Block Rating', DODGE:'Evasion',
   IDMG:'Increased Dmg %', DBLSTRIKE:'Double Strike %', CLEAVE:'Cleave %', BOSSDMG:'Dmg vs Bosses %',
   EXEC:'Execute %', PEN:'Armor Pen %', GOLDFIND:'Gold Find %', XPGAIN:'XP Gain %',
   MAGICFIND:'Magic Find %', MATFIND:'Material Find %', SPELLPWR:'Spell Power %',
@@ -3791,7 +3795,7 @@ const STAT_LABELS = { ATK:'Attack', DEF:'Defense', SPD:'Speed', LCK:'Fortune', H
   BLEED:'Bleed Chance %', STUNPWR:'Stun Power %' };
 // Short codes for the compact one-line item summary (the tooltip/enchanter use the
 // full STAT_LABELS above). Anything missing falls back to its raw key.
-const STAT_SHORT = { ATK:'ATK', DEF:'DEF', SPD:'SPD', LCK:'FOR', HP:'HP', MP:'MP', CRIT:'CRIT',
+const STAT_SHORT = { ATK:'ATK', DEF:'DEF', SPD:'SPD', LCK:'FOR', HP:'HP', MP:'MP', CRIT:'CRIT', ACC:'ACC',
   CRITDMG:'CDMG', REGEN:'REG', LEECH:'LCH', MPLEECH:'MLC', HPKILL:'HoK', MPKILL:'MoK',
   THORNS:'THN', DR:'DR', BLOCK:'BLK', DODGE:'DGE', IDMG:'IDMG', DBLSTRIKE:'2X', CLEAVE:'CLV',
   BOSSDMG:'vsB', EXEC:'EXE', PEN:'PEN', GOLDFIND:'GF', XPGAIN:'XP', MAGICFIND:'MF', MATFIND:'MTF',
@@ -3799,7 +3803,10 @@ const STAT_SHORT = { ATK:'ATK', DEF:'DEF', SPD:'SPD', LCK:'FOR', HP:'HP', MP:'MP
 // Stats whose value is a percentage — shown with a trailing % and consumed as /100
 // throughout combat. (CRIT/CRITDMG were always percentages; they're listed too so
 // the compact line shows their unit.)
-const PCT_STATS = new Set(['CRIT','CRITDMG','LEECH','MPLEECH','DR','BLOCK','DODGE','IDMG',
+// CRIT/DODGE/BLOCK/DR are RATINGS now (contested vs enemy level), not flat %, so
+// they're no longer here — they render as plain "+N" and the hero sheet shows the
+// effective % they currently produce. CRITDMG stays a % (it's a damage multiplier).
+const PCT_STATS = new Set(['CRITDMG','LEECH','MPLEECH','IDMG',
   'DBLSTRIKE','CLEAVE','BOSSDMG','EXEC','PEN','GOLDFIND','XPGAIN','MAGICFIND','MATFIND',
   'SPELLPWR','CDR','MCR','BLEED','STUNPWR']);
 const HERO = '🧙';
@@ -3808,9 +3815,11 @@ const HERO = '🧙';
 // Every equippable item has a single "power" number summarising how strong it is:
 // each stat is worth a weighted amount, plus a flat bonus for its rarity tier.
 // The player's overall power is built from their level, attributes, and gear.
-const STAT_POWER_WEIGHTS = { ATK:3, DEF:2, SPD:2, LCK:2, HP:1, MP:1, CRIT:4, CRITDMG:1, REGEN:5, DMG:3,
-  // New stats weighted by rough combat value per point so item Power stays sane.
-  LEECH:5, MPLEECH:3, HPKILL:1, MPKILL:1, THORNS:1, DR:6, BLOCK:4, DODGE:5, IDMG:4, DBLSTRIKE:5,
+const STAT_POWER_WEIGHTS = { ATK:3, DEF:2, SPD:2, LCK:1.5, HP:1, MP:1, CRIT:1.5, ACC:0.9, CRITDMG:1, REGEN:5, DMG:3,
+  // Rating stats (CRIT/DODGE/BLOCK/DR/ACC/SPD) are now larger flat numbers that
+  // scale with item level, so their per-point power weight is lowered to keep an
+  // item's overall Power sane and comparable to the old %-stat era.
+  LEECH:5, MPLEECH:3, HPKILL:1, MPKILL:1, THORNS:1, DR:1.5, BLOCK:1.2, DODGE:1.5, IDMG:4, DBLSTRIKE:5,
   CLEAVE:2, BOSSDMG:2, EXEC:2, PEN:2, GOLDFIND:1, XPGAIN:1, MAGICFIND:2, MATFIND:1, SPELLPWR:3,
   CDR:4, MCR:3, BLEED:3, STUNPWR:2 };
 // Per-point power weight of a raised attribute carried on an item (e.g. +13 Might).
@@ -3831,7 +3840,7 @@ const TIER_POWER_BONUS = { junk:0, normal:1, uncommon:2, rare:4, epic:7, legenda
 const ATTRIBUTES = {
   might:    { label: '💪 Might',    short: 'MIG', desc: 'raises Attack power (most for Warrior & Rogue)' },
   vitality: { label: '❤️ Vitality', short: 'VIT', desc: 'raises max HP, Defense & HP regen' },
-  agility:  { label: '🎯 Agility',  short: 'AGI', desc: 'raises Speed (dodge)' },
+  agility:  { label: '🎯 Agility',  short: 'AGI', desc: 'raises Evasion (dodge) & Accuracy (hit)' },
   spirit:   { label: '🌌 Spirit',   short: 'SPR', desc: 'raises max MP, MP regen & spell power' },
   luck:     { label: '🍀 Luck',     short: 'LUK', desc: 'raises Crit chance & loot quality' },
 };
@@ -3852,12 +3861,17 @@ const ATTR_FX = {
   atkPerMight:   0.6,    // Might → flat Attack power for EVERY class (see attrDamage)
   hpPerVit:      11,     // Vitality → max HP
   defPerVit:     0.5,    // Vitality → Defense
-  hpRegenPerVit: 0.16,   // Vitality → HP regen / turn
+  hpRegenPerVit: 0.06,   // Vitality → HP regen / turn (a slow trickle — HP is finite)
   mpPerSpr:      6,      // Spirit → max MP
-  mpRegenPerSpr: 0.10,   // Spirit → MP regen / turn
+  mpRegenPerSpr: 0.05,   // Spirit → MP regen / turn (a slow trickle — mana runs dry)
   spellPerSpr:   3,      // Spirit → spell skill power (Firebolt/Mend)
-  dodgePerAgi:   0.0072, // Agility → dodge chance
-  critPerLuck:   0.009,  // Luck → crit chance
+  // Agility/Luck feed integer RATINGS contested against enemy level (see the
+  // rating-vs-level block below). Agility drives BOTH evasion and accuracy; Luck
+  // drives crit. No caps — the rating/(rating+opposition) curve makes runaway
+  // values mechanically unreachable rather than clamped.
+  evaPerAgi:     0.95,   // Agility → evasion rating (dodge)
+  accPerAgi:     2.0,    // Agility → accuracy rating (hit chance)
+  critPerLuck:   0.6,    // Luck → crit rating
 };
 // Damage scaling off the class's primary / secondary attribute (per point).
 const ATTR_DMG_PRIMARY   = 2.4;
@@ -4030,6 +4044,9 @@ function attrDamage() {
 // Crit damage multiplier — equipment-only beyond the base, so gear (CRITDMG)
 // drives how hard your crits land. Crit damage can swing freely up or down, but
 // the multiplier never drops below 0 (no stat should ever read negative).
+// Crit DAMAGE is a magnitude (not a chance), so it has no ceiling — stacking
+// CRITDMG gear is a legitimate endgame payoff. Floored at 0 so a curse never
+// reads negative.
 function critDamageMult() { return Math.max(0, 2.0 + totalStat('CRITDMG') / 100 + skillBonus('critDmg')); }
 
 // The player's overall power: a blend of level, spent attributes, and equipped gear.
@@ -4064,26 +4081,91 @@ function playerDefense() {
   return totalStat('DEF') + totalAttr('vitality') * ATTR_FX.defPerVit + foodFx('defFlat');
 }
 
-// Crit chance — driven by Luck (and gear CRIT/LCK). Crit chance only ever ranges
-// 0–100% in play, so it's clamped to [0%, 60%]: capped so you can't become a
-// guaranteed-crit machine, and floored at 0 so a cursed item can never push it
-// negative (no stat should ever read below 0).
-function playerCritChance() {
-  const rogueCrit = player.class === 'rogue' ? 0.08 : 0;
-  return Math.max(0, Math.min(0.6, 0.04 + rogueCrit + skillBonus('crit') + buffMag('critUp') + foodFx('critPct')
-    + (totalStat('CRIT') + totalStat('LCK')) * 0.01
-    + totalAttr('luck') * ATTR_FX.critPerLuck));
+// ── RATING-VS-LEVEL CHANCE SYSTEM ──
+// Every percentage "chance" in the game (dodge, hit, crit, block, damage
+// reduction) is derived the SAME way: an integer RATING you build from
+// attributes + gear, contested against an OPPOSITION value that scales with the
+// enemy's (floor) level:
+//
+//     chance = rating / (rating + opposition)
+//
+// This has no hard cap and needs none — for any finite rating the result is
+// strictly below 1, so a chance can never reach, let alone exceed, 100%. You
+// simply can't stack modifiers high enough; runaway numbers are mechanically
+// unreachable rather than clamped. And because opposition grows with depth, a
+// fixed rating buys LESS chance the deeper you go, so you must keep investing to
+// stay sharp — there's no "max it once on floor 10 and coast". In true endgame,
+// with extreme investment, you can still push a stat very high; just never
+// trivially and never absolutely.
+function rated(rating, opposition) {
+  if (rating <= 0) return 0;
+  if (opposition <= 0) return 1; // no opposition → certain (shouldn't happen in play)
+  return rating / (rating + opposition);
 }
+// The floor/enemy level a chance is measured against. Combat passes the actual
+// foe's level; menus/the hero sheet use the current floor (or the floor you'll
+// return to from town) so a displayed % reflects "here, right now".
+function curDepth() { return inTown ? Math.max(1, dungeonReturn || 1) : dungeonLevel; }
+function oppLevel(e) { return (e && e.level) || curDepth(); }
 
-// Chance to completely avoid an incoming hit, driven by Agility and gear SPD.
-// Capped so you can never become untouchable — depth threat still outpaces it.
-function playerDodge() {
-  const base = totalAttr('agility') * ATTR_FX.dodgePerAgi + totalStat('SPD') * 0.006
-    + totalStat('DODGE') / 100 + skillBonus('dodge') + buffMag('dodgeUp') + foodFx('dodgePct');
-  // Rogues are slipperier: a flat dodge bump and a slightly higher ceiling.
-  if (player.class === 'rogue') return Math.min(0.6, base + 0.08);
-  return Math.min(0.5, base);
+// ── ENEMY OPPOSITION (scales with depth) ──
+// Accuracy is contested by your Evasion (your dodge); Evasion by your Accuracy
+// (your hit chance). Some foes are extra accurate or extra evasive (accMult /
+// evaMult, default 1): an "accurate" foe punches through dodge, an "evasive" one
+// is hard to hit without Accuracy.
+function enemyAccuracyRating(e) {
+  let m = (e && e.accMult) || 1;
+  if (e && e.isBoss) m *= 1.35;        // guardians are hard to dodge
+  else if (e && e.isElite) m *= 1.15;  // elites a touch harder
+  return Math.round((32 + oppLevel(e) * 10) * m);
 }
+function enemyEvasionRating(e)  { return Math.round((6 + oppLevel(e) * 3) * ((e && e.evaMult) || 1)); }
+// Generic depth resistance the player's crit/block/DR chances are rated against —
+// deeper foes are harder to crit, block and shrug off.
+function critOpposition(lvl)  { return 34 + (lvl || curDepth()) * 9; }
+function blockOpposition(lvl) { return 30 + (lvl || curDepth()) * 9; }
+function drOpposition(lvl)    { return 46 + (lvl || curDepth()) * 12; }
+
+// ── PLAYER RATINGS (integers, from attributes + gear + skills/food/buffs) ──
+// Accuracy keeps a level-scaled floor so ordinary attacks keep landing.
+const ACC_BASE = 80, ACC_PER_LEVEL = 12;
+// skillBonus/buffMag/foodFx are still authored as old-style fractions (0.01 = "1%"),
+// so convert them into rating points with one constant until the skill overhaul
+// re-authors them directly in rating units.
+const SKILL_RATING = 120;
+function ratePct(v) { return (v || 0) * SKILL_RATING; }
+// Agility drives BOTH Evasion and Accuracy; gear SPD/DODGE (legacy) read as flat
+// evasion rating, the new ACC stat as accuracy. Rogues get an evasion/crit edge.
+function playerEvasionRating() {
+  let r = totalAttr('agility') * ATTR_FX.evaPerAgi
+    + totalStat('SPD') + totalStat('DODGE')
+    + ratePct(skillBonus('dodge')) + ratePct(buffMag('dodgeUp')) + ratePct(foodFx('dodgePct'));
+  if (player.class === 'rogue') r += 14;
+  return Math.max(0, r);
+}
+function playerAccuracyRating() {
+  return Math.max(0, ACC_BASE + player.level * ACC_PER_LEVEL
+    + totalAttr('agility') * ATTR_FX.accPerAgi + totalStat('ACC') + ratePct(skillBonus('acc')));
+}
+function playerCritRating() {
+  let r = totalAttr('luck') * ATTR_FX.critPerLuck + totalStat('CRIT') + totalStat('LCK')
+    + ratePct(skillBonus('crit')) + ratePct(buffMag('critUp')) + ratePct(foodFx('critPct'));
+  if (player.class === 'rogue') r += 12;
+  return Math.max(0, r);
+}
+function playerBlockRating() { return Math.max(0, totalStat('BLOCK') + ratePct(skillBonus('block'))); }
+function playerDRRating()    { return Math.max(0, totalStat('DR') + ratePct(skillBonus('dr'))); }
+
+// ── EFFECTIVE CHANCES (what combat actually rolls; e is the foe, or {level} for UI) ──
+function dodgeChanceVs(e) { return rated(playerEvasionRating(), enemyAccuracyRating(e)); } // player avoids the blow
+function hitChanceVs(e)   { return rated(playerAccuracyRating(), enemyEvasionRating(e)); } // player's weapon lands
+function critChanceVs(e)  { return rated(playerCritRating(), critOpposition(oppLevel(e))); }
+function blockChanceVs(lvl) { return rated(playerBlockRating(), blockOpposition(lvl)); }
+function drFractionVs(lvl)  { return rated(playerDRRating(), drOpposition(lvl)); }
+// Back-compat shims for any caller that still wants a bare number against the
+// current floor (the hero sheet, etc.).
+function playerCritChance() { return critChanceVs({ level: curDepth() }); }
+function playerDodge() { return dodgeChanceVs({ level: curDepth() }); }
 function recomputeMaxStats() {
   player.maxHp = baseMaxHp();
   player.maxMp = baseMaxMp();
@@ -4094,18 +4176,22 @@ function recomputeMaxStats() {
 // Per-turn HP/MP regeneration. Defined here as the single source of truth so the
 // Stats panel can display the exact value applyRegen() applies each turn.
 function hpRegenPerTurn() {
-  let r = totalStat('REGEN') + Math.floor(totalAttr('vitality') * ATTR_FX.hpRegenPerVit);
+  // Fractional on purpose (banked in applyRegen's _hpAcc accumulator) so the slow
+  // Vitality trickle isn't floored to a hard 0/turn for low-Vitality heroes — it's
+  // a smooth, slow drip for everyone rather than an on/off cliff at vit 17.
+  let r = totalStat('REGEN') + totalAttr('vitality') * ATTR_FX.hpRegenPerVit;
   if (player.class === 'templar') r += 2; // Templar mends faster between fights
   r += skillBonus('hpRegen'); // Recovery / Divine Vigor passives
-  r += Math.round(buffMag('regen')); // Redeemer / Bastion regen buffs
-  r += Math.round(foodFx('regen')); // a warm bowl of ramen mends you between fights
+  r += buffMag('regen'); // Redeemer / Bastion regen buffs
+  r += foodFx('regen'); // a warm bowl of ramen mends you between fights
   return r;
 }
 function mpRegenPerTurn() {
   // A slow trickle on purpose: mana should run dry in sustained fights so mana
   // pots stay worth quaffing. Kept fractional (applyRegen accumulates it) so
-  // sub-1 regen is possible while the MP readout stays a clean integer.
-  return 0.5 + totalAttr('spirit') * ATTR_FX.mpRegenPerSpr + skillBonus('mpRegen');
+  // sub-1 regen is possible while the MP readout stays a clean integer. The base
+  // and the per-Spirit rate are both deliberately low — mana is a finite resource.
+  return 0.25 + totalAttr('spirit') * ATTR_FX.mpRegenPerSpr + skillBonus('mpRegen');
 }
 
 const FOODS = [
@@ -4437,7 +4523,7 @@ const CLASSES = {
   rogue: {
     name: 'Rogue', icon: '🗡️', color: '#5ec27a',
     blurb: 'A nimble striker — more crits and harder to pin down.',
-    passive: '+8% crit chance · +8% dodge',
+    passive: 'Keener crits · harder to pin down',
     dmgAttrs: { primary: 'agility', secondary: 'might' },
     weapons: ['Dagger','Sword','Bow'],
   },
@@ -6478,6 +6564,7 @@ document.addEventListener('click', (e) => {
 
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
+  { date: '2026-06-29', size: 'big', v: 'Rating-based combat overhaul', by: 'Claude', notes: ['Chances no longer use flat caps. Crit, dodge, hit, block and damage reduction are now Path-of-Exile-style RATINGS — integer stats you build from attributes and gear — and the actual % is your rating measured against the enemy you\'re facing: chance = rating / (rating + opposition). It can approach 100% but never reach it, so absurd numbers are mechanically impossible rather than clamped.', 'Opposition grows with depth, so a rating that gives big % on floor 5 gives much less on floor 50 — you have to keep investing to stay sharp, and there\'s no maxing a stat once and coasting. In true endgame you can still stack a stat very high; it\'s just never trivial or absolute.', 'Combat is now two-sided: enemies have Accuracy (which eats your dodge) and Evasion (so your weapon attacks can MISS). You have an Accuracy rating too — Agility and the new ACC gear affix raise it. Most attacks still land, but "Accurate" foes punch through evasion and slippery "Evasive" foes need real Accuracy to hit. (Spells never miss.)', 'Agility now drives both Evasion and Accuracy; Luck drives Crit; gear CRIT/SPD/DODGE/BLOCK/DR read as ratings (shown as flat numbers, with the live % on the HERO sheet vs your current floor). Crit damage is uncapped again — it\'s a magnitude, not a chance.', 'Health and mana stay finite (from the prior pass): slower HP/MP regen, level-ups mend ~40% instead of a full refill, smaller potions, and burst-heals capped per use.'] },
   { date: '2026-06-29', size: 'medium', v: 'Every action costs a turn', by: 'Claude', notes: ['Anything you do on a floor now passes a turn, so the world keeps moving even when you can’t. Bumping a wall, the map edge, deep water, a locked door or sealed stairs all tick the clock just like the Wait button.', 'Walking into a boss’s wall of force now passes a turn too, so the barriers pinning you in crumble on their own — no more mashing the Wait button to escape the Rat King’s cage.', 'Being stunned no longer freezes the dungeon: a wasted action still lets foes act while the stun wears off. Drinking from a fountain, touching a shrine and cracking open a chest underfoot are all turns as well.'] },
   { date: '2026-06-29', size: 'big', v: 'Rebalanced loot drops', by: 'ASuiter89', notes: ['Loot rarity is rebalanced so you stop drowning in high-end gear: instead of rolling the rarity table several times and keeping the rarest (which buried you in oranges), each drop now makes one independent check per tier from rarest down, so a baseline drop is ~50% normal, ~21% junk, ~19% uncommon, ~6% rare, ~2% epic, ~0.6% legendary, ~0.15% unique.', 'Magic Find, your Luck and deeper floors still raise the odds — but with diminishing returns that barely move legendary/unique and hard per-tier caps, so stacking Magic Find now floods you with greens and blues rather than legendaries.', 'Tougher foes drop MORE items, not just luckier ones: every kill makes a number of independent “picks” (ordinary foes 1, elites 3, bosses 5), each either dropping nothing or one item — so a boss sprays a pile of loot while a trash mob mostly drops nothing. Elites and bosses are still guaranteed at least one piece.'] },
   { date: '2026-06-29', size: 'small', v: 'Tidier Settings menu', by: 'Claude', notes: ['The ⚙️ Settings menu is now one consistent style — every row shares the same neutral tile instead of the old jumble of red, blue and green buttons.', 'Sound, Zoom and Time gained icons, and every row’s icon now sits in the same fixed cell so the labels line up cleanly.', 'Only meaningful states still colour: New Run flashes red when armed to wipe, and Sound dims when muted.'] },
@@ -9769,6 +9856,10 @@ const AFFIXES = [
   { key: 'tough',    name: 'Tough',    color: '#7fb0ff', apply: m => { m.hp = Math.round(m.hp * 1.6); m.maxHp = m.hp; } },
   { key: 'fierce',   name: 'Fierce',   color: '#ff5a4a', apply: m => { m.dmg = Math.round(m.dmg * 1.4); } },
   { key: 'venomous', name: 'Venomous', color: '#a86bff', apply: m => { m.statusChance = 0.4; } },
+  // Accurate foes see through evasion (their high accuracy eats your dodge);
+  // Evasive foes are slippery (you need Accuracy to reliably land hits on them).
+  { key: 'accurate', name: 'Accurate', color: '#ffd24b', apply: m => { m.accMult = 1.9; } },
+  { key: 'evasive',  name: 'Evasive',  color: '#7fe0c0', apply: m => { m.evaMult = 3.0; } },
 ];
 // Give an enemy a random affix: a name, an aura colour, and a stat/behaviour tweak.
 function applyAffix(mob) {
@@ -9918,23 +10009,18 @@ function affixStatValue(stat, lvl, mult) {
 // level & rarity but cap out, so stacking five rolls can't trivialise the game —
 // `per` is the growth and `cap` the per-roll ceiling.
 const AFFIX_CURVES = {
-  ATK:{flat:1}, DEF:{flat:1}, SPD:{flat:1}, HP:{flat:6}, MP:{flat:4}, REGEN:{flat:0.4},
+  ATK:{flat:1}, DEF:{flat:1}, SPD:{flat:1}, HP:{flat:6}, MP:{flat:4}, REGEN:{flat:0.2},
   THORNS:{flat:0.7}, HPKILL:{flat:0.7}, MPKILL:{flat:0.5},
-  LEECH:{pct:0.18,cap:8}, MPLEECH:{pct:0.18,cap:8}, DR:{pct:0.12,cap:6}, BLOCK:{pct:0.16,cap:8},
-  DODGE:{pct:0.12,cap:6}, IDMG:{pct:0.25,cap:12}, DBLSTRIKE:{pct:0.14,cap:7}, CLEAVE:{pct:0.5,cap:25},
+  // Chance/avoidance stats are flat RATINGS now (scale with item level, no cap):
+  // they feed the rating-vs-level curves in combat instead of being a flat %.
+  CRIT:{flat:1.0}, LCK:{flat:1.0}, DODGE:{flat:1.0}, BLOCK:{flat:1.2}, DR:{flat:0.8}, ACC:{flat:1.8},
+  LEECH:{pct:0.18,cap:8}, MPLEECH:{pct:0.18,cap:8}, IDMG:{pct:0.25,cap:12}, DBLSTRIKE:{pct:0.14,cap:7}, CLEAVE:{pct:0.5,cap:25},
   BOSSDMG:{pct:0.4,cap:18}, EXEC:{pct:0.3,cap:15}, PEN:{pct:0.5,cap:25}, GOLDFIND:{pct:0.7,cap:35},
   XPGAIN:{pct:0.5,cap:25}, MAGICFIND:{pct:0.4,cap:20}, MATFIND:{pct:0.6,cap:30}, SPELLPWR:{pct:0.3,cap:15},
   CDR:{pct:0.12,cap:6}, MCR:{pct:0.16,cap:8},
   BLEED:{pct:0.3,cap:15}, STUNPWR:{pct:0.5,cap:25},
 };
 function affixStatRange(stat, lvl, mult) {
-  // Crit chance / Fortune: small numbers, kept on a tight band (and capped) so a
-  // single piece can never swing crit by a wild amount, but value-rerolls still
-  // do something. The cap mirrors the old fixed ceiling.
-  if (stat === 'CRIT' || stat === 'LCK') {
-    const hi = Math.max(2, Math.round(Math.min(6, (1 + lvl * 0.12) * mult)));
-    return { min: Math.max(1, hi - 2), max: hi };
-  }
   // Crit damage %: roomy ±25% band centred on its old fixed value.
   if (stat === 'CRITDMG') {
     const base = (5 + lvl * 0.8) * mult;
@@ -11907,11 +11993,18 @@ function tickPact() {
 
 // Heal a little each turn based on equipped REGEN, up to max HP.
 function applyRegen() {
-  // Vitality grants passive HP regen on top of any REGEN rolled on gear.
+  // Vitality grants passive HP regen on top of any REGEN rolled on gear. Like MP,
+  // it can be sub-1/turn, so bank it in a fractional accumulator and only ever add
+  // whole points to player.hp (keeps the HP readout a clean integer).
   const r = hpRegenPerTurn();
   if (r > 0 && player.hp > 0 && player.hp < player.maxHp) {
-    player.hp = Math.min(player.maxHp, player.hp + r);
-    updateBars();
+    player._hpAcc = (player._hpAcc || 0) + r;
+    const wholeHp = Math.floor(player._hpAcc);
+    if (wholeHp > 0) {
+      player._hpAcc -= wholeHp;
+      player.hp = Math.min(player.maxHp, player.hp + wholeHp);
+      updateBars();
+    }
   }
   // Mana trickles back each turn (faster with Spirit) so staff bolts stay usable.
   // Regen can be less than 1/turn, so bank it in a fractional accumulator and
@@ -12294,16 +12387,19 @@ function mitigateDamage(raw, lvl) {
 // Post-mitigation gear layers applied to any incoming hit: a Block % chance to
 // halve it, then a flat Damage Reduction %. Both are capped so they can't make the
 // hero untouchable. Returns the final HP damage (≥1).
-function applyIncomingMods(dmg) {
-  // Block chance is normally capped at 60%; the Aegis keystone raises that ceiling
-  // to 75% (its whole point), letting a dedicated shield build wall off more hits.
-  const blockCap = skillFlag('aegis') ? 0.75 : 0.6;
-  if (Math.random() < Math.min(blockCap, (totalStat('BLOCK') + skillBonus('block')) / 100)) {
+function applyIncomingMods(dmg, e) {
+  const lvl = oppLevel(e);
+  // Block chance = block rating vs this depth's block-opposition (no cap — it just
+  // can't reach 100%). The Aegis keystone makes your block rating count for more.
+  let block = blockChanceVs(lvl);
+  if (skillFlag('aegis')) block = blockChanceVs(lvl) + (1 - blockChanceVs(lvl)) * 0.25;
+  if (Math.random() < block) {
     dmg = Math.max(1, Math.round(dmg * 0.5));
     spawnFloatingText(player.x, player.y - 0.3, 'BLOCK', '#cfe0ff');
     fireSkillTrigger('block', {}); // on-block procs (e.g. retaliate, gain a charge)
   }
-  const dr = Math.min(0.6, (totalStat('DR') + skillBonus('dr')) / 100);
+  // Flat damage reduction = DR rating vs depth (asymptotes below 100%, never caps).
+  const dr = drFractionVs(lvl);
   if (dr > 0) dmg = Math.max(1, Math.round(dmg * (1 - dr)));
   dmg = absorbWithShield(dmg);
   return dmg;
@@ -12377,7 +12473,7 @@ function enemyLabel(e) {
 }
 
 // Chance for the player to dodge an incoming hit (Agility + gear SPD).
-function rollDodge() { return Math.random() < playerDodge(); }
+function rollDodge(e) { return Math.random() < dodgeChanceVs(e); }
 
 // Enemies orthogonally/diagonally adjacent to e (for cleaving weapons).
 function adjacentEnemies(e) {
@@ -12391,8 +12487,9 @@ function adjacentEnemies(e) {
 // retaliation rather than a bigger one-shot. Crit damage scales with gear CRITDMG.
 // Returns { dmg, isCrit }.
 function rollPlayerHit(e) {
-  // A primed crit (e.g. from on-dodge "your next hit crits") is consumed here.
-  const isCrit = skillPrimed.crit || Math.random() < playerCritChance();
+  // A primed crit (e.g. from on-dodge "your next hit crits") is consumed here;
+  // otherwise roll crit against THIS foe's level (rating-vs-level system).
+  const isCrit = skillPrimed.crit || Math.random() < critChanceVs(e);
   if (skillPrimed.crit) skillPrimed.crit = false;
   let dmg = getWeaponDamage() + player.level * 2 + totalStat('ATK') + attrDamage() + skillBonus('atkFlat');
   const hitDivisor = e.isBoss ? 9 : (e.isElite ? 6 : 4);
@@ -12616,8 +12713,16 @@ function attackEnemy(e, opts = {}) {
   const label = enemyLabel(e);
   let anyCrit = false, dealtTotal = 0;
 
+  let anyMiss = false;
   const swing = (target, mult = 1) => {
     if (target.dead) return;
+    // Accuracy vs the foe's Evasion: a weapon attack can now MISS (each swing rolls
+    // independently). Spells don't use this — they resolve through applyOffenseMods.
+    if (Math.random() >= hitChanceVs(target)) {
+      anyMiss = true;
+      spawnFloatingText(target.x, target.y, 'MISS', '#c2c7d0');
+      return;
+    }
     const h = rollPlayerHit(target);
     const d = Math.max(1, Math.round(h.dmg * mult));
     if (h.isCrit) anyCrit = true;
@@ -12631,15 +12736,22 @@ function attackEnemy(e, opts = {}) {
   if (style === 'flurry') {
     // Dagger: two quick lighter strikes, extra crit rolled per hit.
     sfx('attack'); swing(e, 0.62); swing(e, 0.62);
-    log(`🔪 ${HERO} knifes ${label} twice for ${dealtTotal}${anyCrit ? '!' : ''}`, anyCrit ? 'important' : '');
+    if (dealtTotal > 0) log(`🔪 ${HERO} knifes ${label} twice for ${dealtTotal}${anyCrit ? '!' : ''}`, anyCrit ? 'important' : '');
+    else log(`🌬️ ${HERO} slashes at ${label} but finds only air!`);
   } else {
-    sfx(anyCrit ? 'crit' : 'attack');
+    sfx('attack');
     swing(e);
     const verb = style === 'shot' ? '🏹 shoots' : style === 'bolt' ? '🔮 blasts'
       : style === 'thrust' ? '🔱 skewers' : style === 'cleave' ? '🪓 hews'
       : style === 'reap' ? '⚔️ reaps' : style === 'crush' ? '🔨 smashes' : 'hits';
-    log(anyCrit ? `💥 CRITICAL! ${HERO} ${verb} ${label} for ${dealtTotal}!`
-                : `${HERO} ${verb} ${label} for ${dealtTotal}!`, anyCrit ? 'important' : '');
+    if (dealtTotal > 0) {
+      if (anyCrit) sfx('crit');
+      log(anyCrit ? `💥 CRITICAL! ${HERO} ${verb} ${label} for ${dealtTotal}!`
+                  : `${HERO} ${verb} ${label} for ${dealtTotal}!`, anyCrit ? 'important' : '');
+    } else {
+      const dodgeVerb = style === 'shot' ? 'shot goes wide' : style === 'bolt' ? 'bolt fizzles past' : 'blow whiffs';
+      log(`🌬️ ${HERO}'s ${dodgeVerb} — ${label} avoids it!`);
+    }
   }
 
   // Cleave (Axe) / Reap (Scythe): the blow carries into other adjacent foes.
@@ -12695,9 +12807,11 @@ function attackEnemy(e, opts = {}) {
     }
   }
 
-  // Reap (Scythe): siphon a quarter of all damage dealt back as health.
+  // Reap (Scythe): siphon a quarter of all damage dealt back as health, capped at
+  // a fraction of max HP per swing (like lifesteal) so it can't out-heal a boss.
   if (style === 'reap' && dealtTotal > 0 && player.hp < player.maxHp) {
-    const got = Math.min(Math.max(1, Math.round(dealtTotal * 0.25)), player.maxHp - player.hp);
+    const reapCap = Math.max(1, Math.round(player.maxHp * 0.15));
+    const got = Math.min(Math.max(1, Math.round(dealtTotal * 0.25)), player.maxHp - player.hp, reapCap);
     if (got > 0) { player.hp += got; spawnFloatingText(player.x, player.y, `+${got}`, '#7fffaa'); }
   }
 
@@ -12904,7 +13018,7 @@ function applyOffenseMods(dmg, e, forceCrit, isSpell) {
   const zeal = skillBonus('zeal'); if (zeal && !isSpell) dmg *= (1 + zeal * (1 - player.hp / player.maxHp));
   const lowHp = skillBonus('lowHpDmg') + totalStat('EXEC') / 100;
   if (lowHp && e && e.hp < e.maxHp * 0.35) dmg *= (1 + lowHp);
-  if (forceCrit || Math.random() < playerCritChance()) dmg *= critDamageMult();
+  if (forceCrit || Math.random() < critChanceVs(e)) dmg *= critDamageMult();
   const armor = enemyArmorPct(e);
   if (armor > 0) { const pen = Math.min(0.9, totalStat('PEN') / 100 + skillBonus('pen')); dmg *= (1 - armor * (1 - pen)); }
   return dmg;
@@ -13097,7 +13211,11 @@ function resolveCast(node, rank) {
     let heal = 0;
     if (c.heal.flat) heal += (c.heal.flat + player.level * (c.heal.perLevel || 0)) * rs;
     if (c.heal.pctDmg) heal += total * c.heal.pctDmg;
-    heal = Math.min(player.maxHp - player.hp, Math.round(heal));
+    // Cap a single cast's healing to a fraction of max HP (like the lifesteal/leech
+    // caps above), so a big smite/nova can't refill you from near-death every turn
+    // and HP stays a finite resource.
+    const healCap = Math.max(1, Math.round(player.maxHp * 0.20));
+    heal = Math.min(player.maxHp - player.hp, healCap, Math.round(heal));
     if (heal > 0) { player.hp += heal; spawnFloatingText(player.x, player.y, `+${heal}`, '#7fffaa'); }
   }
   if (c.buff) {
@@ -13479,7 +13597,7 @@ function goblinFlee(e) {
 // A melee enemy strikes the player from an adjacent tile.
 function enemyAttackPlayer(e) {
   const beh = BEHAVIORS[e.behavior] || BEHAVIORS.chaser;
-  if (rollDodge()) {
+  if (rollDodge(e)) {
     spawnFloatingText(player.x, player.y, 'DODGE', '#9fe8ff');
     log(`💨 ${HERO} dodges ${enemyLabel(e)}!`);
     fireSkillTrigger('dodge', { enemy: e }); // on-dodge procs (e.g. prime a crit)
@@ -13488,7 +13606,7 @@ function enemyAttackPlayer(e) {
   let raw = Math.round(e.dmg * rnd(80, 120) / 100);
   if (beh.hitMult) raw = Math.round(raw * beh.hitMult);
   if (buffs.guard) raw = Math.round(raw * 0.6);
-  const dmg = applyIncomingMods(absorbWithMana(mitigateDamage(raw, e.level)));
+  const dmg = applyIncomingMods(absorbWithMana(mitigateDamage(raw, e.level)), e);
   player.hp = Math.max(0, player.hp - dmg);
   sfx('hurt');
   spawnFloatingText(player.x, player.y, `${dmg}`, '#ff3344');
@@ -13512,7 +13630,7 @@ function enemyAttackPlayer(e) {
 
 // A ranged enemy flings a bolt at the player from a distance.
 function enemyRangedAttack(e) {
-  if (rollDodge()) {
+  if (rollDodge(e)) {
     spawnFloatingText(player.x, player.y, 'DODGE', '#9fe8ff');
     log(`💨 ${HERO} sidesteps ${enemyLabel(e)}'s bolt!`);
     fireSkillTrigger('dodge', { enemy: e });
@@ -13520,7 +13638,7 @@ function enemyRangedAttack(e) {
   }
   let raw = Math.round(e.dmg * rnd(75, 110) / 100);
   if (buffs.guard) raw = Math.round(raw * 0.6);
-  const dmg = applyIncomingMods(absorbWithMana(mitigateDamage(raw, e.level)));
+  const dmg = applyIncomingMods(absorbWithMana(mitigateDamage(raw, e.level)), e);
   player.hp = Math.max(0, player.hp - dmg);
   sfx(e.isBoss ? 'boss' : 'hurt');
   // Draw the shot so the source is unmistakable: a tracer from foe to hero, a
@@ -14190,8 +14308,10 @@ function checkLevelUp() {
     player.attrPoints = (player.attrPoints || 0) + ATTR_POINTS_PER_LEVEL;
     player.skillPoints = (player.skillPoints || 0) + SKILL_POINTS_PER_LEVEL;
     recomputeMaxStats();        // level grants more base HP/MP
-    player.hp = player.maxHp;   // a level up fully restores you
-    player.mp = player.maxMp;
+    // A level-up mends a chunk of HP/MP — a real relief mid-fight, but no longer
+    // a free full reset, so health and mana stay finite resources you manage.
+    player.hp = Math.min(player.maxHp, player.hp + Math.round(player.maxHp * 0.4));
+    player.mp = Math.min(player.maxMp, player.mp + Math.round(player.maxMp * 0.4));
     sfx('levelup');
     showLevelUpBanner(player.level);
     log(`⭐ LEVEL UP! You are now level ${player.level}!`, 'important');
@@ -14384,7 +14504,7 @@ function updateBars() {
 // after a sip both flasks recharge over a few turns. Health potions restore a
 // percentage of max HP so they scale with you instead of becoming useless at
 // high levels.
-const HEAL_PERCENT = 0.30;
+const HEAL_PERCENT = 0.25;     // a sip mends 25% of max HP — sustain, not a reset
 const POTION_CD = 3;            // shared cooldown — recharges over 3 turns
 function healPotionAmount() { return Math.max(1, Math.round(player.maxHp * HEAL_PERCENT)); }
 function potionReady() { return (player.potionCd || 0) === 0; }
@@ -14398,13 +14518,17 @@ function useHealthPotion() {
   spendPotionTurn();
 }
 
-const MANA_AMOUNT = 40;
+// Mana potions restore a fraction of max MP (so they scale with you) rather than
+// a flat pool — kept deliberately modest so mana stays a resource you ration.
+const MANA_PERCENT = 0.25;
+function manaPotionAmount() { return Math.max(10, Math.round(player.maxMp * MANA_PERCENT)); }
 function useManaPotion() {
   if (!potionReady()) { log(`⏳ Potions recharge — ${player.potionCd} turn${player.potionCd === 1 ? '' : 's'} left.`); return; }
   if (player.mp >= player.maxMp) { log('Already at full mana.'); return; }
-  player.mp = Math.min(player.maxMp, player.mp + MANA_AMOUNT);
+  const restore = Math.min(player.maxMp - player.mp, manaPotionAmount());
+  player.mp += restore;
   sfx('potion');
-  log(`🔷 Quaffed a ${logPotion('Mana Potion')}. +${MANA_AMOUNT} MP`, 'loot');
+  log(`🔷 Quaffed a ${logPotion('Mana Potion')}. +${restore} MP`, 'loot');
   spendPotionTurn();
 }
 
@@ -14629,8 +14753,8 @@ function renderHero(el) {
     ['IDMG','ic_stun','Increased dmg'], ['BOSSDMG','ui_level','Dmg vs bosses'], ['EXEC','w_dagger','Execute'],
     ['PEN','w_spear','Armor pen'], ['CLEAVE','w_axe','Cleave'], ['DBLSTRIKE','w_scythe','Double strike'],
     ['LEECH','ic_heart','Life leech'], ['MPLEECH','ic_orb','Mana leech'], ['HPKILL','ic_heart','Life on kill'],
-    ['MPKILL','ic_orb','Mana on kill'], ['THORNS','spikes_up','Thorns'], ['DR','a_shield','Dmg reduction'],
-    ['BLOCK','a_shield','Block'], ['SPELLPWR','ic_orb','Spell power'], ['CDR','ic_wand','Cooldown reduc'],
+    ['MPKILL','ic_orb','Mana on kill'], ['THORNS','spikes_up','Thorns'],
+    ['SPELLPWR','ic_orb','Spell power'], ['CDR','ic_wand','Cooldown reduc'],
     ['MCR','ui_mp','Mana cost reduc'], ['GOLDFIND','ic_money','Gold find'], ['XPGAIN','scroll','XP gain'],
     ['MAGICFIND','chest','Magic find'], ['MATFIND','mat_scrap','Material find'],
     ['BLEED','ic_heart','Bleed chance'], ['STUNPWR','ic_stun','Stun power'],
@@ -14640,17 +14764,25 @@ function renderHero(el) {
     if (!t) return '';
     return stat(name, '+' + t + (PCT_STATS.has(k) ? '%' : ''));
   }).join('');
+  // Chance stats are ratings shown as the % they currently produce against the
+  // floor you're on (the % rises/falls as the floor's level changes).
+  const uiFoe = { level: curDepth() };
+  const rtg = (label, r, c) => stat(label, `${Math.round(r)} <span style="opacity:0.6">→ ${Math.round(c * 100)}%</span>`);
   const derived = `<div class="hero-class" style="border-color:#445">
       <div class="hc-head"><span class="hc-name">📊 Stats</span></div>
+      <div class="hc-line" style="opacity:0.55;font-size:11px;margin:-2px 0 3px">Dodge · hit · crit · block are <b>ratings</b>, shown as the % they yield vs your current floor (${floorLabel(curDepth())}). Deeper floors need more rating for the same %.</div>
       ${stat('Attack power', Math.round(totalStat('ATK') + attrDamage()))}
       ${stat('Defense', Math.round(playerDefense()))}
       ${stat('Max HP', player.maxHp)}
       ${stat('Max MP', player.maxMp)}
-      ${stat('HP regen', '+' + hpRegenPerTurn() + '/turn')}
-      ${stat('MP regen', '+' + mpRegenPerTurn() + '/turn')}
-      ${stat('Crit chance', Math.round(playerCritChance()*100) + '%')}
+      ${stat('HP regen', '+' + (Math.round(hpRegenPerTurn() * 100) / 100) + '/turn')}
+      ${stat('MP regen', '+' + (Math.round(mpRegenPerTurn() * 100) / 100) + '/turn')}
+      ${rtg('Accuracy', playerAccuracyRating(), hitChanceVs(uiFoe))}
+      ${rtg('Evasion (dodge)', playerEvasionRating(), dodgeChanceVs(uiFoe))}
+      ${rtg('Crit', playerCritRating(), critChanceVs(uiFoe))}
       ${stat('Crit damage', Math.round(critDamageMult()*100) + '%')}
-      ${stat('Dodge', Math.round(playerDodge()*100) + '%')}
+      ${playerBlockRating() > 0 ? rtg('Block', playerBlockRating(), blockChanceVs(curDepth())) : ''}
+      ${playerDRRating() > 0 ? rtg('Dmg reduction', playerDRRating(), drFractionVs(curDepth())) : ''}
       ${diffClearedCount() ? `<div class="hc-line" style="display:flex;justify-content:space-between;color:#ff9b8a;margin-top:4px"><span>⚔️ Conqueror's scars</span><b>−${Math.round((1 - diffDebuffMult()) * 100)}%</b></div>
       <div class="hc-line" style="opacity:0.62;font-size:10px;color:#ff9b8a">${diffClearedCount()} difficult${diffClearedCount() === 1 ? 'y' : 'ies'} conquered — lowers Max&nbsp;HP &amp; damage dealt.</div>` : ''}
       ${extRows ? `<div class="hc-line" style="opacity:0.5;margin-top:4px">— from gear —</div>${extRows}` : ''}
