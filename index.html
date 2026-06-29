@@ -5086,6 +5086,9 @@ let player = { x: 5, y: 5, facing: 'left', hp: 100, maxHp: 100, mp: 60, maxMp: 6
   // Last Stand — a clutch survival that, once per floor, turns a killing blow
   // into 1 HP instead of death. Refreshed each new floor in generateMap().
   lastStandReady: true,
+  // Comeback relief anchor: the floor you revived toward after a death. While you
+  // climb the few floors above it, foes go easier (see spawnEnemies); null = none.
+  reliefFloor: null,
   // Skill tree — 1 skill point earned per level (separate from attribute points),
   // spent on the class's passive/active/path nodes. `skills` maps node id → rank;
   // `skillCds` holds each active skill's independent cooldown.
@@ -9069,6 +9072,19 @@ function spawnEnemies() {
   // hard via depthThreat, so this only lifts the soft opening).
   const earlyBite = dungeonLevel <= 4 ? 1 + (5 - dungeonLevel) * 0.05 : 1;
 
+  // Comeback relief: for a few floors after a death, foes pull their punches so a
+  // stumble doesn't spiral into an unbreakable death loop. It's anchored to the
+  // floor you revive toward and fades as you climb back to where you fell, so it's
+  // recomputed from your current depth each floor (no counter to desync on reload
+  // or when backtracking). Cleared once you've recovered past the ramp.
+  let reliefEase = 1;
+  if (player.reliefFloor != null) {
+    const into = dungeonLevel - player.reliefFloor; // 0 on the floor you re-enter
+    const ramp = [0.7, 0.8, 0.88];                  // −30% / −20% / −12%, then gone
+    if (into >= 0 && into < ramp.length) reliefEase = ramp[into];
+    else if (into >= ramp.length) player.reliefFloor = null; // recovered — clear it
+  }
+
   for (let i = 0; i < count; i++) {
     let ex, ey;
     let tries = 0;
@@ -9140,8 +9156,8 @@ function spawnEnemies() {
         // depthThreat compounds with depth (deep is deadly); threatScale layers
         // main's anti-grind nudge on top (out-leveling a floor toughens its foes).
         const threat = depthThreat(mobLevel);
-        const baseHp = Math.max(1, Math.round((10 + mobLevel * 8) * threat * (floorMod.hpMult || 1) * pfx('hp', 1) * threatScale));
-        const baseDmg = Math.max(1, Math.round((3.5 + mobLevel * 1.9 + bandIdx) * threat * (floorMod.dmgMult || 1) * pfx('dmg', 1) * threatScale * earlyBite));
+        const baseHp = Math.max(1, Math.round((10 + mobLevel * 8) * threat * (floorMod.hpMult || 1) * pfx('hp', 1) * threatScale * reliefEase));
+        const baseDmg = Math.max(1, Math.round((3.5 + mobLevel * 1.9 + bandIdx) * threat * (floorMod.dmgMult || 1) * pfx('dmg', 1) * threatScale * earlyBite * reliefEase));
         if (i === eliteIndex) {
           const eHp = Math.round(baseHp * 2.2);
           const eName = pick(ELITE_NAMES);
@@ -13273,6 +13289,9 @@ function handleDeath() {
   const fellOn = dungeonLevel;
   const tierBase = (dTier - 1) * FLOORS_PER_DIFF + 1;
   dungeonReturn = Math.max(tierBase, dungeonLevel - KNOCK);
+  // Comeback relief: the next few floors of your recovery run go a little easier
+  // (see spawnEnemies) so a death doesn't trap you in an unwinnable spiral.
+  player.reliefFloor = dungeonReturn;
   closeShop(); closeMystic(); closeTown();
   buildTown();     // clears inTown=false → true and resets town state
   revivedInTown = true;  // flag so the town hub spells out how to get back to questing
@@ -13281,7 +13300,7 @@ function handleDeath() {
   player.hp = Math.max(1, Math.round(player.maxHp * 0.5));
   player.mp = Math.round(player.maxMp * 0.5);
   showDeathScreen(lostGold, lostXp, dungeonReturn, lostBag, (graveSite ? fellOn : 0));
-  log(`💀 ${player.name || HERO} was SLAIN on ${floorLabel(fellOn)}! Lost ${lostGold}g${lostXp ? ` and ${lostXp} XP` : ''}${lostBag ? `, and dropped your bag (${lostBag}) — reclaim it on ${floorLabel(fellOn)}` : ''} — revived weakened in town.`, 'important');
+  log(`💀 ${player.name || HERO} was SLAIN on ${floorLabel(fellOn)}! Lost ${lostGold}g${lostXp ? ` and ${lostXp} XP` : ''}${lostBag ? `, and dropped your bag (${lostBag}) — reclaim it on ${floorLabel(fellOn)}` : ''} — revived weakened in town. The dungeon eases up while you find your feet.`, 'important');
   recomputeMaxStats();
   updateBars();
   renderPanel();
