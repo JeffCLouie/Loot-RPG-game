@@ -80,9 +80,8 @@
   }
   #gold-display { color: var(--gold); font-size: 11px; }
 
-  /* "Watch" settings button → spectator stream page (watch.html) */
-  .settings-item.watch-action { color: #ff6b78; }
-  .settings-item.watch-action .action-icon { display: inline-flex; align-items: center; justify-content: center; }
+  /* "Watch" settings button → spectator stream page (watch.html). Row keeps the
+     standard look; the pulsing red dot alone signals the live stream. */
   .watch-live-dot {
     width: 9px; height: 9px; border-radius: 50%;
     background: #ff3b4e; box-shadow: 0 0 6px #ff3b4e;
@@ -248,6 +247,9 @@
     z-index: 320;
   }
   #settings-menu.open { display: flex; }
+  /* Every settings row shares ONE neutral look — same tile background, border
+     and text colour. Only meaningful *states* tint (muted sound, armed New Run);
+     nothing is colour-coded just to stand out. */
   .settings-item {
     display: flex;
     flex-direction: row;
@@ -256,13 +258,23 @@
     padding: 9px 12px;
     border: 1px solid var(--border);
     border-radius: 8px;
+    background: #221b38;
+    color: #d6cdea;
     cursor: pointer;
     font-family: 'Courier New', monospace;
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation;
+    transition: background 0.12s ease, border-color 0.12s ease;
   }
-  .settings-item .action-icon { font-size: 18px; }
-  .settings-item .action-label { font-size: 12px; }
+  .settings-item:active { background: #2e2550; border-color: var(--frame); }
+  /* Fixed-width icon cell so every label starts at the same x — emoji, DawnLike
+     sprite and the live dot all sit in an identical box, no ragged edges. */
+  .settings-item .action-icon {
+    flex: 0 0 22px; width: 22px; height: 22px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 18px; line-height: 1;
+  }
+  .settings-item .action-label { font-size: 12px; letter-spacing: 0.5px; }
 
   /* ── DEATH SCREEN ── */
   #death-overlay { position: fixed; inset: 0; background: rgba(40,0,0,0.78); z-index: 500; display: none; align-items: center; justify-content: center; padding: 20px; }
@@ -452,29 +464,13 @@
   .bag-btn:active { background: #6b4f2f; }
   .bag-btn.open { background: #6b4f2f; border-color: var(--gold); color: #fff; }
 
-  .sound-action {
-    background: #1f2a3a;
-    border-color: #2f4a6b;
-    color: #bcd5ff;
-  }
-  .sound-action:active { background: #2f4a6b; }
-  .sound-action.muted { background: #262626; border-color: #444; color: #888; }
+  /* Sound off is a real state, so it stays dimmed/greyed even at rest. */
+  .sound-action.muted { background: #1c1726; border-color: #322c44; color: #8c84a0; }
 
-  .slots-action {
-    background: #1f2a22;
-    border-color: #2f4a38;
-    color: #bcffd0;
-  }
-  .slots-action:active { background: #2f4a38; }
-
-  .newgame-action {
-    background: #3a1414;
-    border-color: #a32222;
-    color: #ff5a5a;
-    font-weight: bold;
-  }
-  .newgame-action:active { background: var(--hp); color: #fff; }
-  .newgame-action.armed { background: var(--hp); color: #fff; border-color: #fff; }
+  /* New Run is destructive: neutral at rest like every other row, but turns red
+     the moment it's armed (and while pressed) to flag the wipe. */
+  .newgame-action.armed,
+  .newgame-action:active { background: var(--hp); color: #fff; border-color: #fff; }
 
   .skill-btn {
     background: #2a1f4a;
@@ -2271,31 +2267,31 @@
            stopPropagation keeps it open while you toggle sound or arm New Game. -->
       <div id="settings-menu" onclick="event.stopPropagation()">
         <button class="settings-item newgame-action" onclick="confirmNewGame()">
-          <span class="action-icon">↻</span><span class="action-label">NEW RUN</span>
+          <span class="action-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.5 15a9 9 0 1 1-2-9.6L23 10"/></svg></span><span class="action-label">NEW RUN</span>
         </button>
         <button class="settings-item sound-action" onclick="toggleSound()">
-          <span class="action-label" id="sound-label">ON</span>
+          <span class="action-icon" id="sound-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a9 9 0 0 1 0 14"/></svg></span><span class="action-label" id="sound-label">ON</span>
         </button>
         <button class="settings-item zoom-action" onclick="toggleZoom()">
-          <span class="action-label" id="zoom-label">WIDE</span>
+          <span class="action-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span><span class="action-label" id="zoom-label">WIDE</span>
         </button>
         <button class="settings-item unstuck-action" onclick="unstuck()" data-tip="<div class='ht-name'>🌀 Unstuck</div><div class='ht-line'>Warp to a random open spot elsewhere on the floor.</div><div class='ht-sub'>use if you get wedged in</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
-          <span class="action-icon">🌀</span><span class="action-label">UNSTUCK</span>
+          <span class="action-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5"/><path d="M4 20 21 3"/><path d="M21 16v5h-5"/><path d="m15 15 6 6"/><path d="M4 4l5 5"/></svg></span><span class="action-label">UNSTUCK</span>
         </button>
         <button class="settings-item slots-action" onclick="openSlots()">
-          <span class="action-icon">💾</span><span class="action-label">SLOTS</span>
+          <span class="action-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg></span><span class="action-label">SLOTS</span>
         </button>
         <button class="settings-item cloud-action" onclick="openAccount()">
-          <span class="action-icon" id="cloud-icon">☁️</span><span class="action-label" id="cloud-label">CLOUD</span>
+          <span class="action-icon" id="cloud-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg></span><span class="action-label" id="cloud-label">CLOUD</span>
         </button>
         <button class="settings-item" onclick="showLeaderboard()">
-          <span class="action-icon" data-spr="ui_trophy"></span><span class="action-label">BOARDS</span>
+          <span class="action-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg></span><span class="action-label">BOARDS</span>
         </button>
         <button class="settings-item" onclick="showVersionHistory()">
-          <span class="action-icon">📜</span><span class="action-label">VERSION</span>
+          <span class="action-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span><span class="action-label">VERSION</span>
         </button>
         <button class="settings-item" onclick="showPlayTime()">
-          <span class="action-label">TIME</span>
+          <span class="action-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 1.8"/></svg></span><span class="action-label">TIME</span>
         </button>
         <!-- Opens the spectator stream (watch.html) where you can watch Claude
              play Dungeon Loot live. -->
@@ -6038,10 +6034,12 @@ function toggleSound() {
   if (!audio.muted) { audioUnlock(); sfx('click'); }
   updateSoundButton();
 }
+const SOUND_ON_SVG = "<svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polygon points=\"11 5 6 9 2 9 2 15 6 15 11 19 11 5\"/><path d=\"M15.5 8.5a5 5 0 0 1 0 7\"/><path d=\"M19 5a9 9 0 0 1 0 14\"/></svg>";
+const SOUND_OFF_SVG = "<svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polygon points=\"11 5 6 9 2 9 2 15 6 15 11 19 11 5\"/><line x1=\"22\" y1=\"9\" x2=\"16\" y2=\"15\"/><line x1=\"16\" y1=\"9\" x2=\"22\" y2=\"15\"/></svg>";
 function updateSoundButton() {
   const ic = document.getElementById('sound-icon');
   const lbl = document.getElementById('sound-label');
-  if (ic) ic.textContent = audio.muted ? '🔇' : '🔊';
+  if (ic) ic.innerHTML = audio.muted ? SOUND_OFF_SVG : SOUND_ON_SVG;
   if (lbl) lbl.textContent = audio.muted ? 'OFF' : 'ON';
   const btn = document.querySelector('.sound-action');
   if (btn) btn.classList.toggle('muted', audio.muted);
@@ -6083,6 +6081,7 @@ document.addEventListener('click', (e) => {
 
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
+  { date: '2026-06-29', size: 'small', v: 'Tidier Settings menu', by: 'Claude', notes: ['The ⚙️ Settings menu is now one consistent style — every row shares the same neutral tile instead of the old jumble of red, blue and green buttons.', 'Sound, Zoom and Time gained icons, and every row’s icon now sits in the same fixed cell so the labels line up cleanly.', 'Only meaningful states still colour: New Run flashes red when armed to wipe, and Sound dims when muted.'] },
   { date: '2026-06-29', size: 'small', v: 'Auto-Loot on the LOOT tab', by: 'ASuiter89', notes: ['The ♻️ Auto-Loot picker moved out of the ⚙️ settings menu onto the LOOT tab, where it belongs — a button right above your loot shows its on/off state at a glance and opens the per-rarity Keep / Scrap / Sell picker.'] },
   { date: '2026-06-29', size: 'medium', v: 'Shared stash', by: 'Claude', notes: ['The town Vault is now shared across all of your save slots — gold or gear banked by one hero can be withdrawn by any other, so it doubles as account-wide storage you can pass loot between characters with.', 'Signed in? The shared stash also syncs to your account and follows you across devices.', 'Anything your existing heroes had banked is merged into the shared pool automatically, so nothing is lost.'] },
   { date: '2026-06-29', size: 'big', v: 'Auto-loot & bag selling', by: 'ASuiter89', notes: ['New ♻️ AUTO-LOOT setting (off by default): pick, per rarity, whether dropped gear is kept, auto-scrapped into materials, or auto-sold for gold — so the loot drawer stops clogging with junk.', 'Sell and Scrap now live on the bag itself: tap any loot item for per-piece Sell/Scrap buttons, or use the Sell all / Scrap all bar at the top of the LOOT drawer — no need to visit a vendor.', 'The Merchant is now buy-only and the Craftsman is forge-only; selling and salvaging moved onto the bag.', 'On top of the new difficulty gating, rarer crafting materials drop a little less often from kills — scrapping unwanted loot is a steady way to stock the high end.'] },
