@@ -6125,7 +6125,7 @@ canvas.addEventListener('pointerup', e => {
 const touchDpad = document.getElementById('touch-dpad');
 // Movement-pad preferences: corner to dock it in, and its opacity (0 = hidden).
 const DPAD_KEY = 'dpadCfg';
-let dpadCfg = { pos: 'left', opacity: 0.33, style: 'triangle', color: '#e8c267' };
+let dpadCfg = { pos: 'left', opacity: 1, style: 'triangle', color: '#e8c267' };
 // The STYLE picker is just a set of arrow glyphs (CSS rotates the one rightward
 // glyph per direction); the COLOUR picker tints them. No per-option backgrounds
 // or borders — the pad stays a clean set of floating arrows.
@@ -15564,19 +15564,20 @@ function lbSubmitLocal(entry) {
 function lbFetchLocal(col) {
   let all = [];
   try { all = JSON.parse(localStorage.getItem(LB_LOCAL_KEY) || '[]'); } catch (e) {}
-  return all.filter(Boolean).sort((a, b) => (b[col] || 0) - (a[col] || 0)).slice(0, 50);
+  return all.filter(Boolean).sort((a, b) => (b[col] || 0) - (a[col] || 0));
 }
 
-// Fetch the top 50 for a board. Returns { rows, local } — local is true when no
-// backend is configured (so the UI can say the board is device-only). The
-// request is bounded by a timeout so a stalled network fails over to the local
-// mirror instead of leaving the board stuck on "Loading…".
+// Fetch a board's full ranking. Returns { rows, local } — local is true when no
+// backend is configured (so the UI can say the board is device-only). Every entry
+// is listed (no top-N cap); the high limit is just a sanity bound against a
+// runaway table. The request is bounded by a timeout so a stalled network fails
+// over to the local mirror instead of leaving the board stuck on "Loading…".
 async function lbFetch(tab) {
   const sort = LB_SORTS[tab] || LB_SORTS.floor;
   if (!lbEnabled()) return { rows: lbFetchLocal(sort.col), local: true };
   const url = LB_SUPABASE_URL +
     '/rest/v1/leaderboard?select=name,player_class,max_floor,level,gold,power&order=' +
-    sort.col + '.desc&limit=50';
+    sort.col + '.desc&limit=100000';
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 8000);
   try {
@@ -15629,7 +15630,7 @@ async function renderLeaderboard() {
   const rows = data.rows || [];
   if (data.errored) status.textContent = '⚠️ Could not reach the global board — showing scores from this device.';
   else if (data.local) status.textContent = 'Local leaderboard (no backend configured yet).';
-  else status.textContent = rows.length ? 'Global · top ' + rows.length : 'Global leaderboard';
+  else status.textContent = rows.length ? 'Global · ' + rows.length + ' hero' + (rows.length === 1 ? '' : 'es') : 'Global leaderboard';
   if (!rows.length) {
     list.innerHTML = '<div class="lb-row"><span class="lb-name">No heroes yet — be the first!</span></div>';
     return;
