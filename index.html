@@ -15577,13 +15577,26 @@ async function lbFetch(tab) {
   if (!lbEnabled()) return { rows: lbFetchLocal(sort.col), local: true };
   const url = LB_SUPABASE_URL +
     '/rest/v1/leaderboard?select=name,player_class,max_floor,level,gold,power&order=' +
-    sort.col + '.desc&limit=100000';
+    sort.col + '.desc';
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 8000);
+  const timer = setTimeout(() => ctrl.abort(), 12000);
   try {
-    const res = await fetch(url, { headers: lbHeaders(), signal: ctrl.signal });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    return { rows: await res.json(), local: false };
+    // Page through with Range headers: PostgREST caps each response at its
+    // server-side max-rows (commonly 1000) no matter the URL limit, so we keep
+    // requesting the next window until a short page tells us we've got them all.
+    const PAGE = 1000;
+    let rows = [];
+    for (let from = 0; ; from += PAGE) {
+      const res = await fetch(url, {
+        headers: lbHeaders({ 'Range-Unit': 'items', 'Range': from + '-' + (from + PAGE - 1) }),
+        signal: ctrl.signal,
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const page = await res.json();
+      rows = rows.concat(page);
+      if (!Array.isArray(page) || page.length < PAGE) break; // last window reached
+    }
+    return { rows, local: false };
   } finally {
     clearTimeout(timer);
   }
