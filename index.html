@@ -3454,14 +3454,18 @@ function visualIcon(slot) {
 
 const POTIONS = ['Health Potion','Mana Potion','Elixir'];
 
+// The Diablo-2-style loot tiers, rarest last. Order matters: it defines the
+// rarity ranking used throughout (auto-loot, enchanting, sorting). Rarity is no
+// longer chosen by a weight here — that lives in rollTier/TIER_BASE — so these
+// carry only the colour each tier communicates with.
 const TIERS = {
-  junk:      { color: '#6b6b6b', weight: 30 },
-  normal:    { color: '#e8e8e8', weight: 35 },
-  uncommon:  { color: '#44bb44', weight: 20 },
-  rare:      { color: '#4488ff', weight: 10 },
-  epic:      { color: '#aa44ff', weight: 4  },
-  legendary: { color: '#ff8800', weight: 1  },
-  unique:    { color: '#ff2222', weight: 0.5},
+  junk:      { color: '#6b6b6b' },
+  normal:    { color: '#e8e8e8' },
+  uncommon:  { color: '#44bb44' },
+  rare:      { color: '#4488ff' },
+  epic:      { color: '#aa44ff' },
+  legendary: { color: '#ff8800' },
+  unique:    { color: '#ff2222' },
 };
 
 // ── AUTO-LOOT ──
@@ -6115,6 +6119,7 @@ document.addEventListener('click', (e) => {
 
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
+  { date: '2026-06-29', size: 'big', v: 'Diablo-2-style loot drops', by: 'ASuiter89', notes: ['Loot rarity is rebalanced so you stop drowning in high-end gear: instead of rolling the rarity table several times and keeping the rarest (which buried you in oranges), each drop now makes one independent check per tier from rarest down, so a baseline drop is ~50% normal, ~21% junk, ~19% uncommon, ~6% rare, ~2% epic, ~0.6% legendary, ~0.15% unique.', 'Magic Find, your Luck and deeper floors still raise the odds — but with Diablo-2-style diminishing returns that barely move legendary/unique and hard per-tier caps, so stacking Magic Find now floods you with greens and blues rather than legendaries.', 'Tougher foes drop MORE items, not just luckier ones: every kill makes a number of independent “picks” (ordinary foes 1, elites 3, bosses 5), each either dropping nothing or one item — so a boss sprays a pile of loot while a trash mob mostly drops nothing. Elites and bosses are still guaranteed at least one piece.'] },
   { date: '2026-06-29', size: 'small', v: 'Tidier Settings menu', by: 'Claude', notes: ['The ⚙️ Settings menu is now one consistent style — every row shares the same neutral tile instead of the old jumble of red, blue and green buttons.', 'Sound, Zoom and Time gained icons, and every row’s icon now sits in the same fixed cell so the labels line up cleanly.', 'Only meaningful states still colour: New Run flashes red when armed to wipe, and Sound dims when muted.'] },
   { date: '2026-06-29', size: 'small', v: 'Auto-Loot on the LOOT tab', by: 'ASuiter89', notes: ['The ♻️ Auto-Loot picker moved out of the ⚙️ settings menu onto the LOOT tab, where it belongs — a button right above your loot shows its on/off state at a glance and opens the per-rarity Keep / Scrap / Sell picker.'] },
   { date: '2026-06-29', size: 'medium', v: 'Shared stash', by: 'Claude', notes: ['The town Vault is now shared across all of your save slots — gold or gear banked by one hero can be withdrawn by any other, so it doubles as account-wide storage you can pass loot between characters with.', 'Signed in? The shared stash also syncs to your account and follows you across devices.', 'Anything your existing heroes had banked is merged into the shared pool automatically, so nothing is lost.'] },
@@ -9403,38 +9408,73 @@ function spawnGroundLoot() {
 // ITEM GENERATION
 // ══════════════════════════════════════════
 
-// Bonus rarity rolls earned from progression: the deeper you delve and the
-// higher your level, the more rolls every drop gets (and keeps the best),
-// so rarer loot steadily becomes more common. Capped so it stays sane.
-function progressionRolls() {
-  const depth = Math.min(6, Math.floor(dungeonLevel / 4) + Math.floor((player.level - 1) / 5));
-  // The Luck attribute sweetens every drop with extra rarity rolls (capped).
-  const luck = Math.min(3, Math.floor(Math.max(0, totalAttr('luck') - ATTR_BASE) / 12));
-  return depth + luck;
+// ── DROP QUALITY (Diablo-2-style independent descending checks) ──
+// Rarity is no longer "roll the table N times and keep the rarest" — that
+// best-of-N is exactly what buried players in oranges, because every extra roll
+// geometrically inflated the odds of a high tier. Instead each drop walks the
+// tiers from RAREST to commonest and makes ONE independent check per tier; the
+// first that passes wins, otherwise the item is a plain normal (or junk). So a
+// high tier stays genuinely rare no matter how lucky the source — luck and Magic
+// Find buy MORE items and a slightly better shot, never a guaranteed legendary.
+
+// Baseline per-tier chance with no Magic Find at shallow depth. Tuned so a
+// vanilla drop is ~ normal 50% · junk 21% · uncommon 19% · rare 6% · epic 2% ·
+// legendary 0.6% · unique 0.15% — normal most common, then junk & uncommon as a
+// pair, then each higher tier far rarer than the last.
+const TIER_BASE      = { unique: 0.0015, legendary: 0.006, epic: 0.02, rare: 0.06, uncommon: 0.20 };
+// Magic-Find diminishing-returns factor per tier (smaller = MF saturates sooner =
+// helps LEAST). Ported from D2's effective-MF curve: the top tiers barely move
+// however much MF you stack, while uncommon has effectively none (huge factor).
+const TIER_MF_FACTOR = { unique: 250, legendary: 350, epic: 500, rare: 600, uncommon: 1e9 };
+// Hard ceiling per tier so Magic Find + depth can never push a tier past a
+// prestige cap — the guarantee that you can't drown in high rarity, ever.
+const TIER_CAP       = { unique: 0.008, legendary: 0.025, epic: 0.07, rare: 0.18, uncommon: 0.55 };
+const TIER_CHECK_ORDER = ['unique', 'legendary', 'epic', 'rare', 'uncommon'];
+// When no rarity check passes, this share of the leftover is junk, the rest
+// normal — keeps normal the single most common drop with junk on par with uncommon.
+const JUNK_FRACTION  = 0.30;
+
+// Magic Find with D2-style diminishing returns: linear up to ~10, then it bends
+// toward `factor` and can never exceed it — which is what self-caps the top tiers.
+function effMF(mf, factor) {
+  if (mf <= 0) return 0;
+  if (mf <= 10) return mf;
+  return mf * factor / (mf + factor);
 }
 
-function rollTier(rolls = 1) {
-  const entries = Object.entries(TIERS);
-  const total = entries.reduce((s, [,v]) => s + v.weight, 0);
-  const rollOnce = () => {
-    let roll = Math.random() * total;
-    for (const [k, v] of entries) {
-      roll -= v.weight;
-      if (roll <= 0) return k;
-    }
-    return 'normal';
-  };
-  // Luckier sources roll several times and keep the rarest result, so bosses
-  // (many rolls) skew much higher than elites, which skew higher than normal.
-  // Progression adds extra rolls on top, raising rarity as you advance.
-  const order = Object.keys(TIERS);
-  const totalRolls = Math.max(1, rolls + progressionRolls());
-  let best = rollOnce();
-  for (let i = 1; i < totalRolls; i++) {
-    const r = rollOnce();
-    if (order.indexOf(r) > order.indexOf(best)) best = r;
+// Gentle, capped depth nudge to the high-end odds (replaces the old explosive
+// progression best-of-N): +1.2% per item level, maxing at +100% around ilvl 83.
+function depthFactor(ilvl) {
+  return 1 + Math.min(1.0, Math.max(0, ilvl) * 0.012);
+}
+
+// The old `rolls`/luck argument is reinterpreted as a small flat Magic-Find-like
+// quality bonus (NOT best-of-N): each step above 1 adds +15 effective MF, so a
+// merchant (3) or rich chest (6) feels a touch better without ever guaranteeing a
+// top tier — the per-tier caps still bound it.
+function rollsQualityBonus(rolls) {
+  return Math.max(0, (rolls || 1) - 1) * 15;
+}
+
+// The Magic-Find score that drives drop QUALITY: gear + skill Magic Find, food,
+// and the Luck attribute (Luck is advertised as raising loot quality). Kept
+// separate from lootMult, which governs drop QUANTITY.
+function qualityMagicFind() {
+  const gear = totalStat('MAGICFIND') + skillBonus('magicFind');
+  const food = foodFx('magicPct') * 100;
+  const luck = Math.max(0, totalAttr('luck') - ATTR_BASE) * 1.5;
+  return Math.max(0, gear + food + luck);
+}
+
+function rollTier(rolls = 1, ilvl = null) {
+  const df = depthFactor(ilvl != null ? ilvl : dungeonLevel);
+  const mf = qualityMagicFind() + rollsQualityBonus(rolls);
+  for (const t of TIER_CHECK_ORDER) {
+    let p = TIER_BASE[t] * df * (1 + effMF(mf, TIER_MF_FACTOR[t]) / 100);
+    if (p > TIER_CAP[t]) p = TIER_CAP[t];
+    if (Math.random() < p) return t;
   }
-  return best;
+  return Math.random() < JUNK_FRACTION ? 'junk' : 'normal';
 }
 
 // Rarity multiplier applied to every rolled value. Deliberately compressed (~4x
@@ -9573,17 +9613,18 @@ function lockedStats(item) {
 }
 
 function generateItem(rolls = 1, ilvl = null, forceTier = null, forceSlot = null) {
-  // forceTier pins the rarity (used by the town gambler, which rolls its own
-  // rarity distribution); otherwise rarity comes from the usual luck rolls.
-  // forceSlot pins the equipment slot (also used by the gambler, when the player
-  // pays to target a specific item type); otherwise the slot is rolled.
-  const tier = forceTier || rollTier(rolls);
-  const slot = (forceSlot && SLOTS[forceSlot]) ? forceSlot : weighted(SLOT_WEIGHTS);
-  const baseName = rollBaseName(slot);
   // Item level: how deep this drop is geared for. Higher item level means
   // bigger raw stats regardless of rarity, so loot from deeper floors steadily
   // outweighs rarer loot found earlier. Defaults to the current dungeon depth.
   const lvl = Math.max(1, Math.round(ilvl != null ? ilvl : dungeonLevel));
+  // forceTier pins the rarity (used by the town gambler, which rolls its own
+  // rarity distribution); otherwise rarity comes from rollTier — independent
+  // per-tier checks scaled by this drop's item level, Magic Find and source luck.
+  // forceSlot pins the equipment slot (also used by the gambler, when the player
+  // pays to target a specific item type); otherwise the slot is rolled.
+  const tier = forceTier || rollTier(rolls, lvl);
+  const slot = (forceSlot && SLOTS[forceSlot]) ? forceSlot : weighted(SLOT_WEIGHTS);
+  const baseName = rollBaseName(slot);
 
   let name = baseName;
   if (tier === 'uncommon') name = pick(PREFIXES) + ' ' + baseName;
@@ -12012,15 +12053,38 @@ function onEnemyDefeated(e) {
   // The floor modifier, an active Fortune buff, gear Magic Find, and any pact all
   // sweeten every drop roll.
   const lootMult = (floorMod.lootMult || 1) * (buffs.fortune ? 1.5 : 1) * pfx('loot', 1) * (1 + (totalStat('MAGICFIND') + skillBonus('magicFind')) / 100 + foodFx('magicPct')) * (1 + foodFx('dropPct'));
-  // Drop a chest — bosses and elites always drop, with richer loot. The luck
-  // value is how many rarity rolls the chest makes (more rolls = better odds).
-  // Enemy drops land straight in your pack — no need to walk over and open them.
-  if (e.isBoss || e.isElite || Math.random() < 0.10 * lootMult) {
-    let luck = e.isBoss ? 6 : (e.isElite ? 3 : 1);
-    if (buffs.fortune) luck += 1;
-    const fancy = luck > 1;
-    log(`${fancy ? '🎁' : '🧰'} ${label} dropped a ${fancy ? 'glittering ' : ''}chest!`, 'loot');
-    collectChestLoot(luck, e.level || dungeonLevel, e.x, e.y);
+  // ── Gear drops (Diablo-2-style "picks") ──
+  // Instead of one super-lucky roll, each kill makes a number of independent
+  // PICKS; every pick either finds nothing (NoDrop) or yields one item whose
+  // rarity is rolled on its own (rollTier). Bosses make the most picks — so they
+  // spill the MOST loot — elites fewer, ordinary foes a single stingy pick. The
+  // richer the foe, the small per-item quality nudge it gets too, so the rarity
+  // ratio differs by foe as well as the count. Magic Find & a deep floor erode
+  // the per-pick NoDrop (the single-player echo of D2's "players X" trick), so
+  // juicing loot raises how MUCH drops without ever flooding you with legendaries.
+  {
+    const picksBase = e.isBoss ? 5 : (e.isElite ? 3 : 1);
+    const noDropBase = e.isBoss ? 0.20 : (e.isElite ? 0.45 : 0.85);
+    const qbonus = e.isBoss ? 3 : (e.isElite ? 2 : 1);   // per-item quality nudge
+    const dlvl = e.level || dungeonLevel;
+    const picks = picksBase + (buffs.fortune ? 1 : 0);    // Fortune = one extra pick
+    const noDrop = Math.pow(noDropBase, 1 + Math.max(0, lootMult - 1) / 2);
+    let dropped = 0;
+    for (let p = 0; p < picks; p++) {
+      if (Math.random() >= noDrop) {                       // this pick yields an item
+        const it = generateItem(qbonus, dlvl);
+        if (acquireLoot(it) === 'keep') log(`${e.isBoss ? '🎁' : '🧰'} ${label} dropped ${logItem(it)}`, 'loot');
+        dropped++;
+      }
+    }
+    // Elites and bosses never leave you empty-handed (D2's guaranteed pick).
+    if (dropped === 0 && (e.isBoss || e.isElite)) {
+      const it = generateItem(qbonus, dlvl);
+      if (acquireLoot(it) === 'keep') log(`${e.isBoss ? '🎁' : '🧰'} ${label} dropped ${logItem(it)}`, 'loot');
+      dropped++;
+    }
+    if (dropped > 0) sfx('loot');
+    if (dropped > 1) log(`✨ ${label} spilled ${dropped} pieces of loot!`, 'important');
   }
   if (Math.random() < 0.20 * lootMult && player.hp < player.maxHp) {
     const orb = Math.min(player.maxHp - player.hp, Math.floor(player.maxHp * 0.12));
