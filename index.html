@@ -232,6 +232,14 @@
        of forcing the whole shrink-to-fit menu out to full screen width. */
     max-width: min(280px, calc(100vw - 24px));
     box-sizing: border-box;
+    /* The menu pops upward from the bottom bar; with this many items it used to
+       grow off the top of the screen, hiding NEW RUN / SOUND behind the HUD.
+       Cap the height and scroll inside so every item stays reachable. */
+    max-height: 70vh;
+    max-height: 70dvh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
     background: linear-gradient(180deg, #1a1430, #2c2344);
     border: 1px solid var(--frame);
     border-radius: 10px;
@@ -610,18 +618,21 @@
   #panel-content::-webkit-scrollbar-thumb { background: var(--border); }
 
   /* Loot subtabs: filter the LOOT list down to a single gear slot (all helms,
-     all chests, …) so a fat bag stays browsable. Small wrapping pills. */
+     all chests, …) so a fat bag stays browsable. Evenly-spaced single row. */
   .loot-subtabs {
     display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
+    flex-wrap: nowrap;
+    gap: 3px;
     margin-bottom: 6px;
   }
   .loot-subtab {
+    flex: 1 1 0;
+    min-width: 0;
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 3px;
-    padding: 3px 7px;
+    padding: 3px 2px;
     background: #15151f;
     border: 1px solid var(--border);
     border-radius: 11px;
@@ -2510,44 +2521,6 @@ function drawEmoji(emoji, x, y, fontPx) {
   const sp = typeof emojiSprite === 'function' ? emojiSprite(emoji) : null;
   if (sp && spriteReady) drawSpriteC(sp, x, y, fontPx);
 }
-
-// Draws a bold directional chevron badge on a stair tile so up vs. down read at
-// a glance — the staircase sprites alone look almost identical. dir is 'up' or
-// 'down'; the badge is a dark rounded plaque with a coloured arrow (green = up,
-// amber = down) tucked into the top-centre of the tile.
-function drawStairArrow(px, py, tw, th, dir) {
-  const up = dir === 'up';
-  const cx = px + tw / 2;          // badge centre x
-  const r  = tw * 0.2;             // badge radius
-  const cy = py + r + th * 0.05;   // badge centre y (near the top edge)
-  const arrowCol = up ? '#7dff7a' : '#ffc24b';
-  ctx.save();
-  // Dark rounded plaque so the arrow pops on any biome floor.
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(8,8,14,0.78)';
-  ctx.fill();
-  ctx.lineWidth = Math.max(1.5, tw * 0.04);
-  ctx.strokeStyle = arrowCol;
-  ctx.stroke();
-  // Solid triangle arrow pointing the way the stair leads.
-  const a = r * 0.62;
-  ctx.beginPath();
-  if (up) {
-    ctx.moveTo(cx, cy - a);
-    ctx.lineTo(cx + a, cy + a * 0.7);
-    ctx.lineTo(cx - a, cy + a * 0.7);
-  } else {
-    ctx.moveTo(cx, cy + a);
-    ctx.lineTo(cx + a, cy - a * 0.7);
-    ctx.lineTo(cx - a, cy - a * 0.7);
-  }
-  ctx.closePath();
-  ctx.fillStyle = arrowCol;
-  ctx.fill();
-  ctx.restore();
-}
-
 
 // ── DawnLike sprite atlas ───────────────────────────────────────────────────
 // Pixel-art world sprites from the DawnLike set (CC-BY 4.0 — DragonDePlatino &
@@ -9283,9 +9256,10 @@ function draw() {
       if (t === 1) {
         drawWall(px, py, tw, th, x, y, seed, C, false);
       } else if (t === 2) {
-        // Stairs down — DawnLike pixel staircase (the ▼ is baked into the tile).
-        // Sealed until the floor is cleared: an angry red glow + padlock while
-        // locked, the biome's inviting glow once open. Colour alone signals it.
+        // Stairs down — DawnLike pixel staircase (the ▼ arrow is baked into the
+        // tile, so no arrow badge or glow ring is layered on). While the floor is
+        // uncleared the exit is sealed: a red wash plus a locked-door icon over
+        // the stairs; once cleared it's just the bare staircase.
         const sealed = !floorCleared;
         if (!(spriteReady && drawSprite('stairs_down', px, py, tw))) {
           // Legacy fallback: dark pit with descending steps.
@@ -9297,26 +9271,16 @@ function draw() {
             ctx.fillRect(px + inset, sy, tw - inset*2, th * 0.125 + 1);
           }
         }
-        const glowCol = sealed ? '#cc3322' : C.stairsGlow;
-        // Sealed stairs get a faint red wash so the lock reads at a glance.
-        if (sealed) { ctx.save(); ctx.globalAlpha = 0.28; ctx.fillStyle = glowCol; ctx.fillRect(px, py, tw, th); ctx.restore(); }
-        // Pulsing ring so the exit is easy to spot from across the room.
-        const sp = 0.5 + 0.5*Math.sin(Date.now()/350);
-        ctx.save();
-        ctx.strokeStyle = glowCol;
-        ctx.globalAlpha = 0.35 + 0.4*sp;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(px + tw/2, py + th/2, tw*(0.42 + 0.08*sp), 0, Math.PI*2);
-        ctx.stroke();
-        ctx.restore();
-        if (sealed && !(spriteReady && drawSpriteC('ic_key', px + tw/2, py + th*0.5, Math.round(tw*0.46))))
-          drawEmoji('🔒', px + tw/2, py + th*0.5, Math.round(tw*0.4));
-        // Direction badge so the way DOWN can't be mistaken for the way up.
-        else drawStairArrow(px, py, tw, th, 'down');
+        if (sealed) {
+          // Faint red wash + a locked-door icon so a not-yet-open exit reads at
+          // a glance. Colour alone (no text label) signals the locked state.
+          ctx.save(); ctx.globalAlpha = 0.28; ctx.fillStyle = '#cc3322'; ctx.fillRect(px, py, tw, th); ctx.restore();
+          if (!(spriteReady && drawSpriteC('feat_door', px + tw/2, py + th*0.5, Math.round(tw*0.5))))
+            drawEmoji('🔒', px + tw/2, py + th*0.5, Math.round(tw*0.4));
+        }
       } else if (t === 12) {
-        // Stairs up — DawnLike pixel staircase (the ▲ is baked into the tile).
-        // Never sealed, so it always wears the biome's inviting glow ring.
+        // Stairs up — DawnLike pixel staircase (the ▲ arrow is baked into the
+        // tile). Never sealed, and no glow ring or arrow badge is layered on.
         if (!(spriteReady && drawSprite('stairs_up', px, py, tw))) {
           ctx.fillStyle = '#0d0d14'; ctx.fillRect(px, py, tw, th);
           for (let s = 0; s < 4; s++) {
@@ -9326,18 +9290,6 @@ function draw() {
             ctx.fillRect(px + inset, sy, tw - inset*2, th * 0.125 + 1);
           }
         }
-        const upGlow = C.stairsGlow;
-        const up = 0.5 + 0.5*Math.sin(Date.now()/350);
-        ctx.save();
-        ctx.strokeStyle = upGlow;
-        ctx.globalAlpha = 0.35 + 0.4*up;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(px + tw/2, py + th/2, tw*(0.42 + 0.08*up), 0, Math.PI*2);
-        ctx.stroke();
-        ctx.restore();
-        // Direction badge so the way UP can't be mistaken for the way down.
-        drawStairArrow(px, py, tw, th, 'up');
       } else if (t === 3) {
         // Fountain of Healing — a tiered stone fountain with water spraying
         // from a central spout into a glowing basin.
@@ -9425,12 +9377,14 @@ function draw() {
         ctx.fill();
         ctx.restore();
       } else if (t === 5) {
-        // Shrine — DawnLike altar on the floor, with a soft pulsing glow.
+        // Shrine — DawnLike altar on the floor. A soft purple glow fades out from
+        // behind the icon only (same radial style as a lucky chest), not a flat
+        // wash over the whole tile.
         drawFloorBase(px, py, tw, th, seed, C);
         const sp = 0.5 + 0.5*Math.sin(Date.now()/350);
-        if (spriteReady && drawSprite('feat_shrine', px, py, tw)) {
-          ctx.save(); ctx.globalAlpha = 0.10 + 0.16*sp; ctx.fillStyle = '#d8a8ff';
-          ctx.fillRect(px, py, tw, th); ctx.restore();
+        if (spriteReady && SPRITE_IDX['feat_shrine'] !== undefined) {
+          glowUnder(px + tw/2, py + th/2, tw*(0.34 + 0.06*sp), `rgba(216,168,255,${0.40 + 0.22*sp})`);
+          drawSprite('feat_shrine', px, py, tw);
         } else {
           ctx.save();
           ctx.shadowColor = '#d8a8ff';
@@ -9658,15 +9612,11 @@ function draw() {
   if (merchant && !inTown) {
     const px = offX + merchant.x * tw, py = offY + merchant.y * th;
     drawActorShadow(px + tw/2, py + th*0.82, tw);
-    // pulsing rainbow-ish glow so they stand out as special
+    // Soft rainbow glow that fades out from behind them (the same radial style
+    // as pickup glows), instead of a hard-edged circle.
     const t = (Date.now() % 2000) / 2000;
     const hue = Math.floor(t * 360);
-    ctx.save();
-    ctx.fillStyle = `hsla(${hue},90%,60%,0.35)`;
-    ctx.beginPath();
-    ctx.arc(px + tw/2, py + th/2, tw*0.55, 0, Math.PI*2);
-    ctx.fill();
-    ctx.restore();
+    glowUnder(px + tw/2, py + th/2, tw*0.6, `hsla(${hue},90%,62%,0.5)`);
     // merchant sprite on top (a full DawnLike townsfolk sprite, so no procedural
     // robe blob behind it any more)
     ctx.font = `${Math.round(tw * 0.74)}px serif`;
@@ -9685,15 +9635,11 @@ function draw() {
   if (mystic && !inTown) {
     const px = offX + mystic.x * tw, py = offY + mystic.y * th;
     drawActorShadow(px + tw/2, py + th*0.82, tw);
-    // slow breathing teal glow so they read as arcane, distinct from the merchant
+    // Slow breathing teal glow so they read as arcane, distinct from the
+    // merchant — a soft radial fade, not a hard-edged circle.
     const t = (Date.now() % 2600) / 2600;
-    const pulse = 0.22 + 0.16 * (0.5 + 0.5 * Math.sin(t * Math.PI * 2));
-    ctx.save();
-    ctx.fillStyle = `rgba(70,225,210,${pulse})`;
-    ctx.beginPath();
-    ctx.arc(px + tw/2, py + th/2, tw*0.55, 0, Math.PI*2);
-    ctx.fill();
-    ctx.restore();
+    const pulse = 0.34 + 0.22 * (0.5 + 0.5 * Math.sin(t * Math.PI * 2));
+    glowUnder(px + tw/2, py + th/2, tw*0.6, `rgba(70,225,210,${pulse})`);
     // mystic sprite on top (full DawnLike hooded sprite — no procedural robe blob)
     ctx.font = `${Math.round(tw * 0.74)}px serif`;
     ctx.textAlign = 'center';
@@ -9772,25 +9718,38 @@ function draw() {
       const inRange = isRanged && edist <= (ebeh.range || 4) && hasLineToPlayer(e);
       const threatens = edist <= 1 || inRange;
       if (threatens) {
-        const tp = 0.5 + 0.5 * Math.sin(Date.now() / 220);
-        const pcx = offX + player.x * tw + tw / 2, pcy = offY + player.y * th + th / 2;
+        const tp = 0.5 + 0.5 * Math.sin(Date.now() / 380);   // calm, slow pulse
+        const fcx = cx, fcy = py + ch / 2;
+        // Ranged "line of fire" to the hero: a thin, faint, marching-dash line
+        // (like a sight-laser) instead of a solid crayon stroke. Drawn first so
+        // the soft threat ring sits over its near end.
         if (inRange) {
+          const pcx = offX + player.x * tw + tw / 2, pcy = offY + player.y * th + th / 2;
           ctx.save();
-          ctx.globalAlpha = 0.18 + 0.12 * tp;
+          ctx.globalAlpha = 0.16 + 0.12 * tp;
           ctx.strokeStyle = '#ff6a55';
-          ctx.lineWidth = Math.max(1, tw * 0.04);
+          ctx.lineWidth = Math.max(1, tw * 0.028);
+          ctx.lineCap = 'round';
+          ctx.setLineDash([tw * 0.14, tw * 0.12]);
+          ctx.lineDashOffset = -((Date.now() / 36) % 100000);
           ctx.beginPath();
-          ctx.moveTo(cx, py + ch / 2);
+          ctx.moveTo(fcx, fcy);
           ctx.lineTo(pcx, pcy);
           ctx.stroke();
           ctx.restore();
         }
+        // Threat marker: a soft red glow ring that fades out at both edges (no
+        // hard outline), echoing the radial-glow style used elsewhere.
+        const rr = cw * 0.52, a = 0.20 + 0.16 * tp;
+        const g = ctx.createRadialGradient(fcx, fcy, rr * 0.46, fcx, fcy, rr);
+        g.addColorStop(0, 'rgba(255,70,58,0)');
+        g.addColorStop(0.72, `rgba(255,70,58,${a})`);
+        g.addColorStop(1, 'rgba(255,70,58,0)');
         ctx.save();
-        ctx.strokeStyle = `rgba(255,80,64,${0.4 + 0.4 * tp})`;
-        ctx.lineWidth = Math.max(1.5, tw * 0.05);
+        ctx.fillStyle = g;
         ctx.beginPath();
-        ctx.arc(cx, py + ch / 2, cw * 0.46, 0, Math.PI * 2);
-        ctx.stroke();
+        ctx.arc(fcx, fcy, rr, 0, Math.PI * 2);
+        ctx.fill();
         ctx.restore();
       }
     }
@@ -9826,20 +9785,21 @@ function draw() {
     const cx = gpx + tw / 2, cy = gpy + th / 2 + th * 0.02;
     const t = Date.now() / 300;
     const gsp = 0.5 + 0.5 * Math.sin(t);
+    // Bright pulsing glow behind the grave sprite — a soft radial fade (the same
+    // style as pickups), not a boxy shadow halo.
+    glowUnder(cx, cy, tw * (0.5 + 0.12 * gsp), `rgba(255,220,110,${0.5 + 0.25 * gsp})`);
     ctx.save();
-    // Expanding "come grab me" ring that fades as it grows.
+    // Expanding "come grab me" ring that fades as it grows — an animated beacon
+    // so the reclaim spot is easy to find.
     const ringT = (Date.now() % 1200) / 1200;
     ctx.strokeStyle = `rgba(255,215,90,${0.55 * (1 - ringT)})`;
     ctx.lineWidth = Math.max(1.5, tw * 0.06);
     ctx.beginPath();
     ctx.arc(cx, cy, tw * (0.3 + 0.32 * ringT), 0, Math.PI * 2);
     ctx.stroke();
-    // Bright pulsing glow behind the grave sprite.
-    ctx.shadowColor = `rgba(255,220,110,${0.7 + 0.3 * gsp})`;
-    ctx.shadowBlur = tw * (0.45 + 0.2 * gsp);
+    ctx.restore();
     if (!(spriteReady && drawSpriteC('feat_grave', cx, cy, Math.round(tw * 0.8))))
       drawEmoji('🪦', cx, gpy + th / 2 + th * 0.04, Math.round(tw * 0.72));
-    ctx.restore();
   }
 
   // Quest markers — NPCs, objectives, and pickups, each ringed to stand out.
@@ -9849,10 +9809,10 @@ function draw() {
       const dx0 = offX + mx * tw, dy0 = offY + my * th;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      // No backing circle — a soft glow halo keeps the marker readable instead.
+      // No backing circle — a soft radial glow (matching pickups) keeps the
+      // marker readable instead of a boxy shadow halo.
+      glowUnder(dx0 + tw/2, dy0 + th/2 + th*0.02, tw * (0.4 + 0.04*sp), `rgba(${ring},${0.42 + 0.2*sp})`);
       ctx.save();
-      ctx.shadowColor = `rgba(${ring},${0.55 + 0.3*sp})`;
-      ctx.shadowBlur = tw * 0.3;
       if (!(sprite && spriteReady && drawSpriteC(sprite, dx0 + tw/2, dy0 + th/2 + th*0.02, Math.round(tw * 0.8))))
         drawEmoji(emoji, dx0 + tw/2, dy0 + th/2 + th*0.04, Math.round(tw * 0.72));
       ctx.restore();
@@ -12602,26 +12562,25 @@ function renderPanel() {
     const cat = item => item.slot || 'other';
     const counts = {};
     inventory.forEach(item => { counts[cat(item)] = (counts[cat(item)] || 0) + 1; });
-    // If the active filter no longer has any items (e.g. you sold all helms),
-    // fall back to showing everything so the list never looks empty by accident.
-    if (lootFilter !== 'all' && !counts[lootFilter]) lootFilter = 'all';
-    // Build the subtab bar: All, then each slot that has items, then Other. Each
-    // slot shows the same colourful DawnLike sprite the GEAR tab paints for that
-    // slot (derived from the slot label's emoji), falling back to the flat vector
-    // icon only while the atlas is still loading.
-    const slotLabel = s => SLOTS[s].label.replace(/^\S+\s/, '');
+    // Build the subtab bar: All, every gear slot, then Other — always shown, even
+    // when a category is currently empty, so the row never reflows. Each slot is
+    // represented by its icon alone (icon + count, no text label); only "All"
+    // keeps a word. Slot icons reuse the colourful DawnLike sprite the GEAR tab
+    // paints for that slot (derived from the slot label's emoji), falling back to
+    // the flat vector icon only while the atlas is still loading.
     const slotTabIcon = s => {
       const e = (SLOTS[s].label.match(EMOJI_RE) || [])[0];
       const sp = e ? emojiSprite(e) : null;
       return (sp && dlIcon(sp, 16)) || iconMarkup(SLOT_ICONS[s], ICON_EMPTY_COLOR, false);
     };
+    const otherTabIcon = () => dlIcon('potion_r', 16) || '🧪';
     const tabDefs = [{ key: 'all', icon: '', name: 'All', n: inventory.length }];
     SLOT_KEYS.forEach(s => {
-      if (counts[s]) tabDefs.push({ key: s, icon: slotTabIcon(s), name: slotLabel(s), n: counts[s] });
+      tabDefs.push({ key: s, icon: slotTabIcon(s), name: '', n: counts[s] || 0 });
     });
-    if (counts.other) tabDefs.push({ key: 'other', icon: '', name: 'Other', n: counts.other });
+    tabDefs.push({ key: 'other', icon: otherTabIcon(), name: '', n: counts.other || 0 });
     const subtabs = '<div class="loot-subtabs">' + tabDefs.map(t =>
-      `<button class="loot-subtab ${lootFilter===t.key?'active':''}" onclick="setLootFilter('${t.key}')">${t.icon}${t.name} <span class="st-count">${t.n}</span></button>`
+      `<button class="loot-subtab ${lootFilter===t.key?'active':''}" onclick="setLootFilter('${t.key}')">${t.icon}${t.name}<span class="st-count">${t.n}</span></button>`
     ).join('') + '</div>';
     const rows = inventory
       .map((item, i) => ({ item, i }))
@@ -12647,7 +12606,6 @@ function renderPanel() {
         : `<div class='ht-name'>🔓 Unlocked</div><div class='ht-line'>Tap to lock — keeps it from being sold or salvaged.</div>`)}>${dlIcon('key', 16) || (item.locked ? '🔒' : '🔓')}</button>`;
       return `
       <div class="loot-item item-${item.tier} ${selectedItem===i?'selected':''} ${isUpgrade?'upgrade':''} ${item.locked?'locked':''}">
-        <span class="loot-icon">${iconMarkup(itemIcon(item), tierColor(item))}</span>
         <div class="loot-info" onclick="selectItem(${i}, this)"
              onmouseenter="showTooltip(event,${i})" onmouseleave="hideTooltip()">
           <div class="item-name">${item.name}${craftedMark(item)}</div>
