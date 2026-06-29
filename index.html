@@ -14946,8 +14946,10 @@ function renderSkillBar() {
       <span class="sb-key">${key}</span><span class="sb-icon">${dlIcon(s.icon,24)||''}</span><span class="sb-info">${cd > 0 ? cd : s.mp + 'MP'}</span>
     </button>`;
   }).join('');
-  // Desktop only: a TOWN button on the far right of the bar (the header's TOWN
-  // button moved here, keyed 0). Greyed when the gate is currently sealed.
+  // Desktop only: a TOWN button on the far left of the bar (the header's TOWN
+  // button moved here, keyed 0). Sitting before the potions keeps the keys in
+  // reading order — 0, 1, 2, 3… — instead of trailing as a stray 0. Greyed when
+  // the gate is currently sealed.
   // Hidden on touch — mobile keeps TOWN in the bottom control bar, unchanged.
   let townBtn = '';
   if (!touchUI()) {
@@ -14957,7 +14959,7 @@ function renderSkillBar() {
       <span class="sb-key">0</span><span class="sb-icon">${dlIcon('ui_gate',24) || '🏰'}</span><span class="sb-info">TOWN</span>
     </button>`;
   }
-  bar.innerHTML = healBtn + manaBtn + skillsHtml + townBtn;
+  bar.innerHTML = townBtn + healBtn + manaBtn + skillsHtml;
 }
 
 // The potion flasks used by the skill-bar Health (red) and Mana (blue) buttons.
