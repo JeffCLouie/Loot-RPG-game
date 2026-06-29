@@ -347,6 +347,20 @@
   #playtime-overlay.open { display: flex; }
   #playtime-card { background: linear-gradient(180deg, #241c38, #181226); border: 2px solid var(--frame); border-radius: 10px; max-width: 360px; width: 100%; max-height: 80vh; overflow-y: auto; padding: 14px; box-shadow: 0 6px 24px rgba(0,0,0,0.6); }
 
+  /* Graveyard popup — reuses the version/playtime overlay framing. */
+  #graveyard-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 400; display: none; align-items: center; justify-content: center; padding: 16px; }
+  #graveyard-overlay.open { display: flex; }
+  #graveyard-card { background: linear-gradient(180deg, #241c38, #181226); border: 2px solid var(--frame); border-radius: 10px; max-width: 360px; width: 100%; max-height: 80vh; overflow-y: auto; padding: 14px; box-shadow: 0 6px 24px rgba(0,0,0,0.6); }
+  .gy-row { display: flex; align-items: center; gap: 9px; padding: 8px 4px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+  .gy-portrait { flex: 0 0 auto; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; }
+  .gy-portrait .gy-emoji { font-size: 18px; }
+  .gy-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .gy-name { font-size: 12px; color: var(--text); font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .gy-sub { font-size: 10px; color: #8a7d63; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .gy-stats { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end; text-align: right; }
+  .gy-floor { font-size: 12px; color: var(--gold); font-weight: bold; }
+  .gy-meta { font-size: 9px; color: #8a7d63; font-variant-numeric: tabular-nums; }
+
   /* Auto-loot settings popup: a per-rarity Keep / Scrap / Sell picker. */
   #autoloot-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 400; display: none; align-items: center; justify-content: center; padding: 16px; }
   #autoloot-overlay.open { display: flex; }
@@ -2310,6 +2324,9 @@
         <button class="settings-item" onclick="showPlayTime()">
           <span class="action-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 1.8"/></svg></span><span class="action-label">TIME</span>
         </button>
+        <button class="settings-item" onclick="showGraveyard()">
+          <span class="action-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 21V10a6 6 0 0 1 12 0v11"/><line x1="4" y1="21" x2="20" y2="21"/><line x1="12" y1="6.5" x2="12" y2="12.5"/><line x1="9.5" y1="9" x2="14.5" y2="9"/></svg></span><span class="action-label">GRAVES</span>
+        </button>
         <!-- Opens the spectator stream (watch.html) where you can watch Claude
              play Dungeon Loot live. -->
         <button class="settings-item watch-action" onclick="window.open('./watch.html','_blank')" data-tip="<div class='ht-name' style='color:#ff6b78'>📺 Watch Live</div><div class='ht-line'>Watch Claude play Dungeon Loot live on the spectator stream.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
@@ -2369,6 +2386,16 @@
       <div class="version-head">Time Played <button class="version-x" onclick="closePlayTime()">✕</button></div>
       <div id="playtime-total"></div>
       <div id="playtime-body"></div>
+    </div>
+  </div>
+
+  <!-- Graveyard of fallen heroes — every past run and how far it got. Opened
+       from the title screen and the in-game ⚙️ settings menu. -->
+  <div id="graveyard-overlay" onclick="if(event.target===this)closeGraveyard()">
+    <div id="graveyard-card">
+      <div class="version-head">⚰️ Graveyard of Fallen Heroes <button class="version-x" onclick="closeGraveyard()">✕</button></div>
+      <div id="graveyard-total"></div>
+      <div id="graveyard-body"></div>
     </div>
   </div>
 
@@ -2492,6 +2519,7 @@
       <button class="title-set-btn" onclick="showLeaderboard()"><span class="tsb-ic">🏆</span><span class="tsb-lbl">Leaderboards</span></button>
       <button class="title-set-btn" onclick="showVersionHistory()"><span class="tsb-ic">📜</span><span class="tsb-lbl">Version</span></button>
       <button class="title-set-btn" onclick="showPlayTime()"><span class="tsb-ic"><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 1.8"/></svg></span><span class="tsb-lbl">Time Played</span></button>
+      <button class="title-set-btn" onclick="showGraveyard()"><span class="tsb-ic"><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 21V10a6 6 0 0 1 12 0v11"/><line x1="4" y1="21" x2="20" y2="21"/><line x1="12" y1="6.5" x2="12" y2="12.5"/><line x1="9.5" y1="9" x2="14.5" y2="9"/></svg></span><span class="tsb-lbl">Graveyard</span></button>
     </div>
     <!-- Optional sign-in callout — updated by refreshAccountUi() to reflect login state. -->
     <div id="title-cloud" onclick="openAccount()"></div>
@@ -6348,6 +6376,44 @@ function showPlayTime() {
   if (menu) menu.classList.remove('open');
 }
 function closePlayTime() { document.getElementById('playtime-overlay').classList.remove('open'); }
+
+// Short date for a headstone, e.g. "Jun 29". Falls back to empty on bad input.
+function fmtGraveDate(ts) {
+  if (!ts) return '';
+  try { return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); }
+  catch (e) { return ''; }
+}
+// Graveyard of Fallen Heroes — a roll of every past run and how far it got.
+function showGraveyard() {
+  const totalEl = document.getElementById('graveyard-total');
+  const bodyEl = document.getElementById('graveyard-body');
+  const list = loadGraveyard();
+  if (totalEl) {
+    totalEl.className = 'pt-total';
+    totalEl.innerHTML = `<div class="pt-total-val">${list.length}</div>`
+      + `<div class="pt-total-label">${list.length === 1 ? 'Fallen hero' : 'Fallen heroes'}</div>`;
+  }
+  if (bodyEl) {
+    bodyEl.innerHTML = list.length
+      ? list.map(r => {
+          const portrait = (r.cls && dlIcon('hero_' + r.cls, 28)) || `<span class="gy-emoji">${r.cls ? CLASSES[r.cls].icon : '🧙'}</span>`;
+          const clsName = r.asc ? ASCENSIONS[r.asc].name : (r.cls ? CLASSES[r.cls].name : 'Wanderer');
+          const date = fmtGraveDate(r.ts);
+          return `<div class="gy-row">`
+            + `<span class="gy-portrait">${portrait}</span>`
+            + `<span class="gy-info"><span class="gy-name">${escapeHtml(r.name || 'Adventurer')}</span>`
+            + `<span class="gy-sub">${escapeHtml(clsName)} · Lv ${r.level}</span></span>`
+            + `<span class="gy-stats"><span class="gy-floor">Floor ${r.floor}</span>`
+            + `<span class="gy-meta">${fmtGold(r.gold)}g${date ? ' · ' + date : ''}</span></span>`
+            + `</div>`;
+        }).join('')
+      : `<div class="pt-empty">No fallen heroes yet.<br>Past runs are laid to rest here when you start a New Run.</div>`;
+  }
+  document.getElementById('graveyard-overlay').classList.add('open');
+  const menu = document.getElementById('settings-menu');
+  if (menu) menu.classList.remove('open');
+}
+function closeGraveyard() { document.getElementById('graveyard-overlay').classList.remove('open'); }
 
 // ══════════════════════════════════════════
 // CANVAS SETUP
@@ -15730,7 +15796,44 @@ function loadGame() {
   }
 }
 
+// ── GRAVEYARD (fallen heroes) ───────────────────────────────────────────────
+// When a run ends (a New Run wipes the current hero) we tuck a summary of that
+// hero into a local "graveyard" so players can look back on past runs — the
+// class, name, level, deepest floor reached, gold and play-time. Newest first,
+// capped so the list can't grow without bound.
+const GRAVEYARD_KEY = 'dungeonLoot_graveyard_v1';
+const GRAVEYARD_MAX = 60;
+function loadGraveyard() {
+  try { const a = JSON.parse(localStorage.getItem(GRAVEYARD_KEY)); return Array.isArray(a) ? a : []; }
+  catch (e) { return []; }
+}
+function saveGraveyard(list) {
+  try { localStorage.setItem(GRAVEYARD_KEY, JSON.stringify(list.slice(0, GRAVEYARD_MAX))); } catch (e) {}
+}
+// Record the currently-loaded hero as a fallen run, if they actually got going.
+function recordFallenHero() {
+  if (typeof player !== 'object' || !player || !saveStarted({ player })) return;
+  const list = loadGraveyard();
+  // Don't double-record the same hero — replace any existing entry sharing this
+  // character id with the fresher snapshot.
+  const filtered = player.cid ? list.filter(e => e.cid !== player.cid) : list;
+  filtered.unshift({
+    cid: player.cid || null,
+    name: player.name || null,
+    cls: (player.class && CLASSES[player.class]) ? player.class : null,
+    asc: (player.ascension && typeof ASCENSIONS === 'object' && ASCENSIONS[player.ascension]) ? player.ascension : null,
+    level: player.level || 1,
+    floor: player.maxFloor || (typeof dungeonLevel === 'number' ? dungeonLevel : 1) || 1,
+    gold: player.maxGold || player.gold || 0,
+    playMs: player.playMs || 0,
+    ts: Date.now(),
+  });
+  saveGraveyard(filtered);
+}
+
 async function wipeSave() {
+  // The hero you're abandoning earns a headstone in the graveyard first.
+  recordFallenHero();
   // Clears the slot you're currently playing, then reloads into a fresh hero.
   // Latch _wipingSave first so the pagehide/visibilitychange autosaves that fire
   // during reload can't re-write the slot we're about to clear.
