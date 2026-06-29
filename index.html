@@ -8546,10 +8546,11 @@ function applyAffix(mob) {
 
 function spawnGroundLoot() {
   groundItems = [];
-  // Ground loot is a rare lucky find — most floors have none.
+  // Ground loot is a rare lucky find — most floors have none. Kept scarce so a
+  // chest on the floor feels like a real score rather than routine.
   let count = 0;
-  if (Math.random() < 0.22) count = 1;
-  if (count === 1 && dungeonLevel >= 6 && Math.random() < 0.15) count = 2;
+  if (Math.random() < 0.14) count = 1;
+  if (count === 1 && dungeonLevel >= 6 && Math.random() < 0.10) count = 2;
   // Bountiful floors hide a few extra chests.
   if (floorMod.chestBonus) count += floorMod.chestBonus;
   // Deeper chests roll richer loot on top of the usual progression bonus.
@@ -8764,7 +8765,7 @@ function generateItem(rolls = 1, ilvl = null, forceTier = null, forceSlot = null
   // pays to target a specific item type); otherwise the slot is rolled.
   const tier = forceTier || rollTier(rolls);
   const slot = (forceSlot && SLOTS[forceSlot]) ? forceSlot : weighted(SLOT_WEIGHTS);
-  const baseName = pick(SLOTS[slot].names);
+  const baseName = rollBaseName(slot);
   // Item level: how deep this drop is geared for. Higher item level means
   // bigger raw stats regardless of rarity, so loot from deeper floors steadily
   // outweighs rarer loot found earlier. Defaults to the current dungeon depth.
@@ -8822,6 +8823,22 @@ function generateItem(rolls = 1, ilvl = null, forceTier = null, forceSlot = null
     item.value = Math.round(value * 1.5);
   }
   return item;
+}
+
+// Pick the base item type for a slot. For weapons we heavily favour the types
+// the player's class can actually wield, so most weapon drops are equippable —
+// only occasionally does an off-class weapon slip through. Other slots (armour,
+// jewelry) are wearable by every class, so they just roll uniformly.
+function rollBaseName(slot) {
+  const names = SLOTS[slot].names;
+  if (slot === 'weapon') {
+    const cls = playerClass();
+    if (cls && cls.weapons && cls.weapons.length) {
+      const usable = names.filter(n => cls.weapons.includes(n));
+      if (usable.length) return Math.random() < 0.85 ? pick(usable) : pick(names);
+    }
+  }
+  return pick(names);
 }
 
 function weighted(obj) {
@@ -11128,7 +11145,7 @@ function onEnemyDefeated(e) {
   // Drop a chest — bosses and elites always drop, with richer loot. The luck
   // value is how many rarity rolls the chest makes (more rolls = better odds).
   // Enemy drops land straight in your pack — no need to walk over and open them.
-  if (e.isBoss || e.isElite || Math.random() < 0.18 * lootMult) {
+  if (e.isBoss || e.isElite || Math.random() < 0.10 * lootMult) {
     let luck = e.isBoss ? 6 : (e.isElite ? 3 : 1);
     if (buffs.fortune) luck += 1;
     const fancy = luck > 1;
@@ -12535,7 +12552,7 @@ function collectChestLoot(luck, ilvl, x, y) {
   sfx('loot');
   log(`${fancy ? '🎁' : '🧰'} Chest loot: ${logItem(item)}`, 'loot');
   // Loot explosion: a lucky chest occasionally overflows with a bonus item.
-  if (Math.random() < 0.12) {
+  if (Math.random() < 0.08) {
     const bonus = generateItem(luck, ilvl);
     inventory.push(bonus);
     recordWardrobe(bonus);
