@@ -12824,6 +12824,9 @@ function renderPanel() {
     const subtabs = '<div class="loot-subtabs">' + tabDefs.map(t =>
       `<button class="loot-subtab ${lootFilter===t.key?'active':''}" onclick="setLootFilter('${t.key}')">${t.icon}${t.name}<span class="st-count">${t.n}</span></button>`
     ).join('') + '</div>';
+    // Rarity rank for sorting: junk 0 → unique 6 (higher = rarer).
+    const TIER_KEYS = Object.keys(TIERS);
+    const tierRank = item => TIER_KEYS.indexOf(item.tier);
     const rows = inventory
       .map((item, i) => ({ item, i }))
       .filter(({ item }) => lootFilter === 'all' || cat(item) === lootFilter)
@@ -12832,6 +12835,13 @@ function renderPanel() {
         const wa = (a.item.slot && !canEquipItem(a.item)) ? 1 : 0;
         const wb = (b.item.slot && !canEquipItem(b.item)) ? 1 : 0;
         if (wa !== wb) return wa - wb;
+        // Highest rarity first (unique → junk); item Power breaks ties so the
+        // strongest gear floats to the top, then slot keeps each tier tidy.
+        const ra = tierRank(a.item), rb = tierRank(b.item);
+        if (ra !== rb) return rb - ra;
+        const pa = a.item.slot ? itemPower(a.item) : -1;
+        const pb = b.item.slot ? itemPower(b.item) : -1;
+        if (pa !== pb) return pb - pa;
         const oa = a.item.slot in slotOrder ? slotOrder[a.item.slot] : 99;
         const ob = b.item.slot in slotOrder ? slotOrder[b.item.slot] : 99;
         return oa - ob;
