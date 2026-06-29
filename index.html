@@ -3026,6 +3026,28 @@ function drawSprite(name, dx, dy, dsize) {
 function drawSpriteC(name, cx, cy, size) {
   return drawSprite(name, cx - size / 2, cy - size / 2, size);
 }
+// Shared, crisp on-screen sprite sizes for world entities, each a pure function
+// of the camera tile `tw`. Routing same-class things through one of these keeps
+// them the same size as one another at every zoom and screen size.
+//
+// Why this exists: drawSprite snaps every sprite to a whole multiple of the 16px
+// atlas tile to stay crisp. On a roomy desktop view (large `tw`) that 16px step
+// is a small slice of the sprite, so the hero (≈0.9·tw) and a slightly-smaller
+// NPC (≈0.82·tw) round to the SAME multiple and look alike. On a phone
+// (`tw`≈28-32) the step is huge: the hero rounds UP to 32px (a full tile) while
+// the NPC/chest/coin rounds DOWN to 16px — half a tile — and looks tiny. Bucketing
+// them together fixes that: characters track the hero, pickups stay one step
+// smaller but never collapse to half-size.
+function charSpritePx(tw) {
+  // Matches the hero's own snapped size exactly, so every character lines up with it.
+  return ATLAS_TS * Math.max(1, Math.round(Math.round(tw * 0.9) / ATLAS_TS));
+}
+function itemSpritePx(tw) {
+  // One tile smaller than a character on roomy views, but floored at a full tile
+  // so pickups never shrink to half-size on small (mobile) screens.
+  const c = charSpritePx(tw);
+  return c > ATLAS_TS * 2 ? c - ATLAS_TS : c;
+}
 // Build an HTML <span> showing a DawnLike atlas tile as a CSS background, for DOM
 // menus (the canvas blitter can't reach the DOM). Returns '' until the atlas has
 // loaded so callers fall back to their emoji.
@@ -9059,7 +9081,7 @@ function drawTownNpcs(offX, offY, tw, th, scale) {
     ctx.textBaseline = 'middle';
     // DawnLike townsfolk sprite + icon tag, falling back to the emoji.
     const tSprite = TOWN_SPRITE[n.kind];
-    if (!(tSprite && spriteReady && drawSpriteC(tSprite, px + tw / 2, py + th / 2 + th * 0.02, Math.round(tw * 0.82))))
+    if (!(tSprite && spriteReady && drawSpriteC(tSprite, px + tw / 2, py + th / 2 + th * 0.02, charSpritePx(tw))))
       drawEmoji(n.emoji, px + tw / 2, py + th / 2 + th * 0.02, Math.round(tw * 0.72));
     ctx.font = `bold ${Math.round(tw * 0.32)}px serif`;
     const tagSprite = TOWN_TAG_SPRITE[n.tag];
@@ -9903,7 +9925,7 @@ function drawHeroSprite(px, py, tw, th, scale) {
     ctx.save();
     ctx.translate(px + tw / 2, 0);
     if (facingRight) ctx.scale(-1, 1);
-    drawSpriteC(heroSprite, 0, py + th / 2, Math.round(tw * 0.9));
+    drawSpriteC(heroSprite, 0, py + th / 2, charSpritePx(tw));
     ctx.restore();
     drawHeldWeapon(px, py, tw, th, facingRight);
     return;
@@ -10560,7 +10582,7 @@ function draw() {
     // hand-drawn chest below as fallback.
     if (spriteReady && SPRITE_IDX['chest'] !== undefined) {
       glowUnder(cx, cy, tw * (lucky ? 0.6 : 0.46), lucky ? 'rgba(255,224,102,0.45)' : 'rgba(202,162,74,0.3)');
-      drawSpriteC('chest', cx, cy, Math.round(tw * 0.72));
+      drawSpriteC('chest', cx, cy, itemSpritePx(tw));
       return;
     }
     const w = tw * 0.58, h = th * 0.46;
@@ -10613,7 +10635,7 @@ function draw() {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     glowUnder(px + tw/2, py + th/2, tw * 0.42, 'rgba(255,224,102,0.4)');
-    if (!(spriteReady && drawSpriteC('coins', px + tw/2, py + th/2, Math.round(tw * 0.6))))
+    if (!(spriteReady && drawSpriteC('coins', px + tw/2, py + th/2, itemSpritePx(tw))))
       drawEmoji('🪙', px + tw/2, py + th/2, Math.round(tw * 0.52));
   });
 
@@ -10624,7 +10646,7 @@ function draw() {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     glowUnder(px + tw/2, py + th/2, tw * 0.52, 'rgba(255,224,102,0.45)');
-    if (!(spriteReady && drawSpriteC('key', px + tw/2, py + th/2, Math.round(tw * 0.82))))
+    if (!(spriteReady && drawSpriteC('key', px + tw/2, py + th/2, itemSpritePx(tw))))
       drawEmoji('🗝️', px + tw/2, py + th/2, Math.round(tw * 0.65));
   }
 
@@ -10645,7 +10667,7 @@ function draw() {
     ctx.font = `${Math.round(tw * 0.74)}px serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    if (!(spriteReady && drawSpriteC('npc_shop', px + tw/2, py + th/2 + th*0.02, Math.round(tw * 0.82))))
+    if (!(spriteReady && drawSpriteC('npc_shop', px + tw/2, py + th/2 + th*0.02, charSpritePx(tw))))
       drawEmoji('🧙‍♂️', px + tw/2, py + th/2 + th*0.02, Math.round(tw * 0.74));
   }
 
@@ -10665,7 +10687,7 @@ function draw() {
     ctx.font = `${Math.round(tw * 0.74)}px serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    if (!(spriteReady && drawSpriteC('npc_mage', px + tw/2, py + th/2 + th*0.02, Math.round(tw * 0.82))))
+    if (!(spriteReady && drawSpriteC('npc_mage', px + tw/2, py + th/2 + th*0.02, charSpritePx(tw))))
       drawEmoji('🧙', px + tw/2, py + th/2 + th*0.02, Math.round(tw * 0.74));
   }
 
@@ -10818,7 +10840,7 @@ function draw() {
       ctx.stroke();
     }
     ctx.restore();
-    if (!(spriteReady && drawSpriteC('feat_grave', cx, cy, Math.round(tw * 0.8))))
+    if (!(spriteReady && drawSpriteC('feat_grave', cx, cy, charSpritePx(tw))))
       drawEmoji('🪦', cx, gpy + th / 2 + th * 0.04, Math.round(tw * 0.72));
     // Bobbing downward chevron floating above the grave — a clear "pick this up"
     // beacon that points right at your lost loot. Drawn procedurally (UI marker).
@@ -10849,7 +10871,7 @@ function draw() {
       // marker readable instead of a boxy shadow halo.
       glowUnder(dx0 + tw/2, dy0 + th/2 + th*0.02, tw * (0.4 + 0.04*sp), `rgba(${ring},${0.42 + 0.2*sp})`);
       ctx.save();
-      if (!(sprite && spriteReady && drawSpriteC(sprite, dx0 + tw/2, dy0 + th/2 + th*0.02, Math.round(tw * 0.8))))
+      if (!(sprite && spriteReady && drawSpriteC(sprite, dx0 + tw/2, dy0 + th/2 + th*0.02, charSpritePx(tw))))
         drawEmoji(emoji, dx0 + tw/2, dy0 + th/2 + th*0.04, Math.round(tw * 0.72));
       ctx.restore();
     };
@@ -10892,7 +10914,7 @@ function draw() {
     // DawnLike minion sprite (scaled up a touch for "strong" summons), with the
     // emoji as a load-time fallback only.
     const mSprite = MINION_SPRITE[m.kind];
-    const mSz = Math.round(tw * (m.strong ? 0.92 : 0.82));
+    const mSz = Math.max(charSpritePx(tw), Math.round(tw * (m.strong ? 0.92 : 0.82)));
     if (!(mSprite && spriteReady && drawSpriteC(mSprite, mx + tw/2, my + th/2 + th*0.02, mSz))) {
       ctx.font = `${Math.round(tw * (m.strong ? 0.78 : 0.66))}px serif`;
       drawEmoji(m.icon, mx + tw/2, my + th/2 + th*0.02, Math.round(tw * (m.strong ? 0.78 : 0.66)));
