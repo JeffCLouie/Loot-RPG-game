@@ -275,6 +275,17 @@
   .death-btn { background: #b3303a; border: 1px solid #ff6472; color: #fff; font-family: 'Courier New', monospace; font-size: 13px; letter-spacing: 1px; padding: 9px 22px; border-radius: 8px; cursor: pointer; }
   .death-btn:active { background: #ff4452; }
 
+  /* ── DIFFICULTY CONQUEST ── shown when a finite dungeon difficulty is cleared. */
+  #conquest-overlay { position: fixed; inset: 0; background: rgba(20,6,8,0.82); z-index: 480; display: none; align-items: center; justify-content: center; padding: 20px; }
+  #conquest-overlay.open { display: flex; animation: deathFade 0.4s ease; }
+  #conquest-card { background: linear-gradient(180deg, #2c1a10, #1a0d09); border: 2px solid var(--gold); border-radius: 12px; max-width: 340px; width: 100%; padding: 22px 18px; text-align: center; box-shadow: 0 0 44px rgba(255,170,60,0.45); }
+  #conquest-title { color: var(--gold); font-size: 22px; font-weight: bold; letter-spacing: 2px; text-shadow: 0 0 12px rgba(255,180,70,0.6); margin-bottom: 14px; }
+  #conquest-body { display: flex; flex-direction: column; gap: 9px; margin-bottom: 16px; }
+  .conquest-line { font-size: 12.5px; color: #f3e4cf; line-height: 1.5; }
+  .conquest-scar { color: #ff9b8a; }
+  .conquest-btn { background: #6a4a1c; border: 1px solid var(--gold); color: #fff2d6; font-family: 'Courier New', monospace; font-size: 13px; letter-spacing: 1px; padding: 9px 22px; border-radius: 8px; cursor: pointer; }
+  .conquest-btn:active { background: #8a6326; }
+
   /* ── VERSION HISTORY POPUP ── */
   #version-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 400; display: none; align-items: center; justify-content: center; padding: 16px; }
   #version-overlay.open { display: flex; }
@@ -1561,6 +1572,20 @@
   }
   .gate-floor:active { background: #5a4520; }
   .gate-floor.current { border-color: var(--gold); color: var(--gold); }
+  /* Difficulty tier picker at the top of the Dungeon Gate. */
+  .gate-diffs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 8px; }
+  .gate-diff {
+    padding: 9px 0; border: 1px solid var(--border); border-radius: 5px;
+    background: #221a10; color: #d9c79a; font-family: 'Courier New', monospace;
+    font-weight: bold; font-size: 12px; cursor: pointer; -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  .gate-diff:active { background: #5a4520; }
+  .gate-diff.sel { background: #2e2212; }
+  .gate-diff.locked { opacity: 0.4; cursor: not-allowed; }
+  .gate-tier-blurb { font-size: 11px; opacity: 0.92; margin: 2px 0 8px; }
+  /* The small coloured difficulty tag shown beside the floor number in the HUD. */
+  .floor-diff { font-size: 9px; font-weight: bold; margin-left: 4px; letter-spacing: 0.3px; vertical-align: middle; }
 
   /* Crafting materials — the compact wallet strip (bag + town) and the
      Craftsman's slot/base/rarity pickers. */
@@ -2089,7 +2114,7 @@
       <span id="mp-text" style="font-size:10px">60/60</span>
     </div>
   </div>
-  <div class="hud-item" id="floor-hud" data-tip="<div class='ht-name'>🗺️ Dungeon Depth</div><div class='ht-line'>The floor you're on. Each floor down is tougher — but the loot gets richer too.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">🗺️ <span class="hud-val" id="floor-num">1</span></div>
+  <div class="hud-item" id="floor-hud" data-tip="<div class='ht-name'>🗺️ Dungeon Depth</div><div class='ht-line'>The floor you're on, and the difficulty tier. Each floor down is tougher — but the loot gets richer too. Conquer floor 25 to unlock the next, deadlier difficulty.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">🗺️ <span class="hud-val" id="floor-num">1</span><span class="floor-diff" id="floor-diff"></span></div>
   <div class="hud-item" id="level-hud" data-tip="<div class='ht-name'>⭐ Hero Level</div><div class='ht-line'>Fill the XP bar by slaying foes to level up. Each level boosts your stats and grants an attribute point.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">Lv <span class="hud-val" id="level-num">1</span>
     <div class="xp-track"><div class="xp-fill" id="xp-bar" style="width:0%"></div></div>
   </div>
@@ -2211,6 +2236,15 @@
       <div class="death-title">💀 YOU DIED</div>
       <div id="death-penalties"></div>
       <button class="death-btn" onclick="closeDeath()">Continue</button>
+    </div>
+  </div>
+
+  <!-- Difficulty conquered — shown when a finite dungeon's floor-25 boss falls. -->
+  <div id="conquest-overlay">
+    <div id="conquest-card">
+      <div id="conquest-title">Difficulty Conquered!</div>
+      <div id="conquest-body"></div>
+      <button class="conquest-btn" onclick="conquestToTown()">🏰 Return to Town</button>
     </div>
   </div>
 
@@ -3170,10 +3204,10 @@ const TIERS = {
 // and Chaos Orbs the premium "top end" material (legendary crafts & big reforges).
 // They live on player.materials and are saved with the player.
 const CRAFT_MATERIALS = {
-  scrap:   { emoji: '🔩', name: 'Scrap',     color: '#c0a06a', desc: 'Common. The bulk material for crafting any item.' },
-  core:    { emoji: '🔆', name: 'Core',      color: '#ffb24b', desc: 'Rare. Needed to craft higher-rarity items.' },
-  glimmer: { emoji: '✨', name: 'Glimmer',   color: '#7fd0ff', desc: 'The Enchanter\'s fuel for adding & rerolling modifiers.' },
-  chaos:   { emoji: '🌀', name: 'Chaos Orb', color: '#c87bff', desc: 'Very rare. Powers legendary crafts & big reforges.' },
+  scrap:   { emoji: '🔩', name: 'Scrap',     color: '#c0a06a', desc: 'Common. The bulk material for crafting any item. Drops on every difficulty.' },
+  core:    { emoji: '🔆', name: 'Core',      color: '#ffb24b', desc: 'Rare. Needed to craft higher-rarity items. Only found on Brutal difficulty and deeper.' },
+  glimmer: { emoji: '✨', name: 'Glimmer',   color: '#7fd0ff', desc: 'The Enchanter\'s fuel for adding & rerolling modifiers. Only found on Hardened difficulty and deeper.' },
+  chaos:   { emoji: '🌀', name: 'Chaos Orb', color: '#c87bff', desc: 'Very rare. Powers legendary crafts & big reforges. Only found in Endless mode.' },
 };
 const CRAFT_MAT_KEYS = Object.keys(CRAFT_MATERIALS);
 
@@ -3358,8 +3392,77 @@ function depthThreat(level) {
   // The growth term climbs twice as fast as the original /15 curve, so every
   // floor's threat multiplier above the floor-1 baseline is doubled.
   const d = Math.max(0, (level || 1) - 1);
-  return 1 + Math.pow(d, 1.2) / 7.5;
+  // Endless mode ramps a touch steeper than the raw depth continuation; a no-op
+  // (×1) for the three finite difficulties (see endlessBite below).
+  return (1 + Math.pow(d, 1.2) / 7.5) * endlessBite();
 }
+
+// ── DUNGEON DIFFICULTY TIERS ──────────────────────────────────────────────
+// The dungeon is 25 floors long, but a run doesn't end there. `dungeonLevel` is
+// a SINGLE continuous depth counter that simply keeps climbing across tiers:
+//   floors  1–25  → Normal    (tier 1)
+//   floors 26–50  → Hardened  (tier 2)  — the same 25 floors, but more powerful
+//   floors 51–75  → Brutal    (tier 3)  — harder still
+//   floors 76+    → Endless   (tier 4)  — no cap, random bosses, ramps further
+// Because depth stays continuous, every existing power/loot formula keeps
+// working untouched — a Hardened floor 1 (dungeonLevel 26) is simply "as deep as
+// floor 26", a smooth continuation rather than a jarring reset. What DOES reset
+// per tier is the DISPLAYED floor number and the visual theme, so each
+// difficulty replays the same 25-floor dungeon — just tougher and redder.
+const FLOORS_PER_DIFF = 25;
+const FINITE_DEPTH = FLOORS_PER_DIFF * 3; // last floor of the third (Brutal) tier
+const DIFFS = [
+  { n: 1, key: 'normal',   name: 'Normal',   color: '#bfe3ff', tint: 0.00 },
+  { n: 2, key: 'hardened', name: 'Hardened', color: '#ffb38a', tint: 0.08 },
+  { n: 3, key: 'brutal',   name: 'Brutal',   color: '#ff8366', tint: 0.14 },
+  { n: 4, key: 'endless',  name: 'Endless',  color: '#ff5a78', tint: 0.20 },
+];
+// Difficulty tier (1–4) of a continuous depth; everything past the third tier is
+// Endless.
+function diffOf(dl) { return Math.min(4, Math.floor(((dl || 1) - 1) / FLOORS_PER_DIFF) + 1); }
+function currentDifficulty() { return diffOf(dungeonLevel); }
+function diffMeta(dl) { return DIFFS[diffOf(dl) - 1]; }
+function isEndless() { return dungeonLevel > FINITE_DEPTH; }
+// The floor number shown to the player. Finite tiers cycle 1–25; Endless keeps
+// climbing (1, 2, 3 … unbounded) from its own floor 1.
+function displayFloor(dl) {
+  dl = (dl == null ? dungeonLevel : dl);
+  if (dl > FINITE_DEPTH) return dl - FINITE_DEPTH;
+  return ((dl - 1) % FLOORS_PER_DIFF) + 1;
+}
+// The last floor of a FINITE difficulty (its boss floor 25). Endless never ends.
+function isLastFiniteFloor() { return dungeonLevel <= FINITE_DEPTH && displayFloor() === FLOORS_PER_DIFF; }
+// A short "Normal · Floor 3" label for logs and the HUD.
+function floorLabel(dl) {
+  dl = (dl == null ? dungeonLevel : dl);
+  return `${DIFFS[diffOf(dl) - 1].name} · Floor ${displayFloor(dl)}`;
+}
+// Endless mode ramps a touch steeper than the raw depth continuation, creeping
+// up the deeper you push. A no-op (×1) for the three finite difficulties.
+function endlessBite() {
+  if (dungeonLevel <= FINITE_DEPTH) return 1;
+  return 1 + Math.min(0.6, (dungeonLevel - FINITE_DEPTH) * 0.006);
+}
+
+// ── DIFFICULTY PROGRESSION STATE ──
+// How many finite tiers the hero has fully conquered (beaten the floor-25 boss
+// of): 0 none, 1 Normal, 2 Hardened, 3 Brutal. The next tier up is then unlocked
+// at the town Dungeon Gate, and Endless opens once Brutal (3) is conquered.
+function diffClearedCount() { return Math.max(0, Math.min(3, player.diffCleared || 0)); }
+function frontierDiff() { return Math.min(4, diffClearedCount() + 1); }
+// Conquering each difficulty leaves a permanent scar: a stacking debuff to the
+// hero's max HP and the damage they deal, so deeper tiers keep biting even as
+// gear climbs. Multiplicative, ~6% per tier conquered (so Endless heroes fight
+// at ~83% of their raw power).
+function diffDebuffMult() { return Math.pow(0.94, diffClearedCount()); }
+
+// ── MATERIAL GATING ──
+// Rarer crafting materials only turn up once you're delving a hard enough tier:
+// Scrap anywhere, Glimmer from Hardened, Core from Brutal, Chaos Orbs only in
+// Endless. Salvaging in town uses the tier you'll return to.
+const MATERIAL_MIN_DIFF = { scrap: 1, glimmer: 2, core: 3, chaos: 4 };
+function activeDifficulty() { return inTown ? diffOf(Math.max(1, dungeonReturn || 1)) : currentDifficulty(); }
+function materialUnlocked(k) { return activeDifficulty() >= (MATERIAL_MIN_DIFF[k] || 1); }
 
 // Total power of a single item: weighted sum of its stats + a rarity bonus.
 function itemPower(item) {
@@ -3434,6 +3537,7 @@ function baseMaxHp() {
   let hp = player.level*8 + totalAttr('vitality') * ATTR_FX.hpPerVit + totalStat('HP');
   if (player.class === 'templar') hp = hp * 1.20; // Templar: hardier body
   hp = hp * (1 + skillBonus('maxHpPct') + foodFx('maxHpPct')); // skills + a hearty bowl of ramen
+  hp = hp * diffDebuffMult();   // permanent scar from each difficulty conquered
   return Math.max(1, Math.round(hp));
 }
 function baseMaxMp() {
@@ -4492,18 +4596,64 @@ function updateFloorClear() {
   if (!floorCleared && hostilesRemaining() === 0) {
     floorCleared = true;
     if (player.clearedFloors) player.clearedFloors[dungeonLevel] = true;
-    log('🔓 The floor is clear — the stairs down unseal!', 'important');
-    sfx('stairs');
+    if (isLastFiniteFloor()) {
+      // The end of a finite difficulty — there are no stairs down. Conquering it
+      // unlocks the next tier (chosen back in town) and brands a permanent scar.
+      sfx('bosskill');
+      conquerDifficulty();
+    } else {
+      log('🔓 The floor is clear — the stairs down unseal!', 'important');
+      sfx('stairs');
+    }
     updateBars();
   }
 }
 // A short, themed description of what bars the stairs on this floor.
 function clearConditionLabel() {
   const n = hostilesRemaining();
+  if (isLastFiniteFloor()) return 'Slay the final guardian to conquer this difficulty — then return to town for the next one.';
   if (dungeonLevel % 5 === 0) return 'Slay the floor guardian and its minions to descend.';
   if (n === 0) return 'The way down is already open.';
   return `Defeat all ${n} foes on this floor to unseal the stairs down.`;
 }
+
+// ── DIFFICULTY CONQUEST ──
+// Beating a finite tier's floor-25 boss conquers that difficulty: it unlocks the
+// next tier at the town Dungeon Gate and brands the hero with a permanent stat
+// scar. Re-clearing an already-conquered tier just nods to it.
+function conquerDifficulty() {
+  const tier = currentDifficulty();              // 1, 2 or 3
+  const firstTime = (player.diffCleared || 0) < tier;
+  if (firstTime) {
+    player.diffCleared = tier;
+    recomputeMaxStats();                          // bank the new permanent HP scar
+    lbScheduleSubmit();
+  }
+  saveGame();
+  showConquest(tier, firstTime);
+}
+function showConquest(tier, firstTime) {
+  const thisName = DIFFS[tier - 1].name;
+  const next = DIFFS[tier];                       // the newly opened tier (Hardened→…→Endless)
+  const titleEl = document.getElementById('conquest-title');
+  const bodyEl = document.getElementById('conquest-body');
+  if (titleEl) titleEl.textContent = firstTime ? `${thisName} Conquered!` : `${thisName} — already conquered`;
+  const lines = [];
+  if (firstTime) {
+    lines.push(`<div class="conquest-line">You slew the final guardian and cleared every floor of the <b style="color:${DIFFS[tier-1].color}">${thisName}</b> dungeon.</div>`);
+    if (next) lines.push(`<div class="conquest-line">🔓 <b style="color:${next.color}">${next.name}</b> difficulty is now open — choose it at the town <b>🌀 Dungeon&nbsp;Gate</b>. The dungeon resets to floor&nbsp;1, far deadlier${next.key === 'endless' ? ', with no preset bosses and no floor&nbsp;cap' : ''}.</div>`);
+    const pct = Math.round((1 - diffDebuffMult()) * 100);
+    lines.push(`<div class="conquest-line conquest-scar">⚔️ The triumph leaves a permanent scar — your max HP and the damage you deal are now reduced by <b>${pct}%</b> in total.</div>`);
+  } else {
+    lines.push(`<div class="conquest-line">You've bested the ${thisName} guardian before. Harder tiers await at the town <b>🌀 Dungeon&nbsp;Gate</b>.</div>`);
+  }
+  if (bodyEl) bodyEl.innerHTML = lines.join('');
+  const ov = document.getElementById('conquest-overlay');
+  if (ov) ov.classList.add('open');
+  log(`🏆 You conquered the ${thisName} dungeon!`, 'important');
+}
+function closeConquest() { const ov = document.getElementById('conquest-overlay'); if (ov) ov.classList.remove('open'); }
+function conquestToTown() { closeConquest(); enterTown(); }
 
 function rollFloorMod() {
   // First two floors are always normal so players learn the ropes.
@@ -4582,6 +4732,9 @@ let player = { x: 5, y: 5, facing: 'left', hp: 100, maxHp: 100, mp: 60, maxMp: 6
   // Deepest dungeon floor reached — the Dungeon Gate in town lets you re-enter
   // on any floor up to this, so you can backtrack to grind levels and gear.
   maxFloor: 1,
+  // Finite difficulty tiers conquered (0–3). Drives Dungeon-Gate unlocks and the
+  // permanent per-tier stat debuff.
+  diffCleared: 0,
   // Floors the player has already cleared of foes, keyed by floor number. Once a
   // floor is here its stairs never re-seal — backtracking via the Dungeon Gate or
   // the up-stairs drops you onto an already-open floor with no unlock conditions.
@@ -5501,6 +5654,7 @@ document.addEventListener('click', (e) => {
 
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
+  { date: '2026-06-29', size: 'big', v: 'Dungeon difficulties', by: 'Claude', notes: ['Conquer the floor-25 guardian to unlock the next, deadlier difficulty at the town Dungeon Gate: Normal → Hardened → Brutal → Endless, each the same 25 floors but more powerful and bathed in deepening red.', 'Endless mode restarts at floor 1 (as deep as floor 76), rolls random bosses, has no floor cap and ramps ever harder.', 'Death penalties grow per tier — gentle on Normal, ruinous in Endless — and each difficulty conquered leaves a permanent stat scar.', 'Rarer crafting materials are gated by tier: Glimmer (Hardened), Core (Brutal), Chaos Orbs (Endless only).', 'The leaderboard now shows the difficulty with the floor and ranks harder runs above easier ones.'] },
   { date: '2026-06-29', size: 'medium', v: 'Power leaderboard', by: 'Claude', notes: ['The global leaderboards now have a fourth board ranking heroes by their highest Power ever reached, alongside Furthest floor, Level and Gold.'] },
   { date: '2026-06-29', size: 'big', v: 'Paper-doll gear screen', by: 'Jeff Louie', notes: ['The GEAR tab is now a Diablo-2-style equipment doll: each slot is a framed cell laid out around a faint hero body, with worn pieces ringed in their rarity colour. Tap a slot for its tooltip, ✕ to unequip.'] },
   { date: '2026-06-29', size: 'small', v: 'Monochrome UI symbols', by: 'Jeff Louie', notes: ['Menu and HUD emoji that aren’t game icons now render as flat single-colour symbols instead of colourful emoji (and the title-screen setting icons no longer vanish). The colourful pixel-art game icons are unchanged.'] },
@@ -6176,14 +6330,21 @@ function generateMap() {
   const climbing = arrivalDir === 'up' && dungeonLevel > 1;
   const farStair = climbing ? 12 : 2;   // the way onward
   const entryStair = climbing ? 2 : 12; // the way back, under your feet
-  let best = null, bestD = -1;
-  for (let t = 0; t < 80; t++) {
-    const c = randomFloorTile(reach); if (!c) break;
-    const d = Math.abs(c.x - player.x) + Math.abs(c.y - player.y);
-    if (d > bestD) { bestD = d; best = c; }
+  // The last floor of a finite difficulty (its boss floor 25) is the END of that
+  // dungeon — there are no stairs down. Conquer the guardian, then return to town
+  // and pick the next difficulty at the Dungeon Gate. (Endless never ends, so it
+  // always has its onward stairs.)
+  const noOnward = isLastFiniteFloor() && farStair === 2;
+  if (!noOnward) {
+    let best = null, bestD = -1;
+    for (let t = 0; t < 80; t++) {
+      const c = randomFloorTile(reach); if (!c) break;
+      const d = Math.abs(c.x - player.x) + Math.abs(c.y - player.y);
+      if (d > bestD) { bestD = d; best = c; }
+    }
+    if (best) mapData[best.y][best.x] = farStair;
+    else mapData[player.y][Math.min(MAP_W-2, player.x+1)] = farStair; // safety fallback
   }
-  if (best) mapData[best.y][best.x] = farStair;
-  else mapData[player.y][Math.min(MAP_W-2, player.x+1)] = farStair; // safety fallback
 
   // ── ENTRY STAIR ── back the way you came. It sits on the entry tile (where you
   // arrive), so walking back onto it returns you to the previous floor. Floor 1
@@ -6346,6 +6507,8 @@ function generateMap() {
   } else if (hostilesRemaining() === 0) {
     floorCleared = true;
     if (player.clearedFloors) player.clearedFloors[dungeonLevel] = true;
+  } else if (isLastFiniteFloor()) {
+    log(`👑 The dungeon's final guardian holds this floor. ${clearConditionLabel()}`, 'important');
   } else {
     log(`🔒 The stairs down are sealed. ${clearConditionLabel()}`, 'important');
   }
@@ -7139,7 +7302,7 @@ function openTownHub() {
   const gateTile =
     `<button class="town-menu-btn tm-gate" onclick="openTownService('gate')">
        <span class="tm-icon">${dlIcon('feat_portal') || '🌀'}</span>
-       <span class="tm-text"><span class="tm-name">Dungeon Gate</span><span class="tm-desc">Descend to floor ${gateFloor}, or pick another</span></span>
+       <span class="tm-text"><span class="tm-name">Dungeon Gate</span><span class="tm-desc">Back to ${floorLabel(gateFloor)}, or pick a difficulty</span></span>
      </button>`;
   setTownContent(`<div class="town-blurb">A safe haven away from the dungeon. Pick a service, then take the Dungeon Gate when you're ready to delve again.</div><div class="town-menu">${tiles}${gateTile}</div>`);
 }
@@ -7502,10 +7665,14 @@ function salvageRanges(item) {
   const sLo = Math.max(1, Math.round((1 + rank) * lf));
   const sHi = Math.max(sLo + 1, Math.round((3 + rank * 2) * lf));
   r.push({ key: 'scrap', lo: sLo, hi: sHi });       // every piece gives scrap
-  if (rank >= 2) r.push({ key: 'glimmer', lo: 1, hi: 1 + Math.floor(rank / 2) }); // uncommon+
-  if (rank >= 3) r.push({ key: 'core',    lo: 1, hi: rank - 1 });                 // rare+
-  if (rank >= 5) r.push({ key: 'chaos',   lo: 1, hi: 2 });                        // legendary+ guaranteed
-  else if (rank >= 4) r.push({ key: 'chaos', lo: 0, hi: 1 });                     // epic: a lucky chance
+  // Rarer salvage is gated by the difficulty you're delving (Glimmer→Hardened,
+  // Core→Brutal, Chaos→Endless), matching how those materials drop from foes.
+  if (rank >= 2 && materialUnlocked('glimmer')) r.push({ key: 'glimmer', lo: 1, hi: 1 + Math.floor(rank / 2) }); // uncommon+
+  if (rank >= 3 && materialUnlocked('core'))    r.push({ key: 'core',    lo: 1, hi: rank - 1 });                 // rare+
+  if (materialUnlocked('chaos')) {
+    if (rank >= 5) r.push({ key: 'chaos',   lo: 1, hi: 2 });                       // legendary+ guaranteed
+    else if (rank >= 4) r.push({ key: 'chaos', lo: 0, hi: 1 });                    // epic: a lucky chance
+  }
   return r;
 }
 // Roll the actual materials gained from salvaging one item.
@@ -8144,30 +8311,79 @@ function renderEnchantItem(item) {
     ${poolPanel}`);
 }
 
-// ── DUNGEON GATE — choose any reached floor to re-enter ──
-function openGate() { openTownModal('🌀 Dungeon Gate'); renderGate(); }
+// ── DUNGEON GATE — choose a difficulty, then a floor, to re-enter ──
+// Each finite difficulty you conquer (its floor-25 boss) unlocks the next at the
+// Gate; Endless opens once Brutal falls. You can revisit any floor of a tier
+// you've reached to grind levels and gear before pushing deeper.
+let gateDiff = 0; // tier selected in the Gate UI; 0 = default to the frontier
+function openGate() { gateDiff = 0; openTownModal('🌀 Dungeon Gate'); renderGate(); }
+// Deepest DISPLAYED floor the hero may re-enter for a given tier.
+function tierFloorCap(d) {
+  const dc = diffClearedCount();
+  if (d <= dc) return FLOORS_PER_DIFF;                 // conquered → replay any floor
+  if (d === dc + 1) {                                  // the frontier tier you're still pushing
+    if (d <= 3) return Math.max(1, Math.min(FLOORS_PER_DIFF, (player.maxFloor || 1) - dc * FLOORS_PER_DIFF));
+    return Math.max(1, (player.maxFloor || 1) - FINITE_DEPTH); // Endless frontier
+  }
+  return 0;                                            // still locked
+}
+function selectGateDiff(d) { gateDiff = d; renderGate(); }
 function renderGate() {
-  const maxF = Math.max(1, player.maxFloor || 1);
+  const front = frontierDiff();
+  if (!gateDiff) gateDiff = front;
+  gateDiff = Math.max(1, Math.min(front, gateDiff));
+  // Tier picker — one chip per difficulty, still-locked ones greyed out.
+  let tabs = '';
+  for (let d = 1; d <= 4; d++) {
+    const meta = DIFFS[d - 1];
+    const unlocked = d <= front;
+    const cls = `gate-diff${d === gateDiff ? ' sel' : ''}${unlocked ? '' : ' locked'}`;
+    const style = (d === gateDiff && unlocked) ? ` style="border-color:${meta.color};color:${meta.color}"` : '';
+    tabs += `<button class="${cls}"${style} ${unlocked ? `onclick="selectGateDiff(${d})"` : 'disabled'}>${meta.name}${unlocked ? '' : ' 🔒'}</button>`;
+  }
+  // Floor picker for the selected tier. Endless can run very deep, so only the
+  // most recent stretch of floors is listed (no thousand-button grids).
+  const cap = tierFloorCap(gateDiff);
+  const startF = (gateDiff === 4 && cap > 40) ? cap - 39 : 1;
   let buttons = '';
-  for (let f = 1; f <= maxF; f++) {
-    const deepest = f === maxF;
-    buttons += `<button class="gate-floor ${f === dungeonReturn ? 'current' : ''}" onclick="enterDungeonAt(${f})">${f}${deepest ? ' ▾' : ''}</button>`;
+  for (let f = startF; f <= cap; f++) {
+    const dl = (gateDiff - 1) * FLOORS_PER_DIFF + f;
+    const deepest = f === cap;
+    buttons += `<button class="gate-floor ${dl === dungeonReturn ? 'current' : ''}" onclick="enterDungeonAt(${gateDiff},${f})">${f}${deepest ? ' ▾' : ''}</button>`;
+  }
+  const meta = DIFFS[gateDiff - 1];
+  const conquered = diffClearedCount() >= gateDiff;
+  let blurb;
+  if (gateDiff === 4) {
+    blurb = 'Endless: the dungeon never ends. Floors climb from 1 forever, bosses are random, and the threat keeps ramping. Death here bites hardest.';
+  } else {
+    const flavour = gateDiff === 1 ? 'as it was meant to be played' : 'the same 25 floors, far tougher and bloodier';
+    const tail = conquered ? 'Conquered — drop in on any floor to grind.' : `Deepest reached: floor ${cap} of 25.`;
+    blurb = `${meta.name}: ${flavour}. ${tail}`;
   }
   setTownContent(`
-    <div class="town-blurb">Step back into the dungeon on any floor you've reached (deepest: ${maxF}). Lower floors are great for grinding levels and gear before pushing deeper.</div>
+    <div class="town-blurb">Choose a difficulty, then a floor. Conquer each one's floor-25 guardian to unlock the next.</div>
+    <div class="gate-diffs">${tabs}</div>
+    <div class="town-blurb gate-tier-blurb" style="color:${meta.color}">${blurb}</div>
     <div class="gate-grid">${buttons}</div>`);
 }
-function enterDungeonAt(f) {
-  const maxF = Math.max(1, player.maxFloor || 1);
-  f = Math.max(1, Math.min(maxF, f));
+function enterDungeonAt(diff, floor) {
+  // Back-compat: a single argument is a continuous depth (leaveTown re-enters you
+  // exactly where you left off).
+  if (floor == null) { const dl = Math.max(1, Math.round(diff) || 1); diff = diffOf(dl); floor = displayFloor(dl); }
+  const front = frontierDiff();
+  diff = Math.max(1, Math.min(front, Math.round(diff) || 1));
+  floor = Math.max(1, Math.min(tierFloorCap(diff) || 1, Math.round(floor) || 1));
   closeTown();
-  dungeonLevel = f;
+  dungeonLevel = (diff - 1) * FLOORS_PER_DIFF + floor;
+  player.maxFloor = Math.max(player.maxFloor || 1, dungeonLevel);
   statusEffects = [];
   player.x = 5; player.y = 5;
+  arrivalDir = 'down';
   generateMap();   // clears inTown and builds the chosen floor
   maybeFloorEvent();
   sfx('stairs');
-  log(`🌀 You step through the gate onto dungeon floor ${f}.`, 'important');
+  log(`🌀 You step through the gate into ${floorLabel()}.`, 'important');
   updateBars(); draw(); saveGame();
 }
 
@@ -8429,7 +8645,7 @@ function spawnEnemies() {
   minions = []; combatBuffs = {};
   const isBossFloor = dungeonLevel % 5 === 0;
   let count = isBossFloor
-    ? 1 + Math.floor(dungeonLevel / 5)
+    ? 1 + Math.min(9, Math.floor(dungeonLevel / 5))   // boss + minions, capped so deep Endless boss floors aren't a wall of 40 foes
     : Math.min(3 + Math.floor(dungeonLevel * 0.7), 10);
   // Some floor modifiers crowd the level with extra foes.
   if (!isBossFloor && floorMod.enemyMult) count = Math.round(count * floorMod.enemyMult);
@@ -8476,8 +8692,12 @@ function spawnEnemies() {
     } while ((mapData[ey][ex] !== 0 || (ex === player.x && ey === player.y) || getEnemyAt(ex,ey)) && tries < 100);
     if (tries < 100) {
       if (isBossFloor && i === 0) {
-        const bossIdx = Math.min(Math.floor(dungeonLevel / 5) - 1, BOSSES.length - 1);
-        const boss = BOSSES[bossIdx];
+        // Finite tiers keep their fixed guardian per floor (5→Rat King … 25→All-
+        // Seer), so each difficulty replays the same boss ladder. Endless has no
+        // preset bosses — it rolls one at random from the pool on every boss floor.
+        const boss = isEndless()
+          ? pick(BOSSES)
+          : BOSSES[Math.max(0, Math.min(Math.floor(displayFloor() / 5) - 1, BOSSES.length - 1))];
         // Big bosses need an open N×N block; fall back to a single tile if the
         // floor is too cramped to fit one.
         let bsize = boss.size || 1;
@@ -9012,7 +9232,9 @@ const THEMES = [
     brickA:'#6a3a4a', brickB:'#241820', mortar:'#161016', crack:'#ff7a3a',
     seam:'#1e161e', speckle:'#5a3a44', accent:'rgba(255,120,50,0.28)', stairsGlow:'#ff9a4b' },
 ];
-function currentTheme() { return THEMES[(dungeonLevel - 1) % THEMES.length]; }
+// Themed by the DISPLAYED floor, so each difficulty replays the same visual
+// progression (floor 1 always looks like floor 1) — only the red wash deepens.
+function currentTheme() { return THEMES[(displayFloor() - 1) % THEMES.length]; }
 
 // Rounded-rect helper (older canvases lack ctx.roundRect).
 function roundRectPath(x, y, w, h, r) {
@@ -10304,6 +10526,17 @@ function draw() {
     ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   }
 
+  // Difficulty wash: each harder dungeon tier bleeds a little more red into the
+  // world — subtle on Hardened, oppressive (but still readable) in Endless. Town
+  // is a safe haven, so it stays untinted.
+  if (!inTown) {
+    const dTint = diffMeta().tint;
+    if (dTint > 0) {
+      ctx.fillStyle = `rgba(196,22,28,${dTint})`;
+      ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    }
+  }
+
   // Painterly vignette: a warm overhead light fading to shadowed edges, for
   // that Golden Sun / Tactics diorama feel.
   const cw = ctx.canvas.width, ch = ctx.canvas.height;
@@ -10793,7 +11026,7 @@ function move(dx, dy) {
     statusEffects = [];
     tickBuffs();
     sfx('stairs');
-    log(`Ascended to dungeon level ${dungeonLevel}. You return to ${currentTheme().name}.`, 'important');
+    log(`Ascended to ${floorLabel()}. You return to ${currentTheme().name}.`, 'important');
     player.x = 5; player.y = 5;
     arrivalDir = 'up';   // spawn on the stairs DOWN that lead back the way you came
     generateMap();
@@ -10826,12 +11059,19 @@ function move(dx, dy) {
       }
       quest = null;
     }
+    // Defensive: finite tiers have no stairs down on their last floor, so this
+    // can't normally fire there — but never let a stray stair punch past the cap.
+    if (isLastFiniteFloor()) {
+      log(`👑 This is the deepest floor of the ${diffMeta().name} dungeon — conquer its guardian, then take the next difficulty from town.`, 'important');
+      sfx('click');
+      return;
+    }
     dungeonLevel++;
     player.maxFloor = Math.max(player.maxFloor || 1, dungeonLevel);
     statusEffects = [];
     tickBuffs();
     sfx('stairs');
-    log(`Descended to dungeon level ${dungeonLevel}! You enter ${currentTheme().name}.`, 'important');
+    log(`Descended to ${floorLabel()}! You enter ${currentTheme().name}.`, 'important');
     player.x = 5; player.y = 5;
     generateMap();
     tickPact();   // floor just entered keeps the pact, then it counts down
@@ -11121,6 +11361,7 @@ function rollPlayerHit(e) {
   if (buffs.power) dmg = Math.round(dmg * 1.5);
   if (foodFx('dmgPct')) dmg = Math.round(dmg * (1 + foodFx('dmgPct'))); // ramen damage buff
   dmg = Math.round(dmg * classDmgDealtMult()); // Warrior + damage passives
+  if (diffClearedCount()) dmg = Math.round(dmg * diffDebuffMult()); // permanent per-tier scar
   const dmgUp = buffMag('dmgUp'); // War Cry / Frenzy / Avatar self-buffs
   if (dmgUp > 0) dmg = Math.round(dmg * (1 + dmgUp));
   // Increased Damage % (gear): a flat multiplier on every hit.
@@ -11231,10 +11472,12 @@ function onEnemyDefeated(e) {
   }
   // ── Crafting materials ── a second currency that fuels the Craftsman and
   // Enchanter. Scrap is common, Glimmer uncommon, Core rare, Chaos Orb very
-  // rare; elites and bosses drop more and unlock the rarer materials.
+  // rare; elites and bosses drop more. The rarer materials are also gated behind
+  // difficulty: Glimmer needs Hardened, Core needs Brutal, Chaos only Endless —
+  // so pushing into deadlier tiers is the only way to fuel top-end crafting.
   {
     const gained = {};
-    const add = (k, n) => { if (n > 0) gained[k] = (gained[k] || 0) + n; };
+    const add = (k, n) => { if (n > 0 && materialUnlocked(k)) gained[k] = (gained[k] || 0) + n; };
     const big = e.isBoss ? 3 : (e.isElite ? 2 : 1);
     // Material Find % (gear) boosts the odds of every crafting-material drop.
     const matMult = lootMult * (1 + totalStat('MATFIND') / 100);
@@ -11565,6 +11808,7 @@ function applyOffenseMods(dmg, e, forceCrit, isSpell) {
   if (buffs.power) dmg *= 1.5;
   if (foodFx('dmgPct')) dmg *= (1 + foodFx('dmgPct')); // ramen damage buff
   if (!isSpell) dmg *= classDmgDealtMult();
+  dmg *= diffDebuffMult(); // permanent per-tier scar — applies to weapon actives AND spells
   const du = buffMag('dmgUp'); if (du) dmg *= (1 + du);
   const idmg = totalStat('IDMG'); if (idmg && !isSpell) dmg *= (1 + idmg / 100);
   const bd = totalStat('BOSSDMG'); if (bd && e && (e.isBoss || e.isElite)) dmg *= (1 + bd / 100);
@@ -12578,11 +12822,16 @@ function handleDeath() {
     updateBars(); renderPanel(); saveGame(); draw();
     return;
   }
-  // The cost of dying: half your gold as the healer's fee, and a quarter of your
-  // progress toward the next level. Your equipped gear is untouched.
-  const lostGold = Math.floor(player.gold / 2);
+  // The cost of dying scales with the dungeon difficulty: gentle on Normal so the
+  // early game forgives a stumble, escalating to brutal in Endless where a fall
+  // costs every coin and most of a level. Your equipped gear is always untouched.
+  const dTier = currentDifficulty();
+  const GOLD_FRAC = [0.5, 0.65, 0.8, 1.0][dTier - 1];
+  const XP_FRAC   = [0.25, 0.4, 0.6, 0.9][dTier - 1];
+  const KNOCK     = [1, 2, 3, 5][dTier - 1];
+  const lostGold = Math.floor(player.gold * GOLD_FRAC);
   player.gold -= lostGold;
-  const lostXp = Math.min(player.xp, Math.round(xpForLevel(player.level) * 0.25));
+  const lostXp = Math.min(player.xp, Math.round(xpForLevel(player.level) * XP_FRAC));
   player.xp = Math.max(0, player.xp - lostXp);
   // Your bag isn't destroyed — it's dropped as a grave on the floor you fell on,
   // ready to be reclaimed if you fight your way back. Any earlier unclaimed grave
@@ -12598,9 +12847,12 @@ function handleDeath() {
   player.skillCds = {}; combatBuffs = {}; minions = []; bossHazards = []; // revived fresh — skills ready again
   sfx('death');
   screenFlash('#cc0000');
-  // Knocked back: the Dungeon Gate returns you a floor shallower than you fell.
+  // Knocked back deeper the harder the tier — but never out of the difficulty you
+  // fell in (Endless floors you at its own floor 1 rather than spilling you back
+  // into an easier dungeon).
   const fellOn = dungeonLevel;
-  dungeonReturn = Math.max(1, dungeonLevel - 1);
+  const tierBase = (dTier - 1) * FLOORS_PER_DIFF + 1;
+  dungeonReturn = Math.max(tierBase, dungeonLevel - KNOCK);
   closeShop(); closeMystic(); closeTown();
   buildTown();     // clears inTown=false → true and resets town state
   openTownHub();   // drop the player into the town menu
@@ -12608,7 +12860,7 @@ function handleDeath() {
   player.hp = Math.max(1, Math.round(player.maxHp * 0.5));
   player.mp = Math.round(player.maxMp * 0.5);
   showDeathScreen(lostGold, lostXp, dungeonReturn, lostBag, (graveSite ? fellOn : 0));
-  log(`💀 ${player.name || HERO} was SLAIN on floor ${fellOn}! Lost ${lostGold}g${lostXp ? ` and ${lostXp} XP` : ''}${lostBag ? `, and dropped your bag (${lostBag}) — reclaim it on floor ${fellOn}` : ''} — revived weakened in town.`, 'important');
+  log(`💀 ${player.name || HERO} was SLAIN on ${floorLabel(fellOn)}! Lost ${lostGold}g${lostXp ? ` and ${lostXp} XP` : ''}${lostBag ? `, and dropped your bag (${lostBag}) — reclaim it on ${floorLabel(fellOn)}` : ''} — revived weakened in town.`, 'important');
   recomputeMaxStats();
   updateBars();
   renderPanel();
@@ -12624,9 +12876,9 @@ function showDeathScreen(lostGold, lostXp, returnFloor, lostBag, graveFloor) {
       `💰 Lost ${lostGold} gold (the healer's fee)`,
       lostXp ? `✦ Lost ${lostXp} XP` : null,
       `🛡️ Kept all your equipped gear`,
-      (lostBag && graveFloor) ? `🪦 Your bag (${lostBag} item${lostBag === 1 ? '' : 's'}) lies on floor ${graveFloor} — go reclaim it` : null,
+      (lostBag && graveFloor) ? `🪦 Your bag (${lostBag} item${lostBag === 1 ? '' : 's'}) lies on ${floorLabel(graveFloor)} — go reclaim it` : null,
       `❤️ Revived at half health & mana`,
-      `⬇️ Re-enter at floor ${returnFloor}`,
+      `⬇️ Re-enter at ${floorLabel(returnFloor)}`,
       `💡 Stuck? Bank gear at the Vault, cook a bowl, strike a pact, or forge gear before diving back.`,
     ].filter(Boolean);
     el.innerHTML = lines.map(t => `<div class="death-pen">${t}</div>`).join('');
@@ -12847,7 +13099,10 @@ function updateBars() {
 
   // Header HUD: current floor, level + XP progress, enemies remaining.
   const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-  setText('floor-num', dungeonLevel);
+  setText('floor-num', displayFloor());
+  // Difficulty tag beside the floor number, coloured per tier.
+  const fd = document.getElementById('floor-diff');
+  if (fd) { const dm = diffMeta(); fd.textContent = dm.name; fd.style.color = dm.color; }
   setText('level-num', player.level);
   const xpBar = document.getElementById('xp-bar');
   if (xpBar) xpBar.style.width = Math.min(100, player.xp / xpForLevel(player.level) * 100) + '%';
@@ -14393,6 +14648,10 @@ function loadGame() {
     }
     // Migrate saves that predate the deepest-floor tracker / town hub.
     if (player.maxFloor == null) player.maxFloor = data.dungeonLevel || 1;
+    // Difficulty tiers: derive conquered-count from how deep an old (pre-tier,
+    // uncapped) save had reached — passing floor 25 meant beating that tier's
+    // boss, so floors 26+ → Normal cleared, 51+ → Hardened cleared, etc.
+    if (player.diffCleared == null) player.diffCleared = Math.max(0, Math.min(3, Math.floor(((player.maxFloor || 1) - 1) / FLOORS_PER_DIFF)));
     // Migrate saves that predate character names / global leaderboards. A null
     // name is fine — the init flow prompts for one on the next load.
     if (player.name === undefined) player.name = null;
@@ -14628,7 +14887,7 @@ function renderSlots() {
     const badge = isActive ? '<span class="slot-badge">PLAYING</span>' : '';
     const icon = s.cls ? CLASSES[s.cls].icon : '🧙';
     const who = escapeHtml(s.name || 'Adventurer');
-    const where = s.inTown ? 'In Town' : ('Floor ' + s.floor);
+    const where = s.inTown ? 'In Town' : lbFloorLabel(s.floor);
     const time = slotTimeAgo(s.ts);
     const playBtn = isActive
       ? `<button class="slot-btn current" disabled>● Playing</button>`
@@ -14742,8 +15001,16 @@ const LB_SUPABASE_KEY = 'sb_publishable_SxnH6A4uxqZq5ZW_PqUeLQ_9ZKd4WfV'; // ano
 
 const LB_LOCAL_KEY = 'dungeonLoot_leaderboard_v1';
 // The three ranked boards: which stored column each sorts by and how to show it.
+// Decode a stored max_floor (a CONTINUOUS depth) into a difficulty-aware label
+// like "Normal 25" or "Endless 82". Because the stored value keeps climbing
+// across tiers, sorting the board by max_floor naturally ranks harder runs above
+// easier ones (Endless 1 = depth 76 outranks Normal 25 = depth 25).
+function lbFloorLabel(v) {
+  v = Math.max(1, Math.floor(Number(v) || 1));
+  return `${DIFFS[diffOf(v) - 1].name} ${displayFloor(v)}`;
+}
 const LB_SORTS = {
-  floor: { col: 'max_floor', fmt: v => 'Floor ' + v },
+  floor: { col: 'max_floor', fmt: lbFloorLabel },
   level: { col: 'level',     fmt: v => 'Lv ' + v },
   gold:  { col: 'gold',      fmt: v => v + 'g' },
   power: { col: 'power',     fmt: v => '⚡' + v },
