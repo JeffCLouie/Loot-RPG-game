@@ -858,6 +858,9 @@
   /* Wraps a (possibly disabled) reroll button so the hover popup still fires —
      disabled buttons swallow mouse events on their own. */
   .ench-tipwrap { display: inline-flex; flex-shrink: 0; }
+  /* Long-pressing a tip-bearing element on touch must reveal its card, not pop
+     the iOS text-selection callout/magnifier over it. */
+  [data-tip], [title] { -webkit-touch-callout: none; }
 
   /* ── EQUIPMENT ── */
   .equip-slot {
@@ -13452,12 +13455,19 @@ const hoverTipEl = document.getElementById('hovertip');
 // and these would pop open at random (e.g. the spell/skill tips on mobile).
 const HOVER_MQ = window.matchMedia('(hover: hover) and (pointer: fine)');
 function showHoverTip(e, el) {
-  if (!HOVER_MQ.matches) return;
-  const html = el && el.dataset ? el.dataset.tip : '';
+  if (!HOVER_MQ.matches) return; // mouse hover only; touch uses long-press (below)
+  renderHoverTip(el);
+}
+// Render the styled popup for an element and anchor it to that element. Shared by
+// the desktop hover path (showHoverTip) and the mobile long-press / tap path, so
+// both surface exactly the same card. `htmlOverride` lets the touch path promote a
+// native `title` into the same look when there's no richer data-tip.
+function renderHoverTip(el, htmlOverride) {
+  const html = htmlOverride || (el && el.dataset ? el.dataset.tip : '');
   if (!html) return;
   hoverTipEl.innerHTML = html;
   hoverTipEl.style.display = 'block';
-  // Sit above the hovered button, centred; drop below if there's no room above.
+  // Sit above the element, centred; drop below if there's no room above.
   const r = el.getBoundingClientRect();
   const tip = hoverTipEl.getBoundingClientRect();
   const gap = 8;
@@ -13470,6 +13480,84 @@ function showHoverTip(e, el) {
   hoverTipEl.style.top = top + 'px';
 }
 function hideHoverTip() { hoverTipEl.style.display = 'none'; }
+
+// ── TOUCH: long-press / tap to reveal hover tooltips on mobile ──
+// On desktop these styled popups (skill descriptions, HUD stat explainers,
+// enchanter costs, action-button hints, d-pad style names) appear on mouse hover.
+// Touch devices get no hover, so the same info is surfaced two ways:
+//   • PRESS-AND-HOLD any element that carries a tip — even an actionable button —
+//     shows its card without firing the button's action.
+//   • A plain TAP on a purely informational element (no click action of its own —
+//     HUD items, stat bars, the gold counter, material chips) toggles its card.
+// Actionable buttons keep their tap = act behaviour; only the hold reveals their
+// tip, so e.g. holding a skill button reads it instead of casting it.
+const LONGPRESS_MS = 350;
+const LONGPRESS_MOVE = 10; // finger travel (px) past which a press becomes a scroll
+let lpTimer = null, lpStartX = 0, lpStartY = 0, lpEl = null, lpFired = false;
+let lpActionable = false, lpSwallowClick = false;
+
+// Nearest ancestor carrying a tip we can surface (a styled data-tip, or a native
+// title we promote into the same card). Elements that run their own tap-driven
+// tooltip (the loot list and gear slots, via the big item card) have no data-tip
+// or title, so they never match here and keep their existing behaviour.
+function tipTarget(node) {
+  return node && node.closest ? node.closest('[data-tip],[title]') : null;
+}
+// Show an element's tip on touch, promoting a bare `title` into the styled card.
+function showTouchTip(el) {
+  let html = el && el.dataset ? el.dataset.tip : '';
+  if (!html && el && el.getAttribute) {
+    const t = el.getAttribute('title');
+    if (t) html = `<div class="ht-name">${t}</div>`;
+  }
+  if (html) renderHoverTip(el, html);
+}
+function clearLongPress() { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } }
+
+document.addEventListener('touchstart', e => {
+  const el = tipTarget(e.target);
+  // Tapping anything other than the currently-pinned element dismisses its tip.
+  if (hoverTipEl.style.display === 'block' && el !== lpEl) hideHoverTip();
+  clearLongPress();
+  lpFired = false;
+  lpEl = el;
+  if (!el) return;
+  // Actionable if the touch landed on/inside a button, link, or onclick handler —
+  // those keep tap = act, so only the hold reveals their tip.
+  lpActionable = !!e.target.closest('button, a, [onclick]');
+  const t = e.touches[0];
+  lpStartX = t.clientX; lpStartY = t.clientY;
+  lpTimer = setTimeout(() => {
+    lpFired = true;
+    lpSwallowClick = true; // hold = inspect — never let the press also act
+    showTouchTip(el);
+  }, LONGPRESS_MS);
+}, { passive: true });
+
+document.addEventListener('touchmove', e => {
+  if (!lpTimer) return;
+  const t = e.touches[0];
+  if (Math.abs(t.clientX - lpStartX) > LONGPRESS_MOVE ||
+      Math.abs(t.clientY - lpStartY) > LONGPRESS_MOVE) clearLongPress();
+}, { passive: true });
+
+document.addEventListener('touchend', () => {
+  clearLongPress();
+  if (lpEl && !lpFired && !lpActionable) {
+    // A plain tap on a non-actionable element toggles its tip (the press would
+    // otherwise do nothing). Swallow the click so the global dismiss handler
+    // doesn't immediately close what we just opened.
+    if (hoverTipEl.style.display === 'block') hideHoverTip();
+    else { showTouchTip(lpEl); lpSwallowClick = true; }
+  }
+  lpEl = null;
+}, { passive: true });
+
+// Swallow the synthetic click that follows a long-press (or a tap we handled
+// ourselves) so holding a button to read it never also triggers its action.
+document.addEventListener('click', e => {
+  if (lpSwallowClick) { lpSwallowClick = false; e.preventDefault(); e.stopPropagation(); }
+}, true);
 
 // Build the data-tip + handlers for a styled hover popup (the gear-card look),
 // so JS-rendered buttons share the same hover UI as everything else instead of
