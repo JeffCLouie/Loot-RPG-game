@@ -2155,7 +2155,11 @@
 
 <!-- Title screen / landing page — shown on load. Surfaces the PLAY/CONTINUE
      action plus the same controls that live behind the ⚙️ settings dropdown. -->
-<div id="title-overlay">
+<!-- Open by default so the landing screen paints on the FIRST frame, before the
+     big game script finishes parsing. Otherwise the raw canvas (a blank map)
+     flashes for a beat on slower phones until showTitle() runs at script end.
+     showTitle() then just refines the content (CONTINUE for a returning hero). -->
+<div id="title-overlay" class="open">
   <div id="title-inner">
     <div class="title-crest" id="title-crest"></div>
     <h1 id="title-logo">DUNGEON<span class="title-sub-word">LOOT</span></h1>
