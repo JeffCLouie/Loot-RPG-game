@@ -269,9 +269,13 @@
   #death-overlay.open { display: flex; animation: deathFade 0.35s ease; }
   @keyframes deathFade { from { opacity: 0; } to { opacity: 1; } }
   #death-card { background: linear-gradient(180deg, #2a1014, #160809); border: 2px solid #b3303a; border-radius: 12px; max-width: 320px; width: 100%; padding: 22px 18px; text-align: center; box-shadow: 0 0 40px rgba(200,0,30,0.5); }
-  .death-title { color: #ff4452; font-size: 26px; font-weight: bold; letter-spacing: 3px; text-shadow: 0 0 12px rgba(255,60,80,0.7); margin-bottom: 14px; }
-  #death-penalties { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+  .death-title { color: #ff4452; font-size: 26px; font-weight: bold; letter-spacing: 3px; text-shadow: 0 0 12px rgba(255,60,80,0.7); margin-bottom: 8px; }
+  .death-sub { font-size: 12.5px; color: #f3dcde; line-height: 1.45; margin-bottom: 14px; }
+  .death-sub b { color: #ffd24b; }
+  #death-penalties { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
   .death-pen { font-size: 12px; color: #f0d8da; }
+  .death-howto { font-size: 12px; color: #ffe2b0; background: rgba(255,180,70,0.1); border: 1px solid rgba(255,180,70,0.35); border-radius: 7px; padding: 8px 10px; line-height: 1.45; margin-bottom: 16px; }
+  .death-howto b { color: #ffd24b; }
   .death-btn { background: #b3303a; border: 1px solid #ff6472; color: #fff; font-family: 'Courier New', monospace; font-size: 13px; letter-spacing: 1px; padding: 9px 22px; border-radius: 8px; cursor: pointer; }
   .death-btn:active { background: #ff4452; }
 
@@ -1342,6 +1346,15 @@
     grid-column: 1 / -1; border-color: #9f7a3f; background: #261c0d;
     box-shadow: 0 0 10px rgba(255,200,100,0.15);
   }
+  /* After dying, the gate is the way back to questing — pulse it so it's obvious. */
+  .town-menu-btn.tm-gate-urgent {
+    border-color: #ffd24b; background: #33260e;
+    animation: gateUrgent 1.3s ease-in-out infinite;
+  }
+  @keyframes gateUrgent {
+    0%,100% { box-shadow: 0 0 8px rgba(255,200,80,0.35); }
+    50%     { box-shadow: 0 0 18px rgba(255,210,90,0.8); }
+  }
 
   /* ── CLASS-PICK OVERLAY ── shown on a new game (and for classless saves). */
   #class-overlay {
@@ -1594,6 +1607,10 @@
   .lb-foot { margin-top: 12px; }
 
   .town-blurb { font-size: 11px; color: #b9a98a; margin-bottom: 8px; line-height: 1.4; }
+  /* The post-death prompt: louder than the usual hub blurb so the player knows what to do. */
+  .town-blurb-revived { font-size: 12px; color: #f3dcde; background: rgba(179,48,58,0.18);
+    border: 1px solid rgba(255,100,114,0.4); border-radius: 8px; padding: 9px 11px; }
+  .town-blurb-revived b { color: #ffd24b; }
   /* Stash vault — gold deposit/withdraw bar and section headings. */
   .stash-gold-bar { display: flex; gap: 6px; margin: 6px 0; align-items: stretch; }
   .stash-gold-bar input {
@@ -2281,8 +2298,10 @@
   <div id="death-overlay">
     <div id="death-card">
       <div class="death-title">💀 YOU DIED</div>
+      <div class="death-sub">You fell in the dungeon and woke up back in <b>Town</b>.</div>
       <div id="death-penalties"></div>
-      <button class="death-btn" onclick="closeDeath()">Continue</button>
+      <div class="death-howto">To keep questing, leave town through the <b>🌀 Dungeon Gate</b> (or the ✕ in the corner).</div>
+      <button class="death-btn" onclick="closeDeath()">Wake up in Town →</button>
     </div>
   </div>
 
@@ -5178,6 +5197,9 @@ let townBuildings = []; // decorative shop buildings drawn behind the NPCs
 let dungeonReturn = 1;
 // Which town screen is showing: 'hub' (the service menu) or 'service' (one shop).
 let townView = 'hub';
+// True while the player is in town because they just died (not a voluntary visit).
+// Lets the town hub flag how to get back to questing, then cleared on leaving.
+let revivedInTown = false;
 // Bumped whenever the active floor is rebuilt (descend, death-retreat, town).
 // Enemy-turn loops capture it and bail if it changes mid-turn, so a death that
 // warps you to a fresh floor can't let stale foes keep acting.
@@ -7640,11 +7662,14 @@ function openTownHub() {
      </button>`).join('');
   const gateFloor = Math.max(1, dungeonReturn || player.maxFloor || 1);
   const gateTile =
-    `<button class="town-menu-btn tm-gate" onclick="openTownService('gate')">
+    `<button class="town-menu-btn tm-gate${revivedInTown ? ' tm-gate-urgent' : ''}" onclick="openTownService('gate')">
        <span class="tm-icon">${dlIcon('feat_portal') || '🌀'}</span>
-       <span class="tm-text"><span class="tm-name">Dungeon Gate</span><span class="tm-desc">Back to ${floorLabel(gateFloor)}, or pick a difficulty</span></span>
+       <span class="tm-text"><span class="tm-name">Dungeon Gate</span><span class="tm-desc">${revivedInTown ? 'Head back down to keep questing' : `Back to ${floorLabel(gateFloor)}, or pick a difficulty`}</span></span>
      </button>`;
-  setTownContent(`<div class="town-blurb">A safe haven away from the dungeon. Pick a service, then take the Dungeon Gate when you're ready to delve again.</div><div class="town-menu">${tiles}${gateTile}</div>`);
+  const blurb = revivedInTown
+    ? `<div class="town-blurb town-blurb-revived">💀 You were slain and revived here in <b>Town</b>. Stock up if you like — then take the <b>🌀 Dungeon Gate</b> below (or the ✕ above) to head back down and keep questing.</div>`
+    : `<div class="town-blurb">A safe haven away from the dungeon. Pick a service, then take the Dungeon Gate when you're ready to delve again.</div>`;
+  setTownContent(`${blurb}<div class="town-menu">${tiles}${gateTile}</div>`);
 }
 // Return from a service panel to the hub menu (also used by the backdrop tap).
 function townBack() {
@@ -8733,6 +8758,7 @@ function enterDungeonAt(diff, floor) {
   const front = frontierDiff();
   diff = Math.max(1, Math.min(front, Math.round(diff) || 1));
   floor = Math.max(1, Math.min(tierFloorCap(diff) || 1, Math.round(floor) || 1));
+  revivedInTown = false; // entering the dungeon clears the post-death prompt
   closeTown();
   dungeonLevel = (diff - 1) * FLOORS_PER_DIFF + floor;
   player.maxFloor = Math.max(player.maxFloor || 1, dungeonLevel);
@@ -13249,6 +13275,7 @@ function handleDeath() {
   dungeonReturn = Math.max(tierBase, dungeonLevel - KNOCK);
   closeShop(); closeMystic(); closeTown();
   buildTown();     // clears inTown=false → true and resets town state
+  revivedInTown = true;  // flag so the town hub spells out how to get back to questing
   openTownHub();   // drop the player into the town menu
   // Revived in town but WEAKENED — only half health and mana, not a full heal.
   player.hp = Math.max(1, Math.round(player.maxHp * 0.5));
