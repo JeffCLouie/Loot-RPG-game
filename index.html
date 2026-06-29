@@ -1992,7 +1992,7 @@
               <!-- highlight -->
               <path d="M7.5 9 q2 -1 4 0" stroke="#b07d40" stroke-width="1.1" fill="none" stroke-linecap="round"/>
             </svg>
-          </span><span class="action-label">BAG</span>
+          </span><span class="action-label"><span id="bag-word">BAG</span><span id="bag-count"></span></span>
           <span id="bag-points-badge"></span>
         </button>
         <!-- Settings: collapses the Sound + New Game controls into one ⚙️ button
@@ -5476,7 +5476,7 @@ function togglePanel() {
   const btn = document.querySelector('.bag-btn');
   panel.classList.toggle('collapsed', !panelOpen);
   btn.classList.toggle('open', panelOpen);
-  btn.querySelector('.action-label').textContent = panelOpen ? 'CLOSE' : 'BAG';
+  btn.querySelector('#bag-word').textContent = panelOpen ? 'CLOSE' : 'BAG';
   if (panelOpen) renderPanel();
 }
 
@@ -12608,6 +12608,12 @@ function updateBars() {
     const totalPts = pts + sPts;
     bagBadge.textContent = totalPts;
     bagBadge.classList.toggle('show', totalPts > 0);
+  }
+  // Plain item count in brackets next to the BAG label — same font, no glow.
+  const bagCount = document.getElementById('bag-count');
+  if (bagCount) {
+    const n = (inventory || []).length;
+    bagCount.textContent = n > 0 ? ` [${n}]` : '';
   }
   // Keep the skill bar (its far-left potion skills + class actives) in sync. The
   // potion cooldown / ready / urgent state is set inside renderSkillBar itself.
