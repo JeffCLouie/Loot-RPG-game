@@ -195,6 +195,7 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    position: relative; /* anchors the ambient-ember overlay */
   }
 
   canvas {
@@ -205,6 +206,32 @@
     min-height: 0;
     touch-action: none;
   }
+
+  /* ── AMBIENT EMBERS ── soft, slow motes drifting up over the map, mirroring
+     the title screen so the play area feels alive. Purely decorative; sits just
+     above the canvas but below the skill bar / log / controls (which raise their
+     own z-index), so the motes only ever drift over the map itself. The tint is
+     set per-floor by JS via --amber (a warm glow on fiery themes, cool on icy). */
+  #ambient-embers {
+    position: absolute; inset: 0; pointer-events: none; overflow: hidden;
+    z-index: 1;
+  }
+  #ambient-embers .amber {
+    position: absolute; bottom: -10px; border-radius: 50%;
+    background: var(--amber, #ffb24a);
+    box-shadow: 0 0 6px 1px var(--amber, #ffb24a);
+    opacity: 0;
+    animation: amberRise linear infinite;
+    will-change: transform, opacity;
+  }
+  @keyframes amberRise {
+    0%   { transform: translate(0, 0) scale(1); opacity: 0; }
+    14%  { opacity: 0.32; }
+    80%  { opacity: 0.16; }
+    100% { transform: translate(var(--drift, 12px), -88%) scale(0.4); opacity: 0; }
+  }
+  /* Skill bar and log raise above the motes so embers stay over the map only. */
+  #skill-bar, #bottom-row { position: relative; z-index: 2; }
 
   /* ── BOTTOM CONTROL BAR (thumb zone) ── */
   #control-bar {
@@ -2473,6 +2500,10 @@
 <div id="main">
   <div id="game-wrap">
     <canvas id="canvas"></canvas>
+    <!-- Ambient drifting motes over the map — the same soft, slow embers as the
+         title screen, tinted to the current floor's theme so the play area never
+         feels flat/static. Decorative; seeded once and theme-tinted by JS. -->
+    <div id="ambient-embers" aria-hidden="true"></div>
     <!-- Desktop-only floor / foes readout pinned to the top-left of the map.
          On mobile these stay in the header (this whole block is display:none),
          so mobile is unchanged. No lock icon: foes remaining already signals a
@@ -11186,9 +11217,39 @@ function drawCrystalWall(px, py, tw, th, x, y, seed, C, cracked) {
   if (cracked) { ctx.strokeStyle = 'rgba(255,220,120,0.3)'; ctx.lineWidth = 1; ctx.strokeRect(px + 1, py + 1, tw - 2, th - 2); }
 }
 
+// ── AMBIENT EMBERS ── seed the decorative drifting motes once (see the
+// #ambient-embers CSS). They're slow and faint so they enliven the map without
+// distracting from play; the colour is theme-tinted by updateAmbientTint().
+function seedAmbientEmbers() {
+  const host = document.getElementById('ambient-embers');
+  if (!host || host.childElementCount) return;
+  let html = '';
+  for (let i = 0; i < 12; i++) {
+    const left = Math.round(Math.random() * 100);
+    const size = (1.5 + Math.random() * 2).toFixed(1);
+    const dur = (10 + Math.random() * 8).toFixed(1);
+    const delay = (Math.random() * 12).toFixed(1);
+    const drift = Math.round(-40 + Math.random() * 80);
+    html += `<span class="amber" style="left:${left}%;width:${size}px;height:${size}px;animation-duration:${dur}s;animation-delay:${delay}s;--drift:${drift}px"></span>`;
+  }
+  host.innerHTML = html;
+}
+// Tint the motes to the current floor's glow colour (warm on fiery themes, cool
+// on icy ones). Cheap, but guarded so it only writes when the theme changes.
+let _amberTint = null;
+function updateAmbientTint(theme) {
+  const host = document.getElementById('ambient-embers');
+  if (!host) return;
+  const tint = ((theme || currentTheme()) || {}).stairsGlow || '#ffb24a';
+  if (tint === _amberTint) return;
+  _amberTint = tint;
+  host.style.setProperty('--amber', tint);
+}
+
 function draw() {
   const W = canvas.width, H = canvas.height;
   const C = currentTheme();
+  updateAmbientTint(C);
   ctx.fillStyle = '#0a0a0f';
   ctx.fillRect(0, 0, W, H);
 
@@ -18429,6 +18490,7 @@ loadStash();
 if (inTown) { buildTown(); openTownHub(); }
 else if (!hadSave && !player.tutorialDone) buildTutorialMap();
 else generateMap();
+seedAmbientEmbers();
 draw();
 updateBars();
 renderPanel();
