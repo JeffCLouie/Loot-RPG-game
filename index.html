@@ -1260,6 +1260,10 @@
   .pd-slot.empty { border-style: dashed; }
   .pd-slot.empty .dl-ic, .pd-slot.empty .pd-emoji { opacity: 0.28; }
   .pd-slot.filled { background: rgba(20,18,12,0.75); }
+  /* A worn piece whose attribute requirement is no longer met: greyed & desaturated
+     so the gear panel shows at a glance it's being ignored until you re-qualify. */
+  .pd-slot.pd-inactive { background: rgba(40,16,22,0.6); }
+  .pd-slot.pd-inactive .dl-ic, .pd-slot.pd-inactive .pd-emoji { opacity: 0.45; filter: grayscale(0.7); }
   .pd-emoji { font-size: 30px; line-height: 1; filter: grayscale(0.1); }
   .pd-pwr { position: absolute; bottom: 1px; right: 3px; font-size: 9px; }
   .pd-unequip {
@@ -4243,8 +4247,10 @@ function itemPower(item) {
 // every hero starts with) plus any bonus carried on equipped gear (+13 Might,
 // etc.). This — not the raw spent value — is what every derived stat reads.
 function totalAttr(key) {
+  const active = activeSlots();
   let sum = (player.attributes?.[key] || 0);
   for (const slot of SLOT_KEYS) {
+    if (!active[slot]) continue;          // red/ignored pieces lend nothing
     const it = equipped[slot];
     if (it && it.attrs && typeof it.attrs[key] === 'number') sum += it.attrs[key];
   }
@@ -4279,9 +4285,11 @@ function attrDamage() {
 function critDamageMult() { return Math.max(0, 2.0 + totalStat('CRITDMG') / 100 + skillBonus('critDmg')); }
 
 // The player's overall power: a blend of level, spent attributes, and equipped gear.
+// Red/ignored pieces (requirement no longer met) don't count — they give nothing.
 function playerPower() {
   let p = player.level * 10;
-  for (const slot of SLOT_KEYS) if (equipped[slot]) p += itemPower(equipped[slot]);
+  const active = activeSlots();
+  for (const slot of SLOT_KEYS) if (active[slot]) p += itemPower(equipped[slot]);
   const spent = ATTR_KEYS.reduce((s, k) => s + (player.attributes?.[k] || 0), 0);
   p += spent * 3;
   p += spentSkillPoints() * 5; // skill-tree investment shows up in Power too
@@ -4670,7 +4678,7 @@ const WEAPON_STYLES = {
   Bow:'shot', Mace:'crush', Spear:'thrust', Scythe:'reap',
 };
 function weaponStyle() {
-  const w = equipped.weapon;
+  const w = activeWeapon();   // red/ignored weapon → unarmed style
   if (!w || !w.name) return 'fist';
   const sub = weaponSubType(w);
   if (sub) return WEAPON_SUBTYPES[sub].style;
@@ -4790,16 +4798,17 @@ function weaponBaseType(item) {
 }
 
 // ── STAT REQUIREMENTS ──
-// Any class may now wield any weapon (and pair any sensible off-hand) — the old
-// hard class-to-category lock is gone. What gates a piece instead is a single
-// ATTRIBUTE REQUIREMENT, computed live from the weapon SUB-TYPE (or off-hand base)
-// and the item's ilvl — never stored on the item, so legacy saves and the
-// Enchanter's rerolls keep working with zero migration. The required attribute is
-// the one the item's natural wielder leans on (heavy melee → Might, finesse/ranged
-// → Agility, casting → Spirit, shields → Vitality), so a hero CAN pick up an
-// "off-class" weapon — they just have to invest that attribute first. The gate
+// EVERY gear slot — weapon, off-hand, armour AND jewelry — gates on a single
+// ATTRIBUTE REQUIREMENT, computed live from the piece's base (weapon sub-type,
+// off-hand base, or armour/jewelry base) and its ilvl — never stored on the item,
+// so legacy saves and the Enchanter's rerolls keep working with zero migration.
+// The required attribute is the one that base's natural wearer leans on, which
+// nudges every class toward gear that fits it: heavy melee / heavy plate lean on
+// Might or Vitality, finesse weapons & light armour on Agility, casting gear &
+// cloth on Spirit, and fortune trinkets on Luck. A hero CAN still pick up an
+// "off-class" piece — they just have to invest that attribute first. The gate
 // scales with ilvl, so deeper gear demands a real, growing investment:
-//   need = round(8 + ilvl * 0.9 * weight)   (heavier sub-types carry a bigger weight)
+//   need = round(8 + ilvl * 0.9 * weight)   (heavier bases carry a bigger weight)
 // Keyed by sub-type first; the bare CATEGORY keys are the legacy fallback for old
 // bare-category weapons whose name carries no sub-type word.
 const WEAPON_REQ = {
@@ -4843,6 +4852,42 @@ const OFFHAND_REQ = {
 // Longest base name first so "Parrying Dagger" / "Tower Shield" win over any shorter
 // substring (mirrors SUBTYPE_KEYS' longest-first resolution).
 const OFFHAND_REQ_KEYS = Object.keys(OFFHAND_REQ).sort((a, b) => b.length - a.length);
+// Armour & jewelry, keyed by SLOT then by the base word in the item's name. The
+// attribute follows the base's character so each class is steered toward fitting
+// gear: heavy plate (Helm, Chestplate, Greaves, Gauntlets) wants Vitality, sturdy
+// mid armour (Cuirass, Mail, Tassets, Bracers) wants Might, light/leather (Cap,
+// Hood, Tunic, Grips, Trousers) wants Agility, and cloth/caster pieces (Robe,
+// Circlet, Crown, Gloves, Leggings) want Spirit. Jewelry spreads across all five
+// attributes so every class has a fitting trinket in each slot. Weights are gentler
+// than weapons' (armour is mandatory, so its gate shouldn't be brutal) and jewelry
+// gentler still. Matched against the item's OWN slot only, so base words never
+// collide across slots.
+const ARMOR_REQ = {
+  head: { 'Helm':{ attr:'vitality', w:0.80 }, 'Cap':{ attr:'agility', w:0.50 }, 'Hood':{ attr:'agility', w:0.55 },
+          'Crown':{ attr:'spirit', w:0.62 }, 'Circlet':{ attr:'spirit', w:0.55 } },
+  chest:{ 'Chestplate':{ attr:'vitality', w:0.95 }, 'Cuirass':{ attr:'might', w:0.78 }, 'Mail':{ attr:'might', w:0.82 },
+          'Tunic':{ attr:'agility', w:0.55 }, 'Robe':{ attr:'spirit', w:0.55 } },
+  hands:{ 'Gauntlets':{ attr:'might', w:0.60 }, 'Bracers':{ attr:'vitality', w:0.48 },
+          'Grips':{ attr:'agility', w:0.46 }, 'Gloves':{ attr:'spirit', w:0.42 } },
+  legs: { 'Greaves':{ attr:'vitality', w:0.78 }, 'Tassets':{ attr:'might', w:0.62 },
+          'Trousers':{ attr:'agility', w:0.48 }, 'Leggings':{ attr:'spirit', w:0.46 } },
+  ring: { 'Signet':{ attr:'might', w:0.42 }, 'Band':{ attr:'vitality', w:0.42 },
+          'Loop':{ attr:'spirit', w:0.42 }, 'Ring':{ attr:'luck', w:0.42 } },
+  amulet:{ 'Necklace':{ attr:'spirit', w:0.48 }, 'Pendant':{ attr:'vitality', w:0.45 }, 'Talisman':{ attr:'luck', w:0.42 },
+           'Amulet':{ attr:'might', w:0.45 }, 'Charm':{ attr:'agility', w:0.40 } },
+};
+// Per-slot base words, longest-first, so a substring base never shadows a longer one.
+const ARMOR_REQ_KEYS = {};
+for (const s in ARMOR_REQ) ARMOR_REQ_KEYS[s] = Object.keys(ARMOR_REQ[s]).sort((a, b) => b.length - a.length);
+// The {attr,w} an armour/jewelry item carries, found by matching its base word
+// within its OWN slot's table (so "Ring" can't shadow a chest's "Mail", etc.).
+function armorReqDef(item) {
+  const tbl = ARMOR_REQ[item.slot];
+  if (!tbl) return null;
+  const nm = item.name || '';
+  for (const k of ARMOR_REQ_KEYS[item.slot]) if (nm.includes(k)) return tbl[k];
+  return null;
+}
 // The required attribute amount for an item of the given ilvl and per-type weight.
 // Clamped so a missing/odd ilvl (very old saves) can never NaN or read as zero.
 function attrReqValue(ilvl, w) { return Math.round(8 + Math.max(1, ilvl || 1) * 0.9 * w); }
@@ -4857,18 +4902,21 @@ function itemAttrReq(item) {
   } else if (item.slot === 'offhand') {
     const nm = item.name || '';
     for (const k of OFFHAND_REQ_KEYS) if (nm.includes(k)) { def = OFFHAND_REQ[k]; break; }
+  } else if (ARMOR_REQ[item.slot]) {
+    def = armorReqDef(item);
   }
   return def ? { attr: def.attr, need: attrReqValue(item.ilvl, def.w) } : null;
 }
-// Live status of a piece's stat gate. `have` is your current attribute total. The
-// gate is checked at equip time, when the candidate is still in the bag and so is
-// NOT yet part of totalAttr — a weapon's own +attr therefore can't bootstrap its
-// own requirement. A worn item naturally reads as met (its bonus is now counted),
-// which is correct: it's already equipped.
+// Live status of a piece's stat gate. `have` is the attribute you have AVAILABLE to
+// meet it (see reqAttrAvail): your base points plus the +attrs from every OTHER
+// active worn piece, never the piece's own bonus. So a candidate in the bag can't
+// bootstrap its own requirement, and — crucially — a WORN piece you can no longer
+// support (e.g. after a respec) reads as NOT met, which is exactly what turns it
+// red in the gear panel and stops it counting (see activeSlots).
 function attrReqStatus(item) {
   const r = itemAttrReq(item);
   if (!r) return null;
-  const have = totalAttr(r.attr);
+  const have = reqAttrAvail(item, r.attr);
   return { attr: r.attr, need: r.need, have, ok: have >= r.need };
 }
 // A short reason a piece's stat gate isn't met (for the lock tooltip / log), or null.
@@ -4907,25 +4955,90 @@ function offhandEquipError(item, weapon) {
   return null; // shield / caster: any one-handed weapon or a free hand works
 }
 
-// Can the current class/loadout equip this item right now? Non-weapon, non-off-hand
-// gear is always allowed; a classless hero has no weapon restriction; an off-hand
-// must also pair with the equipped main-hand weapon (see offhandEquipError).
+// ── EFFECTIVE (NON-IGNORED) GEAR ──
+// A worn piece only COUNTS — for stats, attributes, weapon damage and its own frame
+// colour — while it still MEETS its attribute requirement (and, for an off-hand,
+// still pairs with the main hand). A piece you could no longer equip — the classic
+// case being a respec that drops your attributes below what a heavy chestplate or
+// greatsword demanded — turns red in the gear panel and is IGNORED until you
+// re-qualify, instead of silently keeping its power.
+//
+// Because one piece's +attributes can be exactly what lets ANOTHER piece meet its
+// gate, and an ignored piece must lend nothing, the active set is resolved by
+// FIX-POINT: assume every worn piece active, then repeatedly drop any whose gate
+// isn't met by the attributes of the pieces STILL active (a piece never counts its
+// own +attr toward its own gate — the same rule as the equip check). Dropping only
+// removes, so it settles in at most SLOT_KEYS.length passes. Computed on demand
+// (no cache): it's only hit on player actions and panel renders, never a tight loop.
+// Core resolver, parameterised by `getItem(slot)` so the SAME fix-point serves both
+// the live loadout AND a hypothetical "what if I equipped this candidate" swap (the
+// candidate occupies its slot, the piece it replaces is gone). Returns the settled
+// active map plus `attrFrom(key, exceptSlot)` = base points + the +attrs of the
+// pieces held active in that loadout, excluding one slot.
+function resolveActive(getItem) {
+  const active = {};
+  for (const slot of SLOT_KEYS) active[slot] = !!getItem(slot);
+  const attrFrom = (key, exceptSlot) => {
+    let sum = player.attributes?.[key] || 0;
+    for (const slot of SLOT_KEYS) {
+      if (slot === exceptSlot || !active[slot]) continue;
+      const it = getItem(slot);
+      if (it && it.attrs && typeof it.attrs[key] === 'number') sum += it.attrs[key];
+    }
+    return sum;
+  };
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const slot of SLOT_KEYS) {
+      if (!active[slot]) continue;
+      const it = getItem(slot);
+      const r = itemAttrReq(it);
+      const gateOk = !r || attrFrom(r.attr, slot) >= r.need;
+      // An off-hand also has to still pair with whatever is in the main hand (an
+      // unmet pairing — e.g. a quiver with no bow — also ignores the piece).
+      const pairOk = slot !== 'offhand' || !offhandEquipError(it, getItem('weapon'));
+      if (!gateOk || !pairOk) { active[slot] = false; changed = true; }
+    }
+  }
+  return { active, attrFrom };
+}
+function activeSlots() { return resolveActive(s => equipped[s]).active; }
+// Is the piece in this slot worn AND currently counting (not red/ignored)?
+function slotActive(slot) { return !!equipped[slot] && activeSlots()[slot]; }
+// The main-hand weapon IF it currently counts, else null — so a red/ignored weapon
+// falls back to bare fists for damage, attack style and reach.
+function activeWeapon() { return slotActive('weapon') ? equipped.weapon : null; }
+// The off-hand IF it currently counts, else null — so a red/ignored off-hand grants
+// no loadout-conditional passives (shield/caster/dual bonuses) either.
+function activeOffhand() { return slotActive('offhand') ? equipped.offhand : null; }
+// Attributes AVAILABLE for `item` to meet its gate IF it occupied its slot. Resolves
+// the fix-point over the SWAPPED loadout (item in its slot, the piece it would
+// replace removed), so the answer accounts for any cascade where that replaced piece
+// was propping up ANOTHER piece — a candidate the loot list would otherwise green-
+// light only to have it land red. For the piece already worn in its slot this is
+// identical to the live active set. A piece never counts its own +attr (exclude-self).
+function reqAttrAvail(item, key) {
+  const slot = item.slot;
+  return resolveActive(s => (s === slot ? item : equipped[s])).attrFrom(key, slot);
+}
+
+// Can the loadout equip this item right now? Every gear slot gates on its attribute
+// requirement; an off-hand must ALSO pair with the equipped main-hand weapon.
 function canEquipItem(item) {
   if (!item) return true;
-  // Off-hand: must pair with the main hand AND meet its own stat gate.
   if (item.slot === 'offhand') return offhandEquipError(item, equipped.weapon) === null && attrReqError(item) === null;
-  if (item.slot !== 'weapon') return true;
-  // Any class may wield any weapon now — the attribute requirement is the only gate.
+  // Weapon, armour and jewelry: the attribute requirement is the only gate.
   return attrReqError(item) === null;
 }
 // A short, human reason this item can't be equipped right now (for the loot lock
 // tooltip), or '' if it can.
 function equipLockReason(item) {
   if (!item) return '';
-  if (item.slot === 'weapon') return attrReqError(item) || '';
   // Off-hands fail for a bad main-hand pairing first, then for an unmet stat gate.
   if (item.slot === 'offhand') return offhandEquipError(item, equipped.weapon) || attrReqError(item) || '';
-  return '';
+  // Weapon, armour and jewelry: the attribute requirement is the only equip lock.
+  return attrReqError(item) || '';
 }
 
 // Combat passives keyed off the chosen class — now also folding in any damage
@@ -5481,7 +5594,9 @@ function skillFlag(name) {
 // passives stay cheap and serialization-safe. Unknown conds are simply false.
 function condMet(cond) {
   if (!cond) return true;
-  const w = equipped.weapon, o = equipped.offhand;
+  // Red/ignored pieces grant no loadout-conditional passives, so resolve through the
+  // ACTIVE weapon/off-hand: a piece you can't currently support lends nothing here.
+  const w = activeWeapon(), o = activeOffhand();
   switch (cond) {
     case '2h':       return isTwoHander(w);
     case '1h':       return !!w && !isTwoHander(w);
@@ -5505,7 +5620,8 @@ function condMet(cond) {
 // The bonus off-hand swing fraction granted by Dual Mastery (0 if not unlocked or
 // no parry-blade off-hand equipped), scaling with the unlocking node's rank.
 function dualWieldMult() {
-  if (!equipped.offhand || equipped.offhand.off !== 'dual') return 0;
+  const o = activeOffhand();
+  if (!o || o.off !== 'dual') return 0;
   for (const n of classSkillTree()) {
     if (n.flag === 'dualwield' || n.unlock === 'dualwield') {
       const r = skillRank(n.id);
@@ -6871,6 +6987,7 @@ document.addEventListener('click', (e) => {
 
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
+  { date: '2026-06-30', size: 'big', v: 'Stat requirements on all gear', by: 'Claude', notes: ['The attribute requirement that gated weapons now covers EVERY gear slot — armour and jewelry too. Each base leans on the attribute its natural wearer favours, nudging every class toward gear that fits: heavy plate (a Chestplate, Greaves or Gauntlets) wants Vitality, sturdy mid armour (Cuirass, Mail, Tassets) wants Might, light leather (Cap, Tunic, Trousers) wants Agility, and cloth or caster pieces (Robe, Circlet, Gloves) want Spirit. Jewelry asks a gentler price. Meet the attribute and you can wear it, whatever your class.', 'Requirements scale with the item’s level and are gentler than weapons’ (armour is mandatory, so its gate isn’t brutal). Every item tooltip and the loot list show the requirement in green when you meet it and red when you’re short, and the LOOT tab only lets you equip pieces you actually qualify for — off-hands still also need a fitting main hand.', 'Worn gear is now protected against attribute changes: if a respec (or anything else) drops you below a piece’s requirement, that piece turns RED in the GEAR panel and is IGNORED — it lends no stats, attributes or weapon damage — until you re-invest the attribute and bring it back. No more keeping power you can no longer support.'] },
   { date: '2026-06-30', size: 'big', v: 'Any weapon, with stat requirements', by: 'Claude', notes: ['Every class can now wield every weapon and pair every sensible off-hand — the old hard class-to-weapon lock is gone. What gates a piece instead is a stat requirement: a heavy Greatsword or Maul wants Might, a Rapier, dagger or bow wants Agility, a staff or wand wants Spirit, and a shield wants Vitality. Meet the attribute and you can equip it, whatever your class.', 'Requirements are per weapon TYPE, not just its category — a one-handed Rapier asks for Agility while a Greatsword of the same family asks for Might — and they scale with the item’s level, so deeper gear demands a real, growing investment. Your class still leans toward its favoured weapons in drops, and gear that grants +attributes counts toward meeting requirements.', 'Item tooltips, the loot list and the Forge now show each piece’s requirement in green when you meet it and red when you’re short, so you always know what to raise. Off-hands keep their pairing rules (a quiver needs a bow, a parrying dagger a one-handed melee weapon, a shield or focus a free hand — or any of them alongside a two-hander once you’ve learned Titan’s Grip).'] },
   { date: '2026-06-30', size: 'medium', v: 'Hardcore leaderboards', by: 'Claude', notes: ['The global Leaderboards now have their own Hardcore ladder. A Standard / Hardcore switch at the top of the board flips every ranking — Furthest, Level, Gold and Power — between ordinary heroes and one-life Hardcore heroes.', 'Hardcore heroes are ranked only against each other, so surviving the no-revive run earns its own crimson board.'] },
   { date: '2026-06-30', size: 'small', v: 'Clearer "can\'t afford" prices', by: 'Claude', notes: ['Anywhere you spend gold or materials — the shop, gambler, forge, enchanter, mystic, healer and trainer — wares you can\'t currently afford now dim out so unavailable options read at a glance.', 'Mixed prices now pinpoint the shortfall: the exact gold or material you\'re missing turns red, so a forge or enchant cost shows at once whether you\'re short on gold, scrap, glimmer or a chaos orb.'] },
@@ -9493,6 +9610,10 @@ function respecAttrs() {
   if (player.mp > player.maxMp) player.mp = player.maxMp;
   sfx('shrine');
   log(`🎓 You unlearn your attributes — ${spent} point${spent === 1 ? '' : 's'} returned to spend.`, 'important');
+  // Dropping back to base attributes can leave worn gear under its requirement; warn
+  // so the player understands why those pieces just went red and stopped helping.
+  const ignored = SLOT_KEYS.filter(s => equipped[s] && !slotActive(s)).length;
+  if (ignored) log(`⚠ ${ignored} worn piece${ignored === 1 ? '' : 's'} no longer meet${ignored === 1 ? 's' : ''} the attribute requirement — shown red in GEAR and ignored until you re-invest.`, 'important');
   updateBars(); renderPanel(); renderTrainer(); saveGame();
 }
 function respecSkills() {
@@ -12383,7 +12504,7 @@ function tryBossStatusProc(e) {
 }
 
 function tryPlayerStatusProc(e) {
-  const w = equipped.weapon;
+  const w = activeWeapon();   // a red/ignored weapon procs nothing
   if (!w) return;
   // Bleed (gear stat): a chance to open a bleeding wound — a poison-style damage-
   // over-time — on hit. Unlike the epic+ proc below this fires at ANY rarity, so a
@@ -12933,7 +13054,7 @@ function unstuck() {
 }
 
 function getWeaponDamage() {
-  const w = equipped.weapon;
+  const w = activeWeapon();   // a red/ignored weapon gives no damage — bare fists
   if (w && w.stats.DMG) {
     const [lo, hi] = w.stats.DMG.split('-').map(Number);
     return rnd(lo, hi);
@@ -12945,9 +13066,11 @@ function getWeaponDamage() {
 // wield an off-hand alongside a two-hander, but at a cost: its stats count for 60%.
 // The guard is cheap (the rare 2H+off-hand combo) so skillFlag is rarely hit.
 function totalStat(name) {
+  const active = activeSlots();
   let sum = 0;
   const tgPenalty = (equipped.offhand && isTwoHander(equipped.weapon) && skillFlag('titangrip')) ? 0.6 : 1;
   for (const slot of SLOT_KEYS) {
+    if (!active[slot]) continue;          // red/ignored pieces lend nothing
     const it = equipped[slot];
     if (it && typeof it.stats[name] === 'number') {
       sum += (slot === 'offhand' && tgPenalty !== 1) ? Math.round(it.stats[name] * tgPenalty) : it.stats[name];
@@ -13420,7 +13543,7 @@ function tryRangedAttack(dx, dy) {
   if (dx === 0 && dy === 0) return false;
   if (getEnemyAt(player.x + dx, player.y + dy)) return false; // adjacent → normal melee
   const style = weaponStyle();
-  const range = weaponRangeOf(equipped.weapon) || STYLE_RANGE[style] || 1;
+  const range = weaponRangeOf(activeWeapon()) || STYLE_RANGE[style] || 1;
   if (range < 2) return false;            // melee-only weapons can't poke at range
   const mpCost = style === 'bolt' ? 4 : 0; // the Staff's bolt spends a little mana
   if (mpCost && player.mp < mpCost) return false;
@@ -15427,7 +15550,10 @@ function renderPanel() {
 // HERO tab: overall power, derived stats, and the attributes you can raise.
 function renderHero(el) {
   const pts = player.attrPoints || 0;
-  const gearPower = SLOT_KEYS.reduce((s, k) => s + (equipped[k] ? itemPower(equipped[k]) : 0), 0);
+  // Count only ACTIVE gear so this "from gear" subtotal reconciles with the headline
+  // POWER (playerPower also skips red/ignored pieces).
+  const gActive = activeSlots();
+  const gearPower = SLOT_KEYS.reduce((s, k) => s + (gActive[k] ? itemPower(equipped[k]) : 0), 0);
   const dmgA = classDmgAttrs();
   // Each attribute row shows base+spent plus any gear bonus, tags the class's
   // damage attributes, and offers a + to raise it.
@@ -16217,14 +16343,16 @@ function renderDollSlot(slot) {
   if (slot === 'offhand' && !item && isTwoHander(equipped.weapon) && !skillFlag('titangrip')) {
     const w = equipped.weapon;
     const tic = dlIcon(dollSprite('weapon', w), 40) || `<span class="pd-emoji">🤲</span>`;
-    const tcol = (TIERS[w.tier] || {}).color || '';
+    // Mirror the weapon's own red/ignored state onto the hand it occupies.
+    const wDead = !slotActive('weapon');
+    const tcol = wDead ? '#e0556b' : ((TIERS[w.tier] || {}).color || '');
     const tstyle = tcol ? ` style="border-color:${tcol}77;box-shadow:0 0 6px ${tcol}33;opacity:.62"` : ' style="opacity:.62"';
     return `<div class="pd-cell">
-      <div class="pd-slot filled"${tstyle}
+      <div class="pd-slot filled${wDead ? ' pd-inactive' : ''}"${tstyle}
            onclick="tapSlot('weapon', this)"
            onmouseenter="hoverSlot(event,'weapon')" onmouseleave="hideTooltip()">
         ${tic}
-        <span class="item-power pd-pwr" style="background:#2a2418;color:#cdbf9a">2H</span>
+        <span class="item-power pd-pwr" style="background:#2a2418;color:${wDead ? '#e0556b' : '#cdbf9a'}">${wDead ? '⚠' : '2H'}</span>
       </div>
       <div class="pd-cap" style="color:#8a7d63">Both hands</div>
     </div>`;
@@ -16232,18 +16360,39 @@ function renderDollSlot(slot) {
   const sp = dollSprite(slot, item);
   const emoji = (SLOTS[slot].label.match(EMOJI_RE) || ['❔'])[0];
   const ic = dlIcon(sp, 40) || `<span class="pd-emoji">${emoji}</span>`;
+  // A worn piece whose attribute requirement is no longer met (e.g. after a respec)
+  // is shown RED and treated as ignored everywhere else — flag it here so the gear
+  // panel makes plain WHY it isn't helping and what to raise to bring it back.
+  const inactive = item && !slotActive(slot);
+  const reqS = inactive ? attrReqStatus(item) : null;
+  const reqShort = inactive
+    ? (reqS && !reqS.ok ? `needs ${reqS.need} ${ATTRIBUTES[reqS.attr].short}` : 'unequippable')
+    : '';
   const cap = item ? item.name : SLOTS[slot].label.replace(/^\S+\s/, '');
-  const color = item ? (TIERS[item.tier] || {}).color || '' : '';
-  const frameStyle = item && color ? ` style="border-color:${color};box-shadow:0 0 9px ${color}55"` : '';
+  const tierColor = item ? (TIERS[item.tier] || {}).color || '' : '';
+  const frameStyle = item
+    ? (inactive
+        ? ` style="border-color:#e0556b;box-shadow:0 0 9px #e0556b66;opacity:.62"`
+        : (tierColor ? ` style="border-color:${tierColor};box-shadow:0 0 9px ${tierColor}55"` : ''))
+    : '';
+  const pwrBadge = !item ? ''
+    : inactive
+      ? `<span class="item-power pd-pwr" style="background:#3a1620;color:#e0556b">⚠</span>`
+      : `<span class="item-power pd-pwr">⚡${itemPower(item)}</span>`;
+  const capHTML = !item
+    ? `<div class="pd-cap">${cap}</div>`
+    : inactive
+      ? `<div class="pd-cap" style="color:#e0556b">${cap}<br><span style="font-size:9px;opacity:.95">⚠ ${reqShort}</span></div>`
+      : `<div class="pd-cap"${tierColor ? ` style="color:${tierColor}"` : ''}>${cap}</div>`;
   return `<div class="pd-cell ${item ? '' : 'is-empty'}">
-    <div class="pd-slot ${item ? 'filled' : 'empty'}"${frameStyle}
+    <div class="pd-slot ${item ? 'filled' : 'empty'}${inactive ? ' pd-inactive' : ''}"${frameStyle}
          onclick="tapSlot('${slot}', this)"
          onmouseenter="hoverSlot(event,'${slot}')" onmouseleave="hideTooltip()">
       ${ic}
-      ${item ? `<span class="item-power pd-pwr">⚡${itemPower(item)}</span>` : ''}
+      ${pwrBadge}
       ${item ? `<button class="pd-unequip" onclick="event.stopPropagation();unequip('${slot}')" title="Unequip">✕</button>` : ''}
     </div>
-    <div class="pd-cap"${item && color ? ` style="color:${color}"` : ''}>${cap}</div>
+    ${capHTML}
   </div>`;
 }
 function renderPaperdoll() {
@@ -16288,9 +16437,10 @@ function toggleGearSet(idx) {
   if (target === activeGearSet) return;
   activeGearSet = target;
   // Swapping sets re-wears a loadout you already assembled — it is NOT a fresh equip
-  // event, so (like a strength-gated weapon you keep wearing after a respec) it is
-  // intentionally exempt from the stat gate: pieces stay worn even if your attributes
-  // later dipped below their requirement.
+  // event, so it is intentionally exempt from the equip BLOCK: pieces stay worn even
+  // if your attributes have since dipped below their requirement. Any such piece
+  // simply renders red and is ignored (see activeSlots) until you re-qualify, rather
+  // than being stowed.
   equipped = gearSets[activeGearSet];
   sfx('equip');
   // Worn gear feeds max HP/MP and the on-sprite look, so recompute & re-skin
@@ -16311,19 +16461,16 @@ function quickEquip(i) {
   if (!item) return;
   const slot = item.slot;
   if (!slot) { log(`${logItem(item)} can't be equipped.`); return; }
-  // Weapons are open to every class now — but each demands a minimum attribute (a
-  // Greatsword wants Might, a Rapier Agility, a Staff Spirit). Invest it first.
-  if (slot === 'weapon') {
-    const reason = attrReqError(item);
-    if (reason) { sfx('denied'); log(`🔒 ${reason}`); return; }
-  }
-  // Off-hands must pair with your main-hand weapon (a quiver needs a bow, a parry
-  // dagger a one-handed melee weapon, a shield/focus a free hand) AND meet their own
-  // stat gate (shields want Vitality, caster off-hands Spirit, quivers Agility).
+  // Off-hands must also pair with your main-hand weapon (a quiver needs a bow, a
+  // parry dagger a one-handed melee weapon, a shield/focus a free hand).
   if (slot === 'offhand') {
-    const reason = offhandEquipError(item, equipped.weapon) || attrReqError(item);
-    if (reason) { sfx('denied'); log(`🔒 ${reason}`); return; }
+    const pair = offhandEquipError(item, equipped.weapon);
+    if (pair) { sfx('denied'); log(`🔒 ${pair}`); return; }
   }
+  // EVERY gear slot demands a minimum attribute now (a Greatsword wants Might, a
+  // Robe Spirit, a heavy Chestplate Vitality). Invest it before you can equip.
+  const reqReason = attrReqError(item);
+  if (reqReason) { sfx('denied'); log(`🔒 ${reqReason}`); return; }
   // Equipping a new weapon may leave the current off-hand incompatible (a two-hander
   // takes the hand, a non-bow strands a quiver, a wand strands a parry dagger) —
   // stow the off-hand back into the bag rather than silently dropping its stats.
