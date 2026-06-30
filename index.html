@@ -1185,6 +1185,19 @@
   .pd-bottom .pd-cell { flex: 0 0 calc((100% - 16px) / 3); }
   .pd-hint { grid-column: 1 / -1; margin-top: 8px; font-size: 10px; color: #555; text-align: center; }
 
+  /* ── GEAR-SET SWITCH ── two-loadout toggle above the paper doll. */
+  .gearset-bar { display: flex; gap: 8px; padding: 2px 4px 0; }
+  .gearset-btn {
+    flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
+    padding: 6px 4px; border: 1px solid var(--border); border-radius: 5px;
+    background: rgba(8,8,12,0.5); color: #8a8475; cursor: pointer;
+    font-size: 11px; letter-spacing: 0.5px;
+  }
+  .gearset-btn .gs-name { font-weight: bold; }
+  .gearset-btn .gs-meta { font-size: 9px; color: #6a6456; }
+  .gearset-btn.active { border-color: var(--gold); background: #241d10; color: var(--gold); }
+  .gearset-btn.active .gs-meta { color: #c9b079; }
+
   /* ── LOG ── */
   /* ── BOTTOM ROW: log (left) + dpad (right) ── */
   #bottom-row {
@@ -5648,7 +5661,16 @@ let inventory = [];
 // is only reachable from the Vault in town. `ts` is the last-write time, used to
 // pick the newest copy when syncing.
 let stash = { gold: 0, items: [], ts: 0 };
-let equipped = { head: null, chest: null, hands: null, legs: null, weapon: null, offhand: null, ring: null, amulet: null };
+// ── GEAR SETS ── You keep TWO independent equipment loadouts and toggle between
+// them (Set 1 / Set 2). `equipped` always points at the ACTIVE set, so every
+// read/write of equipped[slot] elsewhere keeps working untouched — only the
+// toggle and save/load are aware there are two. The inactive set's items stay
+// parked in its own slots (never the bag), so switching re-equips a whole
+// loadout in one tap.
+function emptyGearSet() { return { head: null, chest: null, hands: null, legs: null, weapon: null, offhand: null, ring: null, amulet: null }; }
+let gearSets = [emptyGearSet(), emptyGearSet()];
+let activeGearSet = 0;
+let equipped = gearSets[activeGearSet];
 let groundItems = []; // chests on the floor: { x, y } — loot is rolled when opened
 // Death drop: when you fall, your whole bag is left as a recoverable grave on the
 // floor where you died. `graveSite` is the persistent record { floor, items, gold };
@@ -5831,6 +5853,7 @@ window.gameState = function gameState(radius) {
       townView: inTown ? townView : null,
       pointsToSpend: { attribute: player.attrPoints || 0, skill: player.skillPoints || 0 },
       gold: player.gold,
+      activeGearSet: (activeGearSet || 0) + 1,  // 1 or 2 — which loadout is worn
       equipped: Object.fromEntries(Object.entries(equipped || {}).map(([slot, it]) => [slot, brief(it)])),
       inventory: (inventory || []).map((it, i) => Object.assign({ i }, brief(it))),
       shop: (merchant && merchant.stock) ? merchant.stock.map((row, i) => {
@@ -6564,6 +6587,7 @@ document.addEventListener('click', (e) => {
 
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
+  { date: '2026-06-29', size: 'medium', v: 'Two gear sets', by: 'Claude', notes: ['You now keep two independent equipment loadouts and switch between them in one tap. The GEAR tab has a Set 1 / Set 2 switch above the paper doll showing each set\'s worn count and power; the lit one is what you\'re wearing.', 'Tap the other set (or press G anywhere) to instantly swap your whole loadout — handy for keeping a damage set and a defensive or utility set ready. Gear parked in the set you\'re not wearing stays on that set rather than cluttering your bag, and both sets are saved with your character.'] },
   { date: '2026-06-29', size: 'small', v: 'Floor 1 portal fix', by: 'Claude', notes: ['Stepping onto the gate on the first floor of a difficulty now actually returns you to town again. It was silently doing nothing; the TOWN button still worked, but walking into the portal didn\'t.'] },
   { date: '2026-06-29', size: 'big', v: 'Rating-based combat overhaul', by: 'Claude', notes: ['Chances no longer use flat caps. Crit, dodge, hit, block and damage reduction are now Path-of-Exile-style RATINGS — integer stats you build from attributes and gear — and the actual % is your rating measured against the enemy you\'re facing: chance = rating / (rating + opposition). It can approach 100% but never reach it, so absurd numbers are mechanically impossible rather than clamped.', 'Opposition grows with depth, so a rating that gives big % on floor 5 gives much less on floor 50 — you have to keep investing to stay sharp, and there\'s no maxing a stat once and coasting. In true endgame you can still stack a stat very high; it\'s just never trivial or absolute.', 'Combat is now two-sided: enemies have Accuracy (which eats your dodge) and Evasion (so your weapon attacks can MISS). You have an Accuracy rating too — Agility and the new ACC gear affix raise it. Most attacks still land, but "Accurate" foes punch through evasion and slippery "Evasive" foes need real Accuracy to hit. (Spells never miss.)', 'Agility now drives both Evasion and Accuracy; Luck drives Crit; gear CRIT/SPD/DODGE/BLOCK/DR read as ratings (shown as flat numbers, with the live % on the HERO sheet vs your current floor). Crit damage is uncapped again — it\'s a magnitude, not a chance.', 'Health and mana stay finite (from the prior pass): slower HP/MP regen, level-ups mend ~40% instead of a full refill, smaller potions, and burst-heals capped per use.'] },
   { date: '2026-06-29', size: 'medium', v: 'Every action costs a turn', by: 'Claude', notes: ['Anything you do on a floor now passes a turn, so the world keeps moving even when you can’t. Bumping a wall, the map edge, deep water, a locked door or sealed stairs all tick the clock just like the Wait button.', 'Walking into a boss’s wall of force now passes a turn too, so the barriers pinning you in crumble on their own — no more mashing the Wait button to escape the Rat King’s cage.', 'Being stunned no longer freezes the dungeon: a wasted action still lets foes act while the stun wears off. Drinking from a fountain, touching a shrine and cracking open a chest underfoot are all turns as well.'] },
@@ -15574,9 +15598,45 @@ function renderPaperdoll() {
     renderDollSlot('weapon'), renderDollSlot('chest'), renderDollSlot('offhand'),
   ].join('');
   const bottom = `<div class="pd-bottom">${renderDollSlot('hands')}${renderDollSlot('legs')}</div>`;
-  return `<div class="paperdoll">${bodyHTML}${cells}${bottom}
+  return gearSetBarHTML() + `<div class="paperdoll">${bodyHTML}${cells}${bottom}
     <div class="pd-hint">Tap a slot for details · ✕ to unequip · EQUIP loot from the LOOT tab</div>
+    <div class="pd-hint">Two loadouts — switch sets above or press G</div>
   </div>`;
+}
+
+// ── GEAR-SET SWITCH ── the Set 1 / Set 2 toggle that sits above the paper doll.
+function gearSetPower(set) { return SLOT_KEYS.reduce((s, k) => s + (set[k] ? itemPower(set[k]) : 0), 0); }
+function gearSetCount(set) { return SLOT_KEYS.reduce((n, k) => n + (set[k] ? 1 : 0), 0); }
+// The active set is lit gold; tapping the other one swaps your whole loadout.
+function gearSetBarHTML() {
+  return `<div class="gearset-bar">${[0, 1].map(i => {
+    const set = gearSets[i];
+    const n = gearSetCount(set);
+    const meta = n ? `${n} worn · ⚡${gearSetPower(set)}` : 'empty';
+    return `<button class="gearset-btn${i === activeGearSet ? ' active' : ''}" onclick="toggleGearSet(${i})">
+      <span class="gs-name">Set ${i + 1}</span><span class="gs-meta">${meta}</span>
+    </button>`;
+  }).join('')}</div>`;
+}
+// Swap which loadout is worn. Called with no/invalid index from the G hotkey to
+// flip to the other set; with 0/1 from the on-screen buttons to pick one.
+function toggleGearSet(idx) {
+  const target = (idx === 0 || idx === 1) ? idx : (activeGearSet === 0 ? 1 : 0);
+  hideTooltip();
+  if (target === activeGearSet) return;
+  activeGearSet = target;
+  equipped = gearSets[activeGearSet];
+  sfx('equip');
+  // Worn gear feeds max HP/MP and the on-sprite look, so recompute & re-skin
+  // (and clamp current HP/MP) exactly like equipping a single piece does.
+  recomputeMaxStats();
+  if (player.hp > player.maxHp) player.hp = player.maxHp;
+  if (player.mp > player.maxMp) player.mp = player.maxMp;
+  log(`Switched to Gear Set ${activeGearSet + 1}.`, 'loot');
+  updateBars();
+  renderPanel();
+  draw();          // re-skin the sprite with the newly worn set
+  saveGame();
 }
 
 // One-tap equip: route an item straight to its own slot.
@@ -16131,6 +16191,7 @@ document.addEventListener('keydown', e => {
   }
   if (e.key==='t'||e.key==='T'||e.key==='0') enterTown();   // 0 mirrors the skill-bar TOWN button
   if (e.key==='b'||e.key==='B'||e.key==='i'||e.key==='I') togglePanel();
+  if (e.key==='g'||e.key==='G') toggleGearSet();             // swap between gear set 1 and 2
 });
 
 // ══════════════════════════════════════════
@@ -16292,7 +16353,9 @@ function saveGame() {
     const data = {
       // The stash is shared across every slot, so it is NOT part of a character's
       // save — it's persisted separately by saveStash() under STASH_KEY.
-      player, inventory, equipped, dungeonLevel, buffs, pact,
+      // `equipped` is still written (it's the active set) for forward-compat; the
+      // two-loadout state lives in gearSets + activeGearSet.
+      player, inventory, equipped, gearSets, activeGearSet, dungeonLevel, buffs, pact,
       inTown, dungeonReturn, graveSite,
       ts: Date.now(),
     };
@@ -16411,19 +16474,25 @@ function loadGame() {
     // The town stash is shared across every save slot, so it is NOT restored from
     // this character's save. loadStash() (called once at boot) loads it from its
     // own key and folds any per-character stashes from older saves into the pool.
-    // Rebuild equipped into the new 7-slot shape; salvage any still-valid pieces into the bag.
-    // Off-hand is additive: old saves simply have no off-hand, so it defaults null
-    // and the salvage loop below routes any unknown-slot gear safely to the bag.
-    const freshEquipped = { head:null, chest:null, hands:null, legs:null, weapon:null, offhand:null, ring:null, amulet:null };
-    const old = data.equipped || {};
-    Object.values(old).forEach(it => {
-      if (it && it.slot && freshEquipped.hasOwnProperty(it.slot) && !freshEquipped[it.slot]) {
-        freshEquipped[it.slot] = it;
-      } else if (it && it.slot) {
-        inventory.push(it);
-      }
-    });
-    equipped = freshEquipped;
+    // Rebuild each gear set into the canonical 8-slot shape; salvage any extra or
+    // unknown-slot pieces into the bag. Off-hand is additive: old saves simply have
+    // no off-hand, so it defaults null and the salvage loop routes it safely.
+    const rebuildSet = (raw) => {
+      const set = emptyGearSet();
+      Object.values(raw || {}).forEach(it => {
+        if (it && it.slot && set.hasOwnProperty(it.slot) && !set[it.slot]) set[it.slot] = it;
+        else if (it && it.slot) inventory.push(it);
+      });
+      return set;
+    };
+    // New saves carry both loadouts in gearSets; older saves only have `equipped`,
+    // which becomes Set 1 with an empty Set 2 alongside it.
+    const rawSets = (Array.isArray(data.gearSets) && data.gearSets.length)
+      ? [data.gearSets[0], data.gearSets[1]]
+      : [data.equipped || {}, null];
+    gearSets = [rebuildSet(rawSets[0]), rebuildSet(rawSets[1])];
+    activeGearSet = (data.activeGearSet === 1) ? 1 : 0;
+    equipped = gearSets[activeGearSet];
     // Migrate saves that predate cosmetics: ensure the shape exists, then seed the
     // wardrobe from whatever gear the player is already carrying or wearing.
     if (!player.cosmetics) player.cosmetics = { head:null, chest:null, weapon:null };
@@ -16432,12 +16501,14 @@ function loadGame() {
     // Migrate icons from the old emoji system to vector-icon keys: re-stamp gear,
     // rebuild each saved wardrobe look from its name (deduping by key), and convert
     // any chosen cosmetic. Gear without a recognised key heals on next access.
+    // Worn items from BOTH gear sets get the same migrations as the bag.
+    const wornItems = gearSets.flatMap(s => Object.values(s)).filter(it => it && it.slot);
     inventory.forEach(it => { if (it.slot) it.icon = itemIcon(it); });
-    Object.values(equipped).forEach(it => { if (it && it.slot) it.icon = itemIcon(it); });
+    wornItems.forEach(it => { it.icon = itemIcon(it); });
     // Older items predate attribute affixes — give them an empty attrs block so
     // the affix/enchant code can treat every item uniformly.
     inventory.forEach(it => { if (it && !it.attrs) it.attrs = {}; });
-    Object.values(equipped).forEach(it => { if (it && !it.attrs) it.attrs = {}; });
+    wornItems.forEach(it => { if (!it.attrs) it.attrs = {}; });
     for (const slot of VISUAL_SLOTS) {
       const seen = new Set();
       player.wardrobe[slot] = (player.wardrobe[slot] || [])
@@ -16447,7 +16518,7 @@ function loadGame() {
       if (cur && !ICON_PATHS[cur]) player.cosmetics[slot] = LEGACY_EMOJI_KEYS[cur] || null;
     }
     inventory.forEach(recordWardrobe);
-    Object.values(equipped).forEach(recordWardrobe);
+    wornItems.forEach(recordWardrobe);
     dungeonLevel = data.dungeonLevel || 1;
     // Restore shrine buffs, tolerating older saves that predate them.
     buffs = Object.assign({ power: 0, guard: 0, fortune: 0 }, data.buffs || {});
