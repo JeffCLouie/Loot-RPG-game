@@ -841,6 +841,21 @@
     50%     { box-shadow: 0 0 14px rgba(255,215,110,0.9); border-color: #ffe39a; }
   }
   .skillbar-btn.disabled { background: #211c2a; border-color: #33304a; color: #6a647a; }
+  /* League-style cooldown dial: a faint grey radial sweep that covers the
+     still-recharging fraction and clears as the skill readies, with a live
+     countdown (whole seconds, then one decimal under 1s) centred on top. The
+     --cd-frac CSS var (1→0) is driven each frame by updateCooldownDials(). */
+  .skillbar-btn .sb-cd {
+    position: absolute; inset: 0; border-radius: inherit; z-index: 3;
+    display: none; align-items: center; justify-content: center;
+    font-family: 'Courier New', monospace; font-weight: bold; font-size: 13px;
+    color: #f2f2f8; text-shadow: 0 1px 2px #000, 0 0 5px #000;
+    background: conic-gradient(rgba(38,38,50,0.62) calc(var(--cd-frac,0) * 360deg), rgba(0,0,0,0.16) 0);
+    pointer-events: none;
+  }
+  .skillbar-btn.cooling .sb-cd { display: flex; }
+  .skillbar-btn.cooling .sb-info { visibility: hidden; }
+  .skillbar-btn.cooling.ready { animation: none; }
   /* Potion skills pinned to the far left of the bar — red Health flask, blue Mana flask. */
   .skillbar-btn.potion { border-color: #a03048; background: #6a1a2a; color: #ffd5dd; }
   .skillbar-btn.potion .sb-key { color: #ffb3c0; }
@@ -5868,7 +5883,10 @@ function toggleSkillHidden(id) {
   renderPanel(); renderSkillBar(); saveGame();
 }
 function skillCd(id) { return (player.skillCds && player.skillCds[id]) || 0; }
-function setSkillCd(id, v) { if (!player.skillCds) player.skillCds = {}; player.skillCds[id] = v; }
+// Remembers each skill's full cooldown (seconds) at cast time, so the cooldown
+// dial can draw remaining/total as a sweep. In-memory only (cosmetic).
+let skillCdMax = {};
+function setSkillCd(id, v) { if (!player.skillCds) player.skillCds = {}; player.skillCds[id] = v; if (v > 0) skillCdMax[id] = v; }
 // Buy / rank up a skill node, spending one skill point.
 function buySkill(id) {
   const node = skillNode(id);
@@ -17062,11 +17080,12 @@ function renderSkillBar() {
   const manaHint = touchUI() ? 'tap to drink' : 'press 2';
   const healTip = `<div class='ht-name' style='color:var(--hp)'>❤️ Health Potion</div><div class='ht-line'>Quaff to restore a burst of health.</div><div class='ht-sub'>${healHint} · ${POTION_CD}-second cooldown</div>`;
   const manaTip = `<div class='ht-name' style='color:var(--mp)'>🔷 Mana Potion</div><div class='ht-line'>Quaff to restore a burst of mana.</div><div class='ht-sub'>${manaHint} · ${POTION_CD}-second cooldown</div>`;
-  const healBtn = `<button class="skillbar-btn potion ${potReady && !hpFull ? 'ready' : 'empty'} ${urgent ? 'urgent' : ''}" ${hoverTip(healTip)} onclick="useHealthPotion()">
-      <span class="sb-key">1</span><span class="sb-icon">${HEAL_POTION_SVG}</span><span class="sb-info" id="heal-label">${pcd > 0 ? Math.ceil(pcd) + 's' : ''}</span>
+  const cdDial = (key) => `<span class="sb-cd" data-cd="${key}"></span>`;
+  const healBtn = `<button class="skillbar-btn potion ${potReady && !hpFull ? 'ready' : 'empty'} ${urgent ? 'urgent' : ''} ${pcd > 0 ? 'cooling' : ''}" ${hoverTip(healTip)} onclick="useHealthPotion()">
+      <span class="sb-key">1</span><span class="sb-icon">${HEAL_POTION_SVG}</span><span class="sb-info" id="heal-label">${pcd > 0 ? Math.ceil(pcd) + 's' : ''}</span>${cdDial('pot')}
     </button>`;
-  const manaBtn = `<button class="skillbar-btn potion mana ${potReady && !mpFull ? 'ready' : 'empty'}" ${hoverTip(manaTip)} onclick="useManaPotion()">
-      <span class="sb-key">2</span><span class="sb-icon">${MANA_POTION_SVG}</span><span class="sb-info">${pcd > 0 ? Math.ceil(pcd) + 's' : ''}</span>
+  const manaBtn = `<button class="skillbar-btn potion mana ${potReady && !mpFull ? 'ready' : 'empty'} ${pcd > 0 ? 'cooling' : ''}" ${hoverTip(manaTip)} onclick="useManaPotion()">
+      <span class="sb-key">2</span><span class="sb-icon">${MANA_POTION_SVG}</span><span class="sb-info">${pcd > 0 ? Math.ceil(pcd) + 's' : ''}</span>${cdDial('pot')}
     </button>`;
   let num = 0;
   const skillsHtml = skills.map((s) => {
@@ -17081,8 +17100,8 @@ function renderSkillBar() {
     // Desktop names the number/R key; touch (no keyboard, reached by long-press) says "tap to cast".
     const castHint = touchUI() ? ' · tap to cast' : (keyHint ? ` · press ${keyHint}` : '');
     const tip = `<div class='ht-name' style='color:#e6c34a'>${dlIcon(s.icon,16)||''} ${s.name}</div><div class='ht-line'>${s.desc}</div><div class='ht-sub'>${s.mp} MP · ${s.cd}s cooldown${castHint}</div>`;
-    return `<button class="skillbar-btn ${idx === 1 ? 'baseline ' : ''}${ready ? 'ready' : 'disabled'}" ${hoverTip(tip)} onclick="castSkillById('${s.id}')">
-      <span class="sb-key">${key}</span><span class="sb-icon">${dlIcon(s.icon,24)||''}</span><span class="sb-info">${cd > 0 ? Math.ceil(cd) + 's' : s.mp + 'MP'}</span>
+    return `<button class="skillbar-btn ${idx === 1 ? 'baseline ' : ''}${ready ? 'ready' : 'disabled'} ${cd > 0 ? 'cooling' : ''}" ${hoverTip(tip)} onclick="castSkillById('${s.id}')">
+      <span class="sb-key">${key}</span><span class="sb-icon">${dlIcon(s.icon,24)||''}</span><span class="sb-info">${cd > 0 ? Math.ceil(cd) + 's' : s.mp + 'MP'}</span>${cdDial('sk:' + s.id)}
     </button>`;
   }).join('');
   // Desktop only: a TOWN button on the far left of the bar (the header's TOWN
@@ -19780,6 +19799,31 @@ function tickCooldowns(dt) {
   }
 }
 
+// Drive the live cooldown dials each frame: sweep the grey overlay from full to
+// empty and show the countdown (whole seconds, then one decimal under 1s). When
+// a skill/potion finishes recharging, refresh the bar so it reads as ready.
+function updateCooldownDials() {
+  const bar = document.getElementById('skill-bar');
+  if (!bar) return;
+  let finished = false;
+  const dials = bar.querySelectorAll('.sb-cd');
+  for (let i = 0; i < dials.length; i++) {
+    const el = dials[i], btn = el.parentNode, id = el.getAttribute('data-cd');
+    let rem = 0, total = 1;
+    if (id === 'pot') { rem = player.potionCd || 0; total = POTION_CD; }
+    else if (id && id.indexOf('sk:') === 0) { const sid = id.slice(3); rem = skillCd(sid); total = skillCdMax[sid] || rem || 1; }
+    if (rem > 0.05) {
+      if (!btn.classList.contains('cooling')) btn.classList.add('cooling');
+      const frac = total > 0 ? Math.max(0, Math.min(1, rem / total)) : 0;
+      el.style.setProperty('--cd-frac', frac.toFixed(3));
+      el.textContent = rem >= 1 ? String(Math.ceil(rem)) : rem.toFixed(1);
+    } else if (btn.classList.contains('cooling')) {
+      finished = true; // came off cooldown — rebuild so it reads as ready
+    }
+  }
+  if (finished) renderSkillBar();
+}
+
 // Slide every enemy sprite toward its logic cell each frame so cell-to-cell steps
 // read as smooth motion. Big displacements (knockback, blink, a 2-tile dash) snap
 // rather than drift through walls. Lazy-inits fx/fy for foes spawned mid-floor.
@@ -19866,6 +19910,7 @@ function gameLoop(ts) {
   }
   updateActorRender(dt);
   renderStaminaBar();              // stamina drains/refills continuously — keep the END bar live
+  updateCooldownDials();           // animate the skill/potion cooldown dials in real time
   updateHaloVignette();            // the danger halo is a DOM overlay — pulse it every frame
   draw();
 }
