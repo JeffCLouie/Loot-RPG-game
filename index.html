@@ -358,6 +358,11 @@
   .death-title { color: #ff4452; font-size: 26px; font-weight: bold; letter-spacing: 3px; text-shadow: 0 0 12px rgba(255,60,80,0.7); margin-bottom: 8px; }
   .death-sub { font-size: 12.5px; color: #f3dcde; line-height: 1.45; margin-bottom: 14px; }
   .death-sub b { color: #ffd24b; }
+  #death-cause { margin: -4px 0 14px; }
+  .dc-head { font-size: 13px; color: #ff8a93; font-weight: bold; margin-bottom: 6px; }
+  .dc-head b { color: #ffd24b; }
+  .dc-list { display: flex; flex-direction: column; gap: 3px; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,80,90,0.25); border-radius: 7px; padding: 7px 9px; }
+  .dc-row { font-size: 11px; color: #e7c9cc; text-align: left; }
   #death-penalties { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
   .death-pen { font-size: 12px; color: #f0d8da; }
   .death-btn { background: #b3303a; border: 1px solid #ff6472; color: #fff; font-family: 'Courier New', monospace; font-size: 13px; letter-spacing: 1px; padding: 9px 22px; border-radius: 8px; cursor: pointer; }
@@ -1415,6 +1420,7 @@
   /* ── BOTTOM ROW: log (left) + dpad (right) ── */
   #bottom-row {
     display: flex;
+    flex-direction: column;
     align-items: stretch;
     border-top: 1px solid var(--border);
     flex: 0 0 130px;
@@ -1422,6 +1428,24 @@
     max-height: 28vh;
     overflow: hidden;
   }
+  /* Collapsed: only the toggle bar shows, freeing the screen for the map. */
+  #bottom-row.log-collapsed {
+    flex: 0 0 auto;
+    min-height: 0;
+    max-height: none;
+  }
+  #log-toggle {
+    display: flex; align-items: center; gap: 6px;
+    width: 100%; flex: 0 0 auto;
+    background: #14141c; color: #8a8a9a;
+    border: none; border-bottom: 1px solid var(--border);
+    font-family: inherit; font-size: 10px; letter-spacing: 1px; text-transform: uppercase;
+    padding: 4px 8px; cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  #log-toggle .log-caret { transition: transform 0.15s; font-size: 9px; }
+  #bottom-row.log-collapsed #log-toggle { border-bottom: none; }
+  #bottom-row.log-collapsed #log-toggle .log-caret { transform: rotate(-90deg); }
+  #bottom-row.log-collapsed #log { display: none; }
 
   #log {
     background: var(--panel);
@@ -2685,6 +2709,9 @@
          before any active is learned. -->
     <div id="skill-bar" style="display:none"></div>
     <div id="bottom-row">
+      <button id="log-toggle" onclick="toggleLog()" aria-label="Toggle combat log">
+        <span class="log-caret">▾</span><span>Log</span>
+      </button>
       <div id="log"></div>
     </div>
     <div id="control-bar">
@@ -2819,6 +2846,7 @@
     <div id="death-card">
       <div class="death-title">💀 YOU DIED</div>
       <div class="death-sub">You fell in the dungeon and woke up back in <b>Town</b>.</div>
+      <div id="death-cause"></div>
       <div id="death-penalties"></div>
       <button class="death-btn" onclick="closeDeath()">Wake up in Town →</button>
     </div>
@@ -8542,6 +8570,7 @@ function updateProjectiles(dt) {
     if (Math.hypot(p.x - player.fx, p.y - player.fy) < PLAYER_R + 0.18) {
       const dmg = applyIncomingMods(absorbWithMana(mitigateDamage(p.dmg, dungeonLevel)), {});
       player.hp = Math.max(0, player.hp - dmg);
+      notePlayerDamage(dmg, 'arrow trap');
       sfx('hurt'); spawnFloatingText(player.x, player.y, `${dmg}`, p.color);
       spawnParticles(player.x, player.y, p.color, 6, 0.08); addShake(3);
       p.life = 0;
@@ -8572,6 +8601,7 @@ function updateTraps(dt) {
         if (tr.dmgCd <= 0) {
           const dmg = Math.max(1, mitigateDamage(tr.dmg, dungeonLevel));
           player.hp = Math.max(1, player.hp - dmg);   // vents singe but never kill outright (like lava)
+          notePlayerDamage(dmg, 'fire vent');
           spawnFloatingText(player.x, player.y, `${dmg}`, '#ff7733');
           spawnParticles(player.x, player.y, '#ff7733', 5, 0.09);
           tr.dmgCd = 0.5; updateBars();
@@ -13627,6 +13657,7 @@ function tickStatusEffects() {
       if (s.effect === 'poison') {
         const dmg = 2 + dungeonLevel;
         player.hp = Math.max(1, player.hp - dmg);
+        notePlayerDamage(dmg, 'poison');
         spawnFloatingText(player.x, player.y, `${dmg}`, '#44dd44');
         log(`🧪 Poison deals ${dmg} damage!`);
         updateBars();
@@ -13634,6 +13665,7 @@ function tickStatusEffects() {
       if (s.effect === 'burn') {
         const dmg = 4 + Math.round(dungeonLevel * 1.5);
         player.hp = Math.max(1, player.hp - dmg);
+        notePlayerDamage(dmg, 'burning');
         spawnFloatingText(player.x, player.y, `${dmg}`, '#ff8a3a');
         log(`🔥 Burning deals ${dmg} damage!`);
         updateBars();
@@ -13649,7 +13681,7 @@ function tickStatusEffects() {
         e.hp -= dmg;
         spawnFloatingText(e.x, e.y, `${dmg}`, '#ff8a3a');
         log(`🔥 Burning deals ${dmg} to ${e.isBoss ? e.name : e.type}!`);
-        if (e.hp <= 0) { log(`${e.isBoss ? e.name : e.type} burned to ash!`, 'important'); onEnemyDefeated(e); }
+        if (e.hp <= 0) { log(`🔥 ${e.isBoss ? e.name : e.type} burned`, 'important'); onEnemyDefeated(e); }
         // A directly-cast fire-mage burn ignites adjacent foes (weak, non-chaining).
         else if (!s.spread && s.source === 'player' && player.class === 'mage') burnSpreaders.push(e);
       }
@@ -14320,6 +14352,7 @@ function onEnterCell(nx, ny) {
   if (tile === 7) {
     const burn = Math.round(4 + dungeonLevel * 1.5 + player.maxHp * 0.05);
     player.hp = Math.max(1, player.hp - burn);
+    notePlayerDamage(burn, 'lava');
     spawnFloatingText(player.x, player.y, `${burn}`, '#ff7733');
     log(`🔥 The lava scorches you for ${burn}!`, 'important');
     updateBars();
@@ -14327,6 +14360,7 @@ function onEnterCell(nx, ny) {
   if (tile === 8) {
     const stab = Math.round(3 + dungeonLevel + player.maxHp * 0.03);
     player.hp = Math.max(1, player.hp - stab);
+    notePlayerDamage(stab, 'spikes');
     spawnFloatingText(player.x, player.y, `${stab}`, '#ff3344');
     log(`🩸 Spikes stab you for ${stab}!`);
     updateBars();
@@ -14674,7 +14708,7 @@ function onEnemyDefeated(e) {
   const gold = Math.round((rnd(2, 8) + dungeonLevel * 3) * goldMult * (floorMod.goldMult || 1) * pfx('gold', 1) * (1 + (totalStat('GOLDFIND') + skillBonus('goldFind')) / 100 + foodFx('goldPct')));
   player.gold += gold;
   spawnFloatingText(e.x + 0.35, e.y, `+${gold}g`, '#ffd24b');
-  log(`${label} defeated! +${xp} XP, +${gold}g`, 'important');
+  log(`☠ ${label} +${xp}xp +${gold}g`, 'important');
   sfx(e.isBoss ? 'bosskill' : 'kill');
   if (e.isBoss) screenFlash('#ff3344');
   // Life/Mana on Kill (gear): a flat top-up every time a foe falls.
@@ -14712,32 +14746,32 @@ function onEnemyDefeated(e) {
     for (let p = 0; p < picks; p++) {
       if (Math.random() >= noDrop) {                       // this pick yields an item
         const it = generateItem(qbonus, dlvl);
-        if (acquireLoot(it) === 'keep') log(`${e.isBoss ? '🎁' : '🧰'} ${label} dropped ${logItem(it)}`, 'loot');
+        if (acquireLoot(it) === 'keep') log(`${e.isBoss ? '🎁' : '🧰'} ${logItem(it)}`, 'loot');
         dropped++;
       }
     }
     // Elites and bosses never leave you empty-handed (D2's guaranteed pick).
     if (dropped === 0 && (e.isBoss || e.isElite)) {
       const it = generateItem(qbonus, dlvl);
-      if (acquireLoot(it) === 'keep') log(`${e.isBoss ? '🎁' : '🧰'} ${label} dropped ${logItem(it)}`, 'loot');
+      if (acquireLoot(it) === 'keep') log(`${e.isBoss ? '🎁' : '🧰'} ${logItem(it)}`, 'loot');
       dropped++;
     }
     if (dropped > 0) sfx('loot');
-    if (dropped > 1) log(`✨ ${label} spilled ${dropped} pieces of loot!`, 'important');
+    if (dropped > 1) log(`✨ ${dropped} drops`, 'important');
   }
   if (Math.random() < 0.20 * lootMult && player.hp < player.maxHp) {
     const orb = Math.min(player.maxHp - player.hp, Math.floor(player.maxHp * 0.12));
     if (orb > 0) {
       player.hp += orb;
       spawnFloatingText(e.x, e.y, `+${orb}`, '#44dd44');
-      log(`❤️ ${label} dropped a healing essence — +${orb} HP!`, 'loot');
+      log(`❤️ +${orb} HP`, 'loot');
       updateBars();
     }
   }
   if (Math.random() < 0.06) {
     const f = pick(FOODS);
     groundFood.push({ x: e.x, y: e.y, ...f });
-    log(`${f.emoji} ${label} dropped ${f.name}!`, 'loot');
+    log(`${f.emoji} ${f.name}`, 'loot');
   }
   // Enchanter. Scrap is common, Glimmer uncommon, Core rare, Chaos Orb very rare.
   // The rarer materials are gated behind difficulty (Glimmer needs Hardened, Core
@@ -14845,21 +14879,19 @@ function attackEnemy(e, opts = {}) {
   if (style === 'flurry') {
     // Dagger: two quick lighter strikes, extra crit rolled per hit.
     sfx('attack'); swing(e, 0.62); swing(e, 0.62);
-    if (dealtTotal > 0) log(`🔪 ${HERO} knifes ${label} twice for ${dealtTotal}${anyCrit ? '!' : ''}`, anyCrit ? 'important' : '');
-    else log(`🌬️ ${HERO} slashes at ${label} but finds only air!`);
+    if (dealtTotal > 0) log(`${anyCrit ? '💥 ' : ''}🔪 ${label} -${dealtTotal}`, anyCrit ? 'important' : '');
+    else log(`🌬️ ${label} dodged`);
   } else {
     sfx('attack');
     swing(e);
-    const verb = style === 'shot' ? '🏹 shoots' : style === 'bolt' ? '🔮 blasts'
-      : style === 'thrust' ? '🔱 skewers' : style === 'cleave' ? '🪓 hews'
-      : style === 'reap' ? '⚔️ reaps' : style === 'crush' ? '🔨 smashes' : 'hits';
+    const vi = style === 'shot' ? '🏹' : style === 'bolt' ? '🔮'
+      : style === 'thrust' ? '🔱' : style === 'cleave' ? '🪓'
+      : style === 'reap' ? '⚔️' : style === 'crush' ? '🔨' : '⚔️';
     if (dealtTotal > 0) {
       if (anyCrit) sfx('crit');
-      log(anyCrit ? `💥 CRITICAL! ${HERO} ${verb} ${label} for ${dealtTotal}!`
-                  : `${HERO} ${verb} ${label} for ${dealtTotal}!`, anyCrit ? 'important' : '');
+      log(`${anyCrit ? '💥 ' : ''}${vi} ${label} -${dealtTotal}`, anyCrit ? 'important' : '');
     } else {
-      const dodgeVerb = style === 'shot' ? 'shot goes wide' : style === 'bolt' ? 'bolt fizzles past' : 'blow whiffs';
-      log(`🌬️ ${HERO}'s ${dodgeVerb} — ${label} avoids it!`);
+      log(`🌬️ ${label} dodged`);
     }
   }
 
@@ -14879,7 +14911,7 @@ function attackEnemy(e, opts = {}) {
     swing(e);
     if (dealtTotal > before) {
       spawnFloatingText(e.x, e.y - 0.3, `2×${dealtTotal - before}`, '#ffd24b');
-      log(`⚡ ${HERO} strikes again for ${dealtTotal - before}!`, 'important');
+      log(`⚡ again +${dealtTotal - before}`, 'important');
     }
   }
 
@@ -14912,7 +14944,7 @@ function attackEnemy(e, opts = {}) {
     const stunPwr = totalStat('STUNPWR');
     if (Math.random() < 0.5 + stunPwr / 100) {
       applyStatusEffect(e, 'stun', stunPwr >= 15 ? 2 : 1, 'player');
-      log(`🔨 ${label} is stunned by the blow!`, 'important');
+      log(`🔨 ${label} stunned`, 'important');
     }
   }
 
@@ -15375,7 +15407,7 @@ function resolveCast(node, rank) {
     if (best) { setPlayerCell(best.x, best.y); spawnFloatingText(player.x, player.y, '', '#cfe0ff'); }
   }
 
-  log(`${HERO} casts ${node.name}${total > 0 ? ` for ${total}` : ''}${targets.length > 1 ? ` across ${targets.length} foes` : ''}!`, 'important');
+  log(`✦ ${node.name}${total > 0 ? ` -${total}` : ''}${targets.length > 1 ? ` ×${targets.length}` : ''}`, 'important');
   return true;
 }
 
@@ -15779,7 +15811,7 @@ function enemyAttackPlayer(e) {
   const beh = BEHAVIORS[e.behavior] || BEHAVIORS.chaser;
   if (rollDodge(e)) {
     spawnFloatingText(player.x, player.y, 'DODGE', '#9fe8ff');
-    log(`💨 ${HERO} dodges ${enemyLabel(e)}!`);
+    log(`💨 dodged ${enemyLabel(e)}`);
     fireSkillTrigger('dodge', { enemy: e }); // on-dodge procs (e.g. prime a crit)
     return;
   }
@@ -15788,10 +15820,11 @@ function enemyAttackPlayer(e) {
   if (buffs.guard) raw = Math.round(raw * 0.6);
   const dmg = applyIncomingMods(absorbWithMana(mitigateDamage(raw, e.level)), e);
   player.hp = Math.max(0, player.hp - dmg);
+  notePlayerDamage(dmg, enemyLabel(e));
   sfx('hurt');
   spawnFloatingText(player.x, player.y, `${dmg}`, '#ff3344');
   if (dmg > 0) { spawnParticles(player.x, player.y, '#d22a3a', 6, 0.07); addShake(4); }
-  log(`${enemyLabel(e)} attacks ${HERO} for ${dmg}!`);
+  log(`💢 ${enemyLabel(e)} -${dmg}`);
   if (player.hp > 0 && player.hp <= player.maxHp * 0.25) fireSkillTrigger('lowhp', { enemy: e });
   if (player.hp <= player.maxHp * 0.25) screenFlash('#cc0000');
   if (e.bossAbility === 'lifesteal') bossLifesteal(e, dmg);
@@ -15825,7 +15858,7 @@ function enemyRangedAttack(e) {
   if (entryGuard) { spawnFloatingText(player.x, player.y, '✦', '#bfe9ff'); return; }
   if (rollDodge(e)) {
     spawnFloatingText(player.x, player.y, 'DODGE', '#9fe8ff');
-    log(`💨 ${HERO} sidesteps ${enemyLabel(e)}'s bolt!`);
+    log(`💨 dodged ${enemyLabel(e)}`);
     fireSkillTrigger('dodge', { enemy: e });
     return;
   }
@@ -15833,6 +15866,7 @@ function enemyRangedAttack(e) {
   if (buffs.guard) raw = Math.round(raw * 0.6);
   const dmg = applyIncomingMods(absorbWithMana(mitigateDamage(raw, e.level)), e);
   player.hp = Math.max(0, player.hp - dmg);
+  notePlayerDamage(dmg, enemyLabel(e) + ' (ranged)');
   sfx(e.isBoss ? 'boss' : 'hurt');
   // Draw the shot so the source is unmistakable: a tracer from foe to hero, a
   // spark burst on impact, and the damage number.
@@ -15840,7 +15874,7 @@ function enemyRangedAttack(e) {
   spawnTracer(e.x, e.y, player.x, player.y, tcol);
   spawnParticles(player.x, player.y, tcol, 6, 0.08);
   spawnFloatingText(player.x, player.y, `${dmg}`, '#c77dff');
-  log(`✨ ${enemyLabel(e)} strikes ${HERO} from afar for ${dmg}!`);
+  log(`🏹 ${enemyLabel(e)} -${dmg}`);
   // Even a non-critical hit from off-screen gets a soft flash so a ranged
   // attacker chipping you from across the room never goes unsignalled.
   if (player.hp > 0 && player.hp <= player.maxHp * 0.25) fireSkillTrigger('lowhp', { enemy: e });
@@ -15895,6 +15929,7 @@ function tickBossHazards() {
   if (fire && fire.dmg > 0) {
     const burn = Math.max(1, mitigateDamage(fire.dmg, dungeonLevel));
     player.hp = Math.max(1, player.hp - burn);
+    notePlayerDamage(burn, 'wall of flame');
     spawnFloatingText(player.x, player.y, `${burn}`, '#ff7733');
     spawnParticles(player.x, player.y, '#ff7733', 5, 0.08);
     log(`🔥 You stand in the flames for ${burn}!`);
@@ -15935,6 +15970,7 @@ function bossBlockFits(e, nx, ny) {
 function bossHitPlayer(raw, e, color) {
   const dmg = Math.max(1, mitigateDamage(raw, e.level));
   player.hp = Math.max(0, player.hp - dmg);
+  notePlayerDamage(dmg, enemyLabel(e) + ' (special)');
   spawnFloatingText(player.x, player.y, `${dmg}`, color || '#ff3344');
   updateBars();
   if (player.hp <= player.maxHp * 0.25) screenFlash('#cc0000');
@@ -16216,6 +16252,34 @@ function lastStandLog() {
   return lines[player.class] || `🔥 ${who} digs deep and refuses to die — a LAST STAND!`;
 }
 
+// ── DEATH CAUSE TRACKING ──
+// A rolling log of what's been hurting the hero, so the death screen can spell out
+// exactly what killed them and what wore them down. Self-prunes to a recent window;
+// the last entry before a lethal blow is the killing hit.
+let dmgTaken = [];
+function notePlayerDamage(amount, label) {
+  if (!(amount > 0) || !label) return;
+  const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+  dmgTaken.push({ label: String(label), amount: Math.round(amount), t: now });
+  const cutoff = now - 25000;            // keep ~25s of history
+  while (dmgTaken.length && dmgTaken[0].t < cutoff) dmgTaken.shift();
+  if (dmgTaken.length > 80) dmgTaken.shift();
+}
+// Build the "how you died" lines from the damage log: the killing blow, then the
+// recent damage tallied by source (biggest first).
+function deathSummaryLines() {
+  if (!dmgTaken.length) return [];
+  const killer = dmgTaken[dmgTaken.length - 1];
+  const totals = {};
+  for (const d of dmgTaken) { const k = totals[d.label] || (totals[d.label] = { amount: 0, hits: 0 }); k.amount += d.amount; k.hits++; }
+  const ranked = Object.keys(totals).map(l => ({ label: l, amount: totals[l].amount, hits: totals[l].hits })).sort((a, b) => b.amount - a.amount);
+  const lines = ['\u2620\ufe0f Killed by <b>' + killer.label + '</b> &mdash; ' + killer.amount + ' dmg'];
+  const top = ranked.slice(0, 4);
+  for (const r of top) lines.push(r.label + ': ' + r.amount + ' over ' + r.hits + ' hit' + (r.hits === 1 ? '' : 's'));
+  if (ranked.length > top.length) lines.push('&hellip;and ' + (ranked.length - top.length) + ' more');
+  return lines;
+}
+
 function handleDeath() {
   resetPortal();   // a killing blow always collapses any half-formed town portal + its timer
   // Last Stand: once per floor, a killing blow leaves you clinging to 1 HP
@@ -16303,6 +16367,7 @@ function handleDeath() {
   player.hp = Math.max(1, Math.round(player.maxHp * 0.5));
   player.mp = Math.round(player.maxMp * 0.5);
   showDeathScreen(lostGold, lostXp, dungeonReturn, lostBag, (graveSite ? fellOn : 0), relocked);
+  dmgTaken = [];
   log(`💀 ${player.name || HERO} was SLAIN on ${floorLabel(fellOn)}! Lost ${lostGold}g${lostXp ? ` and ${lostXp} XP` : ''}${lostBag ? `, and dropped your bag (${lostBag}) — reclaim it on ${floorLabel(fellOn)}` : ''} — revived weakened in town. The dungeon eases up while you find your feet.`, 'important');
   recomputeMaxStats();
   updateBars();
@@ -16321,6 +16386,13 @@ function showDeathScreen(lostGold, lostXp, returnFloor, lostBag, graveFloor, rel
       `⬇️ Re-enter at ${floorLabel(returnFloor)}${relocked ? ' · deeper floors relock' : ''}`,
     ].filter(Boolean);
     el.innerHTML = lines.map(t => `<div class="death-pen">${t}</div>`).join('');
+  }
+  const causeEl = document.getElementById('death-cause');
+  if (causeEl) {
+    const cl = deathSummaryLines();
+    causeEl.innerHTML = cl.length
+      ? '<div class="dc-head">' + cl[0] + '</div>' + (cl.length > 1 ? '<div class="dc-list">' + cl.slice(1).map(t => '<div class="dc-row">' + t + '</div>').join('') + '</div>' : '')
+      : '';
   }
   const ov = document.getElementById('death-overlay');
   if (ov) ov.classList.add('open');
@@ -16361,6 +16433,7 @@ function hardcoreDeath() {
   spawnFloatingText(player.x, player.y, 'SLAIN', '#ff3344');
   log(`${hcIcon(15)} <b style="color:#ff7a86">${escapeHtml(deadName)}</b> was SLAIN on ${floorLabel(fellOn)} — and in Hardcore, death is forever. Their tale ends here, remembered only in the Graveyard.`, 'important');
   showHardcoreDeathScreen(deadName, deadLevel, deadClass, fellOn, deepest, newAch);
+  dmgTaken = [];
   try { draw(); } catch (e) {}
 }
 
@@ -16372,6 +16445,9 @@ function showHardcoreDeathScreen(name, level, cls, fellOn, deepest, newAch) {
     const clsName = (cls && CLASSES[cls]) ? CLASSES[cls].name : 'hero';
     sub.innerHTML = `<b>${escapeHtml(name)}</b> the ${escapeHtml(clsName)} has fallen on ${floorLabel(fellOn)}. In Hardcore there is no revival — this character is gone for good.`;
   }
+  const hcCause = document.getElementById('hc-death-sub');
+  const hcLines = deathSummaryLines();
+  if (hcCause && hcLines.length) hcCause.innerHTML += ' <span style="color:#ff9aa6">' + hcLines[0] + '</span>';
   const stats = document.getElementById('hc-death-stats');
   if (stats) {
     // Deepest is a CONTINUOUS depth — show it the way the rest of the game does
@@ -16523,6 +16599,7 @@ function openChest(chest) {
       // No room to spawn — it just bites you on the spot instead.
       const bite = mitigateDamage(dmg, mLevel);
       player.hp = Math.max(1, player.hp - bite);
+      notePlayerDamage(bite, 'Mimic 🧰');
       spawnFloatingText(player.x, player.y, `${bite}`, '#ff3344');
     }
     sfx('trap');
@@ -16537,6 +16614,7 @@ function openChest(chest) {
     if (Math.random() < 0.5) {
       const dmg = 4 + dungeonLevel * 2;
       player.hp = Math.max(1, player.hp - dmg);
+      notePlayerDamage(dmg, 'trapped chest');
       spawnFloatingText(player.x, player.y, `${dmg}`, '#ff3344');
       log(`💥 It was a trapped chest! It explodes for ${dmg} damage!`, 'important');
     } else {
@@ -18434,6 +18512,33 @@ function log(msg, cls='') {
   el.innerHTML += `<div class="log-line ${cls}">${dlLogIcons(msg)}</div>`;
   el.scrollTop = el.scrollHeight;
 }
+
+// ── COLLAPSIBLE COMBAT LOG ──
+// Combat resolves fast and the log is rarely read mid-fight, so it can be folded
+// away to a thin bar to free up screen. The choice is remembered; with no saved
+// preference it starts collapsed on mobile (where space is tight) and open on the
+// roomier desktop layout.
+const LOG_COLLAPSE_KEY = 'logCollapsed';
+function setLogCollapsed(collapsed, persist = true) {
+  const row = document.getElementById('bottom-row');
+  if (row) row.classList.toggle('log-collapsed', collapsed);
+  const el = document.getElementById('log');
+  if (el && !collapsed) el.scrollTop = el.scrollHeight; // jump to newest on reopen
+  if (persist) { try { localStorage.setItem(LOG_COLLAPSE_KEY, collapsed ? '1' : '0'); } catch (e) {} }
+}
+function toggleLog() {
+  const row = document.getElementById('bottom-row');
+  setLogCollapsed(!(row && row.classList.contains('log-collapsed')));
+  if (typeof sfx === 'function') sfx('click');
+}
+(function initLogCollapsed() {
+  let pref = null;
+  try { pref = localStorage.getItem(LOG_COLLAPSE_KEY); } catch (e) {}
+  // No saved choice → follow the layout (collapsed on mobile) without persisting,
+  // so it stays responsive until the player makes an explicit choice.
+  if (pref === null) setLogCollapsed(!isWebLayout(), false);
+  else setLogCollapsed(pref === '1');
+})();
 
 // Potions get their own signature colour wherever they're named in the log.
 const POTION_COLOR = '#ff5ec4';
