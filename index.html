@@ -787,8 +787,8 @@
   .sk-vtab.on { border-color: #8c6eff; background: #2a1f4a; color: #e8def8; box-shadow: 0 0 8px rgba(140,110,255,.4); }
   /* Branch (specialization) sub-tabs under PASSIVE/ACTIVE — one per build path. */
   .sk-btabs { display: flex; gap: 3px; margin: 4px 2px 0; }
-  .sk-btab { flex: 1; padding: 4px 1px; border: 1px solid #2a2740; border-radius: 5px; background: #14111e;
-    color: #8a80b8; font-family: inherit; font-size: 7.5px; letter-spacing: .2px; text-transform: uppercase; cursor: pointer;
+  .sk-btab { flex: 1; padding: 10px 2px; border: 1px solid #2a2740; border-radius: 6px; background: #14111e;
+    color: #8a80b8; font-family: inherit; font-size: 9.5px; letter-spacing: .2px; text-transform: uppercase; cursor: pointer;
     -webkit-tap-highlight-color: transparent; touch-action: manipulation; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .sk-btab.on { border-color: #c8a24a; background: #2a2412; color: #f0dca0; box-shadow: 0 0 6px rgba(200,160,70,.35); }
   /* Per-band level markers down the left edge of the tree. */
@@ -16410,10 +16410,10 @@ function setSkillBranch(b) { skillBranch = b; selectedSkillId = null; renderPane
 // Named branches per class (column 0..4) — the same 5 themed build paths in both
 // the passive and active tree, shown as Diablo-style headers above each column.
 const SKILL_BRANCHES = {
-  warrior: ['Bulwark', 'Bloodlust', 'Titan', 'Warlord', 'Sentinel'],
-  rogue:   ['Assassin', 'Duelist', 'Shadow', 'Venom', 'Marksman'],
-  mage:    ['Pyromancy', 'Cryomancy', 'Storm', 'Arcanist', 'Warding'],
-  templar: ['Crusade', 'Aegis', 'Retribution', 'Sacrament', 'Judgment'],
+  warrior: ['Bulwark', 'Blood', 'Titan', 'Warlord', 'Sentry'],
+  rogue:   ['Slayer', 'Duelist', 'Shadow', 'Venom', 'Marks'],
+  mage:    ['Pyro', 'Cryo', 'Storm', 'Arcane', 'Ward'],
+  templar: ['Crusade', 'Aegis', 'Wrath', 'Sacred', 'Judge'],
 };
 // Fraction of the tree height reserved at the top for the branch headers.
 const SK_HEADER = 0.08;
