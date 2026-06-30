@@ -4183,7 +4183,7 @@ const TIER_POWER_BONUS = { junk:0, normal:1, uncommon:2, rare:4, epic:7, legenda
 const ATTRIBUTES = {
   might:    { label: '💪 Might',    short: 'MIG', desc: 'raises Attack power (most for Warrior & Rogue)' },
   vitality: { label: '❤️ Vitality', short: 'VIT', desc: 'raises max HP, Defense & HP regen' },
-  agility:  { label: '🎯 Agility',  short: 'AGI', desc: 'raises Evasion (dodge) & Accuracy (hit)' },
+  agility:  { label: '🎯 Agility',  short: 'AGI', desc: 'raises Evasion, Accuracy, move & attack speed' },
   spirit:   { label: '🌌 Spirit',   short: 'SPR', desc: 'raises max MP, MP regen & spell power' },
   luck:     { label: '🍀 Luck',     short: 'LUK', desc: 'raises Crit chance & loot quality' },
 };
@@ -4219,6 +4219,19 @@ const ATTR_FX = {
   accPerAgi:     2.0,    // Agility → accuracy rating (hit chance)
   critPerLuck:   0.85,   // Luck → crit rating
 };
+// Agility also quickens the body: it speeds up both your movement and your
+// auto-attack swing rhythm — so a finesse build doesn't just dodge and hit, it
+// also kites faster and swings faster. Unlike the ratings above (which can climb
+// freely because depth opposes them), raw move/attack speed has no depth foil,
+// so each uses a SOFT-CAP curve — cap · a / (a + scale) — that always rewards
+// more Agility yet asymptotes toward a ceiling, keeping the hero controllable
+// rather than letting speed run away. The bonus is measured from Agility ABOVE
+// the starting base, so a fresh hero sits at the game's tuned baseline speed and
+// every point you invest (or pick up on gear) is what makes you faster.
+const AGI_MOVE_CAP   = 0.35;  // max +35% move speed from Agility (asymptotic)
+const AGI_MOVE_SCALE = 90;    // Agility-above-base that buys half the move cap
+const AGI_ATKSPD_CAP   = 60;  // max +60% attack speed from Agility (asymptotic)
+const AGI_ATKSPD_SCALE = 100; // Agility-above-base that buys half the atk-spd cap
 // Damage scaling off the class's primary / secondary attribute (per point).
 const ATTR_DMG_PRIMARY   = 2.4;
 const ATTR_DMG_SECONDARY = 0.8;
@@ -4525,6 +4538,22 @@ function playerEvasionRating() {
 function playerAccuracyRating() {
   return Math.max(0, ACC_BASE + player.level * ACC_PER_LEVEL
     + totalAttr('agility') * ATTR_FX.accPerAgi + totalStat('ACC') + ratePct(skillBonus('acc')));
+}
+// Agility you've built beyond the starting base — the input to the speed curves
+// so a fresh hero (base Agility) sits at the tuned baseline and only investment
+// or gear makes you faster. Never negative.
+function agilityAboveBase() { return Math.max(0, totalAttr('agility') - ATTR_BASE); }
+// Move-speed multiplier (≥1) from Agility: a soft-capping curve that always
+// rewards more Agility yet never lets you blur past the AGI_MOVE_CAP ceiling.
+function agiMoveMult() {
+  const a = agilityAboveBase();
+  return 1 + AGI_MOVE_CAP * a / (a + AGI_MOVE_SCALE);
+}
+// Attack-speed % from Agility (added alongside gear ATKSPD in the same /100
+// denominator), soft-capped the same way so swings quicken but never go berserk.
+function agiAtkSpeedPct() {
+  const a = agilityAboveBase();
+  return AGI_ATKSPD_CAP * a / (a + AGI_ATKSPD_SCALE);
 }
 function playerCritRating() {
   let r = totalAttr('luck') * ATTR_FX.critPerLuck + totalStat('CRIT') + totalStat('LCK')
@@ -7239,6 +7268,7 @@ document.addEventListener('click', (e) => {
 
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
+  { date: '2026-06-30', size: 'medium', v: 'Agility speeds you up', by: 'Claude', notes: ['Agility now does more than dodge and hit: it also raises your Move speed and Attack speed, so a nimble build kites faster AND swings faster. Pour points (or stack +Agility gear) into it and you visibly quicken on both counts.', 'Both speeds use a soft cap that always rewards more Agility but eases off at the top, so you keep getting faster without becoming uncontrollable. The HERO sheet now lists Attack speed (with your live swings-per-second) and Move speed so you can see exactly what your Agility is buying.', 'The other four attributes were reviewed and left as-is — they already map cleanly: Might → Attack power, Vitality → HP / Defense / HP regen, Spirit → MP / MP regen / spell power, Luck → Crit & loot quality.'] },
   { date: '2026-06-30', size: 'small', v: 'Custom mouse cursor', by: 'Claude', notes: ['On mouse-and-keyboard, the pointer is now a custom in-game cursor — a small pixel blade drawn from the game\'s own art, with its tip as the click point — instead of the stock desktop arrow. Buttons and text fields still show their usual hand / text cursors.'] },
   { date: '2026-06-30', size: 'medium', v: 'Click to move', by: 'Claude', notes: ['On mouse-and-keyboard, you can now click the map to walk the hero to that spot — a glowing ring marks where you\'re headed. Hold the button (and drag) to keep moving toward the cursor in real time, so you can steer just by pointing. Pressing arrows / WASD instantly takes back manual control, and clicking a foe still opens its info card rather than walking into it. Touch devices keep their floating joystick.'] },
   { date: '2026-06-30', size: 'small', v: 'Cooldowns in seconds', by: 'ASuiter89', notes: ['Skill and potion cooldowns now count down in real seconds — the number on each bar button is the seconds left to wait, matching the real-time pace of combat.', 'Potions share a 5-second cooldown (up from a near-instant recharge), so a sip is a real decision instead of a spam button. Skill cooldowns read in seconds too, tuned to sit naturally alongside the ~1.5s attack rhythm.'] },
@@ -13906,7 +13936,8 @@ function updatePlayer(dt) {
   // Terrain under the hero's cell shapes the feel.
   const stand = tileAtCell(player.x, player.y);
   const onIce = stand === 14;
-  let maxSpd = PLAYER_SPEED * (stand === 13 ? MUD_SPEED : 1) * (1 + totalStat('MOVESPD') / 100);
+  // Agility quickens your stride on top of terrain and any MOVESPD gear.
+  let maxSpd = PLAYER_SPEED * (stand === 13 ? MUD_SPEED : 1) * (1 + totalStat('MOVESPD') / 100) * agiMoveMult();
   if (wantSprint) maxSpd *= SPRINT_MULT;
   if (isPlayerSlowed()) maxSpd *= 0.5;
 
@@ -16766,6 +16797,8 @@ function renderHero(el) {
       <div class="hc-head"><span class="hc-name">📊 Stats</span></div>
       <div class="hc-line" style="opacity:0.55;font-size:11px;margin:-2px 0 3px">Dodge · hit · crit · block are <b>ratings</b>, shown as the % they yield vs your current floor (${floorLabel(curDepth())}). Deeper floors need more rating for the same %.</div>
       ${stat('Attack power', Math.round(totalStat('ATK') + attrDamage()))}
+      ${stat('Attack speed', '+' + Math.round(playerAttackSpeedPct()) + '% <span style="opacity:0.6">→ ' + (1 / playerAttackInterval()).toFixed(2) + '/s</span>')}
+      ${stat('Move speed', '+' + Math.round(((1 + totalStat('MOVESPD') / 100) * agiMoveMult() - 1) * 100) + '%')}
       ${stat('Defense', Math.round(playerDefense()))}
       ${stat('Max HP', player.maxHp)}
       ${stat('Max MP', player.maxMp)}
@@ -20221,12 +20254,15 @@ function updateActorRender(dt) {
 
 // ── Attack speed ──
 // Baseline ~1 swing / 1.5s for the hero, faster for light weapons (daggers) and
-// slower for heavy ones (mauls/axes), then sped up by the ATKSPD gear stat.
+// slower for heavy ones (mauls/axes), then sped up by the ATKSPD gear stat AND by
+// your Agility (agiAtkSpeedPct), both pooled into the same speed % so a nimble
+// hero swings noticeably faster than a sluggish one.
 const PLAYER_ATK_BASE = 1.5;
 const STYLE_ATK_MULT = { flurry: 0.7, slash: 1, cleave: 1.25, crush: 1.4, reap: 1.2, thrust: 1.05, shot: 1.05, bolt: 1.15, fist: 0.85 };
+function playerAttackSpeedPct() { return Math.max(0, totalStat('ATKSPD')) + agiAtkSpeedPct(); }
 function playerAttackInterval() {
   const m = STYLE_ATK_MULT[weaponStyle()] || 1;
-  return PLAYER_ATK_BASE * m / (1 + Math.max(0, totalStat('ATKSPD')) / 100);
+  return PLAYER_ATK_BASE * m / (1 + playerAttackSpeedPct() / 100);
 }
 // Foes swing on their own clock too, varied by type so a pack doesn't strike in
 // lockstep: swift vermin jab fast, brutes are slow, casters middling. A per-foe
