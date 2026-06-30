@@ -804,10 +804,12 @@
     -webkit-tap-highlight-color: transparent; touch-action: manipulation; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .sk-vtab.on { border-color: #8c6eff; background: #2a1f4a; color: #e8def8; box-shadow: 0 0 8px rgba(140,110,255,.4); }
   /* Branch (specialization) sub-tabs under PASSIVE/ACTIVE — one per build path. */
-  .sk-btabs { display: flex; gap: 3px; margin: 4px 2px 0; }
-  .sk-btab { flex: 1; padding: 10px 2px; border: 1px solid #2a2740; border-radius: 6px; background: #14111e;
-    color: #8a80b8; font-family: inherit; font-size: 9.5px; letter-spacing: .2px; text-transform: uppercase; cursor: pointer;
-    -webkit-tap-highlight-color: transparent; touch-action: manipulation; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* Auto-fitting grid: tiles size to hold the full branch name and wrap onto a
+     second row when they won't all fit across, so names are never cut off. */
+  .sk-btabs { display: grid; grid-template-columns: repeat(auto-fit, minmax(64px, 1fr)); gap: 3px; margin: 4px 2px 0; }
+  .sk-btab { padding: 8px 3px; border: 1px solid #2a2740; border-radius: 6px; background: #14111e;
+    color: #8a80b8; font-family: inherit; font-size: 9.5px; letter-spacing: .2px; text-transform: uppercase; cursor: pointer; text-align: center;
+    -webkit-tap-highlight-color: transparent; touch-action: manipulation; white-space: nowrap; }
   .sk-btab.on { border-color: #c8a24a; background: #2a2412; color: #f0dca0; box-shadow: 0 0 6px rgba(200,160,70,.35); }
   /* Per-band level markers down the left edge of the tree. */
   .sk-band { position: absolute; left: 1px; transform: translateY(-50%); font-size: 8px; color: #5a5470;
