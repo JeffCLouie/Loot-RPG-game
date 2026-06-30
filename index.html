@@ -2125,14 +2125,20 @@
      This block is intentionally gated to pointer:fine + hover so the stacked
      mobile/touch layout above is left completely untouched. */
   @media (min-width: 760px) and (hover: hover) and (pointer: fine) {
+    /* Column widths are driven by variables so collapsing the log can reflow the
+       whole desktop layout in one place: the log column shrinks to a slim strip
+       and the freed width is handed to the (usually cramped) loot/bag drawer. */
+    :root { --log-col: clamp(250px, 24vw, 480px); --panel-col: clamp(210px, 22vw, 440px); }
+    body.log-collapsed { --log-col: 30px; --panel-col: clamp(280px, 30vw, 600px); }
+
     /* Loot drawer: a real column in the flow (not an overlay), always open.
        It grows with the viewport so wide screens don't leave dead space beside
        the square map — the panel expands to absorb the right-hand slack. */
     #side-panel {
       position: relative; /* relative + z-index so it stays above town/shop menus */
       z-index: 250;
-      flex: 0 0 clamp(210px, 22vw, 440px);
-      width: clamp(210px, 22vw, 440px);
+      flex: 0 0 var(--panel-col);
+      width: var(--panel-col);
       transform: none;
       opacity: 1;
       pointer-events: auto;
@@ -2157,8 +2163,8 @@
     #town-overlay, #shop-overlay, #mystic-overlay {
       position: absolute;
       top: 0; bottom: 0;
-      left: clamp(250px, 24vw, 480px);
-      right: clamp(210px, 22vw, 440px);
+      left: var(--log-col);
+      right: var(--panel-col);
       padding: 0;
       background: #120e08;
       z-index: 240;
@@ -2211,7 +2217,7 @@
     #map-info {
       display: flex; flex-direction: column; gap: 4px;
       position: absolute; z-index: 50; pointer-events: none;
-      top: 8px; left: calc(clamp(250px, 24vw, 480px) + 10px);
+      top: 8px; left: calc(var(--log-col) + 10px);
     }
     /* On PC there's room for a bigger HUD: bump the stat / gold / chip fonts and
        bars up so health, mana, floor, level, etc. are easier to read. */
@@ -2226,7 +2232,7 @@
       display: grid;
       /* Log column also grows with the viewport so the left-hand slack beside
          the centered map is filled too. The map ('1fr') keeps the remainder. */
-      grid-template-columns: clamp(250px, 24vw, 480px) 1fr;
+      grid-template-columns: var(--log-col) 1fr;
       /* Single map row — the skill bar overlays the bottom of the map (see
          below) rather than taking its own row, so it never shrinks the map. */
       grid-template-rows: 1fr;
@@ -2241,13 +2247,24 @@
       border-top: none;
       border-right: 1px solid var(--border);
     }
+    /* Collapsed on desktop: the column is now a slim strip, so stand the toggle
+       up vertically to fill it (and the freed width has already gone to the loot
+       drawer via --panel-col above). */
+    body.log-collapsed #log-toggle {
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+      height: 100%;
+      justify-content: center;
+      padding: 8px 0;
+      border-bottom: none;
+    }
     /* Skill bar: overlaid across the bottom of the map column rather than
        taking its own grid row, so it renders over the bottom of the map
        instead of pushing it up and shrinking it. #game-wrap is positioned,
        so this anchors to the map column (left edge starts after the log). */
     #skill-bar {
       position: absolute;
-      left: clamp(250px, 24vw, 480px);
+      left: var(--log-col);
       right: 0;
       bottom: 10px;
       z-index: 50;
@@ -18612,6 +18629,9 @@ const LOG_COLLAPSE_KEY = 'logCollapsed';
 function setLogCollapsed(collapsed, persist = true) {
   const row = document.getElementById('bottom-row');
   if (row) row.classList.toggle('log-collapsed', collapsed);
+  // Mirror onto <body> so the desktop layout can reflow its column widths (the
+  // log shrinks to a strip, the loot/bag drawer gets the reclaimed width).
+  document.body.classList.toggle('log-collapsed', collapsed);
   const el = document.getElementById('log');
   if (el && !collapsed) el.scrollTop = el.scrollHeight; // jump to newest on reopen
   if (persist) { try { localStorage.setItem(LOG_COLLAPSE_KEY, collapsed ? '1' : '0'); } catch (e) {} }
