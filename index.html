@@ -5928,6 +5928,10 @@ let floorMod = FLOOR_MODS[0];
 // sealed until the floor's hostiles are dealt with. `floorCleared` latches true
 // once the condition is met (a late mimic popping out won't re-seal you in).
 let floorCleared = false;
+// Arrival grace: true the moment you enter a floor, negating enemy attacks until
+// you take your first turn (so you can't be bursted down before you act). Set in
+// generateMap()/buildTutorialMap(); cleared at the end of the first runEnemyTurn.
+let entryGuard = false;
 // True while the player is on the one-time beach tutorial map (a fresh hero's
 // very first "floor"): a sandy shore with a lone skeleton to fight and a cave
 // to the north that drops them into the real dungeon. See buildTutorialMap().
@@ -7949,6 +7953,7 @@ function tryBuildVault(reach) {
 
 function generateMap() {
   inTown = false;
+  entryGuard = true; // safe on arrival until your first turn
   // Size the floor for its difficulty BEFORE carving anything — harder tiers and
   // deeper Endless floors are larger maps (see mapSizeFor). areaRatio then scales
   // rooms, hazards and foes so a bigger map is a denser dungeon, not a sparse one.
@@ -8241,6 +8246,7 @@ function generateMap() {
 function buildTutorialMap() {
   tutorialActive = true;
   inTown = false;
+  entryGuard = true; // safe on arrival until your first turn
   floorSerial++;
   dungeonLevel = 1;
   arrivalDir = 'down';
@@ -14429,6 +14435,8 @@ function runEnemyTurn() {
     if (dist <= 8) enemyMove(e);
   });
   if (floorSerial === serial) tickBossHazards();
+  // Your first turn on the floor is over — arrival grace ends now.
+  entryGuard = false;
   // The shared potion cooldown (and every active-skill cooldown) was just ticked
   // above, so refresh the skill bar here — the one place every turn-passing action
   // funnels through. Without this, plain moves / melee swings / waiting decrement
@@ -14664,6 +14672,8 @@ function goblinFlee(e) {
 
 // A melee enemy strikes the player from an adjacent tile.
 function enemyAttackPlayer(e) {
+  // Arrival grace — no damage taken until your first turn on a new floor.
+  if (entryGuard) { spawnFloatingText(player.x, player.y, '✦', '#bfe9ff'); return; }
   const beh = BEHAVIORS[e.behavior] || BEHAVIORS.chaser;
   if (rollDodge(e)) {
     spawnFloatingText(player.x, player.y, 'DODGE', '#9fe8ff');
@@ -14698,6 +14708,8 @@ function enemyAttackPlayer(e) {
 
 // A ranged enemy flings a bolt at the player from a distance.
 function enemyRangedAttack(e) {
+  // Arrival grace — no damage taken until your first turn on a new floor.
+  if (entryGuard) { spawnFloatingText(player.x, player.y, '✦', '#bfe9ff'); return; }
   if (rollDodge(e)) {
     spawnFloatingText(player.x, player.y, 'DODGE', '#9fe8ff');
     log(`💨 ${HERO} sidesteps ${enemyLabel(e)}'s bolt!`);
