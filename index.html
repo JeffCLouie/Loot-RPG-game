@@ -7880,6 +7880,7 @@ const CHANGELOG = [
   { date: '2026-06-30', size: 'big', v: 'Bottom command bar on desktop', by: 'Claude', notes: ['On desktop, every vital readout moved off the top and into one command bar across the bottom, under the map. Big flanking Health (left) and Mana (right) bars are now the most prominent things on screen — bold, glowing, with the numbers right on them — hugging the log and loot panels.', 'Your name, Power and gold sit in the middle above a slim endurance bar, all your skill slots run across the centre, and one long experience bar — broken into segments — stretches along the very bottom. The old top stat strip is gone, so the play area runs cleaner.', 'The bar lives in the space between the side panels and reflows with them: collapse the log and the whole bar widens to match. Touch devices are untouched and keep their existing layout.'] },
   { date: '2026-06-30', size: 'medium', v: 'Minimap + fixed map view', by: 'Claude', notes: ['A minimap now sits in the top-left of the dungeon view, sketching the whole floor at a glance — walls, water, lava, doors, shrines, teleporters and the all-important down-stairs (in bright green) — with live dots for you (ringed gold), foes (bosses bigger), allies, chests, loose coins, and the merchant, mystic and quest NPCs. It tucks away while you\'re in town.', 'The map view is now fixed at the most zoomed-in setting. The old Wide / Wider / Widest control has been retired from the ⚙️ menu, since the closest view is the one players kept it on.'] },
   { date: '2026-06-30', size: 'medium', v: 'Power score retuned for the new stats', by: 'Claude', notes: ['The POWER number was audited and recalibrated to match the current attribute and rating systems, so it reflects your real strength more honestly. Nothing about combat changes — only how Power is tallied and displayed.', 'Power is now class-aware: the same item can be worth different Power to different heroes, because it makes a different difference. A +Might piece is worth more to a Warrior than a Mage (it actually makes the Warrior hit harder), a +Spirit piece flips that, and a Spell Power roll counts for a caster but is near-dead weight on a pure-martial Warrior or Rogue. Your damage attribute is now visibly the one that moves your Power most.', 'An attribute point is also worth the same Power whether you spent it on level-up or it came rolled on gear (a +attribute affix used to quietly count for double). The Power tooltip and Hero sheet are reworded to match.', 'Max HP and Max MP rolls on gear no longer dominate the score — a single big HP roll used to be worth more than an entire weapon’s damage. Speed and Evasion gear now report equal Power for an equal benefit, since they do the same thing.', 'The bag and shop ↑ upgrade arrow now accounts for the off-hand a two-handed weapon makes you set down, so a green “upgrade” won’t secretly lower your Power once the off-hand is stowed.'] },
+  { date: '2026-06-30', size: 'small', v: 'Click-to-move slides around walls', by: 'Claude', notes: ['Click-to-move no longer grinds the hero straight into a wall when you point past a corner. If a wall sits between you and where you clicked but the way is open above or below it, the hero now slides along the wall toward the cursor and rounds the corner instead of getting pinned.', 'The slide always heads TOWARD the click and stops at where the cursor points on that axis — so the hero rounds the wall without sailing off past where you actually aimed. Holding the button to steer in real time feels the same, just no longer snagging on corners.'] },
   { date: '2026-06-30', size: 'small', v: 'Dungeon Gate is the only way down', by: 'Claude', notes: ['The ✕ in the corner of the town menus no longer drops you back into the dungeon. The Town menu lost its ✕ entirely, and the town Merchant and Mystic panels now show only ← back to the hub — their ✕ is hidden while you\'re in town.', 'To head back down you now take the 🌀 Dungeon Gate, where you pick your floor and difficulty, so you can\'t accidentally bail out of town onto your old return floor by tapping the corner. Pressing Esc in a town panel steps back toward the hub instead of leaving. A Merchant or Mystic you meet while wandering the dungeon still has its ✕ to dismiss the panel.'] },
   { date: '2026-06-30', size: 'small', v: 'Skill bar stays in town', by: 'Claude', notes: ['On the desktop layout your skill bar no longer vanishes when you step into town — it parks as a tray along the bottom so you can see your kit and rearrange your slots while you shop and plan. The town menu ends just above it instead of covering it, and the tray sits on its own clean strip. (On phones nothing changes: the SKILLS tab already shows your slot row, so the bar stays tucked away in town there.)', 'The Health and Mana potions on that tray are greyed out and locked while you\'re in town: there\'s nothing to fight, and resting already restores you for free, so a potion can\'t be wasted there. They light back up the moment you take the gate back down.'] },
   { date: '2026-06-30', size: 'small', v: 'Tidier SKILLS tab on desktop', by: 'Claude', notes: ['On the wide desktop layout, the SKILLS tab no longer repeats the row of skill slots above the tree. Your bottom skill bar is already on screen there — you can drag a learned skill straight onto it, or rearrange the slots in place — so the second copy was redundant clutter.', 'On phones and tablets the slot tray stays exactly as it was: it\'s the comfortable place to tap a slot and assign a skill, and the only slot editor available while you\'re in town.'] },
@@ -14688,6 +14689,32 @@ function movePlayerBy(ddx, ddy) {
   if (player.x !== preX || player.y !== preY) onEnterCell(player.x, player.y);
 }
 
+// Click-to-move wall steering. Walking dead-straight at the cursor grinds the
+// hero into any wall that sits between them; this re-aims the heading so it
+// slides AROUND the wall instead of pressing into it. We probe a short hop
+// toward the target: if the straight diagonal is blocked but one axis is still
+// open, we steer along that open axis (with a slight lean back into the blocked
+// axis so the hero hugs the wall and slips into the gap the instant it opens).
+// The open axis always points TOWARD the cursor, and we only slide while real
+// distance remains on it — so the hero rounds the corner without sailing past
+// where the cursor actually is on that axis. Returns a unit heading.
+function steerToward(tdx, tdy) {
+  const td = Math.hypot(tdx, tdy) || 1;
+  let dx = tdx / td, dy = tdy / td;
+  const probe = 0.5;
+  if (!playerBoxBlocked(player.fx + dx * probe, player.fy + dy * probe)) return [dx, dy];
+  const sx = Math.sign(dx), sy = Math.sign(dy);
+  const xOpen = sx !== 0 && Math.abs(tdx) > 0.05 && !playerBoxBlocked(player.fx + sx * probe, player.fy);
+  const yOpen = sy !== 0 && Math.abs(tdy) > 0.05 && !playerBoxBlocked(player.fx, player.fy + sy * probe);
+  if (yOpen && !xOpen)      { dx = sx * 0.3; dy = sy; }   // wall blocks our sideways path → slide vertically toward the cursor
+  else if (xOpen && !yOpen) { dx = sx; dy = sy * 0.3; }   // wall blocks our vertical path → slide sideways toward the cursor
+  // both open (a diagonal corner — movePlayerBy already rounds it) or both
+  // blocked (a dead end toward the cursor): keep the straight heading and let it
+  // stall out rather than wandering away from where the cursor points.
+  const m = Math.hypot(dx, dy) || 1;
+  return [dx / m, dy / m];
+}
+
 // Stamina trickles back after a short pause once you stop exerting.
 function regenStamina(dt) {
   if (player._stamDelay > 0) { player._stamDelay -= dt; return; }
@@ -14744,7 +14771,7 @@ function updatePlayer(dt) {
     if (!moveTarget.hold && td <= MOVE_ARRIVE) {
       moveTarget.active = false;            // reached the clicked point — stop
     } else if (td > 0.02) {
-      ix = tdx / td; iy = tdy / td;
+      [ix, iy] = steerToward(tdx, tdy);      // slide around any wall between us and the cursor
       if (!moveTarget.hold) {                // give up if pinned on a wall (no headway)
         if (td < moveTarget._lastDist - 0.01) { moveTarget._lastDist = td; moveTarget._stallT = 0; }
         else if ((moveTarget._stallT += dt) > 0.6) moveTarget.active = false;
