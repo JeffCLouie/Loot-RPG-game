@@ -59,11 +59,13 @@ When asked to make a change:
 
 1. Pull the latest `main`.
 2. Make the edit in `index.html`.
-3. Before committing, verify the JavaScript has no syntax errors (the game
+3. If the change adds or alters a gameplay mechanic, update `gameState()` and
+   `gameGuide()` to match (see "Keep the AI-play API in sync" below).
+4. Before committing, verify the JavaScript has no syntax errors (the game
    silently fails to load if it does). There are no automated tests, so this
    check is the only safety net.
-4. Commit with a clear, descriptive message.
-5. Push and merge directly to `main` so Netlify auto-deploys — do not open a PR
+5. Commit with a clear, descriptive message.
+6. Push and merge directly to `main` so Netlify auto-deploys — do not open a PR
    or wait for approval.
 
 ## Pull requests: merge and conflicts automatically
@@ -112,6 +114,38 @@ The in-game Version History popup is driven by the `CHANGELOG` array in
   without leaning on another game for meaning.
 - Keep the same shape as existing entries (`date`, `size`, `v`, `by`, `notes`)
   and add new releases at the top of the array (newest-first).
+
+## Keep the AI-play API in sync (`gameState()` / `gameGuide()`)
+
+`index.html` exposes two console functions that let an external agent play the
+game without reading pixels — keep BOTH truthful on every gameplay change:
+
+- **`gameState(radius)`** — a live snapshot of WHAT is happening right now: the
+  ASCII map + glyph `legend`, the hero's stats/buffs, the skill hotbar, enemies,
+  loot, hazards, shrines/teleporters, NPCs, and the menu/overlay state.
+- **`gameGuide(topic)`** — the how-to-play reference explaining HOW the game
+  works: the rules, formulas and habits an agent needs (overview, controls,
+  movement, combat, skills, autocast, loot, autoloot, hazards, enemies,
+  progression, town, driving, tips).
+
+**Treat these two as first-class output of every gameplay change, not an
+afterthought.** An agent relies on them being correct, so stale copy makes it
+misplay. Whenever you add or change a mechanic:
+
+- **New or changed live state → update `gameState()`.** If a change introduces
+  something an agent must see to play (a new hazard, status effect, resource,
+  enemy flag, NPC, ground pickup, menu field, overlay/`mode`, …), surface it in
+  the returned object — and in the ASCII overlay + `legend` if it gets a glyph.
+- **New or changed rules → update `gameGuide()`.** If a change alters how
+  anything works (a reworked system, new control/keybind, retuned formula,
+  changed default, new skill mechanic, …), edit the matching topic so the text
+  matches the code. Add a new topic (and `alias` entries) for a whole new system.
+- **Fix stale references, don't just append.** Correct anything the change made
+  wrong — renamed/removed console helpers, changed key counts, reworked
+  behaviours. Both functions must describe the game as it is NOW.
+- **Verify after editing.** `gameGuide()` reads key bindings live and
+  `gameState()` reads live game objects, so confirm the field names, helper
+  names and keybind ids you reference still exist.
 
 ## Before pushing
 
