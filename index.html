@@ -17910,6 +17910,13 @@ function handleEscape() {
   if (close('mystic-overlay', mysticClose)) return true;
   if (close('town-overlay', leaveTown)) return true;
   if (panelOpen && !isWebLayout()) { togglePanel(); return true; }
+  // Nothing was open — in real-time play, Escape now opens the ⚙️ settings menu,
+  // which pauses the game (settings-menu is an RT-blocking overlay). Skip this on
+  // the pre-game screens, where an in-game settings popup makes no sense.
+  const preGame = ['title-overlay', 'name-overlay'].some(id => {
+    const el = document.getElementById(id); return el && el.classList.contains('open');
+  });
+  if (!preGame) { toggleSettingsMenu(); return true; }
   return false;
 }
 
