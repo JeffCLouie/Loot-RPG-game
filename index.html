@@ -1820,6 +1820,20 @@
   }
   #title-credit { color: #6b5f47; font-size: 9px; margin-top: 16px; line-height: 1.5; }
   /* Leaderboard tabs + rows */
+  /* Standard vs Hardcore board selector — a segmented toggle above the sort tabs. */
+  .lb-modes { display: flex; gap: 6px; margin-bottom: 8px; }
+  .lb-mode {
+    flex: 1; padding: 7px 4px; border: 1px solid var(--border); border-radius: 6px;
+    background: #1b160f; color: #b9a98a; font-family: 'Courier New', monospace;
+    font-size: 11px; font-weight: bold; letter-spacing: 0.5px; cursor: pointer;
+    text-align: center; -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  }
+  .lb-mode.on { border-color: var(--gold); color: var(--gold); background: #2a2113; }
+  /* The Hardcore board glows crimson when selected, matching the rest of the HC theming. */
+  .lb-mode.hc.on { border-color: #ff5a66; color: #ff8a93; background: #2a1113; }
+  .lb-mode .dl-ic { vertical-align: -2px; }
+  #lb-modal.hc .ov-title { color: #ff8a93; }
+  #lb-modal.hc .lb-row.me { border-color: #ff5a66; background: #2a1113; }
   .lb-tabs { display: flex; gap: 6px; margin-bottom: 9px; }
   .lb-tab {
     flex: 1; padding: 8px 4px; border: 1px solid var(--border); border-radius: 6px;
@@ -2878,6 +2892,10 @@
   <div id="lb-modal">
     <span class="ov-title"><span data-spr="ui_trophy"></span> Leaderboards</span>
     <div class="ov-sub">The deepest, strongest, and richest heroes across everyone who plays.</div>
+    <div class="lb-modes">
+      <button class="lb-mode on" id="lb-mode-std" onclick="setLbMode('std')">Standard</button>
+      <button class="lb-mode hc" id="lb-mode-hc" onclick="setLbMode('hc')"><span data-spr="ic_cursed"></span> Hardcore</button>
+    </div>
     <div class="lb-tabs">
       <button class="lb-tab on" id="lb-tab-floor" onclick="setLbTab('floor')">⬇️ Furthest</button>
       <button class="lb-tab" id="lb-tab-level" onclick="setLbTab('level')">⭐ Level</button>
@@ -6782,6 +6800,7 @@ document.addEventListener('click', (e) => {
 
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
+  { date: '2026-06-30', size: 'medium', v: 'Hardcore leaderboards', by: 'Claude', notes: ['The global Leaderboards now have their own Hardcore ladder. A Standard / Hardcore switch at the top of the board flips every ranking — Furthest, Level, Gold and Power — between ordinary heroes and one-life Hardcore heroes.', 'Hardcore heroes are ranked only against each other, so surviving the no-revive run earns its own crimson board.'] },
   { date: '2026-06-30', size: 'small', v: 'Clearer "can\'t afford" prices', by: 'Claude', notes: ['Anywhere you spend gold or materials — the shop, gambler, forge, enchanter, mystic, healer and trainer — wares you can\'t currently afford now dim out so unavailable options read at a glance.', 'Mixed prices now pinpoint the shortfall: the exact gold or material you\'re missing turns red, so a forge or enchant cost shows at once whether you\'re short on gold, scrap, glimmer or a chaos orb.'] },
   { date: '2026-06-29', size: 'medium', v: 'Channeled town portal', by: 'Claude', notes: ['The town gate is no longer locked out while you’re in combat or on a cooldown — it’s clickable any time. Instead, opening it now CHANNELS a portal in real time.', 'Once you start it, the dungeon auto-runs one turn every half-second so you actually watch the foes take their swings and close in. Survive 3 clean turns and the gate opens; take a single blow from a foe mid-channel and the half-formed portal shatters.', 'You’re committed while it charges — your own moves are held until it resolves, with a swirling portal and a countdown over your hero showing the turns left. Tap TOWN again to break it off.'] },
   { date: '2026-06-29', size: 'medium', v: 'Bigger floors per difficulty', by: 'Claude', notes: ['Dungeon floors now grow with difficulty: Normal stays 20×20, Hardened is 24×24, Brutal 28×28, and Endless starts at 32×32 and keeps expanding the deeper you push — endlessly, but slower and slower so it never balloons into an unnavigable map.', 'Monster density is held constant, so a bigger, harder floor simply carries proportionally more foes — more rooms, hazards and enemies, at the same crowding you’re used to.', 'A generous cap keeps even the largest deep-Endless floors from spawning an unplayable swarm.'] },
@@ -17553,6 +17572,7 @@ const LB_SORTS = {
   power: { col: 'power',     fmt: v => '⚡' + v },
 };
 let lbTab = 'floor';
+let lbMode = 'std';       // which ladder is shown: 'std' (non-hardcore) or 'hc' (hardcore only)
 let lbLastSig = '';       // last-submitted stat signature — skips no-op writes
 let lbSubmitTimer = null; // pending debounced submit, if any
 
@@ -17581,6 +17601,7 @@ function lbEntryFromPlayer() {
     level: lbInt(player.level || 1, 1),
     gold: lbInt(player.maxGold || player.gold || 0, 0),
     power: lbInt(player.maxPower || playerPower() || 1, 1),
+    hardcore: !!player.hardcore,
   };
 }
 
@@ -17590,7 +17611,7 @@ function lbScheduleSubmit() {
   if (!player || !player.name) return;
   player.maxGold = Math.max(player.maxGold || 0, player.gold || 0);
   player.maxPower = Math.max(player.maxPower || 0, playerPower() || 0);
-  const sig = [player.name, player.maxFloor || 1, player.level || 1, player.maxGold || 0, player.maxPower || 0, player.class || ''].join('|');
+  const sig = [player.name, player.maxFloor || 1, player.level || 1, player.maxGold || 0, player.maxPower || 0, player.class || '', player.hardcore ? 'hc' : ''].join('|');
   if (sig === lbLastSig) return;
   lbLastSig = sig;
   if (lbSubmitTimer) return; // a write is already queued; it'll pick up the latest stats
@@ -17604,7 +17625,7 @@ function lbSubmit() {
   lbSubmitLocal(entry);
   if (!lbEnabled()) return;
   try {
-    fetch(LB_SUPABASE_URL + '/rest/v1/leaderboard?on_conflict=name', {
+    fetch(LB_SUPABASE_URL + '/rest/v1/leaderboard?on_conflict=name,hardcore', {
       method: 'POST',
       headers: lbHeaders({ 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
       body: JSON.stringify(entry),
@@ -17617,7 +17638,9 @@ function lbSubmit() {
 function lbSubmitLocal(entry) {
   try {
     const all = JSON.parse(localStorage.getItem(LB_LOCAL_KEY) || '[]');
-    const i = all.findIndex(e => e && e.name === entry.name);
+    // Keyed by name AND hardcore flag, so a Standard and a Hardcore hero sharing
+    // a name keep separate rows (mirroring the table's composite primary key).
+    const i = all.findIndex(e => e && e.name === entry.name && !!e.hardcore === !!entry.hardcore);
     if (i >= 0) {
       all[i] = {
         name: entry.name,
@@ -17626,6 +17649,7 @@ function lbSubmitLocal(entry) {
         level: Math.max(all[i].level || 1, entry.level),
         gold: Math.max(all[i].gold || 0, entry.gold),
         power: Math.max(all[i].power || 1, entry.power),
+        hardcore: !!entry.hardcore,
       };
     } else {
       all.push(entry);
@@ -17633,10 +17657,10 @@ function lbSubmitLocal(entry) {
     localStorage.setItem(LB_LOCAL_KEY, JSON.stringify(all));
   } catch (e) {}
 }
-function lbFetchLocal(col) {
+function lbFetchLocal(col, hcOnly) {
   let all = [];
   try { all = JSON.parse(localStorage.getItem(LB_LOCAL_KEY) || '[]'); } catch (e) {}
-  return all.filter(Boolean).sort((a, b) => (b[col] || 0) - (a[col] || 0));
+  return all.filter(e => e && !!e.hardcore === !!hcOnly).sort((a, b) => (b[col] || 0) - (a[col] || 0));
 }
 
 // Fetch a board's full ranking. Returns { rows, local } — local is true when no
@@ -17646,10 +17670,11 @@ function lbFetchLocal(col) {
 // over to the local mirror instead of leaving the board stuck on "Loading…".
 async function lbFetch(tab) {
   const sort = LB_SORTS[tab] || LB_SORTS.floor;
-  if (!lbEnabled()) return { rows: lbFetchLocal(sort.col), local: true };
+  const hcOnly = lbMode === 'hc';
+  if (!lbEnabled()) return { rows: lbFetchLocal(sort.col, hcOnly), local: true };
   const url = LB_SUPABASE_URL +
-    '/rest/v1/leaderboard?select=name,player_class,max_floor,level,gold,power&order=' +
-    sort.col + '.desc';
+    '/rest/v1/leaderboard?select=name,player_class,max_floor,level,gold,power,hardcore&hardcore=eq.' +
+    hcOnly + '&order=' + sort.col + '.desc';
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 12000);
   try {
@@ -17681,18 +17706,35 @@ function showLeaderboard() {
   const settings = document.getElementById('settings-menu');
   if (settings) settings.classList.remove('open');
   ov.classList.add('open');
-  setLbTab(lbTab);
+  syncLbButtons();
+  renderLeaderboard();
 }
 function closeLeaderboard() {
   const ov = document.getElementById('lb-overlay');
   if (ov) ov.classList.remove('open');
 }
-function setLbTab(tab) {
-  lbTab = LB_SORTS[tab] ? tab : 'floor';
+// Light up the active sort tab and Standard/Hardcore mode button, and tint the
+// modal crimson while the Hardcore ladder is shown.
+function syncLbButtons() {
   ['floor', 'level', 'gold', 'power'].forEach(t => {
     const el = document.getElementById('lb-tab-' + t);
     if (el) el.classList.toggle('on', t === lbTab);
   });
+  ['std', 'hc'].forEach(m => {
+    const el = document.getElementById('lb-mode-' + m);
+    if (el) el.classList.toggle('on', m === lbMode);
+  });
+  const modal = document.getElementById('lb-modal');
+  if (modal) modal.classList.toggle('hc', lbMode === 'hc');
+}
+function setLbTab(tab) {
+  lbTab = LB_SORTS[tab] ? tab : 'floor';
+  syncLbButtons();
+  renderLeaderboard();
+}
+function setLbMode(mode) {
+  lbMode = (mode === 'hc') ? 'hc' : 'std';
+  syncLbButtons();
   renderLeaderboard();
 }
 async function renderLeaderboard() {
@@ -17708,14 +17750,14 @@ async function renderLeaderboard() {
     data = await lbFetch(lbTab);
   } catch (e) {
     // Couldn't reach the global board — fall back to the local mirror.
-    data = { rows: lbFetchLocal(sort.col), local: true, errored: true };
+    data = { rows: lbFetchLocal(sort.col, lbMode === 'hc'), local: true, errored: true };
   }
   // A slow fetch could resolve after the player switched tabs; ignore if so.
   if (!document.getElementById('lb-overlay').classList.contains('open')) return;
   const rows = data.rows || [];
   if (data.errored) status.textContent = '⚠️ Could not reach the global board — showing scores from this device.';
   else if (data.local) status.textContent = 'Local leaderboard (no backend configured yet).';
-  else status.textContent = rows.length ? 'Global · ' + rows.length + ' hero' + (rows.length === 1 ? '' : 'es') : 'Global leaderboard';
+  else { const scope = lbMode === 'hc' ? 'Hardcore' : 'Standard'; status.textContent = rows.length ? 'Global · ' + scope + ' · ' + rows.length + ' hero' + (rows.length === 1 ? '' : 'es') : 'Global ' + scope + ' leaderboard'; }
   if (!rows.length) {
     list.innerHTML = '<div class="lb-row"><span class="lb-name">No heroes yet — be the first!</span></div>';
     return;
