@@ -16952,9 +16952,12 @@ function renderSkills(el) {
     const barHidden = n.type === 'active' && owned && isSkillHidden(n.id);
     const badge = barHidden ? '🚫' : maxd ? '✓' : avail ? '+' : owned ? rank : ready ? '☆' : '🔒';
     const pips = `<div class="pips">${Array.from({ length: 10 }, (_, i) => `<span class="pip${i < rank ? ' on' : ''}"></span>`).join('')}</div>`;
+    // The node already open in the popover skips its hover/touch teaser, so an
+    // open skill never shows two boxes of the same info at once.
+    const tip = selectedSkillId === n.id ? ''
+      : `data-tip="${skillTipHtml(n)}" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()"`;
     return `<button class="sk-tnode ${state}${n.keystone ? ' keystone' : ''}${n.type === 'active' ? ' act' : ''}${barHidden ? ' barhid' : ''}${selectedSkillId === n.id ? ' sel' : ''}" id="sknode-${n.id}"
-        style="left:${(p[0] * 100).toFixed(2)}%;top:${(p[1] * 100).toFixed(2)}%" onclick="selectSkill('${n.id}')" ondblclick="buySkill('${n.id}')"
-        data-tip="${skillTipHtml(n)}" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
+        style="left:${(p[0] * 100).toFixed(2)}%;top:${(p[1] * 100).toFixed(2)}%" onclick="selectSkill('${n.id}')" ondblclick="buySkill('${n.id}')" ${tip}>
       <span class="ic">${dlIconFill(n.icon)}</span><span class="nm">${n.name}</span><span class="badge">${badge}</span>
     </button>`;
   }).join('');
@@ -17049,35 +17052,13 @@ function skillTipHtml(n) {
   const typeTxt = n.type === 'active'
     ? `⚡ Active · ${skillManaCost(n, rank)}MP · ${n.cd}s cd · ${esc(castShapeLabel(n.cast))}`
     : 'Passive';
+  // Hover/touch tip is a brief teaser only — name, type and what it does. The
+  // full breakdown (mechanics, rank-up preview, requirements, Learn/Hide) lives
+  // in the click popover, so the two don't duplicate a wall of text.
   let h = `<div class='ht-name'>${esc(n.name)} <span style='color:#e8c267'>${rank}/${n.max}${pips ? ' ' + pips : ''}</span></div>`;
   h += `<div class='ht-line' style='color:#9a8fd0'>${typeTxt}</div>`;
   h += `<div class='ht-line'>${esc(n.desc)}</div>`;
-  // The engine mechanics (charges, triggers, synergies, transforms…) as plain
-  // coloured lines — the chip styling lives only in the click popover.
-  for (const m of skillMechList(n)) h += `<div class='ht-line' style='margin-top:2px'><span style='color:${m.color};font-weight:700'>${m.tag}:</span> ${m.desc}</div>`;
-  if (!skillMaxed(n)) {
-    const rows = skillRankUpRows(n, rank);
-    if (rows.length) {
-      h += `<div class='ht-line' style='margin-top:3px;color:#9a8fd0'>${rank > 0 ? `On rank up (${rank}→${rank + 1})` : 'When learned'}</div>`;
-      for (const r of rows) h += `<div class='ht-line'>${r[0]}: ${r[1]}</div>`;
-    }
-  }
-  // Gating: hero level + prerequisite skills, ticked green or locked red.
-  const reqs = [];
-  if ((n.lvl || 1) > 1) {
-    const ok = (player.level || 1) >= n.lvl;
-    reqs.push(`<span style='color:${ok ? '#7ad08a' : '#e08a8a'}'>${ok ? '✓' : '🔒'} Lv ${n.lvl}</span>`);
-  }
-  if (n.req) for (const rid of n.req) {
-    const rn = skillNode(rid); const ok = skillRank(rid) >= 1;
-    reqs.push(`<span style='color:${ok ? '#7ad08a' : '#e08a8a'}'>${ok ? '✓' : '🔒'} ${esc(rn ? rn.name : rid)}</span>`);
-  }
-  if (reqs.length) h += `<div class='ht-line' style='margin-top:3px'>${reqs.join(' · ')}</div>`;
-  // Action hint at the foot of the card.
-  if (skillMaxed(n)) h += `<div class='ht-sub'>✓ Maxed</div>`;
-  else if (canBuySkill(n)) h += `<div class='ht-sub'>Click to learn / rank up</div>`;
-  else if (!skillReqMet(n)) h += `<div class='ht-sub'>Locked — requirements unmet</div>`;
-  else if ((player.skillPoints || 0) <= 0) h += `<div class='ht-sub'>Ready — earn a skill point</div>`;
+  h += `<div class='ht-sub'>${touchUI() ? 'Tap' : 'Click'} for full details</div>`;
   return h;
 }
 
@@ -17272,7 +17253,9 @@ function skillRankUpRows(node, rank) {
     // (more power for more mana) is clear before you spend the point.
     const curMp = skillManaCost(node, rank || 1);
     const nextMp = skillManaCost(node, rank + 1);
-    rows.push(['mana cost', rank > 0 ? `${curMp} → <b>${nextMp}</b> MP` : `<b>${nextMp}</b> MP`]);
+    // Only show mana cost when it actually changes (or on first learn) — a flat
+    // "7 → 7 MP" row is just noise.
+    if (rank === 0 || nextMp !== curMp) rows.push(['mana cost', rank > 0 ? `${curMp} → <b>${nextMp}</b> MP` : `<b>${nextMp}</b> MP`]);
     if (node.cast.summon) {
       const base = node.cast.summon.count || 1;
       const curN = Math.min(8, base + Math.floor(((rank || 1) - 1) / 4));
