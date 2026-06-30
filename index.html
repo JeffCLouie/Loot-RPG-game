@@ -332,6 +332,24 @@
   }
   .settings-item .action-label { font-size: 12px; letter-spacing: 0.5px; }
 
+  /* ── KEYBINDINGS OVERLAY ── */
+  #keybind-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.72); z-index: 600; display: none; align-items: center; justify-content: center; padding: 18px; }
+  #keybind-overlay.open { display: flex; }
+  #keybind-card { background: linear-gradient(180deg, #241c38, #181226); border: 2px solid var(--frame); border-radius: 12px; max-width: 360px; width: 100%; max-height: 82vh; overflow-y: auto; padding: 16px; box-shadow: 0 8px 30px rgba(0,0,0,0.6); }
+  .kb-title { color: var(--gold); font-size: 17px; font-weight: bold; letter-spacing: 1px; margin-bottom: 4px; text-align: center; }
+  .kb-sub { font-size: 11px; color: #b9a98a; line-height: 1.4; margin-bottom: 12px; text-align: center; }
+  #keybind-list { display: flex; flex-direction: column; gap: 5px; }
+  .kb-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 11px; background: #251d3e; border: 1px solid #3a2f5a; border-radius: 7px; color: #d8cdf0; font-family: 'Courier New', monospace; font-size: 12px; cursor: pointer; }
+  .kb-row:active { background: #2e2550; }
+  .kb-row.arming { border-color: var(--gold); background: #33285a; box-shadow: 0 0 8px rgba(232,194,103,0.5); }
+  .kb-act { letter-spacing: 0.5px; }
+  .kb-key { min-width: 64px; text-align: center; padding: 3px 8px; background: #15101f; border: 1px solid #4a3a7a; border-radius: 5px; color: #ffe9a0; font-weight: bold; }
+  .kb-row.arming .kb-key { color: #fff; border-color: var(--gold); }
+  .kb-foot { display: flex; gap: 8px; margin-top: 14px; }
+  .kb-reset, .kb-done { flex: 1; padding: 9px; border-radius: 7px; font-family: 'Courier New', monospace; font-size: 12px; font-weight: bold; cursor: pointer; border: 1px solid #4a3a7a; }
+  .kb-reset { background: #2a2238; color: #c9bce8; }
+  .kb-done { background: #4a3a7a; color: #fff; border-color: #6a55a8; }
+
   /* ── DEATH SCREEN ── */
   #death-overlay { position: fixed; inset: 0; background: rgba(40,0,0,0.78); z-index: 500; display: none; align-items: center; justify-content: center; padding: 20px; }
   #death-overlay.open { display: flex; animation: deathFade 0.35s ease; }
@@ -2632,7 +2650,7 @@
       <div id="action-buttons">
         <!-- The Health Potion now lives at the far left of the skill bar
              (rendered by renderSkillBar), so it's dropped from this nav row. -->
-        <button class="action-btn skill-btn" id="skill-btn" onclick="castSkill()" style="display:none" data-tip="<div class='ht-name'>⚡ Primary Skill</div><div class='ht-line'>Cast your first-learned active skill.</div><div class='ht-sub'>press R</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
+        <button class="action-btn skill-btn" id="skill-btn" onclick="castSkill()" style="display:none" data-tip="<div class='ht-name'>⚡ Primary Skill</div><div class='ht-line'>Cast your first-learned active skill.</div><div class='ht-sub'>cast your primary skill</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
           <span class="action-icon" id="skill-icon">⚡</span><span class="action-label" id="skill-label">SKILL</span>
         </button>
         <button class="action-btn town-action" onclick="enterTown()" data-tip="<div class='ht-name'>🏰 Town</div><div class='ht-line'>Step through the gate to the safe hub — shops, forge, healer, stash.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
@@ -2700,6 +2718,9 @@
         <button class="settings-item watch-action" onclick="window.open('./watch.html','_blank')" data-tip="<div class='ht-name' style='color:#ff6b78'>📺 Watch Live</div><div class='ht-line'>Watch Claude play Dungeon Loot live on the spectator stream.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
           <span class="action-icon"><span class="watch-live-dot"></span></span><span class="action-label">WATCH</span>
         </button>
+        <button class="settings-item" onclick="openKeybinds()">
+          <span class="action-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><line x1="6" y1="10" x2="6" y2="10"/><line x1="10" y1="10" x2="10" y2="10"/><line x1="14" y1="10" x2="14" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/></svg></span><span class="action-label">KEYS</span>
+        </button>
         <!-- Movement-pad position & opacity. Hidden on desktop (no touch d-pad);
              populated by renderDpadControls() when the menu opens. -->
         <div id="dpad-settings">
@@ -2712,6 +2733,19 @@
           <div class="settings-dpad-label">COLOUR</div>
           <div class="settings-dpad-row" id="dpad-color-row"></div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Keybinding settings — remap action hotkeys (movement stays WASD / arrows). -->
+  <div id="keybind-overlay" onclick="if(event.target.id==='keybind-overlay')closeKeybinds()">
+    <div id="keybind-card">
+      <div class="kb-title">⌨️ Keybindings</div>
+      <div class="kb-sub">Click an action, then press the key to bind it. Movement is always WASD / arrow keys; hold Shift to sprint.</div>
+      <div id="keybind-list"></div>
+      <div class="kb-foot">
+        <button class="kb-reset" onclick="resetKeybinds()">Reset to defaults</button>
+        <button class="kb-done" onclick="closeKeybinds()">Done</button>
       </div>
     </div>
   </div>
@@ -6404,7 +6438,7 @@ window.gameState = function gameState(radius) {
   const MODALS = [
     ['title-overlay', 'title'], ['class-overlay', 'classSelect'], ['death-overlay', 'dead'],
     ['settings-menu', 'settings'], ['version-overlay', 'changelog'], ['playtime-overlay', 'playtime'],
-    ['howto-overlay', 'howto'], ['autoloot-overlay', 'autoloot'],
+    ['howto-overlay', 'howto'], ['autoloot-overlay', 'autoloot'], ['keybind-overlay', 'keybinds'],
     ['shop-overlay', 'shop'], ['mystic-overlay', 'mystic'], ['town-overlay', 'town'],
   ];
   let mode = 'dungeon', blockingOverlay = null;
@@ -16275,7 +16309,7 @@ function updateBars() {
       const cd = skillCd(sk.id);
       const ready = cd <= 0 && player.mp >= sk.mp && !inTown;
       if (label) label.textContent = cd > 0 ? `${Math.ceil(cd)}s` : `${sk.mp}MP`;
-      skillBtn.dataset.tip = `<div class='ht-name' style='color:#e6c34a'>${dlIcon(sk.icon,16)||''} ${sk.name}</div><div class='ht-line'>${sk.desc}</div><div class='ht-sub'>${sk.mp} MP · ${sk.cd}s cooldown · ${touchUI() ? 'tap to cast' : 'press R'}</div>`;
+      skillBtn.dataset.tip = `<div class='ht-name' style='color:#e6c34a'>${dlIcon(sk.icon,16)||''} ${sk.name}</div><div class='ht-line'>${sk.desc}</div><div class='ht-sub'>${sk.mp} MP · ${sk.cd}s cooldown · ${touchUI() ? 'tap to cast' : 'press ' + skillKeyLabel(1)}</div>`;
       skillBtn.classList.toggle('disabled', !ready);
       skillBtn.classList.toggle('ready', ready && player.hp > 0);
     } else {
@@ -16601,7 +16635,7 @@ function renderHero(el) {
       <div class="hc-line">${cls.passive}</div>
       <div class="hc-line">⚔️ Damage scales with <b>${ATTRIBUTES[dmgA.primary].label}</b>${dmgA.secondary ? ` & ${ATTRIBUTES[dmgA.secondary].label}` : ''}</div>
       ${(() => { const pri = visibleSkillList()[0], sig = classSignature(player.class);
-        return pri ? `<div class="hc-line">${dlIcon(pri.icon,18)||''} <b>${pri.name}</b> — ${pri.desc} <span style="opacity:0.7">(${pri.mp} MP · ${touchUI() ? 'tap to cast' : 'press R'})</span></div>`
+        return pri ? `<div class="hc-line">${dlIcon(pri.icon,18)||''} <b>${pri.name}</b> — ${pri.desc} <span style="opacity:0.7">(${pri.mp} MP · ${touchUI() ? 'tap to cast' : 'press ' + skillKeyLabel(1)})</span></div>`
           : (sig ? `<div class="hc-line" style="opacity:0.8">Spend a skill point to learn ${dlIcon(sig.icon,16)||''} <b>${sig.name}</b> (SKILLS tab)</div>` : ''); })()}
       ${ascData() ? `<div class="hc-line" style="color:${ascData().color}">${dlIcon(ascData().icon,18)||''} <b>${ascData().name}</b> — ${ascData().blurb}</div>`
         : (cls && (player.level || 1) >= ASCEND_LEVEL ? `<div class="hc-line" style="color:#e8c267">🌟 Ready to ascend — visit the Trainer 🎓</div>` : '')}
@@ -17175,16 +17209,16 @@ function renderSkillBar() {
   const hpFull = player.hp >= player.maxHp;
   const mpFull = player.mp >= player.maxMp;
   const urgent = potReady && player.hp < player.maxHp * 0.35;
-  const healHint = touchUI() ? 'tap to drink' : 'press 1';
-  const manaHint = touchUI() ? 'tap to drink' : 'press 2';
+  const healHint = touchUI() ? 'tap to drink' : 'press ' + kbLabel('healthPotion');
+  const manaHint = touchUI() ? 'tap to drink' : 'press ' + kbLabel('manaPotion');
   const healTip = `<div class='ht-name' style='color:var(--hp)'>❤️ Health Potion</div><div class='ht-line'>Quaff to restore a burst of health.</div><div class='ht-sub'>${healHint} · ${POTION_CD}-second cooldown</div>`;
   const manaTip = `<div class='ht-name' style='color:var(--mp)'>🔷 Mana Potion</div><div class='ht-line'>Quaff to restore a burst of mana.</div><div class='ht-sub'>${manaHint} · ${POTION_CD}-second cooldown</div>`;
   const cdDial = (key) => `<span class="sb-cd" data-cd="${key}"></span>`;
   const healBtn = `<button class="skillbar-btn potion ${potReady && !hpFull ? 'ready' : 'empty'} ${urgent ? 'urgent' : ''} ${pcd > 0 ? 'cooling' : ''}" ${hoverTip(healTip)} onclick="useHealthPotion()">
-      <span class="sb-key">1</span><span class="sb-icon">${HEAL_POTION_SVG}</span><span class="sb-info" id="heal-label">${pcd > 0 ? Math.ceil(pcd) + 's' : ''}</span>${cdDial('pot')}
+      <span class="sb-key">${kbLabel('healthPotion')}</span><span class="sb-icon">${HEAL_POTION_SVG}</span><span class="sb-info" id="heal-label">${pcd > 0 ? Math.ceil(pcd) + 's' : ''}</span>${cdDial('pot')}
     </button>`;
   const manaBtn = `<button class="skillbar-btn potion mana ${potReady && !mpFull ? 'ready' : 'empty'} ${pcd > 0 ? 'cooling' : ''}" ${hoverTip(manaTip)} onclick="useManaPotion()">
-      <span class="sb-key">2</span><span class="sb-icon">${MANA_POTION_SVG}</span><span class="sb-info">${pcd > 0 ? Math.ceil(pcd) + 's' : ''}</span>${cdDial('pot')}
+      <span class="sb-key">${kbLabel('manaPotion')}</span><span class="sb-icon">${MANA_POTION_SVG}</span><span class="sb-info">${pcd > 0 ? Math.ceil(pcd) + 's' : ''}</span>${cdDial('pot')}
     </button>`;
   let num = 0;
   const skillsHtml = skills.map((s) => {
@@ -17194,8 +17228,8 @@ function renderSkillBar() {
     // any beyond that are click/tap only (a deep build can learn more actives
     // than there are keys). The first active also answers to R / the ⚡ button.
     const idx = ++num;
-    const key = idx <= 7 ? String(idx + 2) : '';
-    const keyHint = idx === 1 ? (key ? `${key} or R` : 'R') : key;
+    const key = skillKeyLabel(idx);
+    const keyHint = key;
     // Desktop names the number/R key; touch (no keyboard, reached by long-press) says "tap to cast".
     const castHint = touchUI() ? ' · tap to cast' : (keyHint ? ` · press ${keyHint}` : '');
     const tip = `<div class='ht-name' style='color:#e6c34a'>${dlIcon(s.icon,16)||''} ${s.name}</div><div class='ht-line'>${s.desc}</div><div class='ht-sub'>${s.mp} MP · ${s.cd}s cooldown${castHint}</div>`;
@@ -17213,10 +17247,10 @@ function renderSkillBar() {
   if (!touchUI()) {
     const ch = portalChanneling();
     const townTip = ch
-      ? `<div class='ht-name'>🌀 Town Portal</div><div class='ht-line'>Opening… ${portalCharge} turn${portalCharge === 1 ? '' : 's'} left. A foe's hit shatters it.</div><div class='ht-sub'>press 0 to cancel</div>`
-      : `<div class='ht-name'>🏰 Town Portal</div><div class='ht-line'>Open a portal to the safe hub. It channels for a few turns — you can't act while it does, and a foe's hit shatters it.</div><div class='ht-sub'>press 0</div>`;
+      ? `<div class='ht-name'>🌀 Town Portal</div><div class='ht-line'>Opening… ${portalCharge} turn${portalCharge === 1 ? '' : 's'} left. A foe's hit shatters it.</div><div class='ht-sub'>press ${kbLabel('portal')} to cancel</div>`
+      : `<div class='ht-name'>🏰 Town Portal</div><div class='ht-line'>Open a portal to the safe hub. It channels for a few turns — you can't act while it does, and a foe's hit shatters it.</div><div class='ht-sub'>press ${kbLabel('portal')}</div>`;
     townBtn = `<button class="skillbar-btn town${ch ? ' channeling' : ''}" ${hoverTip(townTip)} onclick="enterTown()">
-      <span class="sb-key">0</span><span class="sb-icon">${dlIcon('ui_gate',24) || '🏰'}</span><span class="sb-info">${ch ? portalCharge : 'TOWN'}</span>
+      <span class="sb-key">${kbLabel('portal')}</span><span class="sb-icon">${dlIcon('ui_gate',24) || '🏰'}</span><span class="sb-info">${ch ? portalCharge : 'TOWN'}</span>
     </button>`;
   }
   bar.innerHTML = townBtn + healBtn + manaBtn + skillsHtml;
@@ -17402,7 +17436,7 @@ function renderPaperdoll() {
   const bottom = `<div class="pd-bottom">${renderDollSlot('hands')}${renderDollSlot('legs')}</div>`;
   return gearSetBarHTML() + `<div class="paperdoll">${bodyHTML}${cells}${bottom}
     <div class="pd-hint">Tap a slot for details · ✕ to unequip · EQUIP loot from the LOOT tab</div>
-    <div class="pd-hint">Two loadouts — switch sets above or press G</div>
+    <div class="pd-hint">Two loadouts — switch sets above or press ${kbLabel('swapWeapon')}</div>
   </div>`;
 }
 
@@ -17911,6 +17945,7 @@ function handleEscape() {
   if (close('playtime-overlay', closePlayTime)) return true;
   if (close('autoloot-overlay', closeAutoLoot)) return true;
   if (close('death-overlay', closeDeath)) return true;
+  if (close('keybind-overlay', closeKeybinds)) return true;
   if (close('settings-menu', () => document.getElementById('settings-menu').classList.remove('open'))) return true;
   if (close('shop-overlay', shopClose)) return true;
   if (close('mystic-overlay', mysticClose)) return true;
@@ -17952,10 +17987,96 @@ document.addEventListener('keyup', e => {
   if (e.key === 'Shift') sprintHeld = false;
 });
 
+// ── KEYBINDINGS ──────────────────────────────────────────────────────────────
+// Remappable action -> key, editable from the gear menu (KEYS) and saved to
+// localStorage. Movement (WASD / arrows) and Sprint (hold Shift) stay fixed.
+// The Town Portal default is the tilde/backquote key (stored as '\u0060').
+const KEYBIND_ACTIONS = [
+  { id:'healthPotion', label:'Health Potion',     def:'q' },
+  { id:'manaPotion',   label:'Mana Potion',       def:'r' },
+  { id:'interact',     label:'Interact / Use',    def:'e' },
+  { id:'portal',       label:'Town Portal',       def:'\u0060' },
+  { id:'swapWeapon',   label:'Swap Weapon Set',   def:'x' },
+  { id:'bag',          label:'Bag / Inventory',   def:'b' },
+  { id:'dash',         label:'Dash',              def:' ' },
+  { id:'skill1', label:'Skill 1 (primary)', def:'1' },
+  { id:'skill2', label:'Skill 2', def:'2' },
+  { id:'skill3', label:'Skill 3', def:'3' },
+  { id:'skill4', label:'Skill 4', def:'4' },
+  { id:'skill5', label:'Skill 5', def:'5' },
+  { id:'skill6', label:'Skill 6', def:'6' },
+  { id:'skill7', label:'Skill 7', def:'7' },
+  { id:'skill8', label:'Skill 8', def:'8' },
+  { id:'skill9', label:'Skill 9', def:'9' },
+];
+const KEYBINDS_STORE = 'dungeonLoot_keybinds';
+let keybinds = (function () {
+  const d = {}; for (const a of KEYBIND_ACTIONS) d[a.id] = a.def;
+  try { const raw = JSON.parse(localStorage.getItem(KEYBINDS_STORE) || '{}');
+    for (const a of KEYBIND_ACTIONS) if (typeof raw[a.id] === 'string') d[a.id] = raw[a.id]; } catch (e) {}
+  return d;
+})();
+function saveKeybinds() { try { localStorage.setItem(KEYBINDS_STORE, JSON.stringify(keybinds)); } catch (e) {} }
+// Normalise a KeyboardEvent into a comparable token: lowercase letters, the
+// backquote char for the tilde key (with or without Shift), ' ' for Space.
+function keyTok(e) {
+  let k = e.key;
+  if (k === ' ' || k === 'Spacebar') return ' ';
+  if (k === '~') return '\u0060';
+  if (k.length === 1) return k.toLowerCase();
+  return k;
+}
+function actionForKey(tok) { for (const a of KEYBIND_ACTIONS) if (keybinds[a.id] === tok) return a.id; return null; }
+// Human-readable label for a bound key, used in tooltips and the skill bar.
+function kbLabel(id) {
+  const k = keybinds[id];
+  if (k == null || k === '') return '-';
+  if (k === ' ') return 'Space';
+  if (k === '\u0060') return '~';
+  return k.length === 1 ? k.toUpperCase() : k;
+}
+// Label for the key that casts visible skill slot n (1-based); '' past slot 9.
+function skillKeyLabel(n) { return n <= 9 ? kbLabel('skill' + n) : ''; }
+
+// ── Keybinding settings overlay ──
+let keybindCapture = null; // action id awaiting a keypress, or null
+function openKeybinds() {
+  keybindCapture = null;
+  const m = document.getElementById('settings-menu'); if (m) m.classList.remove('open');
+  const o = document.getElementById('keybind-overlay'); if (o) o.classList.add('open');
+  renderKeybinds();
+}
+function closeKeybinds() { keybindCapture = null; const o = document.getElementById('keybind-overlay'); if (o) o.classList.remove('open'); }
+function armKeybind(id) { keybindCapture = (keybindCapture === id ? null : id); renderKeybinds(); }
+function resetKeybinds() { for (const a of KEYBIND_ACTIONS) keybinds[a.id] = a.def; keybindCapture = null; saveKeybinds(); renderKeybinds(); if (typeof renderSkillBar === 'function') renderSkillBar(); }
+function renderKeybinds() {
+  const el = document.getElementById('keybind-list'); if (!el) return;
+  el.innerHTML = KEYBIND_ACTIONS.map(a =>
+    `<button class="kb-row${keybindCapture === a.id ? ' arming' : ''}" onclick="armKeybind('${a.id}')"><span class="kb-act">${a.label}</span><span class="kb-key">${keybindCapture === a.id ? 'press a key...' : kbLabel(a.id)}</span></button>`
+  ).join('');
+}
+
 document.addEventListener('keydown', e => {
   // Don't hijack typing — let text fields (e.g. the hero name box) get the keys.
   const t = e.target;
   if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+  // Remapping a hotkey? Capture the next key (Esc cancels) and rebind it, clearing
+  // any other action that used that key so bindings stay unique.
+  if (keybindCapture) {
+    e.preventDefault();
+    if (e.key !== 'Escape') {
+      const tok = keyTok(e);
+      for (const a of KEYBIND_ACTIONS) if (a.id !== keybindCapture && keybinds[a.id] === tok) keybinds[a.id] = '';
+      keybinds[keybindCapture] = tok;
+      saveKeybinds(); if (typeof renderSkillBar === 'function') renderSkillBar();
+    }
+    keybindCapture = null; renderKeybinds();
+    return;
+  }
+  // While the keybind overlay is up, swallow gameplay keys so they don't fire
+  // behind it; only Escape (to close it) gets through.
+  const kbov = document.getElementById('keybind-overlay');
+  if (kbov && kbov.classList.contains('open')) { if (e.key === 'Escape') { closeKeybinds(); e.preventDefault(); } return; }
   // Esc backs out of menus even during the mandatory class pick is NOT allowed,
   // so handle Esc only after that guard.
   const cov = document.getElementById('class-overlay');
@@ -17973,21 +18094,20 @@ document.addEventListener('keydown', e => {
     return;
   }
   if (e.key === 'Shift')                 { sprintHeld = true; return; } // hold to sprint
-  if (e.key===' ')                       { e.preventDefault(); doDash(); return; } // dash burst
-  if (e.key==='f'||e.key==='e'||e.key==='E') pickup();   // use / pick up / talk
-  if (e.key==='1')                       useHealthPotion();
-  if (e.key==='2')                       useManaPotion();
-  if (e.key==='q'||e.key==='Q')          useHealthPotion();           // legacy alias
-  if (e.key==='r'||e.key==='R')          castSkill();
-  // Number keys 3–9 cast learned tree/path actives (1 & 2 are potions).
-  if (e.key>='3' && e.key<='9') {
-    const list = visibleSkillList();
-    const sk = list[parseInt(e.key, 10) - 3];
+  // Everything else routes through the remappable keybinds (see KEYBIND_ACTIONS).
+  const act = actionForKey(keyTok(e));
+  if (act === 'dash')         { e.preventDefault(); doDash(); return; }
+  if (act === 'interact')     { pickup(); return; }
+  if (act === 'healthPotion') { useHealthPotion(); return; }
+  if (act === 'manaPotion')   { useManaPotion(); return; }
+  if (act === 'portal')       { enterTown(); return; }
+  if (act === 'swapWeapon')   { toggleGearSet(); return; }
+  if (act === 'bag')          { togglePanel(); return; }
+  if (act && act.indexOf('skill') === 0) {            // skill1..skill9 -> visible slot
+    const sk = visibleSkillList()[parseInt(act.slice(5), 10) - 1];
     if (sk) castSkillById(sk.id);
+    return;
   }
-  if (e.key==='t'||e.key==='T'||e.key==='0') enterTown();   // 0 mirrors the skill-bar TOWN button
-  if (e.key==='b'||e.key==='B'||e.key==='i'||e.key==='I') togglePanel();
-  if (e.key==='g'||e.key==='G') toggleGearSet();             // swap between gear set 1 and 2
 });
 
 // ══════════════════════════════════════════
@@ -19803,11 +19923,11 @@ log('Progress auto-saves automatically as you play.');
 log('Open 🎒 BAG to view your loot; press the pad\'s USE button to grab items.');
 log(`Tap the ❤️ or 🔷 flask to quaff a ${logPotion('Potion')} — they're a skill now, free to use but share a 5-second cooldown.`);
 log('⌨️ Keys: Q health potion · E mana potion · R primary skill · 3–9 skills · T town · B open bag · Space/F use.');
-log('⚡ You start with a skill point — open 🎒 BAG ▸ SKILLS to learn your first active, then tap ⚡ (or press R) to cast it.');
+log('⚡ You start with a skill point — open 🎒 BAG ▸ SKILLS to learn your first active, then tap ⚡ (or press ' + skillKeyLabel(1) + ') to cast it.');
 log('⚡ Each item has a Power value; your total Power blends level, gear, and attributes.');
 log('💠 Level up to earn points, then raise attributes in the bag\'s HERO tab.');
 log('🗡️ Every weapon fights differently — axes cleave, daggers flurry, bows & staves strike at range, maces stun, scythes drain. Try them all!');
-log('🏰 Tap TOWN (or press T) to warp to the safe hub: craftsman, healer, trainer, enchanter, and a gate to re-enter any floor you\'ve reached.');
+log('🏰 Tap TOWN (or press ' + kbLabel('portal') + ') to warp to the safe hub: craftsman, healer, trainer, enchanter, and a gate to re-enter any floor you\'ve reached.');
 log('🧰 Foes drop crafting materials — 🔩 Scrap, 🔆 Core, ✨ Glimmer, 🌀 Chaos Orb. The 🔨 Craftsman forges blank gear; the 🪄 Enchanter fills in its modifiers.');
 log('♻️ Tap any loot in your 🎒 BAG to Sell it for gold or Scrap it into materials — any time, no vendor needed. Use the ♻️ Auto-Loot button on the LOOT tab to do it automatically by rarity on pickup.');
 log('⚔️ Move freely in real time and auto-attack foes in reach — get surrounded and every foe piles on, so don\'t let them encircle you.');
@@ -19856,7 +19976,7 @@ if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => draw
 // (panelOpen always true) must NOT count, or web players could never move.
 const RT_BLOCKING_OVERLAYS = ['title-overlay','name-overlay','class-overlay','hc-death-overlay','death-overlay',
   'shop-overlay','mystic-overlay','town-overlay','settings-menu','version-overlay','howto-overlay',
-  'playtime-overlay','autoloot-overlay','newrun-overlay',
+  'playtime-overlay','autoloot-overlay','newrun-overlay','keybind-overlay',
   // Reachable mid-dungeon (e.g. from the ⚙️ menu or on a tier conquest) — these
   // close the settings menu, so they must pause the world on their own.
   'conquest-overlay','slots-overlay','account-overlay','lb-overlay','graveyard-overlay'];
