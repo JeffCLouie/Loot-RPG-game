@@ -912,6 +912,52 @@
   }
   .skillbar-btn.town.channeling { border-color: #6ec8ff; background: #1c3550; color: #d6ecff; animation: portalCharging 1s ease-in-out infinite; }
   .action-btn.town-action.channeling { animation: portalCharging 1s ease-in-out infinite; }
+  /* Every hotkey slot is rendered, even unassigned ones, as a dashed drop target
+     you can drag a learned skill onto (or tap to assign). Kept compact and dim so
+     a row of open slots reads as "space to fill", not clutter. */
+  .skillbar-btn.slot-empty { min-width: 34px; background: #1d182b; border: 1px dashed #4a3a7a; color: #6a5fa0; opacity: 0.72; }
+  .skillbar-btn.slot-empty:hover { opacity: 1; border-color: #8a6fff; color: #cbb8ff; }
+  .skillbar-btn.slot-empty .slot-plus { font-size: 18px; line-height: 1; font-weight: 700; }
+  .skillbar-btn.slot-empty.baseline { border-color: #8a6a3a; color: #b09a6a; background: #241d12; }
+  /* A slot lit while a dragged skill hovers over it — the live drop hint. */
+  .skillbar-btn.slot-drop-hot, .lt-slot.slot-drop-hot { border-color: #ffd86a !important; box-shadow: 0 0 8px #ffd86a99; transform: translateY(-2px); }
+  .skillbar-btn[draggable="true"] { cursor: grab; }
+  .skillbar-btn[draggable="true"]:active { cursor: grabbing; }
+
+  /* SKILLS-tab loadout tray — the bank of slots you drag learned actives into. It
+     sits above the skill tree so the source nodes and the slots are co-visible. */
+  .sk-loadout { margin: 4px 0 8px; padding: 6px 8px; border: 1px solid #3a2f5a; border-radius: 9px; background: #1c1730; }
+  .lt-title { font-size: 11px; color: #cbb8ff; margin-bottom: 5px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
+  .lt-hint { font-size: 9px; color: #8a7fc0; opacity: 0.85; }
+  .lt-row { display: flex; flex-wrap: wrap; gap: 5px; }
+  .lt-slot { position: relative; width: 46px; height: 46px; border-radius: 8px; border: 1px solid #4a3a7a; background: #2a1f4a; display: flex; align-items: center; justify-content: center; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .lt-slot.primary { border-color: var(--gold); background: #3a2f1a; }
+  .lt-slot.empty { background: #1d182b; border-style: dashed; color: #6a5fa0; }
+  .lt-slot.empty:hover { border-color: #8a6fff; }
+  .lt-slot[draggable="true"] { cursor: grab; }
+  .lt-slot .lt-key { position: absolute; top: 1px; left: 3px; font-size: 8px; color: #8a7fc0; }
+  .lt-slot.primary .lt-key { color: var(--gold); }
+  .lt-slot .lt-plus { font-size: 20px; font-weight: 700; opacity: 0.7; }
+  .lt-slot .dl-ic, .lt-slot .lt-ic { pointer-events: none; }
+
+  /* Slot-assign picker — the tap fallback (and quick desktop path) for choosing
+     which learned active fills a slot, with a Clear action. */
+  #slotpick-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.72); z-index: 620; display: none; align-items: center; justify-content: center; padding: 18px; }
+  #slotpick-overlay.open { display: flex; }
+  #slotpick-card { width: min(420px, 94vw); max-height: 82vh; overflow-y: auto; background: #1a1530; border: 1px solid #4a3a7a; border-radius: 12px; padding: 14px; box-shadow: 0 10px 40px rgba(0,0,0,0.6); }
+  .slotpick-head { font-size: 14px; color: #cbb8ff; margin-bottom: 10px; font-weight: 700; }
+  .slotpick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px; }
+  .slotpick-skill { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px; border: 1px solid #4a3a7a; border-radius: 8px; background: #2a1f4a; color: #cbb8ff; cursor: pointer; font-family: 'Courier New', monospace; }
+  .slotpick-skill:hover { border-color: #8a6fff; background: #34285a; }
+  .slotpick-skill.cur { border-color: var(--gold); background: #3a2f1a; color: #fff3cf; }
+  .slotpick-skill .sp-nm { font-size: 10px; text-align: center; line-height: 1.15; }
+  .slotpick-skill .sp-meta { font-size: 8px; opacity: 0.7; }
+  .slotpick-empty { font-size: 12px; color: #9a8fd0; padding: 8px; text-align: center; }
+  .slotpick-actions { display: flex; gap: 8px; margin-top: 12px; justify-content: flex-end; }
+  .slotpick-clear, .slotpick-cancel { padding: 7px 12px; border-radius: 8px; border: 1px solid #4a3a7a; background: #2a1f4a; color: #cbb8ff; cursor: pointer; font-family: 'Courier New', monospace; font-size: 12px; }
+  .slotpick-clear { border-color: #a03048; background: #3a1620; color: #ffb3c0; }
+  .slotpick-clear:hover { background: #6a1a2a; }
+  .slotpick-cancel:hover { border-color: #8a6fff; }
 
   #panel-content { flex: 1; overflow-y: auto; padding: 6px; }
   #panel-content::-webkit-scrollbar { width: 4px; }
@@ -2759,6 +2805,13 @@
         <button class="kb-done" onclick="closeKeybinds()">Done</button>
       </div>
     </div>
+  </div>
+
+  <!-- Skill-slot assign picker — tap a slot (bar or SKILLS-tab tray) to choose
+       which learned active fills it, or clear it. The touch-friendly counterpart
+       to dragging a skill onto the slot. -->
+  <div id="slotpick-overlay" onclick="if(event.target.id==='slotpick-overlay')closeSlotPicker()">
+    <div id="slotpick-card"><div id="slotpick-body"></div></div>
   </div>
 
   <!-- Death screen — a hard, unmistakable stop with the penalties spelled out. -->
@@ -6000,21 +6053,144 @@ function activeSkillList() {
   }
   return list;
 }
-// The actives the player actually wants on the skill bar / hotkeys. High-level
-// heroes can learn far more actives than they use, so any can be hidden away
-// (toggled from its node popover in the SKILLS tab). Hidden skills stay learned
-// and fully ranked — they're just dropped from the bar, the number keys, and the
-// R-keyed primary slot to keep the bar uncluttered.
-function visibleSkillList() {
-  const hidden = player.hiddenSkills || {};
-  return activeSkillList().filter(s => !hidden[s.id]);
+// Which learned actives reach the skill bar / hotkeys is now governed by explicit
+// hotkey slots (player.skillSlots) the player fills, not an auto-filled list — see
+// the ACTIVE SKILL SLOTS section just below. The legacy "hidden skills" map is read
+// once on load to seed those slots, then no longer consulted.
+
+// ── ACTIVE SKILL SLOTS ──────────────────────────────────────────────────────
+// The hero keeps a fixed row of SKILL_SLOTS hotkey slots (keys 1–9; slot 1 is the
+// R-keyed primary). Each slot holds a learned active's id, or null when empty.
+// The skill bar renders EVERY slot — empty ones included — as a drop target, and
+// players drag learned actives into slots / drag slots around to rearrange.
+const SKILL_SLOTS = 9;
+// Normalise player.skillSlots to a length-SKILL_SLOTS array of ids|null, dropping
+// any id that's no longer a learned active and de-duping repeats (mutates + returns).
+function normSkillSlots() {
+  const learned = new Set(activeSkillList().map(s => s.id));
+  const src = Array.isArray(player.skillSlots) ? player.skillSlots : [];
+  const out = [], seen = new Set();
+  for (let i = 0; i < SKILL_SLOTS; i++) {
+    let id = src[i];
+    if (!id || !learned.has(id) || seen.has(id)) id = null;
+    if (id) seen.add(id);
+    out.push(id);
+  }
+  player.skillSlots = out;
+  return out;
 }
-function isSkillHidden(id) { return !!(player.hiddenSkills && player.hiddenSkills[id]); }
-function toggleSkillHidden(id) {
-  if (!player.hiddenSkills) player.hiddenSkills = {};
-  if (player.hiddenSkills[id]) delete player.hiddenSkills[id];
-  else player.hiddenSkills[id] = true;
+// The skill object assigned to slot i, or null when the slot is empty / stale.
+function slotSkill(i) {
+  const id = normSkillSlots()[i];
+  return id ? (activeSkillList().find(s => s.id === id) || null) : null;
+}
+function skillSlotIndexOf(id) { return normSkillSlots().indexOf(id); }
+// The hero's primary active — slot 1 if filled, else the first non-empty slot.
+// Drives the R key, the ⚡ button, and the character-panel summary.
+function primarySkill() {
+  const slots = normSkillSlots();
+  const id = slots[0] || slots.find(x => x);
+  return id ? (activeSkillList().find(s => s.id === id) || null) : null;
+}
+// Drop a freshly-learned active into the first open slot so it lands on the bar
+// automatically (mirrors the old auto-filled bar); a full bar leaves it unassigned
+// for the player to slot by hand.
+function autoSlotSkill(id) {
+  const slots = normSkillSlots();
+  if (slots.includes(id)) return;
+  const e = slots.indexOf(null);
+  if (e >= 0) slots[e] = id;
+}
+// Toggle a learned active on/off the bar: add it to the first free slot, or pull
+// it off if it's already slotted. Used by the SKILLS-tab popover button.
+function toggleSkillSlot(id) {
+  const slots = normSkillSlots();
+  const at = slots.indexOf(id);
+  if (at >= 0) { slots[at] = null; }
+  else {
+    const e = slots.indexOf(null);
+    if (e < 0) { log('Every skill slot is full — clear one first to add this skill.'); return; }
+    slots[e] = id;
+  }
   renderPanel(); renderSkillBar(); saveGame();
+}
+// Assign a skill to a specific slot (drag-drop + the slot picker). Clearing it from
+// any other slot it occupied keeps a skill from being doubled up across the bar.
+function assignSkillToSlot(id, slot) {
+  const slots = normSkillSlots();
+  if (slot < 0 || slot >= SKILL_SLOTS) return;
+  if (id) { const prev = slots.indexOf(id); if (prev >= 0) slots[prev] = null; }
+  slots[slot] = id || null;
+  renderPanel(); renderSkillBar(); saveGame();
+}
+// Swap two slots (or move into an empty cell) — the rearrange.
+function swapSkillSlots(a, b) {
+  const slots = normSkillSlots();
+  if (a === b || a < 0 || b < 0 || a >= SKILL_SLOTS || b >= SKILL_SLOTS) return;
+  const t = slots[a]; slots[a] = slots[b]; slots[b] = t;
+  renderPanel(); renderSkillBar(); saveGame();
+}
+
+// ── Skill-slot drag & drop ──────────────────────────────────────────────────
+// One shared drag for both the in-HUD skill bar and the SKILLS-tab loadout tray.
+// `id` is the active being dragged; `from` is its source slot index, or -1 when
+// it's dragged straight off a learned tree node (an assign, not a rearrange).
+let skillDrag = null;
+function skillDragStart(e, id, from) {
+  skillDrag = { id, from: (from == null ? -1 : from) };
+  if (e.dataTransfer) { e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', id); } catch (_) {} }
+}
+function skillDragEnd() {
+  skillDrag = null;
+  const hot = document.querySelectorAll('.slot-drop-hot');
+  for (let i = 0; i < hot.length; i++) hot[i].classList.remove('slot-drop-hot');
+}
+function skillSlotDragOver(e) { if (!skillDrag) return; e.preventDefault(); if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'; }
+function skillSlotDragEnter(e, el) { if (skillDrag && el) el.classList.add('slot-drop-hot'); }
+function skillSlotDragLeave(e, el) { if (el) el.classList.remove('slot-drop-hot'); }
+function skillSlotDropOn(e, slot) {
+  e.preventDefault();
+  if (!skillDrag) return;
+  const d = skillDrag; skillDragEnd();
+  if (d.from >= 0) swapSkillSlots(d.from, slot);   // rearrange between slots
+  else assignSkillToSlot(d.id, slot);              // assign a learned active
+}
+
+// ── Slot-assign picker ──────────────────────────────────────────────────────
+// Tap fallback (and a quick desktop path) for filling a slot without dragging:
+// a small overlay listing every learned active to drop in, plus Clear.
+let slotPickFor = null;
+function openSlotPicker(slot) {
+  if (!activeSkillList().length) { log('No active skills learned yet — spend a skill point in the SKILLS tab.'); return; }
+  slotPickFor = slot;
+  renderSlotPicker();
+  const ov = document.getElementById('slotpick-overlay'); if (ov) ov.classList.add('open');
+}
+function closeSlotPicker() { slotPickFor = null; const ov = document.getElementById('slotpick-overlay'); if (ov) ov.classList.remove('open'); }
+function pickSlotSkill(id) { const s = slotPickFor; closeSlotPicker(); if (s != null) assignSkillToSlot(id, s); }
+function clearSlot() { const s = slotPickFor; closeSlotPicker(); if (s != null) assignSkillToSlot(null, s); }
+function renderSlotPicker() {
+  const body = document.getElementById('slotpick-body');
+  if (!body || slotPickFor == null) return;
+  const slots = normSkillSlots();
+  const actives = activeSkillList();
+  const cur = slots[slotPickFor];
+  const cells = actives.map(s => {
+    const usedSlot = slots.indexOf(s.id);
+    const here = usedSlot === slotPickFor, elsewhere = usedSlot >= 0 && !here;
+    return `<button class="slotpick-skill${here ? ' cur' : ''}" onclick="pickSlotSkill('${s.id}')">
+      <span class="sp-ic">${dlIcon(s.icon, 30) || ''}</span>
+      <span class="sp-nm">${s.name}</span>
+      <span class="sp-meta">${here ? 'in this slot' : elsewhere ? 'slot ' + (usedSlot + 1) : s.mp + ' MP'}</span>
+    </button>`;
+  }).join('');
+  body.innerHTML = `
+    <div class="slotpick-head">Assign to slot ${slotPickFor + 1}${cur ? '' : ' (empty)'}</div>
+    <div class="slotpick-grid">${cells}</div>
+    <div class="slotpick-actions">
+      ${cur ? `<button class="slotpick-clear" onclick="clearSlot()">✕ Clear slot</button>` : ''}
+      <button class="slotpick-cancel" onclick="closeSlotPicker()">Cancel</button>
+    </div>`;
 }
 function skillCd(id) { return (player.skillCds && player.skillCds[id]) || 0; }
 // Remembers each skill's full cooldown (seconds) at cast time, so the cooldown
@@ -6027,8 +6203,12 @@ function buySkill(id) {
   if (!node) return;
   if (!canBuySkill(node)) { log('You can\'t learn that yet — check its level and prerequisites.'); return; }
   if (!player.skills) player.skills = {};
+  const firstRank = !(player.skills[id] > 0);
   player.skills[id] = (player.skills[id] || 0) + 1;
   player.skillPoints--;
+  // A newly-learned active drops onto the first open hotkey slot so it reaches the
+  // bar without a manual assign (the player can re-slot it any time).
+  if (firstRank && node.type === 'active') autoSlotSkill(id);
   // Passives that raise max HP/MP grant the new headroom immediately.
   const beforeHp = player.maxHp, beforeMp = player.maxMp;
   recomputeMaxStats();
@@ -6288,8 +6468,9 @@ let player = { x: 5, y: 5,
   bestiary: {},
   // Skill tree — 1 skill point earned per level (separate from attribute points),
   // spent on the class's passive/active/path nodes. `skills` maps node id → rank;
-  // `skillCds` holds each active skill's independent cooldown.
-  skillPoints: 0, skills: {}, skillCds: {},
+  // `skillCds` holds each active skill's independent cooldown. `skillSlots` is the
+  // ordered row of hotkey slots (id|null per slot) the player fills on the bar.
+  skillPoints: 0, skills: {}, skillCds: {}, skillSlots: [],
   // Hero attributes — every one starts at ATTR_BASE and is raised by spending
   // points earned on level up. attrSchema marks the attribute-driven-stats model
   // (v2) so older saves can be migrated on load.
@@ -6541,6 +6722,7 @@ window.gameState = function gameState(radius) {
     ['title-overlay', 'title'], ['class-overlay', 'classSelect'], ['death-overlay', 'dead'],
     ['settings-menu', 'settings'], ['version-overlay', 'changelog'], ['playtime-overlay', 'playtime'],
     ['howto-overlay', 'howto'], ['autoloot-overlay', 'autoloot'], ['keybind-overlay', 'keybinds'],
+    ['slotpick-overlay', 'slotpick'],
     ['shop-overlay', 'shop'], ['mystic-overlay', 'mystic'], ['town-overlay', 'town'],
   ];
   let mode = 'dungeon', blockingOverlay = null;
@@ -7340,6 +7522,8 @@ document.addEventListener('click', (e) => {
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
   { date: '2026-06-30', size: 'medium', v: 'Might fuels Endurance + Sprint toggle', by: 'Claude', notes: ['Might now does more than raise Attack power: it also DEEPENS your Endurance pool and SPEEDS its recharge. A mighty hero sprints longer and recovers stamina sooner, so pouring points (or stacking +Might gear) into it pays off for footwork, not just damage. The HERO sheet now lists your Max Endurance and Endurance regen.', 'New Sprint setting in the ⚙️ menu: leave it on HOLD to sprint only while Shift is down, or flip it to TOGGLE so a single tap of Shift latches auto-sprint on (tap again to stop) — sprint without keeping a finger on the key. Your choice is remembered across sessions.'] },
+  { date: '2026-06-30', size: 'medium', v: 'Drag-and-drop skill slots', by: 'Claude', notes: ['The skill bar now shows every hotkey slot (keys 1–9), empty ones included, as a dashed open slot — so you can see at a glance how many skills you can bind and where the gaps are. Slot 1 is still the gold primary the R key / ⚡ button cast.', 'Drag a learned active skill straight from its node in the SKILLS tab onto a slot to bind it, and drag a slot onto another to rearrange — including onto an empty slot to move it there. A learned skill that isn\'t in any slot reads as "off the bar" (🚫) and simply isn\'t keyed until you slot it.', 'A new loadout tray sits above the ACTIVE tree showing all your slots together, so the skills and the slots are side by side to drag between. On touch (or as a quick desktop path) just tap any slot to pick which learned skill fills it, or clear it. Your slot layout is saved with the character; existing heroes keep their current bar.'] },
+  { date: '2026-06-30', size: 'small', v: 'One skill card on hover', by: 'Claude', notes: ['Skill nodes no longer show a plain hover tooltip and a separate, nicer card on click — there\'s just one card now. Pointing at a skill opens its full detail card (mechanics, the rank-up preview, and the Learn / Hide buttons), and it stays open while your cursor is over the node or the card, so you can move onto it and click Learn without it vanishing.', 'On touch, nothing changes — a tap still opens the same card.'] },
   { date: '2026-06-30', size: 'medium', v: 'Agility speeds you up', by: 'Claude', notes: ['Agility now does more than dodge and hit: it also raises your Move speed and Attack speed, so a nimble build kites faster AND swings faster. Pour points (or stack +Agility gear) into it and you visibly quicken on both counts.', 'Both speeds use a soft cap that always rewards more Agility but eases off at the top, so you keep getting faster without becoming uncontrollable. The HERO sheet now lists Attack speed (with your live swings-per-second) and Move speed so you can see exactly what your Agility is buying.', 'The other four attributes were reviewed and left as-is — they already map cleanly: Might → Attack power, Vitality → HP / Defense / HP regen, Spirit → MP / MP regen / spell power, Luck → Crit & loot quality.'] },
   { date: '2026-06-30', size: 'small', v: 'Custom mouse cursor', by: 'Claude', notes: ['On mouse-and-keyboard, the pointer is now a custom in-game cursor — a small pixel blade drawn from the game\'s own art, with its tip as the click point — instead of the stock desktop arrow. It replaces the hand/finger pointer over buttons and clickable things too, so the whole game uses one cursor; text fields still show an I-beam for typing and disabled controls still show the "not allowed" cursor.'] },
   { date: '2026-06-30', size: 'medium', v: 'Click to move', by: 'Claude', notes: ['On mouse-and-keyboard, you can now click the map to walk the hero to that spot — a glowing ring marks where you\'re headed. Hold the button (and drag) to keep moving toward the cursor in real time, so you can steer just by pointing. Pressing arrows / WASD instantly takes back manual control, and clicking a foe still opens its info card rather than walking into it. Touch devices keep their floating joystick.'] },
@@ -8673,6 +8857,7 @@ function generateMap() {
   scatterTerrain(reach);
   projectiles = [];
   placeTraps(reach);
+  floorRooms = rooms;
   spawnEnemies();
   spawnGroundLoot();
   // Tiles you can actually WALK to (stairs/teleporters are dead-ends, not
@@ -8729,6 +8914,9 @@ function generateMap() {
       log('🪦 Your lost satchel lies somewhere on this floor — reclaim it.', 'important');
     }
   }
+
+  // Fill any room the random scatter left barren so no carved room is wasted space.
+  populateEmptyRooms();
 
   // A mini-quest may take over the floor (after enemies/loot are placed). Use
   // the foot-reachable set so quest NPCs, markers and pickups are walkable to,
@@ -11130,6 +11318,21 @@ function drawTownNpcs(offX, offY, tw, th, scale) {
   });
 }
 
+// Floor-scoped data shared with the no-empty-rooms pass (populateEmptyRooms): the
+// room rectangles for this floor and the regular-foe template (types + rolled
+// HP/damage) so a filled-in foe matches the ones the scatter loop placed.
+let floorRooms = [];
+let floorMobSpec = null;
+// Spawn one ordinary (non-elite) foe of a random floor type at (ex,ey).
+function spawnFloorMob(ex, ey) {
+  if (!floorMobSpec) return null;
+  const t = pick(floorMobSpec.types);
+  const mob = { x: ex, y: ey, hp: floorMobSpec.hp, maxHp: floorMobSpec.hp, type: t, level: floorMobSpec.level, dmg: floorMobSpec.dmg, dead: false, behavior: behaviorFor(t) };
+  if (Math.random() < 0.22) applyAffix(mob); // ~22% carry a fight-shaking affix
+  enemies.push(mob);
+  return mob;
+}
+
 function spawnEnemies() {
   enemies = [];
   // Summoned minions, transient combat buffs and skill charges don't carry between floors.
@@ -11196,6 +11399,15 @@ function spawnEnemies() {
     else if (into >= ramp.length) player.reliefFloor = null; // recovered — clear it
   }
 
+  // Regular-foe stats are constant across the floor (only elites/affixes vary), so
+  // roll them once and share them via floorMobSpec with both the scatter loop below
+  // and the no-empty-rooms pass (populateEmptyRooms).
+  const mobLevel = dungeonLevel;
+  const threat = depthThreat(mobLevel);   // compounds with depth — deep is deadly
+  const baseHp = Math.max(1, Math.round((10 + mobLevel * 8) * threat * (floorMod.hpMult || 1) * pfx('hp', 1) * threatScale * reliefEase));
+  const baseDmg = Math.max(1, Math.round((3.5 + mobLevel * 1.9 + bandIdx) * threat * (floorMod.dmgMult || 1) * pfx('dmg', 1) * threatScale * earlyBite * reliefEase));
+  floorMobSpec = { types: floorTypes, hp: baseHp, dmg: baseDmg, level: mobLevel };
+
   for (let i = 0; i < count; i++) {
     let ex, ey;
     let tries = 0;
@@ -11261,17 +11473,7 @@ function spawnEnemies() {
         });
         log(`⚠️ ${boss.name} ${boss.type} guards this floor — it ${boss.blurb}!`, 'important');
       } else {
-        // Every monster is the level of its floor, so foes get incrementally
-        // harder the deeper you dive. HP and damage scale off that level (floor
-        // modifiers and any active mystic pact still nudge them up or down).
-        // Damage is meaningful because armor now mitigates by a percentage
-        // rather than a flat subtraction.
-        const mobLevel = dungeonLevel;
-        // depthThreat compounds with depth (deep is deadly); threatScale layers
-        // main's anti-grind nudge on top (out-leveling a floor toughens its foes).
-        const threat = depthThreat(mobLevel);
-        const baseHp = Math.max(1, Math.round((10 + mobLevel * 8) * threat * (floorMod.hpMult || 1) * pfx('hp', 1) * threatScale * reliefEase));
-        const baseDmg = Math.max(1, Math.round((3.5 + mobLevel * 1.9 + bandIdx) * threat * (floorMod.dmgMult || 1) * pfx('dmg', 1) * threatScale * earlyBite * reliefEase));
+        // Regular-foe stats (baseHp / baseDmg / mobLevel) were rolled once above.
         if (i === eliteIndex) {
           const eHp = Math.round(baseHp * 2.2);
           const eName = pick(ELITE_NAMES);
@@ -11288,19 +11490,7 @@ function spawnEnemies() {
           });
           log(`✨ ${eName}, a glowing elite, prowls this floor — slay it for richer loot!`, 'important');
         } else {
-          const mType = pick(floorTypes);
-          const mob = {
-            x: ex, y: ey,
-            hp: baseHp, maxHp: baseHp,
-            type: mType,
-            level: mobLevel,
-            dmg: baseDmg,
-            dead: false,
-            behavior: behaviorFor(mType),
-          };
-          // ~22% of regular foes carry a random affix that shakes up the fight.
-          if (Math.random() < 0.22) applyAffix(mob);
-          enemies.push(mob);
+          spawnFloorMob(ex, ey);
         }
       }
     }
@@ -11323,6 +11513,41 @@ function spawnEnemies() {
       });
       log('👺 A Treasure Goblin scurries about — catch it before it escapes!', 'important');
     }
+  }
+}
+
+// No carved room should be dead space. After enemies AND loot are placed, walk the
+// room list and give anything still barren a reason to exist: a foe if the room has
+// a tile safely outside the hero's entry aggro bubble, otherwise (the entry room and
+// its neighbours) a small coin pile so arriving still feels rewarding rather than
+// landing you in an empty hall. Rooms that already hold a foe, chest, food, coins,
+// the grave, or a feature (shrine/fountain/teleporter/stairs/vault) are left alone,
+// and boss floors are skipped (their arena is the whole point).
+function populateEmptyRooms() {
+  if (dungeonLevel % 5 === 0) return;
+  if (!floorRooms || !floorRooms.length) return;
+  const inB = (o, r) => o && o.x >= r.x && o.x < r.x + r.w && o.y >= r.y && o.y < r.y + r.h;
+  const hasContent = (r) => {
+    if (enemies.some(e => !e.dead && inB(e, r))) return true;
+    if ((groundItems || []).some(o => inB(o, r)) || (groundFood || []).some(o => inB(o, r)) || (groundGold || []).some(o => inB(o, r))) return true;
+    if (graveMarker && inB(graveMarker, r)) return true;
+    for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) {
+      const t = mapData[y] && mapData[y][x];
+      if (t === 2 || t === 3 || t === 5 || t === 9 || t === 11) return true; // a feature (entry stair 12 doesn't count)
+    }
+    return false;
+  };
+  for (const r of floorRooms) {
+    if (hasContent(r)) continue;
+    let far = null, near = null;
+    for (let tr = 0; tr < 60 && !far; tr++) {
+      const sx = rnd(r.x, r.x + r.w - 1), sy = rnd(r.y, r.y + r.h - 1);
+      if (mapData[sy][sx] !== 0 || getEnemyAt(sx, sy)) continue;
+      if ((Math.abs(sx - player.x) + Math.abs(sy - player.y)) > ENEMY_AGGRO + 1) far = { x: sx, y: sy };
+      else if (!near) near = { x: sx, y: sy };
+    }
+    if (far) spawnFloorMob(far.x, far.y);
+    else if (near) groundGold.push({ x: near.x, y: near.y, amount: rnd(3, 10) + dungeonLevel * 2 });
   }
 }
 
@@ -14752,9 +14977,9 @@ function castSkill() {
   if (!playerClass()) { log('Pick a class to gain skills.'); return; }
   const all = activeSkillList();
   if (!all.length) { log(`No active skill learned yet — spend a skill point in the SKILLS tab (${touchUI() ? 'tap 🎒 BAG' : 'press B'}).`); return; }
-  const list = visibleSkillList();
-  if (!list.length) { log('Every active skill is hidden — un-hide one in the SKILLS tab to cast it.'); return; }
-  castSkillById(list[0].id);
+  const pri = primarySkill();
+  if (!pri) { log(`No skill in your slots — assign one in the SKILLS tab (${touchUI() ? 'tap 🎒 BAG' : 'press B'}).`); return; }
+  castSkillById(pri.id);
 }
 
 // Cast any active skill the player has learned, shared by every entry point.
@@ -16557,7 +16782,7 @@ function updateBars() {
   // casts), showing its icon and cooldown / mana cost. Hidden until one is learned.
   const skillBtn = document.getElementById('skill-btn');
   if (skillBtn) {
-    const sk = visibleSkillList()[0];
+    const sk = primarySkill();
     if (sk) {
       skillBtn.style.display = '';
       const icon = document.getElementById('skill-icon');
@@ -16898,7 +17123,7 @@ function renderHero(el) {
         <span class="hc-name" style="color:${cls.color}">${cls.name}</span></div>
       <div class="hc-line">${cls.passive}</div>
       <div class="hc-line">⚔️ Damage scales with <b>${ATTRIBUTES[dmgA.primary].label}</b>${dmgA.secondary ? ` & ${ATTRIBUTES[dmgA.secondary].label}` : ''}</div>
-      ${(() => { const pri = visibleSkillList()[0], sig = classSignature(player.class);
+      ${(() => { const pri = primarySkill(), sig = classSignature(player.class);
         return pri ? `<div class="hc-line">${dlIcon(pri.icon,18)||''} <b>${pri.name}</b> — ${pri.desc} <span style="opacity:0.7">(${pri.mp} MP · ${touchUI() ? 'tap to cast' : 'press ' + skillKeyLabel(1)})</span></div>`
           : (sig ? `<div class="hc-line" style="opacity:0.8">Spend a skill point to learn ${dlIcon(sig.icon,16)||''} <b>${sig.name}</b> (SKILLS tab)</div>` : ''); })()}
       ${ascData() ? `<div class="hc-line" style="color:${ascData().color}">${dlIcon(ascData().icon,18)||''} <b>${ascData().name}</b> — ${ascData().blurb}</div>`
@@ -17059,15 +17284,16 @@ function renderSkills(el) {
     const avail = canBuySkill(n);
     const ready = !owned && !avail && skillReqMet(n);
     const state = maxd ? 'maxed' : avail ? 'avail' : owned ? 'owned' : ready ? 'ready' : 'locked';
-    const barHidden = n.type === 'active' && owned && isSkillHidden(n.id);
-    const badge = barHidden ? '🚫' : maxd ? '✓' : avail ? '+' : owned ? rank : ready ? '☆' : '🔒';
+    // A learned active that isn't in any hotkey slot reads as "off the bar" (🚫) —
+    // it stays fully ranked, it just isn't bound to a key until you slot it.
+    const offBar = n.type === 'active' && owned && skillSlotIndexOf(n.id) < 0;
+    const badge = offBar ? '🚫' : maxd ? '✓' : avail ? '+' : owned ? rank : ready ? '☆' : '🔒';
     const pips = `<div class="pips">${Array.from({ length: 10 }, (_, i) => `<span class="pip${i < rank ? ' on' : ''}"></span>`).join('')}</div>`;
-    // The node already open in the popover skips its hover/touch teaser, so an
-    // open skill never shows two boxes of the same info at once.
-    const tip = selectedSkillId === n.id ? ''
-      : `data-tip="${skillTipHtml(n)}" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()"`;
-    return `<button class="sk-tnode ${state}${n.keystone ? ' keystone' : ''}${n.type === 'active' ? ' act' : ''}${barHidden ? ' barhid' : ''}${selectedSkillId === n.id ? ' sel' : ''}" id="sknode-${n.id}"
-        style="left:${(p[0] * 100).toFixed(2)}%;top:${(p[1] * 100).toFixed(2)}%" onclick="selectSkill('${n.id}')" ondblclick="buySkill('${n.id}')" ${tip}>
+    // Learned actives are drag handles: drag one onto a loadout-tray slot to bind it.
+    const drag = (n.type === 'active' && owned) ? `draggable="true" ondragstart="skillDragStart(event,'${n.id}',-1)" ondragend="skillDragEnd()"` : '';
+    return `<button class="sk-tnode ${state}${n.keystone ? ' keystone' : ''}${n.type === 'active' ? ' act' : ''}${offBar ? ' barhid' : ''}${selectedSkillId === n.id ? ' sel' : ''}" id="sknode-${n.id}" ${drag}
+        style="left:${(p[0] * 100).toFixed(2)}%;top:${(p[1] * 100).toFixed(2)}%" onclick="selectSkill('${n.id}')" ondblclick="buySkill('${n.id}')"
+        onmouseenter="hoverSkill('${n.id}')" onmouseleave="scheduleSkillPopClose()">
       <span class="ic">${dlIconFill(n.icon)}</span><span class="nm">${n.name}</span><span class="badge">${badge}</span>
     </button>`;
   }).join('');
@@ -17122,12 +17348,13 @@ function renderSkills(el) {
     const buyBtn = skillMaxed(sn)
       ? `<button class="pop-buy maxed" disabled>✓ Maxed (10/10)</button>`
       : `<button class="pop-buy" ${canBuySkill(sn) ? '' : 'disabled'} onclick="buySkill('${sn.id}')">Learn (rank ${rank + 1}/${sn.max})</button>`;
-    // Owned actives can be hidden from the skill bar / hotkeys to declutter a
-    // late-game kit full of situational spells you rarely cast.
+    // Owned actives can be slotted onto / pulled off the hotkey bar straight from
+    // the popover (the quick path alongside dragging the node onto a tray slot).
+    const slotAt = (sn.type === 'active' && rank > 0) ? skillSlotIndexOf(sn.id) : -1;
     const hideBtn = (sn.type === 'active' && rank > 0)
-      ? `<button class="pop-hide${isSkillHidden(sn.id) ? ' hidden' : ''}" onclick="toggleSkillHidden('${sn.id}')">${isSkillHidden(sn.id) ? '🚫 Hidden from bar — tap to show' : '👁 On bar — tap to hide'}</button>`
+      ? `<button class="pop-hide${slotAt < 0 ? ' hidden' : ''}" onclick="toggleSkillSlot('${sn.id}')">${slotAt >= 0 ? `⚡ On bar (slot ${slotAt + 1}) — tap to remove` : '🚫 Off the bar — tap to add'}</button>`
       : '';
-    pop = `<div class="sk-pop" id="sk-pop">
+    pop = `<div class="sk-pop" id="sk-pop" onmouseenter="cancelSkillPopClose()" onmouseleave="scheduleSkillPopClose()">
       <b>${dlIcon(sn.icon,18)||''} ${sn.name}</b>${rankTxt}
       <div class="ty">${typeTxt}</div>
       <div class="ds">${sn.desc}</div>
@@ -17139,7 +17366,10 @@ function renderSkills(el) {
     </div>`;
   }
 
-  el.innerHTML = header + `
+  // The loadout tray (the bank of hotkey slots) rides above the ACTIVE / PATH
+  // trees, where the learned-active source nodes are co-visible to drag from.
+  const loadout = (skillView === 'active' || skillView === 'path') ? skillLoadoutTrayHtml() : '';
+  el.innerHTML = header + loadout + `
     <div class="sk-tree${web ? ' web' : ''}" id="sk-tree" onclick="if(event.target.id==='sk-tree'){selectedSkillId=null;renderPanel();}">
       <svg viewBox="0 0 100 100" preserveAspectRatio="none">${lines}</svg>
       ${branchHeads}
@@ -17150,26 +17380,56 @@ function renderSkills(el) {
   positionSkillPop();
 }
 
-// Read-only hover card for a skill node — the same info as the click popover,
-// minus the Learn / Hide buttons, surfaced through the shared hover-tip system so
-// you can read any skill just by pointing at it (clicking still opens the buy
-// popover). Built with single-quoted inner markup since it lives in a data-tip
-// attribute; double quotes in authored text are escaped.
-function skillTipHtml(n) {
-  const esc = s => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
-  const rank = skillRank(n.id);
-  const pips = n.type === 'active' ? milestonePips(rank) : '';
-  const typeTxt = n.type === 'active'
-    ? `⚡ Active · ${skillManaCost(n, rank)}MP · ${n.cd}s cd · ${esc(castShapeLabel(n.cast))}`
-    : 'Passive';
-  // Hover/touch tip is a brief teaser only — name, type and what it does. The
-  // full breakdown (mechanics, rank-up preview, requirements, Learn/Hide) lives
-  // in the click popover, so the two don't duplicate a wall of text.
-  let h = `<div class='ht-name'>${esc(n.name)} <span style='color:#e8c267'>${rank}/${n.max}${pips ? ' ' + pips : ''}</span></div>`;
-  h += `<div class='ht-line' style='color:#9a8fd0'>${typeTxt}</div>`;
-  h += `<div class='ht-line'>${esc(n.desc)}</div>`;
-  h += `<div class='ht-sub'>${touchUI() ? 'Tap' : 'Click'} for full details</div>`;
-  return h;
+// ── Skill popover hover control ──────────────────────────────────────────────
+// One card does the job. Hovering a skill node opens its detail popover (the rich
+// card with mechanics, the rank-up preview, and the Learn / Hide buttons), and it
+// stays open while the pointer is over the node OR the popover, so those buttons
+// stay clickable. Moving off both closes it after a short grace delay — long
+// enough to cross the small gap between the node and the popover below it.
+// Mouse-only: touch has no hover, so it keeps tapping a node to open/pin the card.
+let skillPopCloseTimer = null;
+function hoverSkill(id) {
+  if (!HOVER_MQ.matches) return;          // mouse hover only; touch taps to open
+  cancelSkillPopClose();
+  if (selectedSkillId !== id) { selectedSkillId = id; renderPanel(); }
+}
+function cancelSkillPopClose() {
+  if (skillPopCloseTimer) { clearTimeout(skillPopCloseTimer); skillPopCloseTimer = null; }
+}
+function scheduleSkillPopClose() {
+  if (!HOVER_MQ.matches) return;          // touch closes via tap / outside-click
+  cancelSkillPopClose();
+  skillPopCloseTimer = setTimeout(() => {
+    skillPopCloseTimer = null;
+    if (selectedSkillId) { selectedSkillId = null; renderPanel(); }
+  }, 160);
+}
+
+// The SKILLS-tab loadout tray: a row of every hotkey slot (filled + empty) that
+// the active skill tree feeds into. Drag a learned active node onto a slot to bind
+// it, drag a filled slot onto another to rearrange, or tap a slot for the picker.
+function skillLoadoutTrayHtml() {
+  const slots = normSkillSlots();
+  const byId = {}; for (const s of activeSkillList()) byId[s.id] = s;
+  const cells = slots.map((id, i) => {
+    const s = id ? byId[id] : null;
+    const key = skillKeyLabel(i + 1);
+    const drag = s ? `draggable="true" ondragstart="skillDragStart(event,'${s.id}',${i})" ondragend="skillDragEnd()"` : '';
+    const tip = s
+      ? `<div class='ht-name'>${dlIcon(s.icon,16)||''} ${s.name}</div><div class='ht-sub'>slot ${i + 1}${key ? ` · key ${key}` : ''} · tap to change · drag to move</div>`
+      : `<div class='ht-name'>Empty slot ${i + 1}</div><div class='ht-line'>Drag a learned skill here, or tap to assign one.</div>`;
+    const inner = s ? `<span class="lt-ic">${dlIcon(s.icon,28)||''}</span>` : `<span class="lt-plus">＋</span>`;
+    return `<div class="lt-slot${s ? '' : ' empty'}${i === 0 ? ' primary' : ''}" ${drag}
+        data-slot="${i}" ondragover="skillSlotDragOver(event)" ondrop="skillSlotDropOn(event,${i})"
+        ondragenter="skillSlotDragEnter(event,this)" ondragleave="skillSlotDragLeave(event,this)"
+        onclick="openSlotPicker(${i})" ${hoverTip(tip)}>
+      <span class="lt-key">${key}</span>${inner}
+    </div>`;
+  }).join('');
+  return `<div class="sk-loadout">
+    <div class="lt-title">⚡ Skill slots <span class="lt-hint">drag a learned skill in · drag to rearrange · tap a slot to edit</span></div>
+    <div class="lt-row">${cells}</div>
+  </div>`;
 }
 
 // A short human label for an active's targeting shape, shown in its popover.
@@ -17401,8 +17661,15 @@ function skillTotalSummary(node, rank) {
   return '';
 }
 
-// Toggle the detail popover for a skill node (tap the open node again to close).
+// Open the detail popover for a skill node. On a real pointer the popover is driven
+// by hover (hoverSkill), so a click just keeps it pinned to this node rather than
+// toggling it shut and fighting the hover. On touch (no hover) a tap toggles it.
 function selectSkill(id) {
+  if (HOVER_MQ.matches) {
+    cancelSkillPopClose();
+    if (selectedSkillId !== id) { selectedSkillId = id; renderPanel(); }
+    return;
+  }
   selectedSkillId = (selectedSkillId === id) ? null : id;
   renderPanel();
 }
@@ -17442,7 +17709,10 @@ function positionSkillPop() {
 function renderSkillBar() {
   const bar = document.getElementById('skill-bar');
   if (!bar) return;
-  const skills = visibleSkillList();
+  // A drag in progress rebuilds the dragged element out from under the pointer and
+  // cancels the drop (the world clock re-renders the bar every tick). Hold the
+  // current markup steady until the drag ends — skillDragEnd / the drop re-render.
+  if (skillDrag) return;
   // Hide the bar only in town. Out in the dungeon it always renders, even with
   // no active skills learned yet, because the far-left Health/Mana potion
   // buttons are baseline kit every hero needs from the start.
@@ -17467,20 +17737,32 @@ function renderSkillBar() {
   const manaBtn = `<button class="skillbar-btn potion mana ${potReady && !mpFull ? 'ready' : 'empty'} ${pcd > 0 ? 'cooling' : ''}" ${hoverTip(manaTip)} onclick="useManaPotion()">
       <span class="sb-key">${kbLabel('manaPotion')}</span><span class="sb-icon">${MANA_POTION_SVG}</span><span class="sb-info">${pcd > 0 ? Math.ceil(pcd) + 's' : ''}</span>${cdDial('pot')}
     </button>`;
-  let num = 0;
-  const skillsHtml = skills.map((s) => {
+  // Every hotkey slot is rendered, filled or empty (keys 1–9; slot 1 is the gold
+  // R-keyed primary). A filled slot casts on click and can be dragged to another
+  // slot to rearrange; an empty slot is a dashed drop target — drag a learned
+  // skill onto it, or tap to open the assign picker. Slots beyond key 9 don't
+  // exist, so SKILL_SLOTS caps the row at the number of bindable keys.
+  const slots = normSkillSlots();
+  const actives = activeSkillList();
+  const byId = {}; for (const s of actives) byId[s.id] = s;
+  const dropAttrs = (i) => `data-slot="${i}" ondragover="skillSlotDragOver(event)" ondrop="skillSlotDropOn(event,${i})" ondragenter="skillSlotDragEnter(event,this)" ondragleave="skillSlotDragLeave(event,this)"`;
+  const skillsHtml = slots.map((id, i) => {
+    const key = skillKeyLabel(i + 1);
+    const s = id ? byId[id] : null;
+    if (!s) {
+      const tip = `<div class='ht-name'>Empty slot ${i + 1}</div><div class='ht-line'>${touchUI() ? 'Tap to assign a learned skill.' : 'Drag a learned skill here, or tap to assign one.'}</div>${key && !touchUI() ? `<div class='ht-sub'>casts with ${key}</div>` : ''}`;
+      return `<button class="skillbar-btn slot-empty${i === 0 ? ' baseline' : ''}" ${dropAttrs(i)} ${hoverTip(tip)} onclick="openSlotPicker(${i})">
+      <span class="sb-key">${key}</span><span class="sb-icon big slot-plus">＋</span>
+    </button>`;
+    }
     const cd = skillCd(s.id);
     const ready = cd <= 0 && player.mp >= s.mp && player.hp > 0;
-    // Potions hold keys 1–2, so the first seven learned actives map to keys 3–9;
-    // any beyond that are click/tap only (a deep build can learn more actives
-    // than there are keys). The first active also answers to R / the ⚡ button.
-    const idx = ++num;
-    const key = skillKeyLabel(idx);
-    const keyHint = key;
     // Desktop names the number/R key; touch (no keyboard, reached by long-press) says "tap to cast".
-    const castHint = touchUI() ? ' · tap to cast' : (keyHint ? ` · press ${keyHint}` : '');
-    const tip = `<div class='ht-name' style='color:#e6c34a'>${dlIcon(s.icon,16)||''} ${s.name}</div><div class='ht-line'>${s.desc}</div><div class='ht-sub'>${s.mp} MP · ${s.cd}s cooldown${castHint}</div>`;
-    return `<button class="skillbar-btn ${idx === 1 ? 'baseline ' : ''}${ready ? 'ready' : 'disabled'} ${cd > 0 ? 'cooling' : ''}" ${hoverTip(tip)} onclick="castSkillById('${s.id}')">
+    const castHint = touchUI() ? ' · tap to cast' : (key ? ` · press ${key}` : '');
+    const moveHint = touchUI() ? 'tap the SKILLS tab to re-slot' : 'drag to rearrange · drag a tree skill to swap';
+    const tip = `<div class='ht-name' style='color:#e6c34a'>${dlIcon(s.icon,16)||''} ${s.name}</div><div class='ht-line'>${s.desc}</div><div class='ht-sub'>${s.mp} MP · ${s.cd}s cooldown${castHint}</div><div class='ht-sub' style='opacity:.7'>${moveHint}</div>`;
+    return `<button class="skillbar-btn ${i === 0 ? 'baseline ' : ''}${ready ? 'ready' : 'disabled'} ${cd > 0 ? 'cooling' : ''}" draggable="true"
+      ondragstart="skillDragStart(event,'${s.id}',${i})" ondragend="skillDragEnd()" ${dropAttrs(i)} ${hoverTip(tip)} onclick="castSkillById('${s.id}')">
       <span class="sb-key">${key}</span><span class="sb-icon big">${dlIcon(s.icon,30)||''}</span>${cdDial('sk:' + s.id)}
     </button>`;
   }).join('');
@@ -17550,7 +17832,7 @@ function chooseClass(key) {
   if (!cls) return;
   player.class = key;
   player.skillCd = 0; player.ascension = null;
-  player.skills = {}; player.skillCds = {}; combatBuffs = {};
+  player.skills = {}; player.skillCds = {}; player.skillSlots = []; combatBuffs = {};
   // A fresh hero owns its full lifetime pool of skill points (the starting point
   // plus one per level) with nothing yet spent.
   player.skillPoints = earnedSkillPoints(player.level);
@@ -17578,7 +17860,7 @@ function changeClass(key) {
   const refunded = spentSkillPoints();
   player.class = key;
   player.skillCd = 0; player.ascension = null;
-  player.skills = {}; player.skillCds = {}; combatBuffs = {};
+  player.skills = {}; player.skillCds = {}; player.skillSlots = []; combatBuffs = {};
   player.skillPoints = (player.skillPoints || 0) + refunded;
   recomputeMaxStats();
   if (player.hp > player.maxHp) player.hp = player.maxHp;
@@ -18187,6 +18469,7 @@ document.querySelectorAll('.dpad-btn').forEach(btn => {
 // closed something.
 function handleEscape() {
   const close = (id, fn) => { const el = document.getElementById(id); if (el && el.classList.contains('open')) { fn(); return true; } return false; };
+  if (close('slotpick-overlay', closeSlotPicker)) return true;
   if (close('version-overlay', closeVersion)) return true;
   if (close('howto-overlay', closeHowTo)) return true;
   if (close('playtime-overlay', closePlayTime)) return true;
@@ -18354,8 +18637,8 @@ document.addEventListener('keydown', e => {
   if (act === 'portal')       { enterTown(); return; }
   if (act === 'swapWeapon')   { toggleGearSet(); return; }
   if (act === 'bag')          { togglePanel(); return; }
-  if (act && act.indexOf('skill') === 0) {            // skill1..skill9 -> visible slot
-    const sk = visibleSkillList()[parseInt(act.slice(5), 10) - 1];
+  if (act && act.indexOf('skill') === 0) {            // skill1..skill9 -> hotkey slot
+    const sk = slotSkill(parseInt(act.slice(5), 10) - 1);
     if (sk) castSkillById(sk.id);
     return;
   }
@@ -18630,6 +18913,16 @@ function loadGame() {
       const have = (player.skillPoints || 0) + spentSkillPoints();
       if (have < earned) player.skillPoints += (earned - have);
     }
+    // Skill hotkey slots. Saves that predate them (or any save where the row is
+    // missing/empty) seed from the learned actives in tree order — minus anything
+    // the player had hidden from the bar — so existing heroes keep their bar. After
+    // that, normSkillSlots() trims any stale/duplicate ids against the live tree.
+    if (!Array.isArray(player.skillSlots)) player.skillSlots = [];
+    if (!player.skillSlots.some(x => x)) {
+      const hidden = player.hiddenSkills || {};
+      player.skillSlots = activeSkillList().filter(s => !hidden[s.id]).slice(0, SKILL_SLOTS).map(s => s.id);
+    }
+    normSkillSlots();
     // Migrate saves that predate the deepest-floor tracker / town hub.
     if (player.maxFloor == null) player.maxFloor = data.dungeonLevel || 1;
     // Migrate saves that predate the re-enterable-floor tracker (the Gate lock).
@@ -20231,7 +20524,7 @@ const RT_BLOCKING_OVERLAYS = ['title-overlay','name-overlay','class-overlay','hc
   'playtime-overlay','autoloot-overlay','newrun-overlay','keybind-overlay',
   // Reachable mid-dungeon (e.g. from the ⚙️ menu or on a tier conquest) — these
   // close the settings menu, so they must pause the world on their own.
-  'conquest-overlay','slots-overlay','account-overlay','lb-overlay','graveyard-overlay'];
+  'conquest-overlay','slots-overlay','account-overlay','lb-overlay','graveyard-overlay','slotpick-overlay'];
 function rtPaused() {
   if (gameHalted || inTown || player.hp <= 0) return true;
   for (const id of RT_BLOCKING_OVERLAYS) {
