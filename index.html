@@ -13662,7 +13662,7 @@ function tickStatusEffects() {
           // Route poison kills through the normal death handler so the foe still
           // grants XP/gold/loot AND the floor-clear check runs — otherwise a
           // last hostile that dies to a poison tick leaves the stairs sealed.
-          log(`${e.isBoss ? e.name : e.type} succumbed to poison!`, 'important');
+          log(`☠ ${e.isBoss ? e.name : e.type} poisoned`, 'important');
           onEnemyDefeated(e);
         }
       }
@@ -18510,6 +18510,16 @@ function moveKeyName(k) {
 window.addEventListener('blur', clearHeld);
 window.addEventListener('contextmenu', clearHeld);
 document.addEventListener('visibilitychange', () => { if (document.hidden) clearHeld(); });
+
+// ── BLOCK PINCH-ZOOM (mobile) ──
+// The viewport meta sets user-scalable=no, but iOS Safari ignores that for
+// pinch-zoom, which lets players accidentally zoom the canvas into a useless
+// crop. Kill the iOS pinch gesture events outright, and stop any 2+ finger
+// touchmove from zooming. Single-finger touches (movement, the joystick, panel
+// scrolling) are untouched, and the game's own touch handlers still fire.
+['gesturestart', 'gesturechange', 'gestureend'].forEach(ev =>
+  document.addEventListener(ev, e => e.preventDefault(), { passive: false }));
+document.addEventListener('touchmove', e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
 
 document.addEventListener('keyup', e => {
   const d = moveKeyName(e.key);
