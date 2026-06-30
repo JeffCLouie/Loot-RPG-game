@@ -115,6 +115,20 @@
   #power-hud { color: #ffd24b; }
   #pact-hud { color: #7fe0d0; }
   #food-hud { color: #ffb870; }
+  /* Active buff / debuff chips: a little DawnLike status icon ringed green (buff)
+     or red (debuff), badged with how long it has left. Translucent so the map
+     reads through, mirroring the floating skill bar / d-pad. Laid out by the
+     on-map #buff-overlay (positioned below, near #map-info). */
+  .buff-ic { position: relative; display: inline-flex; align-items: center; justify-content: center;
+             width: 22px; height: 22px; border-radius: 5px; background: rgba(18,14,28,0.5);
+             box-shadow: 0 0 0 1px rgba(0,0,0,0.7), inset 0 0 0 1px #2bd46a99; cursor: help;
+             backdrop-filter: blur(1px); -webkit-backdrop-filter: blur(1px); pointer-events: auto; }
+  .buff-ic.debuff { box-shadow: 0 0 0 1px rgba(0,0,0,0.7), inset 0 0 0 1px #ff5a5a99; }
+  .buff-time { position: absolute; right: -3px; bottom: -4px; min-width: 10px; height: 11px;
+               padding: 0 1px; font-size: 8px; line-height: 11px; font-weight: bold; text-align: center;
+               color: #fff; background: #2bd46a; border: 1px solid rgba(0,0,0,0.8); border-radius: 6px;
+               text-shadow: 0 1px 1px rgba(0,0,0,0.6); }
+  .buff-ic.debuff .buff-time { background: #e0473b; }
   .xp-track { width: 46px; height: 6px; background: #45455e; border: 1px solid #000; border-radius: 3px; overflow: hidden; }
   .xp-fill { height: 100%; background: linear-gradient(180deg, #ffe9a0, var(--gold)); box-shadow: 0 0 5px var(--gold); transition: width 0.2s; }
 
@@ -129,6 +143,18 @@
   }
   #map-floor { color: #9fd0ff; }
   #map-foes { color: #ff9a9a; }
+
+  /* Active buffs & debuffs, overlaid across the TOP-RIGHT of the map and kept
+     right-aligned: chips fill from the right edge leftward (row-reverse), so as
+     effects expire the rest slide back toward the corner. Floats slightly
+     transparent over the map like the skill bar; only the chips catch the
+     pointer (for tooltips) — the gaps pass map clicks through. */
+  #buff-overlay {
+    position: absolute; top: 8px; right: 8px; z-index: 50;
+    display: flex; flex-direction: row-reverse; align-items: flex-start; gap: 5px;
+    max-width: 68%; flex-wrap: wrap; justify-content: flex-start;
+    pointer-events: none; opacity: 0.9;
+  }
 
   /* Danger halo: a pulsing edge glow that signals low HP and player status
      effects. Sits above every panel/menu (but below the rotate gate) so it
@@ -2742,6 +2768,10 @@
       <div id="map-floor">🗺️ <span id="map-floor-num">1</span><span class="floor-diff" id="map-floor-diff"></span></div>
       <div id="map-foes"><span data-spr="ui_foes"></span> <span id="map-foes-num">0</span> foes</div>
     </div>
+    <!-- Active buffs & debuffs, overlaid on the top-right of the map and kept
+         right-aligned (effects fill in from the right corner). Populated by
+         renderStatusStrip(); hidden when nothing is active. -->
+    <div id="buff-overlay" style="display:none"></div>
     <!-- Active skills (every learned tree active; the first is the R-keyed
          primary). Sits between the map and the log so it's reachable in the
          thumb zone on mobile. Populated by renderSkillBar(); hidden in town /
@@ -7592,6 +7622,7 @@ const CHANGELOG = [
   { date: '2026-06-30', size: 'medium', v: 'Might fuels Endurance + Sprint toggle', by: 'Claude', notes: ['Might now does more than raise Attack power: it also DEEPENS your Endurance pool and SPEEDS its recharge. A mighty hero sprints longer and recovers stamina sooner, so pouring points (or stacking +Might gear) into it pays off for footwork, not just damage. The HERO sheet now lists your Max Endurance and Endurance regen.', 'New Sprint setting in the ⚙️ menu: leave it on HOLD to sprint only while Shift is down, or flip it to TOGGLE so a single tap of Shift latches auto-sprint on (tap again to stop) — sprint without keeping a finger on the key. Your choice is remembered across sessions.'] },
   { date: '2026-06-30', size: 'medium', v: 'Drag-and-drop skill slots', by: 'Claude', notes: ['The skill bar now shows every hotkey slot (keys 1–9), empty ones included, as a dashed open slot — so you can see at a glance how many skills you can bind and where the gaps are. Slot 1 is still the gold primary the R key / ⚡ button cast.', 'Drag a learned active skill straight from its node in the SKILLS tab onto a slot to bind it, and drag a slot onto another to rearrange — including onto an empty slot to move it there. A learned skill that isn\'t in any slot reads as "off the bar" (🚫) and simply isn\'t keyed until you slot it.', 'A new loadout tray sits above the ACTIVE tree showing all your slots together, so the skills and the slots are side by side to drag between. On touch (or as a quick desktop path) just tap any slot to pick which learned skill fills it, or clear it. Your slot layout is saved with the character; existing heroes keep their current bar.'] },
   { date: '2026-06-30', size: 'small', v: 'One skill card on hover', by: 'Claude', notes: ['Skill nodes no longer show a plain hover tooltip and a separate, nicer card on click — there\'s just one card now. Pointing at a skill opens its full detail card (mechanics, the rank-up preview, and the Learn / Hide buttons), and it stays open while your cursor is over the node or the card, so you can move onto it and click Learn without it vanishing.', 'On touch, nothing changes — a tap still opens the same card.'] },
+  { date: '2026-06-30', size: 'small', v: 'Active buffs & debuffs', by: 'Claude', notes: ['A row of little status icons now floats over the top-right of the map showing every timed effect on your hero — combat buffs like shields, regen and damage boosts, debuffs like poison, burn, stun and slow, plus active shrine boons. Each icon badges how long it has left and rings green for a buff or red for a debuff.', 'The icons stay tucked into the top-right corner: as effects wear off, the rest slide back to the edge so the newest sit right where you expect. Hover (or hold on touch) any icon to read exactly what it does and how many turns or floors remain.'] },
   { date: '2026-06-30', size: 'medium', v: 'Agility speeds you up', by: 'Claude', notes: ['Agility now does more than dodge and hit: it also raises your Move speed and Attack speed, so a nimble build kites faster AND swings faster. Pour points (or stack +Agility gear) into it and you visibly quicken on both counts.', 'Both speeds use a soft cap that always rewards more Agility but eases off at the top, so you keep getting faster without becoming uncontrollable. The HERO sheet now lists Attack speed (with your live swings-per-second) and Move speed so you can see exactly what your Agility is buying.', 'The other four attributes were reviewed and left as-is — they already map cleanly: Might → Attack power, Vitality → HP / Defense / HP regen, Spirit → MP / MP regen / spell power, Luck → Crit & loot quality.'] },
   { date: '2026-06-30', size: 'small', v: 'Custom mouse cursor', by: 'Claude', notes: ['On mouse-and-keyboard, the pointer is now a custom in-game cursor — a small pixel blade drawn from the game\'s own art, with its tip as the click point — instead of the stock desktop arrow. It replaces the hand/finger pointer over buttons and clickable things too, so the whole game uses one cursor; text fields still show an I-beam for typing and disabled controls still show the "not allowed" cursor.'] },
   { date: '2026-06-30', size: 'medium', v: 'Click to move', by: 'Claude', notes: ['On mouse-and-keyboard, you can now click the map to walk the hero to that spot — a glowing ring marks where you\'re headed. Hold the button (and drag) to keep moving toward the cursor in real time, so you can steer just by pointing. Pressing arrows / WASD instantly takes back manual control, and clicking a foe still opens its info card rather than walking into it. Touch devices keep their floating joystick.'] },
@@ -16846,6 +16877,73 @@ function renderStaminaBar() {
   const txt = document.getElementById('stam-text');
   if (txt) txt.textContent = `${Math.round(st)}/${mx}`;
 }
+// ── Active buffs & debuffs HUD strip ────────────────────────────────────────
+// A little row of DawnLike status icons showing every timed effect on the hero
+// and how long it has left: turn-based combat buffs (War Cry, shields, regen …)
+// and debuffs (poison, burn, stun, slow), plus floor-based shrine boons. Each
+// icon badges its remaining duration and carries a hover tooltip; buffs ring
+// green, debuffs ring red. Rebuilt every updateBars() so countdowns stay live.
+const STATUS_META = {
+  // Player debuffs (statusEffects with target 'player') — counted in turns.
+  poison: { icon: 'ic_poison', kind: 'debuff', name: 'Poisoned', desc: 'Taking poison damage each turn.' },
+  burn:   { icon: 'ic_fire',   kind: 'debuff', name: 'Burning',  desc: 'Taking fire damage each turn.' },
+  stun:   { icon: 'ic_stun',   kind: 'debuff', name: 'Stunned',  desc: "You can't act until it wears off." },
+  slow:   { icon: 'ic_ice',    kind: 'debuff', name: 'Slowed',   desc: 'Sluggish movement and attacks.' },
+  // Combat buffs (combatBuffs) — counted in turns; magnitude shown in the tip.
+  dmgUp:       { icon: 'ui_power',   kind: 'buff', name: 'Damage Up',    desc: 'Your attacks hit harder.' },
+  defUp:       { icon: 'a_shield',   kind: 'buff', name: 'Defense Up',   desc: 'You take less damage.' },
+  critUp:      { icon: 'ic_target',  kind: 'buff', name: 'Crit Up',      desc: 'Higher critical-hit chance.' },
+  dodgeUp:     { icon: 'ui_agility', kind: 'buff', name: 'Dodge Up',     desc: 'Higher chance to dodge.' },
+  spellUp:     { icon: 'ic_wand',    kind: 'buff', name: 'Spell Power',  desc: 'Spells deal more damage.' },
+  lifestealUp: { icon: 'ic_cursed',  kind: 'buff', name: 'Lifesteal',    desc: 'Heal for part of the damage you deal.' },
+  thorns:      { icon: 'ic_mallet',  kind: 'buff', name: 'Thorns',       desc: 'Reflect damage back at attackers.' },
+  regen:       { icon: 'ic_heart',   kind: 'buff', name: 'Regeneration', desc: 'Recover HP each turn.' },
+  shield:      { icon: 'ic_orb',     kind: 'buff', name: 'Shield',       desc: 'Absorbs incoming damage.' },
+  // Shrine boons (the buffs{} object) — counted in floors, not turns.
+  s_power:   { icon: 'ui_power', kind: 'buff', name: 'Power Shrine', desc: '+50% damage.' },
+  s_guard:   { icon: 'a_shield', kind: 'buff', name: 'Guarded',      desc: 'Take 40% less damage.' },
+  s_fortune: { icon: 'ic_money', kind: 'buff', name: 'Fortune',      desc: '+50% loot and an extra drop.' },
+};
+// Order the combat buffs read tidily in the strip (sustain/defence first).
+const COMBAT_BUFF_ORDER = ['shield', 'regen', 'defUp', 'dmgUp', 'spellUp', 'critUp', 'dodgeUp', 'lifestealUp', 'thorns'];
+function buffChipHTML(id, remaining, unit, mag) {
+  const m = STATUS_META[id];
+  if (!m) return '';
+  const icon = dlIcon(m.icon, 16) || '';
+  if (!icon) return ''; // atlas not ready yet — skip; the strip refreshes next tick
+  let magLine = '';
+  if (mag != null) {
+    // shield/regen/thorns carry a flat magnitude; the rest are a percentage.
+    const flat = (id === 'shield' || id === 'regen' || id === 'thorns');
+    magLine = `<div class='ht-line'>${flat ? '+' + Math.round(mag) : '+' + Math.round(mag * 100) + '%'}</div>`;
+  }
+  const left = `${remaining} ${unit}${remaining === 1 ? '' : 's'} left.`;
+  const color = m.kind === 'debuff' ? '#ff9a9a' : '#9fe6a0';
+  const tip = `<div class='ht-name' style='color:${color}'>${m.name}</div><div class='ht-line'>${m.desc}</div>${magLine}<div class='ht-line'>${left}</div>`;
+  return `<span class="buff-ic ${m.kind}" data-tip="${tip}" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">${icon}<span class="buff-time">${remaining}</span></span>`;
+}
+function renderStatusStrip() {
+  const el = document.getElementById('buff-overlay');
+  if (!el) return;
+  const chips = [];
+  // Debuffs first — they're the urgent ones to watch tick down.
+  for (const s of statusEffects) {
+    if (s.target !== 'player' || s.turns <= 0) continue;
+    if (STATUS_META[s.effect]) chips.push(buffChipHTML(s.effect, s.turns, 'turn', null));
+  }
+  // Combat buffs, in a fixed order.
+  for (const id of COMBAT_BUFF_ORDER) {
+    const b = combatBuffs[id];
+    if (b && b.t > 0) chips.push(buffChipHTML(id, b.t, 'turn', b.mag));
+  }
+  // Floor-based shrine boons.
+  for (const k of ['power', 'guard', 'fortune']) {
+    if (buffs[k] > 0) chips.push(buffChipHTML('s_' + k, buffs[k], 'floor', null));
+  }
+  const html = chips.join('');
+  el.innerHTML = html;
+  el.style.display = html ? '' : 'none';
+}
 function updateBars() {
   renderStaminaBar();
   const hpBar = document.getElementById('hp-bar');
@@ -16926,6 +17024,9 @@ function updateBars() {
       foodHud.style.display = 'none';
     }
   }
+
+  // Active buffs & debuffs icon strip (combat buffs, status debuffs, shrine boons).
+  renderStatusStrip();
 
   // Show how many items are in the bag right in the LOOT tab label, in the same
   // tab font (a dim bracket, not a badge).
