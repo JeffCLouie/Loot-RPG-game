@@ -2278,7 +2278,7 @@
        whole desktop layout in one place: the log column shrinks to a slim strip
        and the freed width is handed to the (usually cramped) loot/bag drawer. */
     :root { --log-col: clamp(250px, 24vw, 480px); --panel-col: clamp(210px, 22vw, 440px); --dhud-h: 122px; }
-    body.log-collapsed { --log-col: 30px; --panel-col: clamp(280px, 30vw, 600px); }
+    body.log-collapsed { --log-col: 30px; --panel-col: clamp(300px, 32vw, 660px); }
 
     /* Loot drawer: a real column in the flow (not an overlay), always open.
        It grows with the viewport so wide screens don't leave dead space beside
@@ -8166,6 +8166,28 @@ const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 
 function resizeCanvas() {
+  // On the desktop web layout the map cell is rarely square — and collapsing the
+  // log column to a strip makes it much wider — so a buffer set to the raw cell
+  // size shows a stretched, lopsided view. Pin the canvas to a centered SQUARE
+  // that fits the cell instead. Mobile keeps the simple fill-the-area behaviour.
+  const web = window.matchMedia('(min-width: 760px) and (hover: hover) and (pointer: fine)').matches;
+  const wrap = document.getElementById('game-wrap');
+  if (web && wrap) {
+    const logCol = parseFloat(getComputedStyle(wrap).gridTemplateColumns) || 0; // first grid track = log column
+    // The bottom HUD sits in its own grid row under the map, so the canvas cell is
+    // shorter than the wrap by the HUD's height — subtract it so the square fits
+    // the map row and never overlaps the HP/MP bars.
+    const hud = document.getElementById('desktop-hud');
+    const hudH = (hud && getComputedStyle(hud).display !== 'none') ? hud.offsetHeight : 0;
+    const side = Math.max(80, Math.floor(Math.min(wrap.clientWidth - logCol, wrap.clientHeight - hudH)));
+    canvas.style.width = side + 'px';
+    canvas.style.height = side + 'px';
+    canvas.width = side;
+    canvas.height = side;
+    return;
+  }
+  canvas.style.width = '';
+  canvas.style.height = '';
   canvas.width  = canvas.offsetWidth;
   canvas.height = canvas.offsetHeight;
 }
@@ -19167,6 +19189,10 @@ function setLogCollapsed(collapsed, persist = true) {
   const el = document.getElementById('log');
   if (el && !collapsed) el.scrollTop = el.scrollHeight; // jump to newest on reopen
   if (persist) { try { localStorage.setItem(LOG_COLLAPSE_KEY, collapsed ? '1' : '0'); } catch (e) {} }
+  // Folding the log changes the map column width on desktop — re-fit the square
+  // canvas to the new space and repaint.
+  if (typeof resizeCanvas === 'function') resizeCanvas();
+  if (typeof draw === 'function') { try { draw(); } catch (e) {} }
 }
 function toggleLog() {
   const row = document.getElementById('bottom-row');
@@ -19178,7 +19204,7 @@ function toggleLog() {
   try { pref = localStorage.getItem(LOG_COLLAPSE_KEY); } catch (e) {}
   // No saved choice → follow the layout (collapsed on mobile) without persisting,
   // so it stays responsive until the player makes an explicit choice.
-  if (pref === null) setLogCollapsed(!isWebLayout(), false);
+  if (pref === null) setLogCollapsed(true, false);   // start hidden everywhere; reclaimed space goes to the map + loot panel
   else setLogCollapsed(pref === '1');
 })();
 
