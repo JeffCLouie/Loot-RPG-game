@@ -928,6 +928,19 @@
   .skillbar-btn.slot-drop-hot, .lt-slot.slot-drop-hot { border-color: #ffd86a !important; box-shadow: 0 0 8px #ffd86a99; transform: translateY(-2px); }
   .skillbar-btn[draggable="true"] { cursor: grab; }
   .skillbar-btn[draggable="true"]:active { cursor: grabbing; }
+  /* On touch devices the cast bar is your only way to fire spells/potions, so make
+     the buttons and their icons noticeably bigger for easier tapping. (Desktop has
+     its own larger sizing in the wide-layout media query above.) */
+  @media (pointer: coarse) {
+    #skill-bar { gap: 7px; }
+    #skill-bar .skillbar-btn { min-width: 56px; padding: 7px 9px; }
+    #skill-bar .skillbar-btn.slot-empty { min-width: 46px; }
+    #skill-bar .skillbar-btn .sb-icon { font-size: 26px; }
+    #skill-bar .skillbar-btn .sb-icon.big { font-size: 40px; }
+    #skill-bar .skillbar-btn .sb-icon svg { width: 32px; height: 36px; }
+    #skill-bar .skillbar-btn .sb-key { font-size: 10px; }
+    #skill-bar .skillbar-btn .sb-info { font-size: 9px; }
+  }
 
   /* SKILLS-tab loadout tray — the bank of slots you drag learned actives into. It
      sits above the skill tree so the source nodes and the slots are co-visible. */
@@ -17841,7 +17854,7 @@ function renderSkillBar() {
     const tip = `<div class='ht-name' style='color:#e6c34a'>${dlIcon(s.icon,16)||''} ${s.name}</div><div class='ht-line'>${s.desc}</div><div class='ht-sub'>${s.mp} MP · ${s.cd}s cooldown${castHint}</div><div class='ht-sub' style='opacity:.7'>${moveHint}</div>`;
     return `<button class="skillbar-btn ${i === 0 ? 'baseline ' : ''}${ready ? 'ready' : 'disabled'} ${cd > 0 ? 'cooling' : ''}" draggable="true"
       ondragstart="skillDragStart(event,'${s.id}',${i})" ondragend="skillDragEnd()" ${dropAttrs(i)} ${hoverTip(tip)} onclick="castSkillById('${s.id}')">
-      <span class="sb-key">${key}</span><span class="sb-icon big">${dlIcon(s.icon,30)||''}</span>${cdDial('sk:' + s.id)}
+      <span class="sb-key">${key}</span><span class="sb-icon big">${dlIcon(s.icon, touchUI() ? 48 : 30)||''}</span>${cdDial('sk:' + s.id)}
     </button>`;
   }).join('');
   // Desktop only: a TOWN button on the far left of the bar (the header's TOWN
