@@ -8000,8 +8000,9 @@ function randomFloorTile(reach) {
 function scatterTerrain(reach) {
   if (tutorialActive || inTown) return;
   const blobs = [];
-  if (Math.random() < 0.55) blobs.push({ t: 13, n: rnd(1, 2) });   // mud
-  if (Math.random() < 0.35) blobs.push({ t: 14, n: 1 });           // ice
+  // Kept fairly rare so a mud/ice patch is an occasional wrinkle, not on every floor.
+  if (Math.random() < 0.22) blobs.push({ t: 13, n: 1 });   // mud
+  if (Math.random() < 0.15) blobs.push({ t: 14, n: 1 });   // ice
   for (const b of blobs) {
     for (let k = 0; k < b.n; k++) {
       const c = randomFloorTile(reach);
@@ -8040,9 +8041,10 @@ function placeTraps(reach) {
     traps.push({ kind: 'arrow', x: c.x, y: c.y, dx: d[0], dy: d[1], cd: Math.random() * 2, interval: rnd(18, 28) / 10, dmg: Math.round(5 + dungeonLevel * 1.6) });
     arrows--;
   }
-  // Fire vents — a small cluster that flares in and out of life.
-  if (Math.random() < 0.5) {
-    const n = rnd(2, 4);
+  // Fire vents — a small cluster that flares in and out of life. Kept to a minority
+  // of floors so they're a hazard you notice, not a constant.
+  if (Math.random() < 0.22) {
+    const n = rnd(1, 3);
     for (let i = 0; i < n; i++) {
       const c = randomFloorTile(reach);
       if (!c || (Math.abs(c.x - player.x) + Math.abs(c.y - player.y)) < 6) continue;
