@@ -2796,7 +2796,7 @@
     <div class="xp-track"><div class="xp-fill" id="xp-bar" style="width:0%"></div></div>
   </div>
   <div class="hud-item" id="enemies-hud" data-tip="<div class='ht-name'><span data-spr='ui_foes'></span> Foes Remaining</div><div class='ht-line'>How many enemies are still alive on this floor. The stairs down stay sealed (🔒) until every foe is cleared (🔓).</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()"><span data-spr="ui_foes"></span> <span class="hud-val" id="enemies-num">0</span> <span id="clear-status">🔒</span></div>
-  <div class="hud-item" id="power-hud" data-tip="<div class='ht-name'><span data-spr='ui_power'></span> Power</div><div class='ht-line'>A rough measure of your overall strength, combining your level, equipped gear, spent attributes and skills.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()"><span data-spr="ui_power"></span> <span class="hud-val" id="power-num">0</span></div>
+  <div class="hud-item" id="power-hud" data-tip="<div class='ht-name'><span data-spr='ui_power'></span> Power</div><div class='ht-line'>A rough measure of your overall strength, combining your level, equipped gear, attributes and skills.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()"><span data-spr="ui_power"></span> <span class="hud-val" id="power-num">0</span></div>
   <div class="hud-item" id="pact-hud" style="display:none" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">🔮 <span class="hud-val" id="pact-num"></span></div>
   <div class="hud-item" id="food-hud" style="display:none" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()"></div>
   <div id="gold-display" data-tip="<div class='ht-name' style='color:var(--gold)'>💰 Gold</div><div class='ht-line'>The dungeon's main currency. Spend it at the town shops, the Forge, the Enchanter, and the Stash.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">💰 <span id="gold-count">0</span>g</div>
@@ -4380,15 +4380,29 @@ const HERO = '🧙';
 // Every equippable item has a single "power" number summarising how strong it is:
 // each stat is worth a weighted amount, plus a flat bonus for its rarity tier.
 // The player's overall power is built from their level, attributes, and gear.
-const STAT_POWER_WEIGHTS = { ATK:3, DEF:2, SPD:2, LCK:1.5, HP:1, MP:1, CRIT:1.5, ACC:0.9, CRITDMG:1, REGEN:5, DMG:3,
+const STAT_POWER_WEIGHTS = { ATK:3, DEF:2, SPD:1.5, LCK:1.5, HP:0.2, MP:0.25, CRIT:1.5, ACC:0.9, CRITDMG:1, REGEN:5, DMG:3,
   // Rating stats (CRIT/DODGE/BLOCK/DR/ACC/SPD) are now larger flat numbers that
   // scale with item level, so their per-point power weight is lowered to keep an
-  // item's overall Power sane and comparable to the old %-stat era.
+  // item's overall Power sane and comparable to the old %-stat era. SPD matches
+  // DODGE (1.5): both feed evasion rating 1:1, so an equal value is equal Power.
+  // HP and MP are the two big resource POOLS — they roll several times larger than
+  // any other stat (AFFIX_CURVES flat 6 / 4), so they carry a small per-point weight
+  // (0.2 / 0.25); otherwise one HP roll alone would out-power a whole weapon's damage.
   LEECH:5, MPLEECH:3, HPKILL:1, MPKILL:1, THORNS:1, DR:1.5, BLOCK:1.2, DODGE:1.5, IDMG:4, DBLSTRIKE:5,
   CLEAVE:2, BOSSDMG:2, EXEC:2, PEN:2, GOLDFIND:1, XPGAIN:1, MAGICFIND:2, MATFIND:1, SPELLPWR:3,
   CDR:4, MCR:3, BLEED:3, STUNPWR:2, ATKSPD:4 };
-// Per-point power weight of a raised attribute carried on an item (e.g. +13 Might).
-const ATTR_POWER_WEIGHT = 6;
+// Base per-point power weight of an attribute — the class-INDEPENDENT half: every
+// attribute feeds a family of derived stats (HP, MP, crit, evasion, regen…) that's
+// the same for everyone. On top of this, a class earns EXTRA Power for points in the
+// attribute it deals damage with (see attrPowerWeight), so the same +Might is worth
+// more to a Warrior than a Mage. Used identically for spent attributes (playerPower)
+// and gear affixes (itemPower), so a point is worth the same Power spent or geared.
+const ATTR_POWER_WEIGHT = 3;
+// Power credited per point of bonus Attack an attribute grants THIS class through the
+// damage system (attrDamage / dmgAttrs: primary ×2.4, secondary ×0.8, universal Might
+// ×0.6 per point). Lighter than the ATK gear-stat weight (3) on purpose, so a damage
+// attribute clearly matters to its class without Power collapsing into a damage meter.
+const ATTR_DMG_POWER = 1.2;
 // A small flat nudge per rarity — kept low on purpose so an item's power is
 // driven mostly by its (item-level-scaled) stats. This is what lets a deep
 // common eventually out-power an early legendary instead of the tier bonus
@@ -4606,7 +4620,33 @@ const MATERIAL_MIN_DIFF = { scrap: 1, glimmer: 2, core: 3, chaos: 4 };
 function activeDifficulty() { return inTown ? diffOf(Math.max(1, dungeonReturn || 1)) : currentDifficulty(); }
 function materialUnlocked(k) { return activeDifficulty() >= (MATERIAL_MIN_DIFF[k] || 1); }
 
-// Total power of a single item: weighted sum of its stats + a rarity bonus.
+// Per-point power weight of an attribute FOR THE CURRENT CLASS. Every attribute is
+// worth the class-independent ATTR_POWER_WEIGHT (its derived-stat package); the
+// class's damage attributes turn points into real Attack on top (attrDamage), so a
+// point in your primary/secondary damage stat — or any Might, which always lends a
+// little Attack — is worth more Power to you than to a class that can't hit with it.
+function attrPowerWeight(key) {
+  let w = ATTR_POWER_WEIGHT;
+  const { primary, secondary } = classDmgAttrs();
+  if (key === primary)        w += ATTR_DMG_PRIMARY   * ATTR_DMG_POWER;
+  else if (key === secondary) w += ATTR_DMG_SECONDARY * ATTR_DMG_POWER;
+  else if (key === 'might')   w += ATTR_FX.atkPerMight * ATTR_DMG_POWER; // universal Might dab
+  return w;
+}
+// Per-point power weight of a gear STAT for the current class. Most stats are
+// class-neutral (their table weight); Spell Power is scaled by how much the class
+// actually casts (CLASS_SPELL_RELIANCE), so a caster values a Spell Power roll fully
+// while it's near-dead weight on a pure-martial Warrior or Rogue.
+function statPowerWeight(key) {
+  let w = STAT_POWER_WEIGHTS[key] || 1;
+  if (key === 'SPELLPWR') w *= (CLASS_SPELL_RELIANCE[player.class] ?? 1);
+  return w;
+}
+
+// Total power of a single item, AS THIS CLASS would wield it: weighted sum of its
+// stats + attributes + a rarity bonus. The same item can be worth different Power to
+// different classes (a +Might affix or a Spell Power roll lands differently), which
+// is the point — Power should track the item's real impact on this hero.
 function itemPower(item) {
   if (!item || !item.stats) return 0;
   let p = 0;
@@ -4615,12 +4655,13 @@ function itemPower(item) {
       const [lo, hi] = String(v).split('-').map(Number);
       p += ((lo + hi) / 2) * STAT_POWER_WEIGHTS.DMG;
     } else if (typeof v === 'number') {
-      p += v * (STAT_POWER_WEIGHTS[k] || 1);
+      p += v * statPowerWeight(k);
     }
   }
-  // Attribute affixes (+Might, +Luck, …) add to an item's power too.
-  if (item.attrs) for (const v of Object.values(item.attrs)) {
-    if (typeof v === 'number') p += v * ATTR_POWER_WEIGHT;
+  // Attribute affixes (+Might, +Luck, …) add to an item's power too, weighted by how
+  // much THIS class gains from that attribute (attrPowerWeight).
+  if (item.attrs) for (const [k, v] of Object.entries(item.attrs)) {
+    if (typeof v === 'number') p += v * attrPowerWeight(k);
   }
   p += TIER_POWER_BONUS[item.tier] || 0;
   return Math.max(0, Math.round(p));
@@ -4667,16 +4708,33 @@ function attrDamage() {
 // reads negative.
 function critDamageMult() { return Math.max(0, 2.0 + totalStat('CRITDMG') / 100 + skillBonus('critDmg')); }
 
-// The player's overall power: a blend of level, spent attributes, and equipped gear.
+// The player's overall power: a blend of level, attributes, and equipped gear.
 // Red/ignored pieces (requirement no longer met) don't count — they give nothing.
 function playerPower() {
   let p = player.level * 10;
   const active = activeSlots();
   for (const slot of SLOT_KEYS) if (active[slot]) p += itemPower(equipped[slot]);
-  const spent = ATTR_KEYS.reduce((s, k) => s + (player.attributes?.[k] || 0), 0);
-  p += spent * 3;
+  // Every allocated attribute point counts — the starting ATTR_BASE block AND points
+  // spent on level-up — each weighted by how much THIS class gains from it
+  // (attrPowerWeight), exactly like a gear attribute affix, so a point is worth the
+  // same Power spent or geared and a damage-stat build reads stronger than an off-stat one.
+  for (const k of ATTR_KEYS) p += (player.attributes?.[k] || 0) * attrPowerWeight(k);
   p += spentSkillPoints() * 5; // skill-tree investment shows up in Power too
   return Math.round(p);
+}
+
+// The true Power swing from equipping `item` into its slot — what the bag/shop
+// "upgrade" arrows compare against. Beyond the piece it replaces, equipping a
+// two-handed weapon also STRANDS an incompatible off-hand (loadItem stows it), so
+// that off-hand's power belongs in the baseline. Without this, a 2H weapon could
+// flag as a green upgrade while actually LOWERING your Power once the off-hand drops.
+function equipUpgradeDelta(item) {
+  if (!item || !item.slot) return 0;
+  let baseline = equipped[item.slot] ? itemPower(equipped[item.slot]) : 0;
+  if (item.slot === 'weapon' && equipped.offhand && offhandEquipError(equipped.offhand, item)) {
+    baseline += itemPower(equipped.offhand);
+  }
+  return itemPower(item) - baseline;
 }
 
 // Max HP/MP are derived from level + attributes so the formula stays consistent
@@ -5473,6 +5531,11 @@ function equipLockReason(item) {
 // dealt multiplier only applies to physical hits (see applyOffenseMods).
 const CLASS_DMG_DEALT = { warrior: 1.10, rogue: 1.12, mage: 1.00, templar: 1.00 };
 const CLASS_DMG_TAKEN = { warrior: 0.90, rogue: 0.95, mage: 0.90, templar: 0.85 };
+// How much each class leans on spell damage, used only to value the Spell Power gear
+// stat in Power (statPowerWeight): a Mage lives on spells, a Templar casts holy
+// smites alongside melee, and a Warrior/Rogue barely cast — so Spell Power is near-
+// dead weight for them and shouldn't pad their Power as if it were a caster's.
+const CLASS_SPELL_RELIANCE = { warrior: 0.25, rogue: 0.25, mage: 1.0, templar: 0.7 };
 function classDmgDealtMult() {
   const base = CLASS_DMG_DEALT[player.class] || 1;
   return base * (1 + skillBonus('dmgDealt'));
@@ -7644,6 +7707,7 @@ document.addEventListener('click', (e) => {
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
   { date: '2026-06-30', size: 'medium', v: 'Minimap + fixed map view', by: 'Claude', notes: ['A minimap now sits in the top-left of the dungeon view, sketching the whole floor at a glance — walls, water, lava, doors, shrines, teleporters and the all-important down-stairs (in bright green) — with live dots for you (ringed gold), foes (bosses bigger), allies, chests, loose coins, and the merchant, mystic and quest NPCs. It tucks away while you\'re in town.', 'The map view is now fixed at the most zoomed-in setting. The old Wide / Wider / Widest control has been retired from the ⚙️ menu, since the closest view is the one players kept it on.'] },
+  { date: '2026-06-30', size: 'medium', v: 'Power score retuned for the new stats', by: 'Claude', notes: ['The POWER number was audited and recalibrated to match the current attribute and rating systems, so it reflects your real strength more honestly. Nothing about combat changes — only how Power is tallied and displayed.', 'Power is now class-aware: the same item can be worth different Power to different heroes, because it makes a different difference. A +Might piece is worth more to a Warrior than a Mage (it actually makes the Warrior hit harder), a +Spirit piece flips that, and a Spell Power roll counts for a caster but is near-dead weight on a pure-martial Warrior or Rogue. Your damage attribute is now visibly the one that moves your Power most.', 'An attribute point is also worth the same Power whether you spent it on level-up or it came rolled on gear (a +attribute affix used to quietly count for double). The Power tooltip and Hero sheet are reworded to match.', 'Max HP and Max MP rolls on gear no longer dominate the score — a single big HP roll used to be worth more than an entire weapon’s damage. Speed and Evasion gear now report equal Power for an equal benefit, since they do the same thing.', 'The bag and shop ↑ upgrade arrow now accounts for the off-hand a two-handed weapon makes you set down, so a green “upgrade” won’t secretly lower your Power once the off-hand is stowed.'] },
   { date: '2026-06-30', size: 'small', v: 'Dungeon Gate is the only way down', by: 'Claude', notes: ['The ✕ in the corner of the town menus no longer drops you back into the dungeon. The Town menu lost its ✕ entirely, and the town Merchant and Mystic panels now show only ← back to the hub — their ✕ is hidden while you\'re in town.', 'To head back down you now take the 🌀 Dungeon Gate, where you pick your floor and difficulty, so you can\'t accidentally bail out of town onto your old return floor by tapping the corner. Pressing Esc in a town panel steps back toward the hub instead of leaving. A Merchant or Mystic you meet while wandering the dungeon still has its ✕ to dismiss the panel.'] },
   { date: '2026-06-30', size: 'small', v: 'Skill bar stays in town', by: 'Claude', notes: ['On the desktop layout your skill bar no longer vanishes when you step into town — it parks as a tray along the bottom so you can see your kit and rearrange your slots while you shop and plan. The town menu ends just above it instead of covering it, and the tray sits on its own clean strip. (On phones nothing changes: the SKILLS tab already shows your slot row, so the bar stays tucked away in town there.)', 'The Health and Mana potions on that tray are greyed out and locked while you\'re in town: there\'s nothing to fight, and resting already restores you for free, so a potion can\'t be wasted there. They light back up the moment you take the gate back down.'] },
   { date: '2026-06-30', size: 'small', v: 'Tidier SKILLS tab on desktop', by: 'Claude', notes: ['On the wide desktop layout, the SKILLS tab no longer repeats the row of skill slots above the tree. Your bottom skill bar is already on screen there — you can drag a learned skill straight onto it, or rearrange the slots in place — so the second copy was redundant clutter.', 'On phones and tablets the slot tray stays exactly as it was: it\'s the comfortable place to tap a slot and assign a skill, and the only slot editor available while you\'re in town.'] },
@@ -9615,7 +9679,7 @@ function renderShop() {
       // buyer can spot upgrades at a glance, just like loot in the bag.
       const ip = itemPower(s.item);
       const equippedHere = equipped[s.item.slot];
-      const delta = ip - (equippedHere ? itemPower(equippedHere) : 0);
+      const delta = equipUpgradeDelta(s.item);
       isUpgrade = delta > 0;
       sub += ` <span class="item-power">⚡${ip}</span>`;
       if (equippedHere) sub += `  ${statDiffLine(s.item)}`;
@@ -17399,7 +17463,7 @@ function renderPanel() {
       // flag upgrades and show the power swing (▲+5 / ▼-2).
       const ip = equipable ? itemPower(item) : 0;
       const equippedHere = equipable ? equipped[item.slot] : null;
-      const delta = equipable ? ip - (equippedHere ? itemPower(equippedHere) : 0) : 0;
+      const delta = equipable ? equipUpgradeDelta(item) : 0;
       const isUpgrade = equipable && delta > 0;
       const pwr = equipable ? `<span class="item-power">⚡${ip}</span>` : '';
       const diff = equipable ? `<div class="item-diff">${statDiffLine(item)}</div>` : '';
