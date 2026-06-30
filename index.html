@@ -8912,6 +8912,26 @@ function generateMap() {
   floorRooms = rooms;
   spawnEnemies();
   spawnGroundLoot();
+  // ── TREASURE HOARD ROOM (rare) ── a whole room packed with chests. A jackpot
+  // find — but cracking that many is a gamble (mimics and chest-ambushes lurk).
+  // Chests are laid in a checkerboard so you can still weave between them.
+  if (rooms.length && Math.random() < 0.04) {
+    const far = rooms.filter(r => Math.abs(r.cx - player.x) + Math.abs(r.cy - player.y) >= 6);
+    const room = pick(far.length ? far : rooms);
+    if (room) {
+      const luck = 2 + Math.floor(dungeonLevel / 3);
+      let placed = 0;
+      for (let y = room.y; y < room.y + room.h && placed < 16; y++) {
+        for (let x = room.x; x < room.x + room.w && placed < 16; x++) {
+          if (mapData[y][x] !== 0 || (x + y) % 2 === 0) continue;   // checkerboard gaps
+          if ((x === player.x && y === player.y) || getEnemyAt(x, y)) continue;
+          groundItems.push({ x, y, luck, ilvl: dungeonLevel + 1 });
+          placed++;
+        }
+      }
+      if (placed >= 4) log(`💰 You've stumbled on a hoard — a room piled with ${placed} chests!`, 'important');
+    }
+  }
   // Tiles you can actually WALK to (stairs/teleporters are dead-ends, not
   // pass-throughs). Free-standing NPCs and quest targets must land here, never
   // in a pocket whose only link runs through a warp/stair — otherwise they're
@@ -14701,6 +14721,12 @@ function dealDamage(e, dmg, isCrit) {
   // Vulnerable (cursed/marked) foes take amplified damage from every source.
   if (statusEffects.some(s => s.target === e && s.effect === 'vuln')) dmg = Math.round(dmg * 1.35);
   e.hp -= dmg;
+  // Treasure Goblin: the FIRST hit starts a getaway timer. Burst it down before
+  // the clock runs out (see goblinFlee) or it vanishes with its hoard.
+  if (e.isGoblin && e.escapeTicks == null && e.hp > 0) {
+    e.escapeTicks = GOBLIN_ESCAPE_TICKS;
+    log('👺 The Treasure Goblin is wounded and bolting — finish it fast!', 'important');
+  }
   e.hitAt = Date.now();   // drives the white hit-flash in draw()
   spawnFloatingText(e.x, e.y, isCrit ? `${dmg}!` : `${dmg}`, isCrit ? '#ffdd55' : '#fff');
   spawnParticles(e.x, e.y, isCrit ? '#ffe27a' : '#ff5a4a', isCrit ? 9 : 5, isCrit ? 0.10 : 0.07);
@@ -15806,7 +15832,21 @@ function stepAwayFromPlayer(e) {
 
 // Goblins flee but are clumsy cowards — they frequently fumble their escape
 // (trip and freeze, or bolt the wrong way), so catching one isn't maddening.
+// Once wounded, a Treasure Goblin has this many world-ticks (~400ms each) to
+// live before it escapes with its loot — so the chase has real urgency.
+const GOBLIN_ESCAPE_TICKS = 15;
+// The goblin gives up and vanishes (no loot) when its getaway timer expires.
+function goblinEscape(e) {
+  e.dead = true;
+  spawnParticles(e.x, e.y, '#ffd24b', 14, 0.13);
+  spawnFloatingText(e.x, e.y, 'POOF!', '#ffd24b');
+  sfx('teleport');
+  log('💨 The Treasure Goblin slips away with its hoard — too slow!', 'important');
+  updateFloorClear();
+}
 function goblinFlee(e) {
+  // Wounded goblins are on the clock — run it down, then they bolt for good.
+  if (e.escapeTicks != null && --e.escapeTicks <= 0) { goblinEscape(e); return; }
   if (Math.random() < 0.5) {
     if (Math.random() < 0.55) return;          // trips over its loot and stays put
     // panics in a random direction (may even scurry toward you), never attacks
@@ -16596,10 +16636,10 @@ function collectChestLoot(luck, ilvl, x, y) {
   }
 }
 
-// Open a single ground chest: it may spring into a Mimic, be trapped, or just
-// hand over loot. Returns 'mimic' when it springs to life so the caller can
-// stop opening any other chests stacked on the same tile and let the fight
-// begin; otherwise returns null.
+// Open a single ground chest: it may spring into a Mimic, spring an ambush of
+// foes, be trapped, or just hand over loot. Returns 'mimic' or 'ambush' when a
+// fight breaks out so the caller can stop opening any other chests stacked on
+// the same tile; otherwise returns null.
 function openChest(chest) {
   // Rarely the chest is a Mimic — it springs to life and attacks.
   if (Math.random() < 0.10) {
@@ -16628,6 +16668,26 @@ function openChest(chest) {
     log('🧰 It\'s a MIMIC! The chest lunges at you!', 'important');
     screenFlash('#cc0000');
     return 'mimic';
+  }
+
+  // Ambush! The chest was bait — a small pack of foes bursts out around you,
+  // already alerted. Halts opening the rest of the pile (you're in a fight now).
+  if (Math.random() < 0.08) {
+    const n = rnd(2, 3);
+    let sprung = 0;
+    for (const s of openTilesNear(player.x, player.y, n + 4)) {
+      if (sprung >= n) break;
+      if (getEnemyAt(s.x, s.y)) continue;
+      const foe = makeQuestFoe(s.x, s.y);
+      foe.aggro = true;                 // they spring already hunting
+      enemies.push(foe); sprung++;
+    }
+    if (sprung) {
+      sfx('trap'); screenFlash('#cc0000');
+      log(`⚔️ It's an ambush! ${sprung} foe${sprung === 1 ? '' : 's'} spring from the chest!`, 'important');
+      return 'ambush';
+    }
+    // Nowhere to spawn — fall through and just give the loot.
   }
 
   // Very small chance the chest is trapped.
@@ -16661,7 +16721,8 @@ function pickupChestsAt(x, y) {
     if (idx === -1) break;
     const chest = groundItems.splice(idx, 1)[0];
     opened++;
-    if (openChest(chest) === 'mimic') break;
+    const r = openChest(chest);
+    if (r === 'mimic' || r === 'ambush') break;  // a fight broke out — stop opening the pile
   }
   return opened;
 }
