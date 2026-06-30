@@ -6382,7 +6382,7 @@ let currentTab = 'inv';
 let lootFilter = 'all';
 let selectedItem = null;
 let selectedSkillId = null; // skill-tree node whose detail popover is open (null = none)
-let skillView = 'passive';  // which SKILLS sub-tree is shown: passive | active | path
+let skillView = 'active';  // which SKILLS sub-tree is shown: passive | active | path
 let skillBranch = 0;        // which specialization branch (column 0..4) is shown within passive/active
 let mapData = [];
 let dungeonLevel = 1;
@@ -16518,6 +16518,9 @@ function spendPotionTurn() {
 
 function switchTab(tab) {
   currentTab = tab;
+  // Opening the SKILLS tab lands on the ACTIVE tree by default (the spells you
+  // cast), not the passive web.
+  if (tab === 'skills') skillView = 'active';
   document.getElementById('tab-inv').classList.toggle('active', tab==='inv');
   document.getElementById('tab-equip').classList.toggle('active', tab==='equip');
   document.getElementById('tab-hero').classList.toggle('active', tab==='hero');
