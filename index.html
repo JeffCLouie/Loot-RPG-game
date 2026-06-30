@@ -32,6 +32,21 @@
     --unique:    #ff2222;
   }
 
+  /* Unified themed scrollbar. The LOOT panel's slim purple-on-dark bar is the
+     look we want everywhere; without this, menus/shops/popups fall back to the
+     OS's fat default scrollbar. Applied globally so every scrollable surface
+     (shops, town, the crafting/enchant panels, version & how-to popups, …)
+     scrolls with the same thin themed bar. Specific overrides like
+     #panel-content / #log still win on their own elements via higher
+     specificity. */
+  * {
+    scrollbar-width: thin;                       /* Firefox */
+    scrollbar-color: var(--border) var(--bg);    /* thumb, track */
+  }
+  *::-webkit-scrollbar { width: 4px; height: 4px; }
+  *::-webkit-scrollbar-track { background: var(--bg); }
+  *::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
   body {
     background:
       radial-gradient(circle at 50% -10%, #2a2148 0%, #150f26 55%, var(--bg) 100%);
@@ -304,6 +319,49 @@
   .death-howto b { color: #ffd24b; }
   .death-btn { background: #b3303a; border: 1px solid #ff6472; color: #fff; font-family: 'Courier New', monospace; font-size: 13px; letter-spacing: 1px; padding: 9px 22px; border-radius: 8px; cursor: pointer; }
   .death-btn:active { background: #ff4452; }
+
+  /* ── HARDCORE PERMADEATH ── the terminal "your hero is gone forever" screen.
+     Darker and colder than the normal death screen so the finality reads instantly. */
+  #hc-death-overlay { position: fixed; inset: 0; background: rgba(8,2,4,0.92); z-index: 520; display: none; align-items: center; justify-content: center; padding: 20px; }
+  #hc-death-overlay.open { display: flex; animation: deathFade 0.5s ease; }
+  #hc-death-card { background: linear-gradient(180deg, #1a0a0d, #0a0405); border: 2px solid #8a1f29; border-radius: 12px; max-width: 340px; width: 100%; padding: 24px 18px; text-align: center; box-shadow: 0 0 50px rgba(150,0,20,0.55); }
+  #hc-death-card .hc-skull { width: 46px; height: 46px; margin: 0 auto 8px; display: flex; align-items: center; justify-content: center; filter: drop-shadow(0 0 10px rgba(200,40,55,0.55)); }
+  .hc-death-title { color: #ff3a48; font-size: 23px; font-weight: bold; letter-spacing: 3px; text-shadow: 0 0 14px rgba(255,50,70,0.7); margin-bottom: 6px; }
+  .hc-death-sub { font-size: 12.5px; color: #e6c9cc; line-height: 1.5; margin-bottom: 14px; }
+  .hc-death-sub b { color: #ff7a86; }
+  #hc-death-stats { display: flex; justify-content: center; gap: 20px; margin-bottom: 14px; font-size: 12.5px; color: #d8b6ba; }
+  #hc-death-stats b { color: #ffe9b0; display: block; font-size: 16px; }
+  #hc-death-ach { font-size: 11.5px; color: #e6c9cc; background: rgba(150,20,30,0.16); border: 1px solid rgba(180,40,55,0.4); border-radius: 7px; padding: 8px 10px; line-height: 1.5; margin-bottom: 16px; }
+  #hc-death-ach b { color: #ff9aa4; }
+  .hc-death-btn { width: 100%; box-sizing: border-box; background: #8a1f29; border: 1px solid #ff5a68; color: #fff; font-family: 'Courier New', monospace; font-size: 13px; letter-spacing: 1px; padding: 11px; border-radius: 8px; cursor: pointer; }
+  .hc-death-btn:active { background: #b3303a; }
+
+  /* Hardcore toggle on the new-hero name screen. */
+  .hc-toggle { display: flex; align-items: flex-start; gap: 10px; text-align: left; cursor: pointer;
+    border: 1px solid #5a2630; border-radius: 8px; background: #1c0f12; padding: 10px 11px; margin-bottom: 12px;
+    -webkit-tap-highlight-color: transparent; transition: border-color .15s, background .15s; }
+  .hc-toggle.on { border-color: #b3303a; background: #241115; box-shadow: 0 0 14px rgba(150,30,45,0.3); }
+  .hc-toggle input { position: absolute; opacity: 0; width: 0; height: 0; }
+  .hc-tog-box { flex: 0 0 auto; width: 18px; height: 18px; margin-top: 1px; border-radius: 4px; border: 1px solid #8a5560; background: #160b0e; display: flex; align-items: center; justify-content: center; }
+  .hc-toggle.on .hc-tog-box { border-color: #ff5a68; background: #b3303a; }
+  .hc-toggle.on .hc-tog-box::after { content: '✓'; color: #fff; font-size: 12px; font-weight: bold; }
+  .hc-tog-text { font-size: 11px; color: #c9a9ad; line-height: 1.45; }
+  .hc-tog-text b { color: #ff7a86; letter-spacing: .5px; }
+  .hc-tog-text .hc-tog-sub { display: block; color: #8a7176; font-size: 10px; margin-top: 3px; }
+
+  /* Small crimson "HARDCORE" tag reused on the title card, slots list and graveyard. */
+  .hc-tag { display: inline-flex; align-items: center; gap: 4px; font-size: 9px; font-weight: bold;
+    letter-spacing: 1px; color: #ff8a93; border: 1px solid #8a2530; background: rgba(140,30,40,0.25);
+    border-radius: 4px; padding: 1px 5px; }
+  .hc-tag .dl-ic { filter: drop-shadow(0 0 3px rgba(200,40,55,0.5)); }
+  #title-hero .hc-tag { margin-top: 8px; }
+  .gy-row.hc { background: linear-gradient(90deg, rgba(120,24,34,0.16), transparent); }
+  .gy-row.hc .gy-name { color: #ff9aa4; }
+  /* Hardcore achievement badges glow crimson instead of gold when earned. */
+  .ta-badge.hc.earned .ta-ic { color: #ff5a68; border-color: #8a2530; box-shadow: 0 0 10px rgba(220,50,65,0.4); }
+  .ta-badge.hc.earned .ta-nm { color: #f0b9bd; }
+  #title-achievements .ta-head.hc { color: #c98a8f; margin-top: 14px; }
+  #title-achievements .ta-head.hc b { color: #ff7a86; }
 
   /* ── DIFFICULTY CONQUEST ── shown when a finite dungeon difficulty is cleared. */
   #conquest-overlay { position: fixed; inset: 0; background: rgba(20,6,8,0.82); z-index: 480; display: none; align-items: center; justify-content: center; padding: 20px; }
@@ -778,6 +836,13 @@
   .skillbar-btn.town .sb-key { color: #bfe6a8; }
   .skillbar-btn.town:active { background: #335a2a; }
   .skillbar-btn.town.disabled { background: #20271c; border-color: #34402f; color: #7a8a6c; }
+  /* Town portal charging: a swirling cyan pulse while the gate opens over a few turns. */
+  @keyframes portalCharging {
+    0%,100% { box-shadow: 0 0 6px rgba(110,200,255,0.5);  border-color: #6ec8ff; }
+    50%     { box-shadow: 0 0 15px rgba(150,220,255,0.95); border-color: #b8e6ff; }
+  }
+  .skillbar-btn.town.channeling { border-color: #6ec8ff; background: #1c3550; color: #d6ecff; animation: portalCharging 1s ease-in-out infinite; }
+  .action-btn.town-action.channeling { animation: portalCharging 1s ease-in-out infinite; }
 
   #panel-content { flex: 1; overflow-y: auto; padding: 6px; }
   #panel-content::-webkit-scrollbar { width: 4px; }
@@ -1184,6 +1249,19 @@
   .pd-bottom { grid-column: 1 / -1; display: flex; justify-content: center; gap: 8px; }
   .pd-bottom .pd-cell { flex: 0 0 calc((100% - 16px) / 3); }
   .pd-hint { grid-column: 1 / -1; margin-top: 8px; font-size: 10px; color: #555; text-align: center; }
+
+  /* ── GEAR-SET SWITCH ── two-loadout toggle above the paper doll. */
+  .gearset-bar { display: flex; gap: 8px; padding: 2px 4px 0; }
+  .gearset-btn {
+    flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
+    padding: 6px 4px; border: 1px solid var(--border); border-radius: 5px;
+    background: rgba(8,8,12,0.5); color: #8a8475; cursor: pointer;
+    font-size: 11px; letter-spacing: 0.5px;
+  }
+  .gearset-btn .gs-name { font-weight: bold; }
+  .gearset-btn .gs-meta { font-size: 9px; color: #6a6456; }
+  .gearset-btn.active { border-color: var(--gold); background: #241d10; color: var(--gold); }
+  .gearset-btn.active .gs-meta { color: #c9b079; }
 
   /* ── LOG ── */
   /* ── BOTTOM ROW: log (left) + dpad (right) ── */
@@ -1730,20 +1808,18 @@
     background: #1b160f; border: 1px solid var(--border); border-radius: 6px;
     font-size: 12px;
   }
-  .lb-row.me { border-color: var(--gold); background: #241d10; }
   .lb-rank { width: 26px; color: #8a7d63; font-weight: bold; text-align: right; flex: 0 0 auto; }
-  /* Top-3 medal discs: gold / silver / bronze circles with a bold rank number
-     inside, set apart in colour from the muted plain numbers below them. */
-  .lb-medal {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 20px; height: 20px; border-radius: 50%;
-    font-size: 11px; font-weight: bold; line-height: 1;
-    color: #2a1d08; text-shadow: 0 1px 0 rgba(255,255,255,0.25);
-    box-shadow: inset 0 1px 1px rgba(255,255,255,0.45), inset 0 -2px 2px rgba(0,0,0,0.3);
-  }
-  .lb-medal-1 { background: radial-gradient(circle at 35% 30%, #ffe98a, #d8a614 70%); border: 1px solid #a8780a; }
-  .lb-medal-2 { background: radial-gradient(circle at 35% 30%, #f4f4f6, #a6a8b2 70%); border: 1px solid #80828c; color: #2a2a30; }
-  .lb-medal-3 { background: radial-gradient(circle at 35% 30%, #f0b27e, #aa5f29 70%); border: 1px solid #84481d; color: #2e1a08; }
+  /* Top-3 ranks: instead of a medal disc, the whole row gets a soft gold / silver
+     / bronze wash plus a matching metal-tinted border and rank number. */
+  .lb-row.lb-top-1 { background: linear-gradient(90deg, rgba(255,209,90,0.20), rgba(255,209,90,0.05)); border-color: rgba(216,166,20,0.6); }
+  .lb-row.lb-top-2 { background: linear-gradient(90deg, rgba(222,226,234,0.17), rgba(222,226,234,0.04)); border-color: rgba(150,153,165,0.55); }
+  .lb-row.lb-top-3 { background: linear-gradient(90deg, rgba(222,142,72,0.17), rgba(222,142,72,0.04)); border-color: rgba(170,95,41,0.55); }
+  .lb-top-1 .lb-rank { color: #ffd24b; }
+  .lb-top-2 .lb-rank { color: #d2d5de; }
+  .lb-top-3 .lb-rank { color: #e3a06a; }
+  /* The "me" highlight always wins over the top-rank wash so you can still spot
+     your own row at a glance. */
+  .lb-row.me { border-color: var(--gold); background: #241d10; }
   .lb-class { font-size: 14px; flex: 0 0 auto; width: 18px; text-align: center; }
   .lb-name { flex: 1 1 auto; color: #e8d5a8; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .lb-val { color: var(--gold); font-weight: bold; flex: 0 0 auto; white-space: nowrap; }
@@ -2181,6 +2257,34 @@
   #touch-dpad .dpad-center { color: rgba(245, 240, 230, 0.5); }
   .dpad-center .dp-clock { width: 20px; height: 20px; display: block; }
 
+  /* Beach-tutorial instruction banner — pinned near the top of the play area,
+     persistent (no auto-fade) while the tutorial is active. */
+  #tutorial-hint {
+    position: fixed;
+    left: 50%;
+    top: calc(env(safe-area-inset-top, 0px) + 56px);
+    transform: translateX(-50%);
+    z-index: 216;
+    max-width: 92vw;
+    padding: 9px 14px;
+    border-radius: 12px;
+    background: rgba(20,16,32,0.94);
+    border: 1px solid var(--gold);
+    color: var(--text);
+    font-size: 11px;
+    text-align: center;
+    line-height: 1.5;
+    pointer-events: none;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.6), 0 0 12px rgba(232,194,103,0.25);
+    display: none;
+  }
+  #tutorial-hint.show { display: block; animation: tutHintIn 0.4s ease-out; }
+  #tutorial-hint b { color: var(--gold); }
+  @keyframes tutHintIn {
+    from { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+    to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+  }
+
   /* One-time hint that teaches the movement pad after the d-pad's removal.
      Floats just above the bottom bar and fades itself out. */
   #move-hint {
@@ -2502,6 +2606,19 @@
     </div>
   </div>
 
+  <!-- Hardcore permadeath screen — a final, unrecoverable end. No revive, no town:
+       the hero is laid to rest in the Graveyard and the save is gone for good. -->
+  <div id="hc-death-overlay">
+    <div id="hc-death-card">
+      <div class="hc-skull" id="hc-death-skull">☠️</div>
+      <div class="hc-death-title">YOUR HERO HAS FALLEN</div>
+      <div class="hc-death-sub" id="hc-death-sub">There is no coming back from this.</div>
+      <div id="hc-death-stats"></div>
+      <div id="hc-death-ach"></div>
+      <button class="hc-death-btn" onclick="hcDeathReturnToTitle()">Lay them to rest ⚰️</button>
+    </div>
+  </div>
+
   <!-- Difficulty conquered — shown when a finite dungeon's floor-25 boss falls. -->
   <div id="conquest-overlay">
     <div id="conquest-card">
@@ -2653,6 +2770,10 @@
   <div class="lvl-sub">Open the 🎒 BAG → HERO tab to spend your points!</div>
 </div>
 
+<!-- Beach-tutorial instruction banner. Shown (and updated) only while the
+     one-time tutorial map is active; content is set by tutorialStage(). -->
+<div id="tutorial-hint"></div>
+
 <!-- Title screen / landing page — shown on load. Surfaces the PLAY/CONTINUE
      action plus the same controls that live behind the ⚙️ settings dropdown. -->
 <!-- Open by default so the landing screen paints on the FIRST frame, before the
@@ -2692,7 +2813,7 @@
     </div>
     <!-- Optional sign-in callout — updated by refreshAccountUi() to reflect login state. -->
     <div id="title-cloud" onclick="openAccount()"></div>
-    <div id="title-credit">Built by JL &amp; AS</div>
+    <div id="title-credit">Built by JL &amp; AS<br>Art: DawnLike — DragonDePlatino &amp; DawnBringer (CC-BY 4.0)<br>Terrain: LPC Terrains — bluecarrot16 et al. (CC-BY-SA 4.0)</div>
   </div>
 </div>
 
@@ -2711,6 +2832,11 @@
     <div class="ov-sub">Enter the name that will carry your deeds onto the global leaderboards.</div>
     <input id="name-input" maxlength="16" placeholder="Adventurer" autocomplete="off"
            spellcheck="false" onkeydown="if(event.key==='Enter')submitName()">
+    <label class="hc-toggle" id="hc-toggle">
+      <input type="checkbox" id="hc-checkbox" onchange="syncHardcoreToggle()">
+      <span class="hc-tog-box"></span>
+      <span class="hc-tog-text"><b id="hc-tog-label">☠ HARDCORE</b> — one life. If this hero dies, they're gone <b>forever</b>, laid to rest in the Graveyard. No revive, no second chance.<span class="hc-tog-sub">Cross-device permanence syncs through a signed-in account; offline it's enforced per device.</span></span>
+    </label>
     <button class="ov-btn" onclick="submitName()">Begin Your Quest ▶</button>
     <span class="ov-link" onclick="showLeaderboard()"><span data-spr="ui_trophy"></span> View the Leaderboards</span>
   </div>
@@ -2779,7 +2905,13 @@
 // ══════════════════════════════════════════
 
 const TILE = 16;
-const MAP_W = 20, MAP_H = 20;
+// Map dimensions in tiles. No longer fixed: floors grow with difficulty (see
+// mapSizeFor) so harder tiers and deeper Endless floors are physically larger
+// maps. generateMap() sets these per floor; buildTown() resets them to the base
+// size (the town's building layout is hand-placed for a 20×20 plaza). BASE_* is
+// the Normal / town size and the baseline for the area-ratio density scaling.
+const BASE_MAP_W = 20, BASE_MAP_H = 20;
+let MAP_W = BASE_MAP_W, MAP_H = BASE_MAP_H;
 
 // Each equipment slot, with the base item names that roll for it.
 const SLOTS = {
@@ -3319,6 +3451,7 @@ const ENEMY_SPRITE = {
   '\u{1F432}':'b_dragon','\u{1F99E}':'e_lobster',
   '\u{1F451}':'b_ratking','\u{1F525}':'b_inferno','\u{1F480}':'b_deathknight',
   '\u{1F441}':'b_allseer','\u{1F9F0}':'mimic',
+  '\u{1F9B4}':'m_skeleton',  // 🦴 bone → DawnLike skeleton (used by the tutorial foe)
 };
 function enemySprite(e) {
   return ENEMY_SPRITE[e.type] || ENEMY_SPRITE[(e.type || '').replace(/\uFE0F/g, '')] || null;
@@ -3357,6 +3490,8 @@ const LPC_BIOME = {
   'the Crystal Cavern':      { floor:'Gravel_1',      wall:'Rock_Dark',   water:'Water' },
   'the Coral Lagoon':        { floor:'Sand',          wall:'Rock_Gray',   water:'Water' },
   'the Obsidian Wastes':     { floor:'Rock_Dark',     wall:'Rock_Black',  water:'Water' },
+  // The one-time beach tutorial map: sandy ground meeting the sea.
+  'the Sunlit Shore':        { floor:'Sand',          wall:'Rock_Gray',   water:'Water' },
 };
 const lpcSheet = new Image();
 let lpcReady = false;
@@ -3985,6 +4120,30 @@ function endlessBite() {
   if (dungeonLevel <= FINITE_DEPTH) return 1;
   return 1 + Math.min(0.6, (dungeonLevel - FINITE_DEPTH) * 0.006);
 }
+
+// ── DUNGEON MAP SIZE ──────────────────────────────────────────────────────
+// Floors get physically BIGGER with difficulty, and the per-floor monster count
+// scales with the map's area so the density a player actually meets stays the
+// same (see spawnEnemies) — a harder, larger floor simply holds proportionally
+// more foes. Each finite tier is one fixed size, a step larger than the tier
+// above it; Endless keeps expanding with depth, forever but sub-linearly so it
+// never balloons into an unplayably huge, foe-choked map.
+//   Normal 20×20 · Hardened 24×24 · Brutal 28×28 · Endless 32×32 and growing
+const DIFF_SIZE_STEP = 4;  // tiles added to each side per finite tier above Normal
+function mapSizeFor(dl) {
+  const tier = diffOf(dl);                               // 1 Normal · 2 Hardened · 3 Brutal · 4 Endless
+  const base = BASE_MAP_W + (tier - 1) * DIFF_SIZE_STEP; // 20 · 24 · 28 · 32
+  if (tier < 4) return base;                             // finite tiers: one fixed size each
+  // Endless: start at the tier-4 base, then creep upward with the Endless floor
+  // number. The √ keeps it climbing endlessly while decelerating hard, so even
+  // very deep floors stay navigable (floor 1 → 32, 26 → 37, 101 → 42, 401 → 52).
+  const ef = Math.max(0, dl - (FINITE_DEPTH + 1));       // 0 on Endless floor 1, then 1, 2, 3 …
+  return base + Math.floor(Math.sqrt(ef));
+}
+// How much larger (by area) the current floor is than the base 20×20. Drives the
+// per-floor scaling of room count, hazards and monster count, so a bigger floor
+// is a genuinely bigger dungeon at the same crowding rather than a sparse one.
+function mapAreaRatio() { return (MAP_W * MAP_H) / (BASE_MAP_W * BASE_MAP_H); }
 
 // ── DIFFICULTY PROGRESSION STATE ──
 // How many finite tiers the hero has fully conquered (beaten the floor-25 boss
@@ -5448,28 +5607,16 @@ let floorMod = FLOOR_MODS[0];
 // sealed until the floor's hostiles are dealt with. `floorCleared` latches true
 // once the condition is met (a late mimic popping out won't re-seal you in).
 let floorCleared = false;
-// ── TOWN GATE ACCESS ── (you can't just bail to town whenever you like)
-// You may step through the town gate only when you're (#3) not in combat,
-// (#5) either on a freshly entered floor you haven't engaged or one you've
-// cleared, and (#4) the gate has finished recharging since your last visit.
-let floorEngaged = false;        // latches true once you provoke this floor's foes
-let lastTownLeaveAt = 0;         // timestamp (ms) you last stepped out of town
-const TOWN_GATE_CD_MS = 60000;   // gate recharge between town trips
-const TOWN_COMBAT_RANGE = 6;     // a foe this close (or nearer) counts as "in combat"
-// Any living, non-fleeing foe within range is actively threatening you.
-function inCombatNearby() {
-  return (enemies || []).some(e => !e.dead && !e.isGoblin &&
-    Math.max(Math.abs(e.x - player.x), Math.abs(e.y - player.y)) <= TOWN_COMBAT_RANGE);
-}
-// Resolve whether the town gate is usable right now, with a reason if not.
-function townAccess() {
-  if (inTown) return { ok: true };
-  if (inCombatNearby()) return { ok: false, reason: "You can't slip away to town with enemies bearing down on you." };
-  if (floorEngaged && !floorCleared) return { ok: false, reason: 'Clear the floor before retreating to town.' };
-  const left = TOWN_GATE_CD_MS - (Date.now() - lastTownLeaveAt);
-  if (left > 0) return { ok: false, reason: `The town gate is still recharging — ${Math.ceil(left / 1000)}s.` };
-  return { ok: true };
-}
+// True while the player is on the one-time beach tutorial map (a fresh hero's
+// very first "floor"): a sandy shore with a lone skeleton to fight and a cave
+// to the north that drops them into the real dungeon. See buildTutorialMap().
+let tutorialActive = false;
+// ── TOWN GATE ACCESS ──
+// The town gate is no longer locked behind a combat / cooldown check — it's always
+// clickable. The restriction lives in the CHANNEL instead (see the TOWN PORTAL
+// section): opening the gate takes a few turns, and a hit mid-channel collapses it.
+// So you can begin a portal anywhere, but you still can't blink away while a pack is
+// actively beating on you.
 // Fleeing treasure goblins don't block the exit — they're a bonus chase. Every
 // other living foe (mobs, elites, bosses, quest hordes, mimics) counts.
 function hostilesRemaining() {
@@ -5485,6 +5632,11 @@ function updateFloorClear() {
       // unlocks the next tier (chosen back in town) and brands a permanent scar.
       sfx('bosskill');
       conquerDifficulty();
+    } else if (tutorialActive) {
+      // Beach tutorial: point the new player at the cave instead of "stairs".
+      log('🔓 The skeleton falls — the cave to the north is open!', 'important');
+      sfx('stairs');
+      tutorialStage('cave');
     } else {
       log('🔓 The floor is clear — the stairs down unseal!', 'important');
       sfx('stairs');
@@ -5537,7 +5689,7 @@ function showConquest(tier, firstTime) {
   log(`🏆 You conquered the ${thisName} dungeon!`, 'important');
 }
 function closeConquest() { const ov = document.getElementById('conquest-overlay'); if (ov) ov.classList.remove('open'); }
-function conquestToTown() { closeConquest(); enterTown(); }
+function conquestToTown() { closeConquest(); warpToTown(); }
 
 function rollFloorMod() {
   // First two floors are always normal so players learn the ropes.
@@ -5673,7 +5825,16 @@ let inventory = [];
 // is only reachable from the Vault in town. `ts` is the last-write time, used to
 // pick the newest copy when syncing.
 let stash = { gold: 0, items: [], ts: 0 };
-let equipped = { head: null, chest: null, hands: null, legs: null, weapon: null, offhand: null, ring: null, amulet: null };
+// ── GEAR SETS ── You keep TWO independent equipment loadouts and toggle between
+// them (Set 1 / Set 2). `equipped` always points at the ACTIVE set, so every
+// read/write of equipped[slot] elsewhere keeps working untouched — only the
+// toggle and save/load are aware there are two. The inactive set's items stay
+// parked in its own slots (never the bag), so switching re-equips a whole
+// loadout in one tap.
+function emptyGearSet() { return { head: null, chest: null, hands: null, legs: null, weapon: null, offhand: null, ring: null, amulet: null }; }
+let gearSets = [emptyGearSet(), emptyGearSet()];
+let activeGearSet = 0;
+let equipped = gearSets[activeGearSet];
 let groundItems = []; // chests on the floor: { x, y } — loot is rolled when opened
 // Death drop: when you fall, your whole bag is left as a recoverable grave on the
 // floor where you died. `graveSite` is the persistent record { floor, items, gold };
@@ -5856,6 +6017,7 @@ window.gameState = function gameState(radius) {
       townView: inTown ? townView : null,
       pointsToSpend: { attribute: player.attrPoints || 0, skill: player.skillPoints || 0 },
       gold: player.gold,
+      activeGearSet: (activeGearSet || 0) + 1,  // 1 or 2 — which loadout is worn
       equipped: Object.fromEntries(Object.entries(equipped || {}).map(([slot, it]) => [slot, brief(it)])),
       inventory: (inventory || []).map((it, i) => Object.assign({ i }, brief(it))),
       shop: (merchant && merchant.stock) ? merchant.stock.map((row, i) => {
@@ -6590,6 +6752,9 @@ document.addEventListener('click', (e) => {
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
   { date: '2026-06-30', size: 'small', v: 'Clearer "can\'t afford" prices', by: 'Claude', notes: ['Anywhere you spend gold or materials — the shop, gambler, forge, enchanter, mystic, healer and trainer — wares you can\'t currently afford now dim out so unavailable options read at a glance.', 'Mixed prices now pinpoint the shortfall: the exact gold or material you\'re missing turns red, so a forge or enchant cost shows at once whether you\'re short on gold, scrap, glimmer or a chaos orb.'] },
+  { date: '2026-06-29', size: 'medium', v: 'Channeled town portal', by: 'Claude', notes: ['The town gate is no longer locked out while you’re in combat or on a cooldown — it’s clickable any time. Instead, opening it now CHANNELS a portal in real time.', 'Once you start it, the dungeon auto-runs one turn every half-second so you actually watch the foes take their swings and close in. Survive 3 clean turns and the gate opens; take a single blow from a foe mid-channel and the half-formed portal shatters.', 'You’re committed while it charges — your own moves are held until it resolves, with a swirling portal and a countdown over your hero showing the turns left. Tap TOWN again to break it off.'] },
+  { date: '2026-06-29', size: 'medium', v: 'Bigger floors per difficulty', by: 'Claude', notes: ['Dungeon floors now grow with difficulty: Normal stays 20×20, Hardened is 24×24, Brutal 28×28, and Endless starts at 32×32 and keeps expanding the deeper you push — endlessly, but slower and slower so it never balloons into an unnavigable map.', 'Monster density is held constant, so a bigger, harder floor simply carries proportionally more foes — more rooms, hazards and enemies, at the same crowding you’re used to.', 'A generous cap keeps even the largest deep-Endless floors from spawning an unplayable swarm.'] },
+  { date: '2026-06-29', size: 'medium', v: 'Two gear sets', by: 'Claude', notes: ['You now keep two independent equipment loadouts and switch between them in one tap. The GEAR tab has a Set 1 / Set 2 switch above the paper doll showing each set\'s worn count and power; the lit one is what you\'re wearing.', 'Tap the other set (or press G anywhere) to instantly swap your whole loadout — handy for keeping a damage set and a defensive or utility set ready. Gear parked in the set you\'re not wearing stays on that set rather than cluttering your bag, and both sets are saved with your character.'] },
   { date: '2026-06-29', size: 'small', v: 'Floor 1 portal fix', by: 'Claude', notes: ['Stepping onto the gate on the first floor of a difficulty now actually returns you to town again. It was silently doing nothing; the TOWN button still worked, but walking into the portal didn\'t.'] },
   { date: '2026-06-29', size: 'big', v: 'Rating-based combat overhaul', by: 'Claude', notes: ['Chances no longer use flat caps. Crit, dodge, hit, block and damage reduction are now Path-of-Exile-style RATINGS — integer stats you build from attributes and gear — and the actual % is your rating measured against the enemy you\'re facing: chance = rating / (rating + opposition). It can approach 100% but never reach it, so absurd numbers are mechanically impossible rather than clamped.', 'Opposition grows with depth, so a rating that gives big % on floor 5 gives much less on floor 50 — you have to keep investing to stay sharp, and there\'s no maxing a stat once and coasting. In true endgame you can still stack a stat very high; it\'s just never trivial or absolute.', 'Combat is now two-sided: enemies have Accuracy (which eats your dodge) and Evasion (so your weapon attacks can MISS). You have an Accuracy rating too — Agility and the new ACC gear affix raise it. Most attacks still land, but "Accurate" foes punch through evasion and slippery "Evasive" foes need real Accuracy to hit. (Spells never miss.)', 'Agility now drives both Evasion and Accuracy; Luck drives Crit; gear CRIT/SPD/DODGE/BLOCK/DR read as ratings (shown as flat numbers, with the live % on the HERO sheet vs your current floor). Crit damage is uncapped again — it\'s a magnitude, not a chance.', 'Health and mana stay finite (from the prior pass): slower HP/MP regen, level-ups mend ~40% instead of a full refill, smaller potions, and burst-heals capped per use.'] },
   { date: '2026-06-29', size: 'medium', v: 'Every action costs a turn', by: 'Claude', notes: ['Anything you do on a floor now passes a turn, so the world keeps moving even when you can’t. Bumping a wall, the map edge, deep water, a locked door or sealed stairs all tick the clock just like the Wait button.', 'Walking into a boss’s wall of force now passes a turn too, so the barriers pinning you in crumble on their own — no more mashing the Wait button to escape the Rat King’s cage.', 'Being stunned no longer freezes the dungeon: a wasted action still lets foes act while the stun wears off. Drinking from a fountain, touching a shrine and cracking open a chest underfoot are all turns as well.'] },
@@ -6825,11 +6990,12 @@ function showGraveyard() {
           const portrait = (r.cls && dlIcon('hero_' + r.cls, 28)) || `<span class="gy-emoji">${r.cls ? CLASSES[r.cls].icon : '🧙'}</span>`;
           const clsName = r.asc ? ASCENSIONS[r.asc].name : (r.cls ? CLASSES[r.cls].name : 'Wanderer');
           const date = fmtGraveDate(r.ts);
-          return `<div class="gy-row">`
+          const hcMark = r.hardcore ? ` <span class="hc-tag">${hcIcon(10)} HC</span>` : '';
+          return `<div class="gy-row${r.hardcore ? ' hc' : ''}">`
             + `<span class="gy-portrait">${portrait}</span>`
-            + `<span class="gy-info"><span class="gy-name">${escapeHtml(r.name || 'Adventurer')}</span>`
+            + `<span class="gy-info"><span class="gy-name">${escapeHtml(r.name || 'Adventurer')}${hcMark}</span>`
             + `<span class="gy-sub">${escapeHtml(clsName)} · Lv ${r.level}</span></span>`
-            + `<span class="gy-stats"><span class="gy-floor">Floor ${r.floor}</span>`
+            + `<span class="gy-stats"><span class="gy-floor">${floorLabel(r.floor)}</span>`
             + `<span class="gy-meta">${fmtGold(r.gold)}g${date ? ' · ' + date : ''}</span></span>`
             + `</div>`;
         }).join('')
@@ -7335,6 +7501,12 @@ function tryBuildVault(reach) {
 
 function generateMap() {
   inTown = false;
+  // Size the floor for its difficulty BEFORE carving anything — harder tiers and
+  // deeper Endless floors are larger maps (see mapSizeFor). areaRatio then scales
+  // rooms, hazards and foes so a bigger map is a denser dungeon, not a sparse one.
+  const mapSize = mapSizeFor(dungeonLevel);
+  MAP_W = mapSize; MAP_H = mapSize;
+  const areaRatio = mapAreaRatio();
   floorSerial++;
   player.lastStandReady = true; // a fresh Last Stand each floor
   rollFloorMod();
@@ -7352,7 +7524,9 @@ function generateMap() {
 
   // ── ROOMS ── a handful of rectangles, occasionally one big grand hall.
   const rooms = [];
-  const roomCount = rnd(5, 8);
+  // More rooms on bigger floors, so a larger map is a denser dungeon rather than
+  // the same handful of rooms marooned in acres of rock.
+  const roomCount = Math.max(5, Math.round(rnd(5, 8) * areaRatio));
   const grandHall = Math.random() < 0.3;
   for (let i = 0; i < roomCount; i++) {
     const big = grandHall && i === 0;
@@ -7375,7 +7549,8 @@ function generateMap() {
 
   // ── CORRIDORS ── connect rooms in a chain, plus a couple of loops for choice.
   for (let i = 1; i < rooms.length; i++) carveCorridor(rooms[i-1].cx, rooms[i-1].cy, rooms[i].cx, rooms[i].cy);
-  for (let k = 0; k < 2; k++) { const a = pick(rooms), b = pick(rooms); if (a !== b) carveCorridor(a.cx, a.cy, b.cx, b.cy); }
+  const extraLoops = Math.max(2, Math.round(2 * areaRatio)); // more alternate routes on bigger floors
+  for (let k = 0; k < extraLoops; k++) { const a = pick(rooms), b = pick(rooms); if (a !== b) carveCorridor(a.cx, a.cy, b.cx, b.cy); }
 
   // ── PLAYER START ── first room centre, cleared of obstacles.
   const start = rooms[0];
@@ -7450,7 +7625,7 @@ function generateMap() {
       }
       return false;
     };
-    const pools = rnd(1, 2);
+    const pools = Math.min(5, Math.max(1, Math.round(rnd(1, 2) * areaRatio))); // more (but capped) on bigger floors
     for (let p = 0; p < pools; p++) {
       const seed = randomFloorTile(reach);
       if (!seed || nearWater(seed.x, seed.y)) continue; // keep pools clear of water
@@ -7461,7 +7636,7 @@ function generateMap() {
   }
   // ── SPIKE TRAPS (passable, stabs) ──
   if (Math.random() < 0.6) {
-    const n = rnd(2, 5);
+    const n = Math.max(2, Math.round(rnd(2, 5) * areaRatio)); // more on bigger floors so they aren't trap-sparse
     for (let i = 0; i < n; i++) { const c = randomFloorTile(reach); if (c) mapData[c.y][c.x] = 8; }
   }
   // With traps down, melt any that sit on the only route somewhere so the
@@ -7470,7 +7645,9 @@ function generateMap() {
   // ── TELEPORTER PAIR ── rare, and the two pads must sit far apart so a warp
   // is a meaningful shortcut rather than a tiny hop.
   if (rooms.length >= 2 && Math.random() < 0.18) {
-    const MIN_TP_DIST = 22; // Manhattan tiles between the paired pads
+    // Scale the minimum warp distance with the map so a teleporter stays a real
+    // shortcut on bigger floors (≈22 on the base 20×20).
+    const MIN_TP_DIST = Math.round(Math.min(MAP_W, MAP_H) * 1.1); // Manhattan tiles between the paired pads
     let a = null, b = null;
     for (let tries = 0; tries < 60; tries++) {
       const p = randomFloorTile(reach), q = randomFloorTile(reach);
@@ -7491,7 +7668,7 @@ function generateMap() {
   // -looking area can actually be walked to.
   ensureFootConnected();
   // ── CRACKED WALLS ── breakable walls with open floor on opposite sides.
-  let cracks = rnd(2, 4);
+  let cracks = Math.max(2, Math.round(rnd(2, 4) * areaRatio)); // scale breakable walls with floor size
   for (let tries = 0; tries < 150 && cracks > 0; tries++) {
     const x = rnd(1, MAP_W-2), y = rnd(1, MAP_H-2);
     if (mapData[y][x] !== 1) continue;
@@ -7591,7 +7768,7 @@ function generateMap() {
   // A floor you've already cleared stays open: backtracking here via the gate or
   // the up-stairs never re-imposes an unlock condition.
   floorCleared = false;
-  floorEngaged = false;
+  resetPortal();   // a fresh floor cancels any half-formed town portal (and its timer)
   if (player.clearedFloors && player.clearedFloors[dungeonLevel]) {
     floorCleared = true;
   } else if (hostilesRemaining() === 0) {
@@ -7606,6 +7783,95 @@ function generateMap() {
   // Consume the arrival direction — the next floor defaults to a downward entry
   // unless its caller (the stairs-up handler) sets it again right before building.
   arrivalDir = 'down';
+}
+
+// ── BEACH TUTORIAL ───────────────────────────────────────────────────────────
+// A fresh hero's very first map. They wake on a sandy shore (sand to the north,
+// sea to the south), learn to move, fight one lone skeleton, then step into the
+// cave set into the northern wall — which descends into the real dungeon. Built
+// once per new hero; `player.tutorialDone` keeps it from ever showing again.
+function buildTutorialMap() {
+  tutorialActive = true;
+  inTown = false;
+  floorSerial++;
+  dungeonLevel = 1;
+  arrivalDir = 'down';
+  player.lastStandReady = true;
+  // Wipe any lingering floor state so nothing bleeds into the tutorial.
+  enemies = []; merchant = null; mystic = null; minions = []; combatBuffs = {};
+  groundItems = []; groundFood = []; groundGold = []; graveMarker = null;
+  quest = null; teleporters = {}; shrineData = {}; bossHazards = [];
+  hasFountain = false; groundKey = null; hasKey = false;
+  floorMod = FLOOR_MODS[0]; floorTint = null;
+  floatingTexts = [];
+  statusEffects = (statusEffects || []).filter(s => s.target === 'player');
+
+  // Solid rock border, sandy beach up top, sea along the bottom.
+  const SHORE = 12; // first row (from the top) that is water
+  mapData = [];
+  for (let y = 0; y < MAP_H; y++) {
+    mapData[y] = [];
+    for (let x = 0; x < MAP_W; x++) {
+      if (x === 0 || y === 0 || x === MAP_W - 1 || y === MAP_H - 1) mapData[y][x] = 1; // wall
+      else if (y >= SHORE) mapData[y][x] = 6; // water (south)
+      else mapData[y][x] = 0;                 // sand (north)
+    }
+  }
+  // The cave: a down-stair set into the northern wall, dead centre.
+  const caveX = MAP_W >> 1;
+  mapData[1][caveX] = 2;       // down-stairs tile (the cave mouth)
+  mapData[0][caveX] = 1;       // wall above keeps it reading as a cave in the wall
+
+  // Spawn the hero a few tiles up from the shoreline, facing the cave.
+  player.x = caveX; player.y = SHORE - 1;        // sand, with water directly below
+  // A lone skeleton a few steps north, between the hero and the cave.
+  const skl = { x: caveX, y: SHORE - 5, type: '🦴', name: 'Skeleton',
+    hp: 24, maxHp: 24, level: 1, dmg: 4, dead: false, behavior: 'chaser' };
+  enemies.push(skl);
+
+  // Seal the cave until the skeleton falls, so the fight can't be skipped.
+  floorCleared = false;
+  tutorialStage('move');
+}
+
+// Leaving the beach: step into the cave to begin the real dungeon on floor 1.
+function finishTutorial() {
+  tutorialActive = false;
+  player.tutorialDone = true;
+  hideTutorialHint();
+  dungeonLevel = 1;
+  arrivalDir = 'down';
+  statusEffects = [];
+  sfx('stairs');
+  log('🕳️ You step into the cave — the dungeon proper opens up below...', 'important');
+  player.x = 5; player.y = 5;
+  generateMap();
+  tickPact();
+  maybeFloorEvent();
+  updateBars(); renderPanel(); saveGame(); draw();
+}
+
+// ── TUTORIAL HINT BANNER ── a floating instruction that updates as the new
+// player progresses (move → fight → enter the cave).
+function tutorialStage(stage) {
+  const moveHow = touchUI()
+    ? 'the on-screen d-pad'
+    : 'WASD or the arrow keys';
+  if (stage === 'move') {
+    setTutorialHint(`<b>You wake on a strange shore.</b><br>Use ${moveHow} to move — head up the beach toward the cave.<br>⚔️ A skeleton blocks the way: <b>walk into it</b> to attack until it falls.`);
+  } else if (stage === 'cave') {
+    setTutorialHint(`<b>The skeleton is dust.</b><br>🕳️ Now step into the cave (⬇) in the northern wall to descend into the dungeon.`);
+  }
+}
+function setTutorialHint(html) {
+  const el = document.getElementById('tutorial-hint');
+  if (!el) return;
+  el.innerHTML = html;
+  el.classList.add('show');
+}
+function hideTutorialHint() {
+  const el = document.getElementById('tutorial-hint');
+  if (el) el.classList.remove('show');
 }
 
 // Build a standard floor-level foe at a tile (used for quest hordes).
@@ -8134,20 +8400,96 @@ function buyPact(i, floors) {
 // TOWN  (safe hub with NPC services + dungeon gate)
 // ══════════════════════════════════════════
 
-// Warp to town from anywhere in the dungeon, opening the town hub MENU. Dungeon
-// progress is untouched — re-enter through the Dungeon Gate to drop back in on
-// any floor you've reached, so you can backtrack to grind levels and gear.
-// (If you're already in town, this just reopens the hub menu.)
-function enterTown() {
+// ── TOWN PORTAL ──
+// The town gate is always usable, but it doesn't whisk you away instantly: opening
+// the portal CHANNELS in real time. Once you start it, the dungeon auto-runs one
+// turn every PORTAL_TICK_MS — so you actually watch the foes take their swings and
+// close in — and after PORTAL_CHANNEL_TURNS clean turns the gate opens. The instant a
+// foe lands a blow on you mid-channel, the portal collapses and you start over. You're
+// committed while it charges: your own moves/attacks are held until it resolves (tap
+// TOWN again to break it off). So you can bail to town from anywhere — but not while a
+// pack is actively wailing on you.
+let portalCharge = 0;                 // turns of channel left before the gate opens; 0 = idle
+let portalTimer = null;               // setTimeout handle driving the real-time channel
+const PORTAL_CHANNEL_TURNS = 3;       // clean turns needed to fully open the portal
+const PORTAL_TICK_MS = 500;           // real time between auto-run channel turns
+function portalChanneling() { return portalCharge > 0; }
+function clearPortalTimer() { if (portalTimer) { clearTimeout(portalTimer); portalTimer = null; } }
+// Wipe the channel outright (floor change, death, leaving to town) with no fanfare.
+function resetPortal() { portalCharge = 0; clearPortalTimer(); }
+// Collapse an in-progress channel, with a reason for the log.
+function cancelPortalChannel(reason) {
+  if (portalCharge <= 0 && !portalTimer) return;
+  resetPortal();
+  if (reason) log(reason, 'important');
+  sfx('denied');
+  updateBars(); renderSkillBar(); draw();
+}
+
+// The TOWN button / hotkey / floor-1 up-stair entry point. In town it just reopens
+// the hub menu; in the dungeon it begins the channel, or breaks off one already going.
+function startPortalChannel() {
   if (inTown) { openTownHub(); return; }
-  const acc = townAccess();
-  if (!acc.ok) { log('🏰 ' + acc.reason); sfx('denied'); return; }
+  if (tutorialActive) { log('🏖️ Head north into the cave to begin your descent first.'); sfx('denied'); return; }
+  if (portalCharge > 0) { cancelPortalChannel('🌀 You let the town portal fade.'); return; }
+  portalCharge = PORTAL_CHANNEL_TURNS;
+  log(`🌀 You begin opening a town portal — hold out ${PORTAL_CHANNEL_TURNS} turns without being hit.`, 'important');
+  sfx('teleport');
+  updateBars(); renderSkillBar(); draw();
+  schedulePortalTick();
+}
+
+// The guarded TOWN button / hotkey handler (re-entrancy wrapper installed below).
+function enterTown() { startPortalChannel(); }
+
+function schedulePortalTick() { clearPortalTimer(); portalTimer = setTimeout(portalTick, PORTAL_TICK_MS); }
+
+// One real-time beat of the channel: the dungeon takes a full turn on its own (foes
+// and hazards act, status & regen tick) so you can see it happen, then we judge the
+// channel. A hit this turn shatters it; otherwise it charges down, and on the final
+// clean turn the gate opens for real.
+function portalTick() {
+  portalTimer = null;
+  if (portalCharge <= 0 || inTown) { resetPortal(); return; }
+  // If the game is halted or a turn is still resolving, wait and try again shortly.
+  if (gameHalted || __turnBusy) { schedulePortalTick(); return; }
+  __turnBusy = true;
+  try {
+    tickStatusEffects();
+    applyRegen();
+    const hpBefore = player.hp;          // snapshot AFTER upkeep: only foe/hazard damage counts as a "hit"
+    runEnemyTurn();
+    moveQuestEntities();
+    if (player.hp <= 0) { resetPortal(); draw(); saveGame(); return; } // a killing blow — death takes over
+    if (player.hp < hpBefore) {          // took a hit while channeling → it breaks
+      __turnBusy = false;                // let cancelPortalChannel's redraw run outside the guard
+      cancelPortalChannel('💥 A blow shatters your half-formed town portal!');
+      saveGame();
+      return;
+    }
+    portalCharge--;
+    if (portalCharge <= 0) { resetPortal(); __turnBusy = false; warpToTown(); return; }
+    log(`🌀 The town portal swirls — ${portalCharge} turn${portalCharge === 1 ? '' : 's'} to go.`);
+    updateBars(); renderSkillBar(); draw(); saveGame();
+    schedulePortalTick();
+  } finally {
+    __turnBusy = false;
+  }
+}
+
+// Whisk the hero to town and open the hub MENU. Dungeon progress is untouched —
+// re-enter through the Dungeon Gate to drop back in on any floor you've reached, so
+// you can backtrack to grind levels and gear. Reached when a channel finishes, and
+// used directly by the post-conquest "Return to Town" button (no channel there).
+function warpToTown() {
+  resetPortal();
+  if (inTown) { openTownHub(); return; }
   closeShop(); closeMystic(); closeTown();
   dungeonReturn = dungeonLevel;
   bossHazards = [];
   buildTown();
   sfx('stairs');
-  log('🏰 You step through a shimmering gate into the safety of town.', 'important');
+  log('🏰 The portal opens and you step through into the safety of town.', 'important');
   log('Pick a service from the menu. The 🌀 Dungeon Gate takes you back below.');
   updateBars();
   openTownHub();
@@ -8158,6 +8500,10 @@ function enterTown() {
 // Lay out the walled town plaza and place its NPCs.
 function buildTown() {
   inTown = true;
+  // The town's buildings, NPCs and entry point are hand-placed for the base 20×20
+  // plaza, so always rebuild it at the base size — a dungeon floor may have grown
+  // MAP_W/MAP_H for a harder tier.
+  MAP_W = BASE_MAP_W; MAP_H = BASE_MAP_H;
   floorSerial++;
   // Clear every dungeon-only entity so nothing lingers into the safe hub.
   enemies = []; merchant = null; mystic = null; minions = []; combatBuffs = {};
@@ -8332,7 +8678,6 @@ function townBack() {
 function leaveTown() {
   if (!inTown) { closeTown(); return; }
   const f = Math.max(1, dungeonReturn || player.maxFloor || dungeonLevel || 1);
-  lastTownLeaveAt = Date.now();
   enterDungeonAt(f);
 }
 
@@ -9699,15 +10044,23 @@ function spawnEnemies() {
   // Summoned minions, transient combat buffs and skill charges don't carry between floors.
   minions = []; combatBuffs = {}; clearCharges();
   const isBossFloor = dungeonLevel % 5 === 0;
+  // Hold monster DENSITY constant as floors grow: the regular per-floor foe count
+  // is scaled by how much bigger this floor is than the base 20×20 (mapAreaRatio),
+  // so a larger, harder map carries proportionally more foes at the same crowding.
+  // A generous ceiling keeps even the largest deep-Endless floors from spawning an
+  // unnavigable mob. Boss floors keep their own tuned, depth-based roster.
   let count = isBossFloor
     ? 1 + Math.min(9, Math.floor(dungeonLevel / 5))   // boss + minions, capped so deep Endless boss floors aren't a wall of 40 foes
-    : Math.min(3 + Math.floor(dungeonLevel * 0.7), 10);
+    : Math.min(Math.round(Math.min(3 + Math.floor(dungeonLevel * 0.7), 10) * mapAreaRatio()), 40);
   // Some floor modifiers crowd the level with extra foes.
   if (!isBossFloor && floorMod.enemyMult) count = Math.round(count * floorMod.enemyMult);
   if (!isBossFloor && pfx('enemy', 1) !== 1) count = Math.max(1, Math.round(count * pfx('enemy', 1)));
   // Floors 2-3 pack one extra foe so the opening isn't a total faceroll — but
   // floor 1 is left alone so a fresh, gearless hero gets a fair first dive.
   if (!isBossFloor && dungeonLevel >= 2 && dungeonLevel <= 3) count += 1;
+  // Final safety ceiling (after modifiers): no floor, however large or heavily
+  // modified, spawns an unplayable swarm.
+  if (!isBossFloor) count = Math.min(count, 48);
 
   // Pick 2-3 enemy types for this floor from the depth-appropriate band, so
   // each floor has variety while every monster stays around the same level.
@@ -10337,9 +10690,18 @@ const THEMES = [
     brickA:'#6a3a4a', brickB:'#241820', mortar:'#161016', crack:'#ff7a3a',
     seam:'#1e161e', speckle:'#5a3a44', accent:'rgba(255,120,50,0.28)', stairsGlow:'#ff9a4b' },
 ];
+// The beach tutorial's own look — warm sand floor, rocky shore wall. Its name
+// matches the LPC_BIOME entry above so the autotiled ground paints as Sand.
+const TUTORIAL_THEME = {
+  name: 'the Sunlit Shore',
+  floor:'#d8c382', floorAlt:'#cdb673', wall:'#7a6a44', wallTop:'#b8a06a',
+  brickA:'#8a7748', brickB:'#766239', mortar:'#4a3e24', crack:'#3a2e18',
+  seam:'#5a4a2a', speckle:'#e6d49a', accent:'rgba(255,236,170,0.28)', stairsGlow:'#ffe9b0',
+};
 // Themed by the DISPLAYED floor, so each difficulty replays the same visual
 // progression (floor 1 always looks like floor 1) — only the red wash deepens.
-function currentTheme() { return THEMES[(displayFloor() - 1) % THEMES.length]; }
+// The tutorial beach overrides this with its own sandy palette.
+function currentTheme() { return tutorialActive ? TUTORIAL_THEME : THEMES[(displayFloor() - 1) % THEMES.length]; }
 
 // Rounded-rect helper (older canvases lack ctx.roundRect).
 function roundRectPath(x, y, w, h, r) {
@@ -11581,6 +11943,30 @@ function draw() {
   // its equipped weapon type at its side.
   drawHeroSprite(px, py, tw, th, scale);
 
+  // Town-portal channel: a DawnLike swirling-portal tile pulses over the hero while
+  // the gate charges, with the remaining-turn count floating above so the progress
+  // (and the "don't get hit" stakes) read at a glance.
+  if (portalChanneling()) {
+    const pulse = 0.55 + 0.35 * Math.sin(Date.now() / 180);
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, Math.min(1, pulse));
+    if (!(spriteReady && drawSpriteC('feat_portal', px + tw / 2, py + th / 2, tw))) {
+      drawEmoji('🌀', px + tw / 2, py + th / 2, tw * 0.8);
+    }
+    ctx.restore();
+    ctx.save();
+    ctx.font = `bold ${Math.round(tw * 0.34)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const ny = py - th * 0.18;
+    ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+    ctx.lineWidth = 3;
+    ctx.strokeText(portalCharge, px + tw / 2, ny);
+    ctx.fillStyle = '#bfe8ff';
+    ctx.fillText(portalCharge, px + tw / 2, ny);
+    ctx.restore();
+  }
+
   // Player status effects are surfaced as full-screen coloured halos (see
   // updateHaloVignette), not as little icons over the hero sprite.
 
@@ -12093,6 +12479,9 @@ function move(dx, dy) {
   // hub menu in case it was dismissed, so the player is never stuck staring at
   // the backdrop.
   if (inTown) { openTownHub(); return; }
+  // Committed to a town portal: the channel auto-runs the turns in real time, so
+  // your own moves are held until it opens or breaks. (Tap TOWN to break it off.)
+  if (portalChanneling()) return;
   if (isPlayerStunned()) {
     // Stunned: your action is wasted, but the turn still passes — foes act while
     // you reel, and the stun ticks down toward wearing off.
@@ -12165,11 +12554,10 @@ function move(dx, dy) {
   // is one you've already been through), so there's never an unlock condition.
   if (tile === 12) {
     // On floor 1 of a difficulty there's no floor above — the "up" stair is the
-    // way back to TOWN (same access rules as the town gate). This fires from
-    // INSIDE the already-guarded move turn, so call the raw town-entry handle:
-    // the guarded enterTown would see the in-flight __turnBusy flag and silently
-    // no-op, stranding the player on the portal instead of sending them to town.
-    if (displayFloor() === 1) { player.x = nx; player.y = ny; enterTownRaw(); return; }
+    // way back to TOWN, so reaching it opens a town portal (same channel as the
+    // TOWN button). Call the unguarded helper directly: move() is already inside
+    // the re-entrancy guard, so the wrapped enterTown() would no-op here.
+    if (displayFloor() === 1) { player.x = nx; player.y = ny; startPortalChannel(); return; }
     dungeonLevel--;
     statusEffects = [];
     tickBuffs();
@@ -12187,6 +12575,18 @@ function move(dx, dy) {
 
   // Stairs
   if (tile === 2) {
+    // Tutorial cave: sealed until the lone skeleton is dealt with, then it
+    // drops the new player into the real dungeon (floor 1) rather than descending.
+    if (tutorialActive) {
+      if (!floorCleared) {
+        log('🦴 Defeat the skeleton first — then the cave will let you pass.', 'important');
+        sfx('click');
+        endBlockedTurn();
+        return;
+      }
+      finishTutorial();
+      return;
+    }
     // Sealed until the floor is cleared — no sprinting straight to the exit.
     if (!floorCleared) {
       log(`🔒 The stairs are sealed. ${clearConditionLabel()}`, 'important');
@@ -12353,6 +12753,7 @@ function move(dx, dy) {
 // actually feels like a relocation. Only valid while exploring a dungeon floor.
 function unstuck() {
   if (inTown) { log('🌀 Nothing to escape in town.'); return; }
+  if (portalChanneling()) return;   // held while a town portal channels (tap TOWN to break off)
   // Gather every plain-floor tile that isn't the player's own and has no foe.
   const spots = [];
   for (let y = 1; y < MAP_H - 1; y++) {
@@ -12915,6 +13316,7 @@ function castSkillById(id) {
   const sk = activeSkillList().find(s => s.id === id);
   if (!sk) { log('You haven\'t learned that skill.'); return; }
   if (inTown) { log('Save your skills for the dungeon.'); return; }
+  if (portalChanneling()) return;   // held while a town portal channels (tap TOWN to break off)
   if (isPlayerStunned()) { log('You are stunned and can\'t cast!'); return; }
   const cd = skillCd(id);
   if (cd > 0) { log(`⏳ ${sk.name} is recharging (${cd} more turn${cd === 1 ? '' : 's'}).`); return; }
@@ -13390,7 +13792,6 @@ function runEnemyTurn() {
   // and any transient combat buffs (War Cry, Sanctuary, …).
   if (player.skillCds) for (const k in player.skillCds) if (player.skillCds[k] > 0) player.skillCds[k]--;
   if (player.potionCd > 0) player.potionCd--;
-  if (!floorEngaged && inCombatNearby()) floorEngaged = true;
   for (const k in combatBuffs) { const b = combatBuffs[k]; if (b && b.t > 0) { b.t--; if (b.t <= 0) delete combatBuffs[k]; } }
   // Summoned minions act on the hero's turn — before foes, so they can soak and
   // strike — then count down their lifespan.
@@ -14055,6 +14456,7 @@ function lastStandLog() {
 }
 
 function handleDeath() {
+  resetPortal();   // a killing blow always collapses any half-formed town portal + its timer
   // Last Stand: once per floor, a killing blow leaves you clinging to 1 HP
   // instead of dying. It's free (no buff burned) so it triggers before the
   // Phoenix bowl below, saving that revive for a later death.
@@ -14084,6 +14486,9 @@ function handleDeath() {
     updateBars(); renderPanel(); saveGame(); draw();
     return;
   }
+  // Hardcore: past the Last Stand / Phoenix safety nets, death is the end. No town,
+  // no penalties to tally — the hero is gone for good.
+  if (player.hardcore) { hardcoreDeath(); return; }
   // The cost of dying scales with the dungeon difficulty: gentle on Normal so the
   // early game forgives a stumble, escalating to brutal in Endless where a fall
   // costs every coin and most of a level. Your equipped gear is always untouched.
@@ -14165,6 +14570,111 @@ function showDeathScreen(lostGold, lostXp, returnFloor, lostBag, graveFloor, rel
   if (ov) ov.classList.add('open');
 }
 function closeDeath() { const ov = document.getElementById('death-overlay'); if (ov) ov.classList.remove('open'); }
+
+// ── HARDCORE DEATH ── final and unrecoverable. Files a graveyard headstone, writes
+// the death to the permanent ledger (so the hero can never be loaded again), then
+// destroys the playable save and shows the terminal screen.
+function hardcoreDeath() {
+  const fellOn = dungeonLevel;
+  // Halt the in-progress enemy turn — the run is over, no stale foe should keep
+  // swinging at the corpse (mirrors how buildTown/generateMap bump this on a normal
+  // death-retreat).
+  floorSerial++;
+  // Make sure the hero has a stable id to ledger; a brand-new hero may not have
+  // been saved (and minted one) yet.
+  if (!player.cid) player.cid = newCid();
+  // Lock in final progress for the headstone / screen.
+  player.maxFloor = Math.max(player.maxFloor || 1, dungeonLevel);
+  player.maxGold = Math.max(player.maxGold || 0, player.gold || 0);
+  // Capture any hardcore achievements earned right up to the fatal blow BEFORE the
+  // save is destroyed, so they persist in hcMeta.ach.
+  const achBefore = hcMeta.ach.slice();
+  checkHardcoreAchievements();
+  const newAch = hcMeta.ach.filter(id => achBefore.indexOf(id) === -1);
+  const deadName = player.name || HERO, deadLevel = player.level || 1, deadClass = player.class, deepest = player.maxFloor || fellOn;
+  // Headstone in the Graveyard, exactly like any other fallen hero (flagged hardcore).
+  recordFallenHero();
+  // The death that makes it stick — append-only, synced, never undone.
+  hcMarkDead(player.cid);
+  // Tear out the playable save: freeze further autosaves so the unload handler
+  // can't rewrite the slot, then clear it locally and in the cloud.
+  _wipingSave = true;
+  try { localStorage.removeItem(slotKey(activeSlot)); } catch (e) {}
+  try { cloudDeleteSlot(activeSlot); } catch (e) {}
+  sfx('death'); screenFlash('#cc0000'); addShake(9);
+  spawnFloatingText(player.x, player.y, 'SLAIN', '#ff3344');
+  log(`${hcIcon(15)} <b style="color:#ff7a86">${escapeHtml(deadName)}</b> was SLAIN on ${floorLabel(fellOn)} — and in Hardcore, death is forever. Their tale ends here, remembered only in the Graveyard.`, 'important');
+  showHardcoreDeathScreen(deadName, deadLevel, deadClass, fellOn, deepest, newAch);
+  try { draw(); } catch (e) {}
+}
+
+function showHardcoreDeathScreen(name, level, cls, fellOn, deepest, newAch) {
+  const skull = document.getElementById('hc-death-skull');
+  if (skull) skull.innerHTML = hcIcon(32);
+  const sub = document.getElementById('hc-death-sub');
+  if (sub) {
+    const clsName = (cls && CLASSES[cls]) ? CLASSES[cls].name : 'hero';
+    sub.innerHTML = `<b>${escapeHtml(name)}</b> the ${escapeHtml(clsName)} has fallen on ${floorLabel(fellOn)}. In Hardcore there is no revival — this character is gone for good.`;
+  }
+  const stats = document.getElementById('hc-death-stats');
+  if (stats) {
+    // Deepest is a CONTINUOUS depth — show it the way the rest of the game does
+    // (per-difficulty floor number + tier), not the raw cumulative count.
+    const dpt = deepest || fellOn;
+    stats.innerHTML =
+      `<div><b>${level}</b>Level</div>`
+      + `<div><b>${displayFloor(dpt)}</b>Deepest · ${DIFFS[diffOf(dpt) - 1].name}</div>`;
+  }
+  const achEl = document.getElementById('hc-death-ach');
+  if (achEl) {
+    const total = hcMeta.ach.length;
+    if (newAch && newAch.length) {
+      const names = newAch.map(id => { const a = HC_ACHIEVEMENTS.find(x => x.id === id); return a ? a.name : null; }).filter(Boolean);
+      achEl.style.display = '';
+      achEl.innerHTML = `${hcIcon(14)} Earned in this run: <b>${names.map(escapeHtml).join(', ')}</b><br>Your Hardcore feats live on — ${total} unlocked, shown on the title screen.`;
+    } else if (total) {
+      achEl.style.display = '';
+      achEl.innerHTML = `Your <b>${total}</b> Hardcore feat${total === 1 ? '' : 's'} live on, shown on the title screen.`;
+    } else {
+      achEl.style.display = 'none';
+    }
+  }
+  const ov = document.getElementById('hc-death-overlay');
+  if (ov) ov.classList.add('open');
+}
+// The only way out of the hardcore death screen: a clean reload back to the title.
+// The slot is already wiped, so the game boots into a fresh start.
+async function hcDeathReturnToTitle() {
+  _switchingSlot = true; // belt-and-braces: no teardown autosave during the reload
+  try { cloudFlush(); } catch (e) {}
+  // Best-effort: get the death onto the cloud ledger (union-first, so it can't
+  // shrink) before reloading, so other devices lock out promptly. Bounded by a
+  // timeout so a slow/offline network can't trap the player on this screen — the
+  // death is already in the LOCAL ledger and re-syncs on the next boot regardless.
+  try { await Promise.race([cloudPushHcMeta(), new Promise(r => setTimeout(r, 2500))]); } catch (e) {}
+  location.reload();
+}
+
+// The active hero turns out to be dead — either it just was ledgered (a death that
+// synced in from ANOTHER device), or a stale session is being reconciled. Make it
+// final right here: file the headstone, destroy the save, and show the terminal
+// screen. Returns true when it acted (so callers can stop their normal flow).
+function hcEnforceActiveLockout(fromSync) {
+  if (typeof player !== 'object' || !player || !player.hardcore || !hcIsDead(player.cid)) return false;
+  const floor = Math.max(player.maxFloor || 1, (typeof dungeonLevel === 'number' ? dungeonLevel : 1));
+  player.maxFloor = floor;
+  player.maxGold = Math.max(player.maxGold || 0, player.gold || 0);
+  recordFallenHero();
+  _wipingSave = true;
+  try { localStorage.removeItem(slotKey(activeSlot)); } catch (e) {}
+  try { cloudDeleteSlot(activeSlot); } catch (e) {}
+  showHardcoreDeathScreen(player.name || HERO, player.level || 1, player.class, floor, floor, []);
+  if (fromSync) {
+    const sub = document.getElementById('hc-death-sub');
+    if (sub) sub.innerHTML = `<b>${escapeHtml(player.name || 'Your hero')}</b> fell in Hardcore on another device. Death syncs everywhere — this character is gone for good.`;
+  }
+  return true;
+}
 
 function checkPickupProximity() {
   // Loot underfoot is shown on the map; no need to nag about it.
@@ -14304,6 +14814,7 @@ function pickupChestsAt(x, y) {
 // so this just opens anything already underfoot (e.g. a chest that dropped on
 // your tile) and otherwise passes the turn.
 function pickup() {
+  if (portalChanneling()) return;   // held while a town portal channels (tap TOWN to break off)
   const opened = pickupChestsAt(player.x, player.y);
   if (opened === 0) { log('You wait...'); passTurn(); return; }
   // Cracking open a chest underfoot is an action too — it costs a turn (foes act,
@@ -14316,13 +14827,8 @@ function pickup() {
 // Install the re-entrancy / halt guard around every player-action entry point.
 // Done here (after all are defined) by reassigning the binding, so both internal
 // callers and inline onclick="…" handlers route through the guarded version.
-// Raw, unguarded handle to the town-entry logic. move() uses this when a step
-// onto the floor-1 gate resolves into entering town: that call happens while the
-// move turn already holds __turnBusy, so it must bypass the re-entrancy guard
-// (the guarded enterTown would otherwise drop it and leave the player stranded
-// on the portal). Direct callers (TOWN button, 0/T key, conquest) still use the
-// guarded enterTown below.
-const enterTownRaw = enterTown;
+// (The floor-1 up-stair deliberately calls the unguarded startPortalChannel()
+// directly, since it fires from inside move()'s already-guarded turn.)
 move           = guardAction(move);
 pickup         = guardAction(pickup);
 castSkillById  = guardAction(castSkillById);
@@ -14523,14 +15029,19 @@ function updateBars() {
     }
   }
 
-  // Town gate: grey it out (with the reason in the tooltip) when you can't leave.
+  // Town gate: always usable now — tapping it opens a town portal that channels in
+  // real time. Show the countdown on the button (and a cyan pulse) while it opens.
   const townBtn = document.querySelector('.town-action');
   if (townBtn) {
-    const acc = townAccess();
-    townBtn.classList.toggle('disabled', !acc.ok);
-    townBtn.dataset.tip = acc.ok
-      ? "<div class='ht-name'>🏰 Town</div><div class='ht-line'>Step through the gate to the safe hub — shops, forge, healer, stash.</div>"
-      : "<div class='ht-name'>🏰 Town</div><div class='ht-line'>" + acc.reason + "</div>";
+    const ch = portalChanneling();
+    townBtn.classList.remove('disabled');
+    townBtn.classList.toggle('channeling', ch);
+    const lbl = townBtn.querySelector('.action-label');
+    // Keep the two parts on one line (nbsp) so the countdown never wraps to a lone row.
+    if (lbl) lbl.textContent = ch ? `TOWN ${portalCharge}` : 'TOWN';
+    townBtn.dataset.tip = ch
+      ? `<div class='ht-name'>🌀 Town Portal</div><div class='ht-line'>Opening… ${portalCharge} turn${portalCharge === 1 ? '' : 's'} left. A foe's hit shatters it — tap again to cancel.</div>`
+      : "<div class='ht-name'>🏰 Town Portal</div><div class='ht-line'>Open a portal to the safe hub. It channels for a few turns — you can't act while it does, and a foe's hit shatters it.</div>";
   }
 
   // The danger halo (low HP + status effects) refreshes immediately here, and
@@ -14548,6 +15059,7 @@ const POTION_CD = 3;            // shared cooldown — recharges over 3 turns
 function healPotionAmount() { return Math.max(1, Math.round(player.maxHp * HEAL_PERCENT)); }
 function potionReady() { return (player.potionCd || 0) === 0; }
 function useHealthPotion() {
+  if (portalChanneling()) return;   // held while a town portal channels (tap TOWN to break off)
   if (!potionReady()) { log(`⏳ Potions recharge — ${player.potionCd} turn${player.potionCd === 1 ? '' : 's'} left.`); return; }
   if (player.hp >= player.maxHp) { log('Already at full health.'); return; }
   const heal = Math.min(player.maxHp - player.hp, healPotionAmount());
@@ -14562,6 +15074,7 @@ function useHealthPotion() {
 const MANA_PERCENT = 0.25;
 function manaPotionAmount() { return Math.max(10, Math.round(player.maxMp * MANA_PERCENT)); }
 function useManaPotion() {
+  if (portalChanneling()) return;   // held while a town portal channels (tap TOWN to break off)
   if (!potionReady()) { log(`⏳ Potions recharge — ${player.potionCd} turn${player.potionCd === 1 ? '' : 's'} left.`); return; }
   if (player.mp >= player.maxMp) { log('Already at full mana.'); return; }
   const restore = Math.min(player.maxMp - player.mp, manaPotionAmount());
@@ -15422,15 +15935,18 @@ function renderSkillBar() {
   }).join('');
   // Desktop only: a TOWN button on the far left of the bar (the header's TOWN
   // button moved here, keyed 0). Sitting before the potions keeps the keys in
-  // reading order — 0, 1, 2, 3… — instead of trailing as a stray 0. Greyed when
-  // the gate is currently sealed.
+  // reading order — 0, 1, 2, 3… — instead of trailing as a stray 0. Always usable —
+  // opening it channels a town portal in real time, so while it's charging the
+  // button shows the countdown and a cyan pulse.
   // Hidden on touch — mobile keeps TOWN in the bottom control bar, unchanged.
   let townBtn = '';
   if (!touchUI()) {
-    const acc = townAccess();
-    const townTip = `<div class='ht-name'>🏰 Town</div><div class='ht-line'>Step through the gate to the safe hub — shops, forge, healer, stash.</div><div class='ht-sub'>press 0</div>`;
-    townBtn = `<button class="skillbar-btn town${acc.ok ? '' : ' disabled'}" ${hoverTip(townTip)} onclick="enterTown()">
-      <span class="sb-key">0</span><span class="sb-icon">${dlIcon('ui_gate',24) || '🏰'}</span><span class="sb-info">TOWN</span>
+    const ch = portalChanneling();
+    const townTip = ch
+      ? `<div class='ht-name'>🌀 Town Portal</div><div class='ht-line'>Opening… ${portalCharge} turn${portalCharge === 1 ? '' : 's'} left. A foe's hit shatters it.</div><div class='ht-sub'>press 0 to cancel</div>`
+      : `<div class='ht-name'>🏰 Town Portal</div><div class='ht-line'>Open a portal to the safe hub. It channels for a few turns — you can't act while it does, and a foe's hit shatters it.</div><div class='ht-sub'>press 0</div>`;
+    townBtn = `<button class="skillbar-btn town${ch ? ' channeling' : ''}" ${hoverTip(townTip)} onclick="enterTown()">
+      <span class="sb-key">0</span><span class="sb-icon">${dlIcon('ui_gate',24) || '🏰'}</span><span class="sb-info">${ch ? portalCharge : 'TOWN'}</span>
     </button>`;
   }
   bar.innerHTML = townBtn + healBtn + manaBtn + skillsHtml;
@@ -15602,9 +16118,45 @@ function renderPaperdoll() {
     renderDollSlot('weapon'), renderDollSlot('chest'), renderDollSlot('offhand'),
   ].join('');
   const bottom = `<div class="pd-bottom">${renderDollSlot('hands')}${renderDollSlot('legs')}</div>`;
-  return `<div class="paperdoll">${bodyHTML}${cells}${bottom}
+  return gearSetBarHTML() + `<div class="paperdoll">${bodyHTML}${cells}${bottom}
     <div class="pd-hint">Tap a slot for details · ✕ to unequip · EQUIP loot from the LOOT tab</div>
+    <div class="pd-hint">Two loadouts — switch sets above or press G</div>
   </div>`;
+}
+
+// ── GEAR-SET SWITCH ── the Set 1 / Set 2 toggle that sits above the paper doll.
+function gearSetPower(set) { return SLOT_KEYS.reduce((s, k) => s + (set[k] ? itemPower(set[k]) : 0), 0); }
+function gearSetCount(set) { return SLOT_KEYS.reduce((n, k) => n + (set[k] ? 1 : 0), 0); }
+// The active set is lit gold; tapping the other one swaps your whole loadout.
+function gearSetBarHTML() {
+  return `<div class="gearset-bar">${[0, 1].map(i => {
+    const set = gearSets[i];
+    const n = gearSetCount(set);
+    const meta = n ? `${n} worn · ⚡${gearSetPower(set)}` : 'empty';
+    return `<button class="gearset-btn${i === activeGearSet ? ' active' : ''}" onclick="toggleGearSet(${i})">
+      <span class="gs-name">Set ${i + 1}</span><span class="gs-meta">${meta}</span>
+    </button>`;
+  }).join('')}</div>`;
+}
+// Swap which loadout is worn. Called with no/invalid index from the G hotkey to
+// flip to the other set; with 0/1 from the on-screen buttons to pick one.
+function toggleGearSet(idx) {
+  const target = (idx === 0 || idx === 1) ? idx : (activeGearSet === 0 ? 1 : 0);
+  hideTooltip();
+  if (target === activeGearSet) return;
+  activeGearSet = target;
+  equipped = gearSets[activeGearSet];
+  sfx('equip');
+  // Worn gear feeds max HP/MP and the on-sprite look, so recompute & re-skin
+  // (and clamp current HP/MP) exactly like equipping a single piece does.
+  recomputeMaxStats();
+  if (player.hp > player.maxHp) player.hp = player.maxHp;
+  if (player.mp > player.maxMp) player.mp = player.maxMp;
+  log(`Switched to Gear Set ${activeGearSet + 1}.`, 'loot');
+  updateBars();
+  renderPanel();
+  draw();          // re-skin the sprite with the newly worn set
+  saveGame();
 }
 
 // One-tap equip: route an item straight to its own slot.
@@ -16134,6 +16686,10 @@ document.addEventListener('keydown', e => {
   // so handle Esc only after that guard.
   const cov = document.getElementById('class-overlay');
   if (cov && cov.classList.contains('open')) return;
+  // The hardcore death screen is terminal — swallow all keys (even Esc) so a dead
+  // hero can't keep acting behind it. Only the on-screen button moves on.
+  const hcov = document.getElementById('hc-death-overlay');
+  if (hcov && hcov.classList.contains('open')) return;
   if (e.key === 'Escape') { if (handleEscape()) e.preventDefault(); return; }
   const moveDir = dirForKey(e.key);
   if (moveDir) {
@@ -16159,6 +16715,7 @@ document.addEventListener('keydown', e => {
   }
   if (e.key==='t'||e.key==='T'||e.key==='0') enterTown();   // 0 mirrors the skill-bar TOWN button
   if (e.key==='b'||e.key==='B'||e.key==='i'||e.key==='I') togglePanel();
+  if (e.key==='g'||e.key==='G') toggleGearSet();             // swap between gear set 1 and 2
 });
 
 // ══════════════════════════════════════════
@@ -16320,7 +16877,9 @@ function saveGame() {
     const data = {
       // The stash is shared across every slot, so it is NOT part of a character's
       // save — it's persisted separately by saveStash() under STASH_KEY.
-      player, inventory, equipped, dungeonLevel, buffs, pact,
+      // `equipped` is still written (it's the active set) for forward-compat; the
+      // two-loadout state lives in gearSets + activeGearSet.
+      player, inventory, equipped, gearSets, activeGearSet, dungeonLevel, buffs, pact,
       inTown, dungeonReturn, graveSite,
       ts: Date.now(),
     };
@@ -16328,6 +16887,9 @@ function saveGame() {
   } catch (e) {
     // localStorage unavailable (e.g. inside artifact preview) — fail silently
   }
+  // Grant any hardcore achievements the hero now qualifies for (persisted outside
+  // the save so they outlive a permadeath). Cheap once everything's earned.
+  if (player.hardcore) checkHardcoreAchievements();
   // Push this character's best stats to the global leaderboard (debounced).
   lbScheduleSubmit();
   // Mirror this slot to the cloud account, if the player is signed in (debounced).
@@ -16340,6 +16902,11 @@ function loadGame() {
     if (!raw) return false;
     const data = JSON.parse(raw);
     if (!data.player) return false;
+    // Hardcore permadeath: a hero whose id is in the death ledger is gone for good.
+    // Reloading the page after a fatal blow, or re-importing an older copy of the
+    // save, can't revive them — the ledger is keyed by cid and append-only. Bury
+    // any headstone we owe and refuse to load the slot.
+    if (hcDeadSave(data)) { hcBuryDeadSave(data); return false; }
     player = data.player;
     if (player.gold == null) player.gold = 0;
     // Potions used to be hoarded consumables; they're a cooldown-gated skill now.
@@ -16439,19 +17006,25 @@ function loadGame() {
     // The town stash is shared across every save slot, so it is NOT restored from
     // this character's save. loadStash() (called once at boot) loads it from its
     // own key and folds any per-character stashes from older saves into the pool.
-    // Rebuild equipped into the new 7-slot shape; salvage any still-valid pieces into the bag.
-    // Off-hand is additive: old saves simply have no off-hand, so it defaults null
-    // and the salvage loop below routes any unknown-slot gear safely to the bag.
-    const freshEquipped = { head:null, chest:null, hands:null, legs:null, weapon:null, offhand:null, ring:null, amulet:null };
-    const old = data.equipped || {};
-    Object.values(old).forEach(it => {
-      if (it && it.slot && freshEquipped.hasOwnProperty(it.slot) && !freshEquipped[it.slot]) {
-        freshEquipped[it.slot] = it;
-      } else if (it && it.slot) {
-        inventory.push(it);
-      }
-    });
-    equipped = freshEquipped;
+    // Rebuild each gear set into the canonical 8-slot shape; salvage any extra or
+    // unknown-slot pieces into the bag. Off-hand is additive: old saves simply have
+    // no off-hand, so it defaults null and the salvage loop routes it safely.
+    const rebuildSet = (raw) => {
+      const set = emptyGearSet();
+      Object.values(raw || {}).forEach(it => {
+        if (it && it.slot && set.hasOwnProperty(it.slot) && !set[it.slot]) set[it.slot] = it;
+        else if (it && it.slot) inventory.push(it);
+      });
+      return set;
+    };
+    // New saves carry both loadouts in gearSets; older saves only have `equipped`,
+    // which becomes Set 1 with an empty Set 2 alongside it.
+    const rawSets = (Array.isArray(data.gearSets) && data.gearSets.length)
+      ? [data.gearSets[0], data.gearSets[1]]
+      : [data.equipped || {}, null];
+    gearSets = [rebuildSet(rawSets[0]), rebuildSet(rawSets[1])];
+    activeGearSet = (data.activeGearSet === 1) ? 1 : 0;
+    equipped = gearSets[activeGearSet];
     // Migrate saves that predate cosmetics: ensure the shape exists, then seed the
     // wardrobe from whatever gear the player is already carrying or wearing.
     if (!player.cosmetics) player.cosmetics = { head:null, chest:null, weapon:null };
@@ -16460,12 +17033,14 @@ function loadGame() {
     // Migrate icons from the old emoji system to vector-icon keys: re-stamp gear,
     // rebuild each saved wardrobe look from its name (deduping by key), and convert
     // any chosen cosmetic. Gear without a recognised key heals on next access.
+    // Worn items from BOTH gear sets get the same migrations as the bag.
+    const wornItems = gearSets.flatMap(s => Object.values(s)).filter(it => it && it.slot);
     inventory.forEach(it => { if (it.slot) it.icon = itemIcon(it); });
-    Object.values(equipped).forEach(it => { if (it && it.slot) it.icon = itemIcon(it); });
+    wornItems.forEach(it => { it.icon = itemIcon(it); });
     // Older items predate attribute affixes — give them an empty attrs block so
     // the affix/enchant code can treat every item uniformly.
     inventory.forEach(it => { if (it && !it.attrs) it.attrs = {}; });
-    Object.values(equipped).forEach(it => { if (it && !it.attrs) it.attrs = {}; });
+    wornItems.forEach(it => { if (!it.attrs) it.attrs = {}; });
     for (const slot of VISUAL_SLOTS) {
       const seen = new Set();
       player.wardrobe[slot] = (player.wardrobe[slot] || [])
@@ -16475,7 +17050,7 @@ function loadGame() {
       if (cur && !ICON_PATHS[cur]) player.cosmetics[slot] = LEGACY_EMOJI_KEYS[cur] || null;
     }
     inventory.forEach(recordWardrobe);
-    Object.values(equipped).forEach(recordWardrobe);
+    wornItems.forEach(recordWardrobe);
     dungeonLevel = data.dungeonLevel || 1;
     // Restore shrine buffs, tolerating older saves that predate them.
     buffs = Object.assign({ power: 0, guard: 0, fortune: 0 }, data.buffs || {});
@@ -16525,9 +17100,109 @@ function recordFallenHero() {
     floor: player.maxFloor || (typeof dungeonLevel === 'number' ? dungeonLevel : 1) || 1,
     gold: player.maxGold || player.gold || 0,
     playMs: player.playMs || 0,
+    hardcore: !!player.hardcore,
     ts: Date.now(),
   });
   saveGraveyard(filtered);
+}
+
+// ── HARDCORE MODE (permadeath) ──────────────────────────────────────────────
+// A hero created in Hardcore mode (player.hardcore) gets exactly one life: the
+// first real death is final. Making "dead means dead" actually stick — even
+// against reloading the page or re-importing an older copy of the save — needs a
+// record of death that lives OUTSIDE the save file and can never be walked back.
+// That record is an append-only DEATH LEDGER of fallen character ids (cids):
+//   • It's kept locally, keyed by cid (separate from any slot), and entries are
+//     never removed — so loading any copy of a dead hero, however old, is
+//     recognised as dead.
+//   • For signed-in players it's mirrored to the account and UNION-merged across
+//     devices (see cloudPushHcMeta/hcReconcile). Because the ledger only ever
+//     GROWS, a "live" copy of the hero left open on a second device can never
+//     overwrite a death recorded on the first — the moment either device syncs,
+//     the death propagates and the hero is locked everywhere. (A device that
+//     never syncs at all can't be reached without a server gating every write;
+//     cross-device hardcore therefore relies on the cloud account.)
+// The same record also stores earned hardcore achievements, which must outlive
+// the hero that earned them (the save is destroyed on death).
+const HC_DEAD_KEY = 'dungeonLoot_hcMeta_v1';
+let hcMeta = { cids: [], ach: [], ts: 0 };
+function loadHcMeta() {
+  try {
+    const j = JSON.parse(localStorage.getItem(HC_DEAD_KEY));
+    if (j && typeof j === 'object') {
+      hcMeta = {
+        cids: Array.isArray(j.cids) ? j.cids.filter(x => typeof x === 'string') : [],
+        ach: Array.isArray(j.ach) ? j.ach.filter(x => typeof x === 'string') : [],
+        ts: Math.max(0, Math.floor(j.ts) || 0),
+      };
+    }
+  } catch (e) {}
+}
+function writeHcMeta() { try { localStorage.setItem(HC_DEAD_KEY, JSON.stringify(hcMeta)); } catch (e) {} }
+function hcIsDead(cid) { return !!cid && hcMeta.cids.indexOf(cid) !== -1; }
+// True when a parsed save belongs to a hardcore hero already in the death ledger.
+function hcDeadSave(d) {
+  return !!(d && d.player && d.player.hardcore && d.player.cid && hcIsDead(d.player.cid));
+}
+// Permanently mark a hardcore cid as dead. Append-only + monotonic, then synced.
+function hcMarkDead(cid) {
+  if (!cid) return;
+  if (hcMeta.cids.indexOf(cid) === -1) hcMeta.cids.push(cid);
+  hcMeta.ts = Date.now();
+  writeHcMeta();
+  cloudScheduleHcMeta();
+}
+function hcHasAch(id) { return hcMeta.ach.indexOf(id) !== -1; }
+// Record a newly-earned hardcore achievement. Returns true only the first time.
+function hcGrantAch(id) {
+  if (!id || hcMeta.ach.indexOf(id) !== -1) return false;
+  hcMeta.ach.push(id);
+  hcMeta.ts = Date.now();
+  writeHcMeta();
+  cloudScheduleHcMeta();
+  return true;
+}
+// The DawnLike skull/cursed tile that brands everything hardcore (toggle, tags,
+// graveyard, death screen). Falls back to the ☠ glyph only before the atlas loads.
+function hcIcon(px) { return (typeof dlIcon === 'function' && dlIcon('ic_cursed', px)) || '☠️'; }
+
+// ── Hardcore achievements ── meta-progression that persists in hcMeta.ach, so it
+// survives the death (and wipe) of the hero that earned it. Tested against the
+// live hardcore hero; once earned, stays earned account-wide forever.
+const HC_ACHIEVEMENTS = [
+  { id: 'hc_ironborn',  name: 'Ironborn',          desc: 'Begin a Hardcore hero.',            svg: '<path d="M12 2 4 5v6c0 5 3.5 8 8 11 4.5-3 8-6 8-11V5z"/>',                                              test: p => !!p.hardcore },
+  { id: 'hc_survivor',  name: 'Hardcore Survivor', desc: 'Reach floor 5 in Hardcore.',        svg: '<path d="M12 2 4 5v6c0 5 3.5 8 8 11 4.5-3 8-6 8-11V5z"/><polyline points="9 12 11 14 15 9"/>',         test: p => (p.maxFloor || 1) >= 5 },
+  { id: 'hc_ironclad',  name: 'Ironclad',          desc: 'Reach floor 10 in Hardcore.',       svg: '<path d="M12 2 4 5v6c0 5 3.5 8 8 11 4.5-3 8-6 8-11V5z"/><line x1="12" y1="7" x2="12" y2="16"/><line x1="8" y1="11" x2="16" y2="11"/>', test: p => (p.maxFloor || 1) >= 10 },
+  { id: 'hc_deathless', name: 'Deathless Delver',  desc: 'Reach floor 20 in Hardcore.',       svg: '<path d="M12 2 4 5v6c0 5 3.5 8 8 11 4.5-3 8-6 8-11V5z"/><polyline points="8 11 12 15 16 9"/>',         test: p => (p.maxFloor || 1) >= 20 },
+  { id: 'hc_ironheart', name: 'Iron Heart',        desc: 'Reach hero level 25 in Hardcore.',  svg: '<polygon points="12 2 15 9 22 9 16.5 13.5 18.5 21 12 16.5 5.5 21 7.5 13.5 2 9 9 9"/>',                 test: p => (p.level || 1) >= 25 },
+  { id: 'hc_undying',   name: 'Hardcore Conqueror',desc: 'Conquer a difficulty in Hardcore.', svg: '<circle cx="12" cy="8" r="6"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/>',           test: p => (p.diffCleared || 0) >= 1 },
+];
+// Grant any hardcore achievement the live hero now qualifies for. Cheap enough to
+// call from saveGame() (a handful of comparisons once everything's earned).
+function checkHardcoreAchievements() {
+  if (typeof player !== 'object' || !player || !player.hardcore) return;
+  for (const a of HC_ACHIEVEMENTS) {
+    if (!hcHasAch(a.id) && a.test(player) && hcGrantAch(a.id)) {
+      try { log(`${hcIcon(15)} <b style="color:#ff7a86">Hardcore Achievement</b> — <b>${a.name}</b>: ${a.desc}`, 'important'); } catch (e) {}
+      try { sfx('levelup'); } catch (e) {}
+    }
+  }
+}
+
+// Lay a dead hardcore save to rest without loading it: ensure a headstone, then
+// scrub the playable slot (local + cloud) so there's nothing left to continue.
+// `d` is a parsed save object; bury it as if it were the active hero.
+function hcBuryDeadSave(d, slot) {
+  if (slot == null) slot = activeSlot;
+  // recordFallenHero() works off the global `player`; point it at the dead save just
+  // long enough to file the headstone (it dedups by cid, so re-burying an already-
+  // recorded hero is a harmless no-op), then always restore it.
+  const savedPlayer = player;
+  try { player = d.player; recordFallenHero(); }
+  catch (e) {}
+  finally { player = savedPlayer; }
+  try { localStorage.removeItem(slotKey(slot)); } catch (e) {}
+  try { cloudDeleteSlot(slot); } catch (e) {}
 }
 
 async function wipeSave() {
@@ -16617,6 +17292,7 @@ function slotSummary(i) {
       floor: p.maxFloor || d.dungeonLevel || 1,
       gold: p.gold || 0,
       inTown: !!d.inTown,
+      hardcore: !!p.hardcore,
       ts: d.ts || 0,
       playMs: p.playMs || 0,
     };
@@ -16693,11 +17369,12 @@ function renderSlots() {
       : `<button class="slot-btn" onclick="activateSlot(${i})">▶ Load</button>`;
     const armed = slotDeleteArmed === i;
     const delBtn = `<button class="slot-btn danger${armed ? ' armed' : ''}" onclick="deleteSlot(${i})">${armed ? 'Sure?' : 'Del'}</button>`;
+    const hcMark = s.hardcore ? `<span class="hc-tag">${hcIcon(10)} HC</span>` : '';
     html += `<div class="slot-row${isActive ? ' active' : ''}">
       <div class="slot-head">
         <span class="slot-num">SLOT ${i + 1}</span>${badge}
         <span class="slot-class">${icon}</span>
-        <span class="slot-name">${who}</span>
+        <span class="slot-name">${who}</span>${hcMark}
       </div>
       <div class="slot-stats">Lv ${s.level} · ${where} · ${s.gold}g · <span class="slot-time">⏱️ ${formatPlayTime(s.playMs)}</span>${time ? ` · <span class="slot-time">saved ${time}</span>` : ''}</div>
       <div class="slot-actions">${playBtn}${delBtn}</div>
@@ -16984,15 +17661,12 @@ async function renderLeaderboard() {
   }
   list.innerHTML = rows.map((r, i) => {
     const cls = r.player_class && CLASSES[r.player_class] ? CLASSES[r.player_class].icon : '🧙';
-    // Top three get a gold/silver/bronze medal disc with the rank number
-    // inside (DawnLike has no number tiles, so these are styled text badges);
-    // everyone else gets a plain muted number.
-    const rank = i < 3
-      ? `<span class="lb-medal lb-medal-${i + 1}">${i + 1}</span>`
-      : (i + 1);
+    // Top three shade the whole row gold / silver / bronze (no medal disc);
+    // everyone else is a plain row. The rank is always a plain number.
+    const top = i < 3 ? ` lb-top-${i + 1}` : '';
     const me = myName && r.name === myName ? ' me' : '';
-    return `<div class="lb-row${me}">
-      <span class="lb-rank">${rank}</span>
+    return `<div class="lb-row${top}${me}">
+      <span class="lb-rank">${i + 1}</span>
       <span class="lb-class">${cls}</span>
       <span class="lb-name">${escapeHtml(r.name)}</span>
       <span class="lb-val">${sort.fmt(r[sort.col] || 0)}</span>
@@ -17128,7 +17802,105 @@ function cloudFlush() {
   if (cloudEnabled() && authState.user) {
     try { cloudPushSlot(activeSlot, { keepalive: true }); } catch (e) {}
     try { cloudPushStash({ keepalive: true }); } catch (e) {}
+    // NOTE: the hardcore ledger is deliberately NOT flushed here. A flush is a
+    // blind keepalive write that can't read-then-union first, so a device with a
+    // stale ledger would shrink the cloud row and erase a death recorded
+    // elsewhere. Deaths/feats reach the cloud via the union-first cloudPushHcMeta
+    // (debounced on change, and awaited on the death screen) and re-sync on the
+    // next boot's hcReconcile — never through a flush.
   }
+}
+
+// ── Hardcore-meta cloud sync ────────────────────────────────────────────────
+// The hardcore death ledger + earned-achievement set mirror to their own
+// dedicated row (HC_CLOUD_SLOT), like the shared stash. Unlike per-slot saves
+// (last-writer-wins) this row is UNION-merged on reconcile: deaths and feats only
+// ever accumulate, so a death recorded on any device can never be undone by an
+// older copy on another. cloudReconcile() ignores it (no .player → not a started
+// save), so hcReconcile() handles it on its own.
+const HC_CLOUD_SLOT = -2; // sentinel cloud "slot" for hardcore meta — never a real character
+let cloudHcTimer = null;
+function cloudScheduleHcMeta() {
+  if (!cloudEnabled() || !authState.user) return;
+  if (cloudHcTimer) return;
+  cloudHcTimer = setTimeout(() => { cloudHcTimer = null; cloudPushHcMeta(); }, 3500);
+}
+// Union a cloud hcMeta blob into the local one (monotonic — entries only added,
+// never removed). Persists locally if it grew. Returns true if a death id arrived
+// that this device didn't already hold.
+function hcMergeIn(cloud) {
+  if (!cloud || typeof cloud !== 'object') return false;
+  const cloudCids = Array.isArray(cloud.cids) ? cloud.cids.filter(x => typeof x === 'string') : [];
+  const cloudAch = Array.isArray(cloud.ach) ? cloud.ach.filter(x => typeof x === 'string') : [];
+  const cidSet = new Set(hcMeta.cids), achSet = new Set(hcMeta.ach);
+  const knownDeaths = cidSet.size;
+  cloudCids.forEach(c => cidSet.add(c));
+  cloudAch.forEach(a => achSet.add(a));
+  const grew = cidSet.size !== hcMeta.cids.length || achSet.size !== hcMeta.ach.length;
+  if (grew) { hcMeta.cids = Array.from(cidSet); hcMeta.ach = Array.from(achSet); hcMeta.ts = Date.now(); writeHcMeta(); }
+  return cidSet.size > knownDeaths;
+}
+// Read the account's hardcore-meta row. Returns the data object, null (no row), or
+// undefined (couldn't read — caller MUST NOT then blind-write, or it could shrink
+// the cloud ledger).
+async function cloudFetchHcMeta() {
+  const res = await fetch(LB_SUPABASE_URL + '/rest/v1/saves?select=data&user_id=eq.' + authState.user.id + '&slot=eq.' + HC_CLOUD_SLOT, { headers: cloudRestHeaders() });
+  if (!res.ok) return undefined;
+  const rows = await res.json();
+  return (rows && rows[0] && rows[0].data && typeof rows[0].data === 'object') ? rows[0].data : null;
+}
+// Blind upsert of the CURRENT local hcMeta. Internal — only called right after a
+// successful read+merge, so it writes the union (never a shrunk set).
+async function cloudWriteHcMeta() {
+  try {
+    const res = await fetch(LB_SUPABASE_URL + '/rest/v1/saves?on_conflict=user_id,slot', {
+      method: 'POST',
+      headers: cloudRestHeaders({ 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
+      body: JSON.stringify({
+        user_id: authState.user.id, slot: HC_CLOUD_SLOT, data: hcMeta,
+        updated_at: new Date(hcMeta.ts || Date.now()).toISOString(),
+      }),
+    });
+    return res.ok;
+  } catch (e) { return false; }
+}
+// Did the cloud row hold every id/feat we do? (used to skip pointless writes).
+function hcCloudHasAll(cloud) {
+  if (!cloud) return false;
+  const cc = Array.isArray(cloud.cids) ? cloud.cids : [], ca = Array.isArray(cloud.ach) ? cloud.ach : [];
+  return hcMeta.cids.every(c => cc.indexOf(c) !== -1) && hcMeta.ach.every(a => ca.indexOf(a) !== -1);
+}
+// Union-FIRST push: read the cloud row, merge it into ours, then write the union
+// back. The read-before-write is the whole point — a blind upsert (the only write
+// PostgREST gives us without a server function) would let a device with a stale,
+// smaller ledger OVERWRITE and shrink the cloud, erasing a death recorded
+// elsewhere. By merging the cloud in first we can only ever grow it. If the cloud
+// can't be read we DON'T write, rather than risk a shrinking blind overwrite.
+async function cloudPushHcMeta() {
+  if (!cloudEnabled() || !authState.user) return false;
+  if (!await ensureToken()) return false;
+  let cloud;
+  try { cloud = await cloudFetchHcMeta(); } catch (e) { return false; }
+  if (cloud === undefined) return false;
+  hcMergeIn(cloud);
+  const haveLocal = hcMeta.cids.length || hcMeta.ach.length;
+  if (haveLocal && !hcCloudHasAll(cloud)) return await cloudWriteHcMeta();
+  return true;
+}
+// Boot/sync reconcile: same union-first merge, but reports whether a death arrived
+// from the cloud so the caller can lock out an active hero who died elsewhere.
+async function hcReconcile() {
+  if (!cloudEnabled() || !authState.user) return false;
+  if (!await ensureToken()) return false;
+  let cloud;
+  try { cloud = await cloudFetchHcMeta(); } catch (e) { return false; }
+  if (cloud === undefined) return false;
+  const learnedDeath = hcMergeIn(cloud);
+  // Push our union up if we hold anything the cloud is missing. Nothing local and
+  // no cloud row → leave it be (don't litter empty rows for non-hardcore players).
+  const haveLocal = hcMeta.cids.length || hcMeta.ach.length;
+  if (haveLocal && !hcCloudHasAll(cloud)) await cloudWriteHcMeta();
+  return learnedDeath;
 }
 
 // ── Shared-stash cloud sync ─────────────────────────────────────────────────
@@ -17212,11 +17984,26 @@ async function cloudReconcile() {
   } catch (e) { return result; }
 
   // Started saves on each side, keyed by slot index (blank/unstarted are ignored).
+  // Hardcore heroes already in the death ledger are excluded from BOTH sides and
+  // scrubbed, so a stale "live" copy left open on another device can never put a
+  // dead hero back into play — the ledger (union-merged in hcReconcile, run just
+  // before this) is the source of truth on who's dead.
   const cloud = {}, local = {};
-  (rows || []).forEach(r => { if (r && typeof r.slot === 'number' && saveStarted(r.data)) cloud[r.slot] = r.data; });
+  const deadCloudSlots = []; // dead-hero rows we're scrubbing — keep newcomers off them
+  (rows || []).forEach(r => {
+    if (!r || typeof r.slot !== 'number') return;
+    if (hcDeadSave(r.data)) { deadCloudSlots.push(r.slot); try { cloudDeleteSlot(r.slot); } catch (e) {} return; }
+    if (saveStarted(r.data)) cloud[r.slot] = r.data;
+  });
   const localSlots = allLocalSlotIndices();
   localSlots.forEach(i => {
-    try { const raw = localStorage.getItem(slotKey(i)); if (raw) { const d = JSON.parse(raw); if (saveStarted(d)) local[i] = d; } } catch (e) {}
+    try {
+      const raw = localStorage.getItem(slotKey(i));
+      if (!raw) return;
+      const d = JSON.parse(raw);
+      if (hcDeadSave(d)) { try { localStorage.removeItem(slotKey(i)); if (i === activeSlot) result.activeChanged = true; } catch (e) {} return; }
+      if (saveStarted(d)) local[i] = d;
+    } catch (e) {}
   });
 
   const idOf = (d, slot) => saveCid(d) ? ('cid:' + saveCid(d)) : ('slot:' + slot);
@@ -17234,6 +18021,11 @@ async function cloudReconcile() {
   //    slot is treated as an older copy of the same hero. Anything else is a new
   //    character for the account and gets appended to the lowest free slot.
   const used = new Set(Object.keys(assign).map(Number));
+  // Don't reuse a slot index whose dead-hero cloud row we just fired a (fire-and-
+  // forget) DELETE at — a newcomer pushed to that same index could otherwise be
+  // wiped if the DELETE lands after its PUSH. The freed index returns to the pool
+  // on the next reconcile, once the row is actually gone.
+  deadCloudSlots.forEach(s => used.add(s));
   const localDest = {};      // local slot -> where that hero ended up
   const newcomers = [];
   for (const i of localSlots) {
@@ -17299,6 +18091,10 @@ async function cloudReconcile() {
 // a one-shot flag so it can never loop).
 async function cloudBootSync() {
   if (!cloudEnabled() || !authState.user) return;
+  // Pull the hardcore death ledger first so cloudReconcile sees who's dead — and so
+  // a death recorded on another device locks out the hero we just booted into.
+  const learnedDeath = await hcReconcile();
+  if (learnedDeath && hcEnforceActiveLockout(true)) return;
   const r = await cloudReconcile();
   await stashReconcile(); // sync the shared stash too (writes STASH_KEY before any reload)
   let alreadyReloaded = false;
@@ -17457,6 +18253,8 @@ function doLogout() {
 async function doSyncNow() {
   acctStatus('Syncing…', 'busy');
   try { saveGame(); } catch (e) {}
+  const learnedDeath = await hcReconcile();
+  if (learnedDeath && hcEnforceActiveLockout(true)) return;
   const r = await cloudReconcile();
   await stashReconcile();
   if (r.activeChanged) { _switchingSlot = true; location.reload(); return; }
@@ -17469,14 +18267,32 @@ function showNameEntry() {
   if (!ov) return;
   const input = document.getElementById('name-input');
   if (input) input.value = player.name || '';
+  // Fresh hero → Hardcore starts off. Reflect any in-progress pick, brand the
+  // label with the DawnLike skull, and sync the toggle styling.
+  const cb = document.getElementById('hc-checkbox');
+  if (cb) cb.checked = !!player.hardcore;
+  const lbl = document.getElementById('hc-tog-label');
+  if (lbl) lbl.innerHTML = `${hcIcon(14)} HARDCORE`;
+  syncHardcoreToggle();
   ov.classList.add('open');
   setTimeout(() => { try { if (input) { input.focus(); input.select(); } } catch (e) {} }, 60);
+}
+// Reflect the checkbox state on the toggle row (crimson when armed).
+function syncHardcoreToggle() {
+  const cb = document.getElementById('hc-checkbox');
+  const row = document.getElementById('hc-toggle');
+  if (row) row.classList.toggle('on', !!(cb && cb.checked));
 }
 function submitName() {
   const input = document.getElementById('name-input');
   let name = ((input && input.value) || '').trim().replace(/\s+/g, ' ').slice(0, 16);
   if (!name) name = 'Adventurer';
   player.name = name;
+  // Lock in the Hardcore choice for this brand-new hero. Once set it rides along in
+  // the save and can never be turned off — the name screen only ever shows for a
+  // fresh hero, so there's no path to un-hardcore an existing one.
+  const cb = document.getElementById('hc-checkbox');
+  if (cb && cb.checked) player.hardcore = true;
   const ov = document.getElementById('name-overlay');
   if (ov) ov.classList.remove('open');
   saveGame();
@@ -17516,24 +18332,38 @@ const ACHIEVEMENTS = [
   { id: 'conqueror',  name: 'Conqueror',   desc: 'Conquer a difficulty.',   svg: '<circle cx="12" cy="8" r="6"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/>', test: p => (p.diffCleared || 0) >= 1 },
   { id: 'champion',   name: 'Champion',    desc: 'Conquer all difficulties.',svg: '<path d="M3 18h18l-2-9-4 4-3-6-3 6-4-4z"/>', test: p => (p.diffCleared || 0) >= 3 },
 ];
+// A single achievement badge — shared by the normal (gold) and hardcore (crimson)
+// rows. Reuses the game's styled hover/long-press tooltip (data-tip + showHoverTip).
+function achBadgeHtml(a, got, isHc) {
+  const ic = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + a.svg + '</svg>';
+  const status = got
+    ? `<div class='ht-sub' style='color:${isHc ? '#ff7a86' : 'var(--gold)'}'>✓ Unlocked</div>`
+    : `<div class='ht-sub'>🔒 Locked</div>`;
+  const tip = `<div class='ht-name'>${a.name}</div><div class='ht-line'>${a.desc}</div>${status}`;
+  return `<div class="ta-badge${isHc ? ' hc' : ''} ${got ? 'earned' : 'locked'}" data-tip="${tip}" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()"><span class="ta-ic">${ic}</span><span class="ta-nm">${a.name}</span></div>`;
+}
 function renderTitleAchievements() {
   const wrap = document.getElementById('title-achievements');
   if (!wrap) return;
   const p = (typeof player === 'object' && player) || {};
-  if (!p.class) { wrap.style.display = 'none'; return; }  // nothing to show on a fresh save
-  let earned = 0;
-  const cells = ACHIEVEMENTS.map(a => {
-    const got = !!a.test(p); if (got) earned++;
-    const ic = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + a.svg + '</svg>';
-    // Reuse the game's shared hover/long-press tooltip (data-tip + showHoverTip)
-    // so the badges read with the same styled card as the HUD and shop tips.
-    const status = got
-      ? `<div class='ht-sub' style='color:var(--gold)'>✓ Unlocked</div>`
-      : `<div class='ht-sub'>🔒 Locked</div>`;
-    const tip = `<div class='ht-name'>${a.name}</div><div class='ht-line'>${a.desc}</div>${status}`;
-    return `<div class="ta-badge ${got ? 'earned' : 'locked'}" data-tip="${tip}" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()"><span class="ta-ic">${ic}</span><span class="ta-nm">${a.name}</span></div>`;
-  }).join('');
-  wrap.innerHTML = `<div class="ta-head">Achievements <b>${earned}</b> / ${ACHIEVEMENTS.length}</div><div class="ta-row">${cells}</div>`;
+  const showNormal = !!p.class;  // normal feats derive from the active run
+  // Hardcore feats persist account-wide (hcMeta.ach), so they show whenever any
+  // are earned or the active hero is hardcore — even with no current run.
+  const hcGot = id => hcHasAch(id);
+  const hcEarned = HC_ACHIEVEMENTS.filter(a => hcGot(a.id) || (p.hardcore && a.test(p)));
+  const showHc = hcEarned.length > 0 || !!p.hardcore;
+  if (!showNormal && !showHc) { wrap.style.display = 'none'; return; }  // nothing to show
+  let html = '';
+  if (showNormal) {
+    let earned = 0;
+    const cells = ACHIEVEMENTS.map(a => { const got = !!a.test(p); if (got) earned++; return achBadgeHtml(a, got, false); }).join('');
+    html += `<div class="ta-head">Achievements <b>${earned}</b> / ${ACHIEVEMENTS.length}</div><div class="ta-row">${cells}</div>`;
+  }
+  if (showHc) {
+    const cells = HC_ACHIEVEMENTS.map(a => achBadgeHtml(a, hcGot(a.id) || (p.hardcore && !!a.test(p)), true)).join('');
+    html += `<div class="ta-head hc">${hcIcon(13)} Hardcore <b>${hcEarned.length}</b> / ${HC_ACHIEVEMENTS.length}</div><div class="ta-row">${cells}</div>`;
+  }
+  wrap.innerHTML = html;
   wrap.style.display = '';
 }
 function showTitle() {
@@ -17572,10 +18402,12 @@ function showTitle() {
       const lvl = player.level || 1;
       const deepest = player.maxFloor || 1;
       const gold = fmtGold ? fmtGold(player.gold || 0) : (player.gold || 0);
+      const hcTag = player.hardcore ? `<div><span class="hc-tag">${hcIcon(11)} HARDCORE · ONE LIFE</span></div>` : '';
       hero.innerHTML =
         `<div class="th-name" style="color:${cls.color || '#ffe9b0'}">${nm}</div>`
         + `<div class="th-sub">Level ${lvl} ${cls.name || 'Hero'}</div>`
-        + `<div class="th-stats"><span>Deepest <b>Floor ${deepest}</b></span><span><b>${gold}</b>g</span></div>`;
+        + `<div class="th-stats"><span>Deepest <b>Floor ${deepest}</b></span><span><b>${gold}</b>g</span></div>`
+        + hcTag;
       hero.style.display = '';
     } else {
       hero.style.display = 'none';
@@ -17613,13 +18445,19 @@ function confirmTitleNewRun() { closeNewRun(); closeTitle(); wipeSave(); }   // 
 function titleSound() { toggleSound(); refreshTitleToggles(); }
 function titleZoom() { toggleZoom(); refreshTitleToggles(); }
 
+// Load the hardcore death ledger + earned feats BEFORE the save, so loadGame() can
+// recognise (and refuse to load) a hero who has already permanently died.
+loadHcMeta();
 const hadSave = loadGame();
 // Load the account-wide shared stash (and, on first run, migrate any older
 // per-character stashes into the pool). It lives outside the save slots, so it
 // loads even when the active slot is empty.
 loadStash();
-// Resume in town if that's where the save left off; otherwise build the floor.
-if (inTown) { buildTown(); openTownHub(); } else generateMap();
+// Resume in town if that's where the save left off; a brand-new hero who hasn't
+// done the beach tutorial gets it first; otherwise build the dungeon floor.
+if (inTown) { buildTown(); openTownHub(); }
+else if (!hadSave && !player.tutorialDone) buildTutorialMap();
+else generateMap();
 draw();
 updateBars();
 renderPanel();
@@ -17695,7 +18533,7 @@ function pulseLoop(ts) {
   const hasShrine = Object.keys(shrineData).length > 0;
   const juicing = particles.length || tracers.length || Date.now() < shakeUntil;
   const liquid = mapData.some(row => row && row.some(t => t === 6 || t === 7));
-  if ((inTown || merchant || mystic || hasFountain || hasShrine || quest || graveMarker || floatingTexts.length || statusEffects.length || hasElite || juicing || liquid || floorCleared) && ts - lastPulse > 30) { lastPulse = ts; draw(); }
+  if ((inTown || merchant || mystic || hasFountain || hasShrine || quest || graveMarker || floatingTexts.length || statusEffects.length || hasElite || juicing || liquid || floorCleared || portalChanneling()) && ts - lastPulse > 30) { lastPulse = ts; draw(); }
   // Animate the danger halo every frame — it's a DOM overlay, so it must keep
   // pulsing even when the canvas is idle (e.g. standing still at low HP).
   updateHaloVignette();
