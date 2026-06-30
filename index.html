@@ -955,14 +955,15 @@
   .skillbar-btn[draggable="true"] { cursor: grab; }
   .skillbar-btn[draggable="true"]:active { cursor: grabbing; }
 
-  /* ── IN-TOWN SKILL TRAY ──
-     In town the bar stays put so you can see your kit and rearrange slots, but it
-     parks as a solid tray over a clean strip (not the town plaza behind it) and
-     lifts above the town/shop/mystic menus' backdrops. Those menus reserve exactly
-     the tray's height (--town-bar-reserve, measured in JS) at their own bottom so
-     they end above it and nothing overlaps. */
+  /* ── IN-TOWN SKILL TRAY (web/desktop layout only) ──
+     In town the bar stays put on the wide layout so you can see your kit and
+     rearrange slots there (the SKILLS-tab slot tray is hidden on desktop; on touch
+     it's still present, so the bar is hidden in town instead — see renderSkillBar).
+     It parks as a solid tray over a clean strip (not the town plaza) and lifts above
+     the town/shop/mystic menus, which reserve its height (--town-bar-reserve,
+     measured in JS) so they end above it. The reserve itself lives in the web-layout
+     media query below; here is just the tray's look and the locked-potion styling. */
   #skill-bar.in-town {
-    z-index: 235;
     background: #15101f;
     border-top: 1px solid var(--frame);
     box-shadow: 0 -5px 16px rgba(0,0,0,0.55);
@@ -972,13 +973,6 @@
   .skillbar-btn.town-locked { opacity: 0.4; filter: grayscale(0.7); cursor: not-allowed; animation: none; }
   .skillbar-btn.town-locked:active { transform: none; background: #6a1a2a; }
   .skillbar-btn.town-locked.mana:active { background: #1a2a6a; }
-  /* Keep the town menus (and the shop/mystic sub-menus) clear of the parked tray. */
-  body.town-bar #town-overlay,
-  body.town-bar #shop-overlay,
-  body.town-bar #mystic-overlay { padding-bottom: var(--town-bar-reserve, 16px); }
-  body.town-bar #town-modal,
-  body.town-bar #shop-modal,
-  body.town-bar #mystic-modal { max-height: min(80vh, calc(100vh - var(--town-bar-reserve, 0px) - 20px)); }
 
   /* On touch devices the cast bar is your only way to fire spells/potions, so make
      the buttons and their icons noticeably bigger for easier tapping. (Desktop has
@@ -2229,15 +2223,12 @@
       box-shadow: none;
     }
     /* In town the parked skill tray sits above the town menu (still tucked under
-       the loot drawer); the menus end above it by reserving its height as a bottom
-       gap, so the menu column shrinks rather than overlapping the tray. The full
-       -height web modal then fills the shortened overlay, so its cap is cleared. */
+       the loot drawer); the menus reserve its height as a bottom gap so they end
+       above it rather than overlapping. The full-height modal just fills the
+       shortened overlay unchanged. */
     body.town-bar #town-overlay,
     body.town-bar #shop-overlay,
-    body.town-bar #mystic-overlay { bottom: var(--town-bar-reserve, 0); padding-bottom: 0; }
-    body.town-bar #town-modal,
-    body.town-bar #shop-modal,
-    body.town-bar #mystic-modal { max-height: none; }
+    body.town-bar #mystic-overlay { bottom: var(--town-bar-reserve, 0); }
     #skill-bar.in-town { z-index: 246; bottom: 0; }
 
     /* Desktop header is a centred two-row grid, truly centred in the viewport:
@@ -7650,8 +7641,8 @@ document.addEventListener('click', (e) => {
 
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
-  { date: '2026-06-30', size: 'small', v: 'Skill bar stays in town', by: 'Claude', notes: ['Your skill bar no longer vanishes when you step into town — it parks as a tray along the bottom so you can see your kit and rearrange your slots while you shop and plan. The town menu now ends just above it instead of covering it, and the tray sits on its own clean strip.', 'The Health and Mana potions on that tray are greyed out and locked while you\'re in town: there\'s nothing to fight, and resting already restores you for free, so a potion can\'t be wasted there. They light back up the moment you take the gate back down.'] },
   { date: '2026-06-30', size: 'small', v: 'Dungeon Gate is the only way down', by: 'Claude', notes: ['The ✕ in the corner of the town menus no longer drops you back into the dungeon. The Town menu lost its ✕ entirely, and the town Merchant and Mystic panels now show only ← back to the hub — their ✕ is hidden while you\'re in town.', 'To head back down you now take the 🌀 Dungeon Gate, where you pick your floor and difficulty, so you can\'t accidentally bail out of town onto your old return floor by tapping the corner. Pressing Esc in a town panel steps back toward the hub instead of leaving. A Merchant or Mystic you meet while wandering the dungeon still has its ✕ to dismiss the panel.'] },
+  { date: '2026-06-30', size: 'small', v: 'Skill bar stays in town', by: 'Claude', notes: ['On the desktop layout your skill bar no longer vanishes when you step into town — it parks as a tray along the bottom so you can see your kit and rearrange your slots while you shop and plan. The town menu ends just above it instead of covering it, and the tray sits on its own clean strip. (On phones nothing changes: the SKILLS tab already shows your slot row, so the bar stays tucked away in town there.)', 'The Health and Mana potions on that tray are greyed out and locked while you\'re in town: there\'s nothing to fight, and resting already restores you for free, so a potion can\'t be wasted there. They light back up the moment you take the gate back down.'] },
   { date: '2026-06-30', size: 'small', v: 'Tidier SKILLS tab on desktop', by: 'Claude', notes: ['On the wide desktop layout, the SKILLS tab no longer repeats the row of skill slots above the tree. Your bottom skill bar is already on screen there — you can drag a learned skill straight onto it, or rearrange the slots in place — so the second copy was redundant clutter.', 'On phones and tablets the slot tray stays exactly as it was: it\'s the comfortable place to tap a slot and assign a skill, and the only slot editor available while you\'re in town.'] },
   { date: '2026-06-30', size: 'medium', v: 'Might fuels Endurance + Sprint toggle', by: 'Claude', notes: ['Might now does more than raise Attack power: it also DEEPENS your Endurance pool and SPEEDS its recharge. A mighty hero sprints longer and recovers stamina sooner, so pouring points (or stacking +Might gear) into it pays off for footwork, not just damage. The HERO sheet now lists your Max Endurance and Endurance regen.', 'New Sprint setting in the ⚙️ menu: leave it on HOLD to sprint only while Shift is down, or flip it to TOGGLE so a single tap of Shift latches auto-sprint on (tap again to stop) — sprint without keeping a finger on the key. Your choice is remembered across sessions.'] },
   { date: '2026-06-30', size: 'medium', v: 'Drag-and-drop skill slots', by: 'Claude', notes: ['The skill bar now shows every hotkey slot (keys 1–9), empty ones included, as a dashed open slot — so you can see at a glance how many skills you can bind and where the gaps are. Slot 1 is still the gold primary the R key / ⚡ button cast.', 'Drag a learned active skill straight from its node in the SKILLS tab onto a slot to bind it, and drag a slot onto another to rearrange — including onto an empty slot to move it there. A learned skill that isn\'t in any slot reads as "off the bar" (🚫) and simply isn\'t keyed until you slot it.', 'A new loadout tray sits above the ACTIVE tree showing all your slots together, so the skills and the slots are side by side to drag between. On touch (or as a quick desktop path) just tap any slot to pick which learned skill fills it, or clear it. Your slot layout is saved with the character; existing heroes keep their current bar.'] },
@@ -18041,12 +18032,16 @@ function renderSkillBar() {
   // cancels the drop (the world clock re-renders the bar every tick). Hold the
   // current markup steady until the drag ends — skillDragEnd / the drop re-render.
   if (skillDrag) return;
-  // The bar still renders in town — you can see your kit and rearrange slots there
-  // — but it parks as a solid tray the town menu leaves room for (see
-  // syncTownBarReserve), and its potions go inert. Out in the dungeon it's the live
-  // combat bar, and it always renders even before any active is learned because the
-  // Health/Mana potions are baseline kit.
-  const town = inTown;
+  // In town the bar is only worth showing on the desktop/web layout: there the
+  // SKILLS-tab slot tray is hidden, so this parked bar is how you see and rearrange
+  // slots in town. On touch the SKILLS tab still carries that tray, so the bar would
+  // just be a redundant second copy — keep the old behavior and hide it in town.
+  const town = inTown && isWebLayout();
+  if (inTown && !town) { bar.style.display = 'none'; bar.innerHTML = ''; document.body.classList.remove('town-bar'); syncTownBarReserve(); return; }
+  // On the web layout the in-town bar parks as a solid tray the town menu leaves
+  // room for (see syncTownBarReserve), with its potions inert. Out in the dungeon
+  // it's the live combat bar, and it always renders even before any active is
+  // learned because the Health/Mana potions are baseline kit.
   bar.style.display = 'flex';
   bar.classList.toggle('in-town', town);
   document.body.classList.toggle('town-bar', town);
