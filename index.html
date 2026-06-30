@@ -19585,6 +19585,11 @@ const PANEL_COLLAPSE_KEY = 'panelCollapsed';
 function setPanelCollapsed(collapsed, persist = true) {
   document.body.classList.toggle('panel-collapsed', collapsed);
   if (persist) { try { localStorage.setItem(PANEL_COLLAPSE_KEY, collapsed ? '1' : '0'); } catch (e) {} }
+  // Folding the loot drawer hands its column width to the map on desktop — re-fit
+  // the canvas backing buffer to the new cell width so the map shows MORE floor
+  // instead of stretching the old (narrower) buffer to fill the wider cell.
+  if (typeof resizeCanvas === 'function') resizeCanvas();
+  if (typeof draw === 'function') { try { draw(); } catch (e) {} }
 }
 function togglePanelCollapse() {
   setPanelCollapsed(!document.body.classList.contains('panel-collapsed'));
