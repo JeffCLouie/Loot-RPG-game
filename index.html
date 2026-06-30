@@ -7584,6 +7584,7 @@ const CHANGELOG = [
   { date: '2026-06-30', size: 'big', v: 'Real-time movement', by: 'Claude', notes: ['The dungeon is now real-time instead of turn-based. Hold the d-pad / arrows / WASD to walk freely in all 8 directions — including diagonals — and slide along walls; let go to stop.', 'You auto-attack any foe within your weapon\'s reach on a short cooldown, so positioning matters: kite slow brutes, but watch for swift foes that outrun you. Skills and potions still fire on the bar / number keys.', 'Foes now act on their own clock: they roam and wander when they haven\'t noticed you, then wake and give chase once you stray close or step into their line of sight — and break off if you lose them.', 'Status effects, regrowth, cooldowns, hazards and the town-portal channel all tick on a steady world clock rather than per step. The USE button (centre pad) grabs loot underfoot and talks to NPCs you\'re standing next to.'] },
   { date: '2026-06-30', size: 'big', v: 'Stat requirements on all gear', by: 'Claude', notes: ['The attribute requirement that gated weapons now covers EVERY gear slot — armour and jewelry too. Each base leans on the attribute its natural wearer favours, nudging every class toward gear that fits: heavy plate (a Chestplate, Greaves or Gauntlets) wants Vitality, sturdy mid armour (Cuirass, Mail, Tassets) wants Might, light leather (Cap, Tunic, Trousers) wants Agility, and cloth or caster pieces (Robe, Circlet, Gloves) want Spirit. Jewelry asks a gentler price. Meet the attribute and you can wear it, whatever your class.', 'Requirements scale with the item’s level and are gentler than weapons’ (armour is mandatory, so its gate isn’t brutal). Every item tooltip and the loot list show the requirement in green when you meet it and red when you’re short, and the LOOT tab only lets you equip pieces you actually qualify for — off-hands still also need a fitting main hand.', 'Worn gear is now protected against attribute changes: if a respec (or anything else) drops you below a piece’s requirement, that piece turns RED in the GEAR panel and is IGNORED — it lends no stats, attributes or weapon damage — until you re-invest the attribute and bring it back. No more keeping power you can no longer support.'] },
   { date: '2026-06-30', size: 'medium', v: 'Forge cost varies by base', by: 'Claude', notes: ['Crafting cost no longer depends only on rarity — the base you pick now shifts it. Bulky, heavy pieces (a Maul, a Greataxe, a Tower Shield, plate armor) drink noticeably more materials, while small, fine pieces (a Dagger, a Rapier, a wand, a ring) sip them.', 'Gold runs the other way: delicate, precise work bills more for the skilled labour, so a Dagger or a ring costs more gold than a crude Maul of the same rarity even though it needs far less metal. The Forge now shows a one-line note explaining each base’s build, and two pieces of the same rarity can have genuinely different prices.', 'The Forge’s weapon picker is now two steps: pick a category (Sword, Axe, Dagger…) then the exact type within it (Shortsword, Arming Sword, Rapier…), instead of scrolling one long list of every weapon.'] },
+  { date: '2026-06-30', size: 'small', v: 'Smooth escort movement', by: 'Claude', notes: ['The follower on escort quests — the one you lead to the stairs — now glides smoothly between tiles like every other character, instead of snapping from square to square. A wandering lost pet glides the same way. Purely a visual smoothing pass; how close the follower has to be to count as rescued or escorted is unchanged.'] },
   { date: '2026-06-30', size: 'small', v: 'Even gear slots', by: 'Claude', notes: ['Fixed the GEAR paper-doll so the bottom-row slots — hands and legs — are always the same size as the slots above them. A short item name like "Greaves" no longer collapses its slot smaller than its neighbour; both bottom tiles now match the columns above and stay centred.'] },
   { date: '2026-06-30', size: 'big', v: 'Deep difficulty rebalance', by: 'Claude', notes: ['Levelling is reshaped into a curve that starts easy and ends hard: the first levels now fly by in a couple of kills for a snappy, rewarding opening, but the cost climbs far more steeply at the top — a high level is a rare, hard-won milestone instead of a routine ding. You can no longer out-level the dungeon, so deep runs lean on gear rather than fresh levels.', 'The floor-by-floor difficulty curve was retuned to OUTPACE your levelling: a touch gentler over the opening floors, then a steeper climb that pulls progressively further ahead the deeper you dive. The gap keeps widening, so you periodically have to stop and grind or enhance your gear to break through — and that pressure grows with depth. There is still no hard wall; every floor stays beatable with enough effort.', 'All four classes were rebalanced around distinct identities so every one stays viable: the Warrior is the hardest-hitting melee (lightly armoured), the Rogue is a fragile glass striker whose crits and dodge now scale with level (so they don\'t fade on deep floors), the Mage is a glass cannon with stronger spells and thin padding, and the Templar is the true bulwark — the sturdiest hero, paying for it with no innate damage bonus.', 'Attribute tuning makes more builds viable: committing your points to Agility (dodge) or Luck (crit) now keeps you meaningfully ahead of the depth-scaling defences, so evasion and crit are real build foundations rather than just sprinkles on gear — mix stats, skills and gear to find your own meta.'] },
   { date: '2026-06-30', size: 'small', v: 'Skills cost more mana as they level', by: 'Claude', notes: ['Ranking up an active skill now raises its mana cost a little each rank, so deepening a skill is a real mana commitment rather than free power — the per-rank power climb still outpaces it, so the trade stays worth it. The rank-3 ✦ Empowered milestone keeps its "cheaper casts" perk, which trims the cost back down at that rank.', 'The skill\'s current mana cost shows everywhere it\'s cast from — the skill bar, the ⚡ button and the hero panel — and the SKILLS-tab "On rank up" tooltip now previews the next rank\'s cost (e.g. 8 → 9 MP) right beside its power gain, so you can see exactly how much it will go up before spending the point.'] },
@@ -13370,8 +13371,13 @@ function draw() {
     if (quest.npc) {
       // Lost-pet quests show the animal sprite; everyone else the quest-giver.
       const npcSprite = PET_SPRITE[quest.npc.emoji] || 'npc_quest';
-      drawMark(quest.npc.x, quest.npc.y, quest.npc.emoji, GREEN, npcSprite);
-      const dx0 = offX + quest.npc.x * tw, dy0 = offY + quest.npc.y * th;
+      // Draw at the smooth render position (fx/fy) so a follower glides between
+      // tiles; fall back to the logic cell on the very first frame before
+      // updateActorRender has seeded fx/fy.
+      const nfx = quest.npc.fx != null ? quest.npc.fx : quest.npc.x;
+      const nfy = quest.npc.fy != null ? quest.npc.fy : quest.npc.y;
+      drawMark(nfx, nfy, quest.npc.emoji, GREEN, npcSprite);
+      const dx0 = offX + nfx * tw, dy0 = offY + nfy * th;
       const following = quest.type === 'escort' && quest.npc.following;
       // A DawnLike arrow marks "follow me" (up) vs "quest here" (down).
       if (!(spriteReady && drawSpriteC(following ? 'ic_up' : 'ic_down', dx0 + tw/2, dy0 - th*0.04, Math.round(tw*0.34)))) {
@@ -20806,6 +20812,18 @@ function updateActorRender(dt) {
     if (e.fx == null) { e.fx = tx; e.fy = ty; continue; }
     if (Math.abs(tx - e.fx) > 1.5 || Math.abs(ty - e.fy) > 1.5) { e.fx = tx; e.fy = ty; }
     else { e.fx += (tx - e.fx) * k; e.fy += (ty - e.fy) * k; }
+  }
+  // The quest NPC (an escorted follower, or a wandering lost pet) steps cell-to-
+  // cell on the world tick; glide its sprite toward that logic cell the same way
+  // so it reads as fluid follow movement instead of snapping tile to tile. fx/fy
+  // track the cell in the same top-left convention as npc.x/npc.y (the draw code
+  // adds the +0.5 centre offset). This is render-only — logic positions are
+  // untouched, so completion checks and collision are unaffected.
+  if (quest && quest.npc) {
+    const n = quest.npc;
+    if (n.fx == null) { n.fx = n.x; n.fy = n.y; }
+    else if (Math.abs(n.x - n.fx) > 1.5 || Math.abs(n.y - n.fy) > 1.5) { n.fx = n.x; n.fy = n.y; }
+    else { n.fx += (n.x - n.fx) * k; n.fy += (n.y - n.fy) * k; }
   }
 }
 
