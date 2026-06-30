@@ -4125,11 +4125,100 @@ function drawLPCTerrain(ox, oy, tw, x0, y0, x1, y1) {
   lpcLayer('Lava', isLava, ox, oy, tw, cx0, cy0, cx1, cy1);
 }
 function drawFloorBase(px, py, tw, th, seed, C) {
+  if (C.indoor) { drawIndoorFloor(px, py, tw, th, seed, C); return; } // built interior — never the LPC ground
   if (lpcReady && !inTown) return; // LPC terrain pass already painted the ground
   // Procedural floor that matches the surrounding tiles (the base terrain is no
   // longer drawn from the DawnLike atlas).
   ctx.fillStyle = (Math.abs(seed) % 5 === 0) ? C.floorAlt : C.floor;
   ctx.fillRect(px, py, tw, th);
+}
+
+// ── INDOOR TERRAIN ── procedural plank / tile / stone / carpet floors and log /
+// panel / block / brick walls, themed by the active INDOOR_THEME. Drawn instead
+// of the LPC autotiler so interiors read as built rooms, not outdoor ground.
+// (seed's parity equals (x+y) parity, so it drives a seam-aligned checker.)
+function drawIndoorFloor(px, py, tw, th, seed, C) {
+  const h = Math.abs(seed), par = h & 1, style = C.floorStyle;
+  ctx.fillStyle = C.floor; ctx.fillRect(px, py, tw, th);
+  if (style === 'plank') {
+    const bh = th / 3;
+    for (let i = 0; i < 3; i++) {
+      ctx.fillStyle = (i % 2 === 0) ? C.floor : C.floorAlt;
+      ctx.fillRect(px, py + i * bh, tw, bh);
+      ctx.fillStyle = 'rgba(0,0,0,0.22)';
+      ctx.fillRect(px, py + (i + 1) * bh - Math.max(1, th * 0.04), tw, Math.max(1, th * 0.04));
+    }
+    ctx.fillStyle = 'rgba(0,0,0,0.15)'; ctx.fillRect(px + tw * (0.2 + (h % 3) * 0.25), py, Math.max(1, tw * 0.03), th);
+    ctx.fillStyle = 'rgba(255,235,200,0.05)'; ctx.fillRect(px, py, tw, Math.max(1, th * 0.05));
+  } else if (style === 'tile' || style === 'marble') {
+    const hw = tw / 2, hh = th / 2;
+    for (let r = 0; r < 2; r++) for (let c = 0; c < 2; c++) {
+      ctx.fillStyle = ((c + r + par) % 2 === 0) ? C.floor : C.floorAlt;
+      ctx.fillRect(px + c * hw, py + r * hh, hw, hh);
+    }
+    ctx.fillStyle = 'rgba(0,0,0,0.16)'; ctx.fillRect(px, py + hh - 1, tw, Math.max(1, th * 0.03)); ctx.fillRect(px + hw - 1, py, Math.max(1, tw * 0.03), th);
+    ctx.fillStyle = 'rgba(0,0,0,0.10)'; ctx.fillRect(px, py, tw, 1); ctx.fillRect(px, py, 1, th);
+    if (style === 'marble' && h % 3 === 0) { ctx.strokeStyle = 'rgba(255,255,255,0.16)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(px + tw * 0.2, py + th * 0.7); ctx.lineTo(px + tw * 0.7, py + th * 0.25); ctx.stroke(); }
+  } else if (style === 'stone' || style === 'cobble') {
+    const cw = tw / 2, ch = th / 2;
+    for (let r = 0; r < 2; r++) for (let c = 0; c < 2; c++) {
+      ctx.fillStyle = ((h >> (r * 2 + c)) % 3 === 0) ? C.floorAlt : C.floor;
+      ctx.fillRect(px + c * cw, py + r * ch, cw, ch);
+    }
+    ctx.fillStyle = C.seam; ctx.fillRect(px, py + ch - 1, tw, Math.max(1, th * 0.04)); ctx.fillRect(px + cw - 1, py, Math.max(1, tw * 0.04), th); ctx.fillRect(px, py, tw, 1); ctx.fillRect(px, py, 1, th);
+    ctx.fillStyle = C.speckle; for (let i = 0; i < (h % 3); i++) ctx.fillRect(px + ((h >> (i * 3)) % Math.max(1, Math.floor(tw))), py + ((h >> (i * 2 + 1)) % Math.max(1, Math.floor(th))), Math.max(1, tw * 0.06), Math.max(1, th * 0.06));
+  } else if (style === 'carpet') {
+    ctx.fillStyle = C.floorAlt; ctx.fillRect(px + tw * 0.1, py + th * 0.1, tw * 0.8, th * 0.8);
+    ctx.strokeStyle = 'rgba(255,225,160,0.22)'; ctx.lineWidth = Math.max(1, tw * 0.03); ctx.strokeRect(px + tw * 0.18, py + th * 0.18, tw * 0.64, th * 0.64);
+    ctx.fillStyle = 'rgba(0,0,0,0.08)'; ctx.fillRect(px, py, tw, 1); ctx.fillRect(px, py, 1, th);
+  }
+}
+function drawIndoorWall(px, py, tw, th, x, y, seed, C, cracked) {
+  const h = Math.abs(seed), topLit = !isWallTile(x, y - 1), style = C.wallStyle;
+  ctx.fillStyle = C.wall; ctx.fillRect(px, py, tw, th);
+  if (style === 'log') {
+    const bh = th / 3;
+    for (let i = 0; i < 3; i++) {
+      const g = ctx.createLinearGradient(px, py + i * bh, px, py + (i + 1) * bh);
+      g.addColorStop(0, C.wallTop); g.addColorStop(0.5, C.wall); g.addColorStop(1, C.mortar);
+      ctx.fillStyle = g; ctx.fillRect(px, py + i * bh, tw, bh);
+      ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(px, py + (i + 1) * bh - Math.max(1, th * 0.05), tw, Math.max(1, th * 0.05));
+    }
+  } else if (style === 'panel') {
+    const cw = tw / 3;
+    for (let i = 0; i < 3; i++) {
+      ctx.fillStyle = (i % 2 === 0) ? C.wall : C.brickA; ctx.fillRect(px + i * cw, py, cw, th);
+      ctx.fillStyle = 'rgba(255,235,200,0.10)'; ctx.fillRect(px + i * cw, py, Math.max(1, tw * 0.03), th);
+      ctx.fillStyle = 'rgba(0,0,0,0.28)'; ctx.fillRect(px + (i + 1) * cw - Math.max(1, tw * 0.04), py, Math.max(1, tw * 0.04), th);
+    }
+  } else if (style === 'block') {
+    const bh = th / 2;
+    for (let r = 0; r < 2; r++) {
+      ctx.fillStyle = (r % 2 === 0) ? C.brickA : C.wall; ctx.fillRect(px, py + r * bh, tw, bh);
+      ctx.fillStyle = C.mortar; ctx.fillRect(px, py + (r + 1) * bh - Math.max(1, th * 0.06), tw, Math.max(1, th * 0.06));
+      ctx.fillRect(px + ((r % 2) ? tw * 0.5 : 0), py + r * bh, Math.max(1, tw * 0.06), bh);
+    }
+    if (topLit) { ctx.fillStyle = C.wallTop; ctx.fillRect(px, py, tw, Math.max(1, th * 0.14)); }
+  } else if (style === 'brick') {
+    const bh = th / 4;
+    for (let r = 0; r < 4; r++) {
+      ctx.fillStyle = (r % 2 === 0) ? C.brickA : C.brickB; ctx.fillRect(px, py + r * bh, tw, bh);
+      ctx.fillStyle = C.mortar; ctx.fillRect(px, py + (r + 1) * bh - 1, tw, 1); ctx.fillRect(px + ((r % 2) ? tw * 0.5 : 0), py + r * bh, 1, bh);
+    }
+    if (topLit) { ctx.fillStyle = 'rgba(255,230,200,0.12)'; ctx.fillRect(px, py, tw, Math.max(1, th * 0.1)); }
+  } else { // smooth concrete / plaster
+    const g = ctx.createLinearGradient(px, py, px, py + th);
+    g.addColorStop(0, topLit ? C.wallTop : C.wall); g.addColorStop(1, C.mortar);
+    ctx.fillStyle = g; ctx.fillRect(px, py, tw, th);
+    if (h % 3 === 0) { ctx.strokeStyle = 'rgba(0,0,0,0.12)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(px + tw * 0.3, py); ctx.lineTo(px + tw * 0.42, py + th); ctx.stroke(); }
+  }
+  if (cracked) { ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = Math.max(1, tw * 0.04); ctx.beginPath(); ctx.moveTo(px + tw * 0.5, py); ctx.lineTo(px + tw * 0.4, py + th * 0.5); ctx.lineTo(px + tw * 0.6, py + th); ctx.stroke(); }
+}
+// Furniture props scattered into indoor rooms (decorative — you walk over them).
+let furnitureMap = {}; // "y,x" -> atlas sprite key
+function drawFurnitureAt(x, y, px, py, tw, th) {
+  const k = furnitureMap[y + ',' + x];
+  if (k && spriteReady) drawSpriteC(k, px + tw / 2, py + th * 0.5, Math.round(tw * 0.92));
 }
 
 // Draw an animated water/lava cell. Adjacent liquid tiles merge into one
@@ -12476,10 +12565,61 @@ const TUTORIAL_THEME = {
   brickA:'#8a7748', brickB:'#766239', mortar:'#4a3e24', crack:'#3a2e18',
   seam:'#5a4a2a', speckle:'#e6d49a', accent:'rgba(255,236,170,0.28)', stairsGlow:'#ffe9b0',
 };
+// ── INDOOR THEMES ── built interiors (wood lodges, royal halls, crypts…) that
+// occasionally replace the outdoor floor. Each pairs a procedural floor + wall
+// style (drawn by drawIndoorFloor / drawIndoorWall, never the LPC autotiler) with
+// a set of furniture sprites scattered as room dressing. `furniture` keys are all
+// DawnLike atlas decor tiles vetted to be real objects — never creatures, people,
+// books, or tiles that already mean something interactable in the game.
+const INDOOR_THEMES = [
+  { name: 'the Timber Lodge', indoor: true, floorStyle: 'plank', wallStyle: 'log',
+    floor:'#6e5030', floorAlt:'#7a5a36', wall:'#5a3f27', wallTop:'#7a5733', brickA:'#6a4a2c', brickB:'#4a3320',
+    mortar:'#34230f', seam:'#3a2814', speckle:'#8a6a40', accent:'rgba(255,210,150,0.18)', stairsGlow:'#ffd9a0',
+    furniture:['dl_decor0_7_0','dl_decor0_7_1','dl_decor0_7_2','dl_decor0_6_4','dl_decor0_10_0','dl_decor0_9_3','dl_decor0_21_0'] },
+  { name: 'the Royal Hall', indoor: true, floorStyle: 'marble', wallStyle: 'block',
+    floor:'#cdc3ad', floorAlt:'#b6ab92', wall:'#5b5b66', wallTop:'#7a7a86', brickA:'#6a6a76', brickB:'#4a4a54',
+    mortar:'#2a2a32', seam:'#3a3a44', speckle:'#d6cdb6', accent:'rgba(255,225,150,0.20)', stairsGlow:'#ffe9b0',
+    furniture:['dl_decor0_7_6','dl_decor0_15_1','dl_decor0_8_6','dl_decor0_10_1','dl_decor0_8_2','dl_decor0_7_3'] },
+  { name: 'the Stone Keep', indoor: true, floorStyle: 'stone', wallStyle: 'block',
+    floor:'#6b6660', floorAlt:'#5e5953', wall:'#4a4640', wallTop:'#6a655c', brickA:'#565249', brickB:'#3a372f',
+    mortar:'#262320', seam:'#322f29', speckle:'#857f74', accent:'rgba(220,220,235,0.14)', stairsGlow:'#e8e0c8',
+    furniture:['dl_decor0_10_2','dl_decor0_7_4','dl_decor0_7_3','dl_decor0_9_3','dl_decor0_8_4','dl_decor0_21_0'] },
+  { name: 'the Manor Bedroom', indoor: true, floorStyle: 'carpet', wallStyle: 'panel',
+    floor:'#6a2230', floorAlt:'#7a2a38', wall:'#5a4330', wallTop:'#7a5a3c', brickA:'#6a4e34', brickB:'#46331f',
+    mortar:'#2e2012', seam:'#3a2a18', speckle:'#9a4350', accent:'rgba(255,210,160,0.18)', stairsGlow:'#ffd9a0',
+    furniture:['dl_decor0_20_0','dl_decor0_10_2','dl_decor0_9_6','dl_decor0_8_1','dl_decor0_7_3','dl_decor0_7_5'] },
+  { name: 'the Tavern Kitchen', indoor: true, floorStyle: 'tile', wallStyle: 'brick',
+    floor:'#9a6b4a', floorAlt:'#86583c', wall:'#7a4434', wallTop:'#9a5a44', brickA:'#8a4e3a', brickB:'#5e3326',
+    mortar:'#3a261c', seam:'#46301f', speckle:'#b6855e', accent:'rgba(255,180,120,0.16)', stairsGlow:'#ffce9a',
+    furniture:['dl_decor0_6_6','dl_decor0_6_0','dl_decor0_6_1','dl_decor0_7_1','dl_decor0_7_0','dl_decor0_9_3'] },
+  { name: 'the Forgotten Crypt', indoor: true, floorStyle: 'stone', wallStyle: 'block',
+    floor:'#4a4a52', floorAlt:'#40404a', wall:'#2e2e36', wallTop:'#45454f', brickA:'#3a3a44', brickB:'#22222a',
+    mortar:'#161620', seam:'#22222c', speckle:'#5a5a66', accent:'rgba(150,180,255,0.16)', stairsGlow:'#cfe0ff',
+    furniture:['dl_decor0_17_0','dl_decor0_17_1','dl_decor0_17_2','dl_decor0_10_7','dl_decor0_19_0','dl_decor0_10_6'] },
+  { name: 'the Abandoned Hall', indoor: true, floorStyle: 'plank', wallStyle: 'panel',
+    floor:'#5a5044', floorAlt:'#635849', wall:'#4a4338', wallTop:'#635a48', brickA:'#564e40', brickB:'#3a342a',
+    mortar:'#262017', seam:'#322c20', speckle:'#7a7060', accent:'rgba(150,200,140,0.16)', stairsGlow:'#e0e4c0',
+    furniture:['dl_decor0_19_0','dl_decor0_19_2','dl_decor0_9_3','dl_decor0_9_2','dl_decor0_2_4','dl_decor0_2_6'] },
+  { name: 'the Marble Temple', indoor: true, floorStyle: 'marble', wallStyle: 'smooth',
+    floor:'#dcd8cc', floorAlt:'#c9c4b4', wall:'#b8b2a2', wallTop:'#e6e0d2', brickA:'#c8c2b2', brickB:'#a49e8e',
+    mortar:'#86806e', seam:'#9a9482', speckle:'#efe9da', accent:'rgba(255,240,190,0.22)', stairsGlow:'#fff2c8',
+    furniture:['dl_decor0_8_6','dl_decor0_15_3','dl_decor0_10_6','dl_decor0_8_2','dl_decor0_8_7'] },
+  { name: 'the Dungeon Cells', indoor: true, floorStyle: 'cobble', wallStyle: 'block',
+    floor:'#3e3a36', floorAlt:'#34302c', wall:'#33312e', wallTop:'#4a4742', brickA:'#3e3b37', brickB:'#22201a',
+    mortar:'#15130f', seam:'#22201b', speckle:'#56524a', accent:'rgba(255,120,90,0.14)', stairsGlow:'#ffb89a',
+    furniture:['dl_decor0_21_1','dl_decor0_21_0','dl_decor0_19_0','dl_decor0_9_3','dl_decor0_20_1'] },
+  { name: 'the Garden Atrium', indoor: true, floorStyle: 'tile', wallStyle: 'block',
+    floor:'#b8b0a0', floorAlt:'#a89f8c', wall:'#5e6e4e', wallTop:'#86a06a', brickA:'#6e7e5a', brickB:'#46523a',
+    mortar:'#2e3824', seam:'#3a462e', speckle:'#c8c0ae', accent:'rgba(150,230,140,0.20)', stairsGlow:'#dfffc8',
+    furniture:['dl_plant0_2_0','dl_plant0_3_1','dl_plant0_4_0','dl_plant0_5_0','dl_decor0_2_4','dl_decor0_2_5','dl_decor0_9_7'] },
+];
+// When a floor rolls indoor, this holds that floor's chosen indoor theme; null on
+// ordinary outdoor floors. Set in generateMap, cleared in town.
+let floorThemeOverride = null;
 // Themed by the DISPLAYED floor, so each difficulty replays the same visual
 // progression (floor 1 always looks like floor 1) — only the red wash deepens.
-// The tutorial beach overrides this with its own sandy palette.
-function currentTheme() { return tutorialActive ? TUTORIAL_THEME : THEMES[(displayFloor() - 1) % THEMES.length]; }
+// An indoor floor (floorThemeOverride) and the tutorial beach override this.
+function currentTheme() { return floorThemeOverride || (tutorialActive ? TUTORIAL_THEME : THEMES[(displayFloor() - 1) % THEMES.length]); }
 
 // Rounded-rect helper (older canvases lack ctx.roundRect).
 function roundRectPath(x, y, w, h, r) {
