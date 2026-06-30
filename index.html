@@ -12785,18 +12785,22 @@ function draw() {
     drawActorShadow(cx, py + ch*0.82, cw);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    // Status tint: green = poisoned, gold = stunned.
+    // Status tint: green = poisoned, gold = stunned, orange = burning, blue = chilled.
     const eStatus = statusByTarget.get(e) || NO_STATUS;
     const poisoned = eStatus.some(s => s.effect === 'poison');
     const stunned = eStatus.some(s => s.effect === 'stun');
     const burning = eStatus.some(s => s.effect === 'burn');
     const cursed = eStatus.some(s => s.effect === 'vuln');
+    const chilled = eStatus.some(s => s.effect === 'chill');
+    const charged = eStatus.some(s => s.effect === 'static');
     ctx.save();
     if (e.hitAt && Date.now() - e.hitAt < 110) ctx.filter = 'brightness(2.6) saturate(0.4)';   // white hit-flash
     else if (burning) ctx.filter = 'grayscale(1) sepia(1) saturate(9) hue-rotate(-30deg) brightness(1.2)';
     else if (poisoned) ctx.filter = 'grayscale(1) sepia(1) saturate(6) hue-rotate(60deg) brightness(1.05)';
     else if (cursed) ctx.filter = 'grayscale(1) sepia(1) saturate(6) hue-rotate(220deg) brightness(0.92)';
     else if (stunned) ctx.filter = 'grayscale(1) sepia(1) saturate(7) hue-rotate(-15deg) brightness(1.25)';
+    else if (chilled) ctx.filter = 'grayscale(1) sepia(1) saturate(6) hue-rotate(160deg) brightness(1.15)';
+    else if (charged) ctx.filter = 'brightness(1.35) saturate(1.5)';
     // Pop: a coloured glowing halo marks elites/bosses/affixed foes so they stand
     // out. Plain foes get no halo — a dark one read as a faint square box around
     // the sprite, so it's been removed for ordinary enemies.
@@ -13267,6 +13271,10 @@ function applyStatusEffect(target, effect, turns, source) {
 }
 
 function tickStatusEffects() {
+  // Fire mages' burns spread (see spreadBurnFrom). Collect the burning foes that
+  // should ignite their neighbours this tick, then apply after the filter — the
+  // filter rebuilds statusEffects, so pushing new burns mid-loop would be lost.
+  const burnSpreaders = [];
   statusEffects = statusEffects.filter(s => {
     if (s.target === 'player') {
       if (s.effect === 'poison') {
@@ -13290,11 +13298,13 @@ function tickStatusEffects() {
       const e = s.target;
       if (e.dead) return false;
       if (s.effect === 'burn') {
-        const dmg = 4 + Math.round(dungeonLevel * 1.5);
+        const dmg = s.spread ? burnSpreadDmg() : burnDmg();
         e.hp -= dmg;
         spawnFloatingText(e.x, e.y, `${dmg}`, '#ff8a3a');
         log(`🔥 Burning deals ${dmg} to ${e.isBoss ? e.name : e.type}!`);
         if (e.hp <= 0) { log(`${e.isBoss ? e.name : e.type} burned to ash!`, 'important'); onEnemyDefeated(e); }
+        // A directly-cast fire-mage burn ignites adjacent foes (weak, non-chaining).
+        else if (!s.spread && s.source === 'player' && player.class === 'mage') burnSpreaders.push(e);
       }
       if (s.effect === 'poison') {
         const dmg = 2 + dungeonLevel;
@@ -13313,6 +13323,103 @@ function tickStatusEffects() {
     s.turns--;
     return s.turns > 0;
   });
+  for (const e of burnSpreaders) spreadBurnFrom(e);
+}
+
+// ── ELEMENTAL SPELL AFFINITY ────────────────────────────────────────────────
+// A mage's spells leave an elemental mark that does something extra:
+//   • FIRE   — burns; a burning foe ignites its neighbours with a weak ember.
+//   • LIGHT. — builds STATIC; charged foes take bonus lightning damage, and the
+//              charge arcs to nearby foes so you can prime a whole pack.
+//   • ICE    — stacks CHILL that slows the foe; enough chill flash-freezes it.
+// Damage that piggybacks on these is kept deliberately small so they reward
+// good positioning/combos without becoming a free damage steroid.
+function burnDmg()       { return 4 + Math.round(dungeonLevel * 1.5); }
+function burnSpreadDmg() { return 1 + Math.floor(dungeonLevel / 5); } // super low, can't snowball
+
+// Tag a spell's element from its icon / name (the data is stable and avoids
+// having to annotate every spell definition). Returns 'fire' | 'ice' | 'lightning' | null.
+function spellElement(node) {
+  const s = ((node && node.icon) || '') + ' ' + ((node && node.name) || '');
+  const t = s.toLowerCase();
+  if (/fire|flame|pyro|ember|inferno|meteor|cinder|immol|burn|phoenix|magma|scorch|blaze/.test(t)) return 'fire';
+  if (/frost|cryo|\bice\b|blizzard|glaci|freeze|snow|chill|permafrost|winter|cold|shard/.test(t)) return 'ice';
+  if (/spark|light|thunder|storm|volt|tesla|\barc\b|shock|chain|conduct|static|gale|tempest/.test(t)) return 'lightning';
+  return null;
+}
+
+// Living, non-fleeing foes orthogonally/diagonally adjacent to (e).
+function enemiesAdjacent(e) {
+  return enemies.filter(o => o !== e && !o.dead && !o.isGoblin &&
+    Math.max(Math.abs(o.x - e.x), Math.abs(o.y - e.y)) === 1);
+}
+
+// Fire: ignite each adjacent foe that isn't already burning with a tiny ember.
+// Spread embers are flagged so they can't ignite further (no chain reaction).
+function spreadBurnFrom(e) {
+  if (e.dead) return;
+  for (const o of enemiesAdjacent(e)) {
+    if (statusEffects.some(s => s.target === o && s.effect === 'burn')) continue;
+    statusEffects.push({ target: o, effect: 'burn', turns: 2, source: 'player', spread: true });
+  }
+}
+
+// Lightning: read/add static charge (max 3 stacks). `spread` arcs are short-lived.
+function staticStacks(e) {
+  const s = statusEffects.find(x => x.target === e && x.effect === 'static');
+  return s ? (s.stacks || 0) : 0;
+}
+function addStatic(e, n, spread) {
+  if (e.dead || e.isGoblin) return;
+  let s = statusEffects.find(x => x.target === e && x.effect === 'static');
+  if (!s) { s = { target: e, effect: 'static', turns: 0, stacks: 0, source: 'player' }; statusEffects.push(s); }
+  s.stacks = Math.min(3, (s.stacks || 0) + n);
+  s.turns = Math.max(s.turns, spread ? 3 : 5);
+}
+
+// Ice: stack chill (slows in enemyMove); the 3rd stack flash-freezes (a brief
+// stun) and clears the chill so it has to be built back up.
+function isChilled(e) {
+  return statusEffects.some(s => s.target === e && s.effect === 'chill');
+}
+function addChill(e) {
+  if (e.dead || e.isGoblin) return;
+  let s = statusEffects.find(x => x.target === e && x.effect === 'chill');
+  if (!s) { s = { target: e, effect: 'chill', turns: 0, stacks: 0, source: 'player' }; statusEffects.push(s); }
+  s.stacks = (s.stacks || 0) + 1;
+  s.turns = Math.max(s.turns, 5);
+  if (s.stacks >= 3) {
+    s.stacks = 0;
+    applyStatusEffect(e, 'stun', 2, 'player'); // flash-freeze ≈ 0.8s rooted
+    spawnFloatingText(e.x, e.y, 'FROZEN', '#bff0ff');
+    spawnParticles(e.x, e.y, '#bff0ff', 10, 0.1);
+  }
+}
+
+// Apply a spell's element to a foe it just hit. Returns bonus damage to deal
+// (lightning's static amp); fire/ice return 0 and just leave their mark.
+function applyElementalHit(e, node, dmg) {
+  if (!e || e.dead) return 0;
+  if (player.class !== 'mage') return 0; // elemental affinity is the mage's domain
+  const el = spellElement(node);
+  if (!el) return 0;
+  if (el === 'fire') {
+    // Ensure a full, spreading burn (upgrades a foe that only carries a weak
+    // spread-ember into a proper direct burn).
+    let s = statusEffects.find(x => x.target === e && x.effect === 'burn');
+    if (s) { s.turns = Math.max(s.turns, 3); s.spread = false; s.source = 'player'; }
+    else statusEffects.push({ target: e, effect: 'burn', turns: 3, source: 'player', spread: false });
+    return 0;
+  }
+  if (el === 'lightning') {
+    const before = staticStacks(e);
+    const bonus = (before > 0 && dmg > 0) ? Math.round(dmg * Math.min(0.36, 0.12 * before)) : 0;
+    addStatic(e, 1);                                  // this hit adds a charge
+    for (const o of enemiesAdjacent(e)) addStatic(o, 1, true); // and arcs charge to the pack
+    return bonus;
+  }
+  if (el === 'ice') { addChill(e); return 0; }
+  return 0;
 }
 
 function isPlayerStunned() {
@@ -14820,6 +14927,10 @@ function resolveCast(node, rank) {
         else if (e.isBoss) dmg = Math.round(dmg * 1.4);
       }
       if (dmg > 0) { total += dmg; dealDamage(e, dmg, !!c.crit); }
+      // Elemental affinity: fire ignites, lightning charges (and amps), ice chills.
+      // The static amp deals a small bonus on top, shown as a pale-blue tick.
+      const elemBonus = applyElementalHit(e, node, dmg);
+      if (elemBonus > 0 && !e.dead) { total += elemBonus; dealDamage(e, elemBonus, false); spawnFloatingText(e.x, e.y, `+${elemBonus}`, '#bfe3ff'); }
       if (c.status && !e.dead) {
         const chance = Math.min(1, c.status.chance + 0.03 * (rank - 1));
         if (Math.random() < chance) applyStatusEffect(e, c.status.effect, c.status.dur + Math.floor((rank - 1) / 3), 'player');
@@ -15149,8 +15260,9 @@ function enemyMove(e) {
   if (e.isBoss && bossSpecial(e, dist, beh)) return;
 
   // Heavy brutes (and flagged-slow foes like the tutorial skeleton) act only
-  // every other turn — slow, but they still close in.
-  if (beh.slow || e.slow) { e.tick = (e.tick || 0) + 1; if (e.tick % 2 === 1) return; }
+  // every other turn — slow, but they still close in. A chilled foe (ice) is
+  // dragged to that same half-speed until the frost wears off.
+  if (beh.slow || e.slow || isChilled(e)) { e.tick = (e.tick || 0) + 1; if (e.tick % 2 === 1) return; }
 
   // Lurkers stay coiled until you stray close, then commit to the hunt.
   if (beh.ambush) {
