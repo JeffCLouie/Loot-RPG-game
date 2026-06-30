@@ -751,8 +751,10 @@
   .sk-pop .ru { margin-top: 5px; padding: 4px 6px; background: #1d1630; border: 1px solid #3a3056; border-radius: 6px; }
   .sk-pop .ru-h { font-size: 8px; letter-spacing: 0.5px; color: #9a8fd0; text-transform: uppercase; margin-bottom: 2px; }
   .sk-pop .ru-row { display: flex; justify-content: space-between; gap: 6px; font-size: 9.5px; line-height: 1.45; }
-  .sk-pop .ru-row .ru-k { color: #bdb2dd; }
-  .sk-pop .ru-row .ru-v { color: #cdc2e8; white-space: nowrap; }
+  .sk-pop .ru-row .ru-k { color: #bdb2dd; min-width: 0; }
+  /* Let long values (e.g. a milestone note) wrap instead of spilling past the
+     popover's border; short number ranges still fit on one line. */
+  .sk-pop .ru-row .ru-v { color: #cdc2e8; text-align: right; min-width: 0; overflow-wrap: anywhere; }
   .sk-pop .ru-row .ru-v b { color: #7ad08a; font-weight: bold; }
   .sk-pop .rq { font-size: 9px; margin-top: 3px; line-height: 1.5; }
   .sk-pop .rq.no { color: #e08a8a; }
@@ -16910,6 +16912,15 @@ function selectSkill(id) {
   selectedSkillId = (selectedSkillId === id) ? null : id;
   renderPanel();
 }
+// Clicking anywhere outside the open skill popover closes it — except on a skill
+// node, which manages its own open/close/switch. Capture phase so it runs before
+// the panel rebuilds.
+document.addEventListener('click', (e) => {
+  if (!selectedSkillId) return;
+  if (e.target.closest && (e.target.closest('.sk-pop') || e.target.closest('.sk-tnode'))) return;
+  selectedSkillId = null;
+  renderPanel();
+}, true);
 
 // Place the selected node's popover just below it, flipping above and clamping
 // horizontally so it always stays inside the tree canvas.
