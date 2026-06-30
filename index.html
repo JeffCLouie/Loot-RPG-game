@@ -7281,6 +7281,7 @@ document.addEventListener('click', (e) => {
 
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
+  { date: '2026-06-30', size: 'small', v: 'One skill card on hover', by: 'Claude', notes: ['Skill nodes no longer show a plain hover tooltip and a separate, nicer card on click — there\'s just one card now. Pointing at a skill opens its full detail card (mechanics, the rank-up preview, and the Learn / Hide buttons), and it stays open while your cursor is over the node or the card, so you can move onto it and click Learn without it vanishing.', 'On touch, nothing changes — a tap still opens the same card.'] },
   { date: '2026-06-30', size: 'medium', v: 'Agility speeds you up', by: 'Claude', notes: ['Agility now does more than dodge and hit: it also raises your Move speed and Attack speed, so a nimble build kites faster AND swings faster. Pour points (or stack +Agility gear) into it and you visibly quicken on both counts.', 'Both speeds use a soft cap that always rewards more Agility but eases off at the top, so you keep getting faster without becoming uncontrollable. The HERO sheet now lists Attack speed (with your live swings-per-second) and Move speed so you can see exactly what your Agility is buying.', 'The other four attributes were reviewed and left as-is — they already map cleanly: Might → Attack power, Vitality → HP / Defense / HP regen, Spirit → MP / MP regen / spell power, Luck → Crit & loot quality.'] },
   { date: '2026-06-30', size: 'small', v: 'Custom mouse cursor', by: 'Claude', notes: ['On mouse-and-keyboard, the pointer is now a custom in-game cursor — a small pixel blade drawn from the game\'s own art, with its tip as the click point — instead of the stock desktop arrow. It replaces the hand/finger pointer over buttons and clickable things too, so the whole game uses one cursor; text fields still show an I-beam for typing and disabled controls still show the "not allowed" cursor.'] },
   { date: '2026-06-30', size: 'medium', v: 'Click to move', by: 'Claude', notes: ['On mouse-and-keyboard, you can now click the map to walk the hero to that spot — a glowing ring marks where you\'re headed. Hold the button (and drag) to keep moving toward the cursor in real time, so you can steer just by pointing. Pressing arrows / WASD instantly takes back manual control, and clicking a foe still opens its info card rather than walking into it. Touch devices keep their floating joystick.'] },
@@ -17039,12 +17040,9 @@ function renderSkills(el) {
     const barHidden = n.type === 'active' && owned && isSkillHidden(n.id);
     const badge = barHidden ? '🚫' : maxd ? '✓' : avail ? '+' : owned ? rank : ready ? '☆' : '🔒';
     const pips = `<div class="pips">${Array.from({ length: 10 }, (_, i) => `<span class="pip${i < rank ? ' on' : ''}"></span>`).join('')}</div>`;
-    // The node already open in the popover skips its hover/touch teaser, so an
-    // open skill never shows two boxes of the same info at once.
-    const tip = selectedSkillId === n.id ? ''
-      : `data-tip="${skillTipHtml(n)}" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()"`;
     return `<button class="sk-tnode ${state}${n.keystone ? ' keystone' : ''}${n.type === 'active' ? ' act' : ''}${barHidden ? ' barhid' : ''}${selectedSkillId === n.id ? ' sel' : ''}" id="sknode-${n.id}"
-        style="left:${(p[0] * 100).toFixed(2)}%;top:${(p[1] * 100).toFixed(2)}%" onclick="selectSkill('${n.id}')" ondblclick="buySkill('${n.id}')" ${tip}>
+        style="left:${(p[0] * 100).toFixed(2)}%;top:${(p[1] * 100).toFixed(2)}%" onclick="selectSkill('${n.id}')" ondblclick="buySkill('${n.id}')"
+        onmouseenter="hoverSkill('${n.id}')" onmouseleave="scheduleSkillPopClose()">
       <span class="ic">${dlIconFill(n.icon)}</span><span class="nm">${n.name}</span><span class="badge">${badge}</span>
     </button>`;
   }).join('');
@@ -17104,7 +17102,7 @@ function renderSkills(el) {
     const hideBtn = (sn.type === 'active' && rank > 0)
       ? `<button class="pop-hide${isSkillHidden(sn.id) ? ' hidden' : ''}" onclick="toggleSkillHidden('${sn.id}')">${isSkillHidden(sn.id) ? '🚫 Hidden from bar — tap to show' : '👁 On bar — tap to hide'}</button>`
       : '';
-    pop = `<div class="sk-pop" id="sk-pop">
+    pop = `<div class="sk-pop" id="sk-pop" onmouseenter="cancelSkillPopClose()" onmouseleave="scheduleSkillPopClose()">
       <b>${dlIcon(sn.icon,18)||''} ${sn.name}</b>${rankTxt}
       <div class="ty">${typeTxt}</div>
       <div class="ds">${sn.desc}</div>
@@ -17127,26 +17125,29 @@ function renderSkills(el) {
   positionSkillPop();
 }
 
-// Read-only hover card for a skill node — the same info as the click popover,
-// minus the Learn / Hide buttons, surfaced through the shared hover-tip system so
-// you can read any skill just by pointing at it (clicking still opens the buy
-// popover). Built with single-quoted inner markup since it lives in a data-tip
-// attribute; double quotes in authored text are escaped.
-function skillTipHtml(n) {
-  const esc = s => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
-  const rank = skillRank(n.id);
-  const pips = n.type === 'active' ? milestonePips(rank) : '';
-  const typeTxt = n.type === 'active'
-    ? `⚡ Active · ${skillManaCost(n, rank)}MP · ${n.cd}s cd · ${esc(castShapeLabel(n.cast))}`
-    : 'Passive';
-  // Hover/touch tip is a brief teaser only — name, type and what it does. The
-  // full breakdown (mechanics, rank-up preview, requirements, Learn/Hide) lives
-  // in the click popover, so the two don't duplicate a wall of text.
-  let h = `<div class='ht-name'>${esc(n.name)} <span style='color:#e8c267'>${rank}/${n.max}${pips ? ' ' + pips : ''}</span></div>`;
-  h += `<div class='ht-line' style='color:#9a8fd0'>${typeTxt}</div>`;
-  h += `<div class='ht-line'>${esc(n.desc)}</div>`;
-  h += `<div class='ht-sub'>${touchUI() ? 'Tap' : 'Click'} for full details</div>`;
-  return h;
+// ── Skill popover hover control ──────────────────────────────────────────────
+// One card does the job. Hovering a skill node opens its detail popover (the rich
+// card with mechanics, the rank-up preview, and the Learn / Hide buttons), and it
+// stays open while the pointer is over the node OR the popover, so those buttons
+// stay clickable. Moving off both closes it after a short grace delay — long
+// enough to cross the small gap between the node and the popover below it.
+// Mouse-only: touch has no hover, so it keeps tapping a node to open/pin the card.
+let skillPopCloseTimer = null;
+function hoverSkill(id) {
+  if (!HOVER_MQ.matches) return;          // mouse hover only; touch taps to open
+  cancelSkillPopClose();
+  if (selectedSkillId !== id) { selectedSkillId = id; renderPanel(); }
+}
+function cancelSkillPopClose() {
+  if (skillPopCloseTimer) { clearTimeout(skillPopCloseTimer); skillPopCloseTimer = null; }
+}
+function scheduleSkillPopClose() {
+  if (!HOVER_MQ.matches) return;          // touch closes via tap / outside-click
+  cancelSkillPopClose();
+  skillPopCloseTimer = setTimeout(() => {
+    skillPopCloseTimer = null;
+    if (selectedSkillId) { selectedSkillId = null; renderPanel(); }
+  }, 160);
 }
 
 // A short human label for an active's targeting shape, shown in its popover.
@@ -17378,8 +17379,15 @@ function skillTotalSummary(node, rank) {
   return '';
 }
 
-// Toggle the detail popover for a skill node (tap the open node again to close).
+// Open the detail popover for a skill node. On a real pointer the popover is driven
+// by hover (hoverSkill), so a click just keeps it pinned to this node rather than
+// toggling it shut and fighting the hover. On touch (no hover) a tap toggles it.
 function selectSkill(id) {
+  if (HOVER_MQ.matches) {
+    cancelSkillPopClose();
+    if (selectedSkillId !== id) { selectedSkillId = id; renderPanel(); }
+    return;
+  }
   selectedSkillId = (selectedSkillId === id) ? null : id;
   renderPanel();
 }
