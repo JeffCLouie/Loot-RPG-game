@@ -32,6 +32,21 @@
     --unique:    #ff2222;
   }
 
+  /* Unified themed scrollbar. The LOOT panel's slim purple-on-dark bar is the
+     look we want everywhere; without this, menus/shops/popups fall back to the
+     OS's fat default scrollbar. Applied globally so every scrollable surface
+     (shops, town, the crafting/enchant panels, version & how-to popups, …)
+     scrolls with the same thin themed bar. Specific overrides like
+     #panel-content / #log still win on their own elements via higher
+     specificity. */
+  * {
+    scrollbar-width: thin;                       /* Firefox */
+    scrollbar-color: var(--border) var(--bg);    /* thumb, track */
+  }
+  *::-webkit-scrollbar { width: 4px; height: 4px; }
+  *::-webkit-scrollbar-track { background: var(--bg); }
+  *::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
   body {
     background:
       radial-gradient(circle at 50% -10%, #2a2148 0%, #150f26 55%, var(--bg) 100%);
