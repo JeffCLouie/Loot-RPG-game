@@ -9158,6 +9158,25 @@ function tryBuildVault(reach) {
   return false;
 }
 
+// Scatter themed furniture across an indoor floor's open tiles (decorative and
+// non-blocking — you walk over them). Avoids the player, stairs, features, loot
+// and foes, and keeps a clear ring around the entry.
+function placeFurniture(theme) {
+  const list = theme.furniture || [];
+  if (!list.length) return;
+  const target = Math.min(24, Math.max(6, Math.round(MAP_W * MAP_H / 40)));
+  let placed = 0, tries = 0;
+  while (placed < target && tries++ < target * 12) {
+    const x = rnd(1, MAP_W - 2), y = rnd(1, MAP_H - 2);
+    if (mapData[y][x] !== 0) continue;                       // plain floor only
+    if (furnitureMap[y + ',' + x] || getEnemyAt(x, y)) continue;
+    if (Math.abs(x - player.x) + Math.abs(y - player.y) < 2) continue; // not on/next to the entry
+    if (groundItems.some(g => g.x === x && g.y === y)) continue;
+    furnitureMap[y + ',' + x] = pick(list);
+    placed++;
+  }
+}
+
 function generateMap() {
   inTown = false;
   entryGuard = true; // safe on arrival until your first turn
@@ -9169,6 +9188,11 @@ function generateMap() {
   const areaRatio = mapAreaRatio();
   floorSerial++;
   player.lastStandReady = true; // a fresh Last Stand each floor
+  // ── INDOOR FLOOR? ── now and then the whole floor is a built interior (a wood
+  // lodge, royal hall, crypt…) instead of an outdoor biome; furniture is dressed
+  // in after the rooms are carved. Set BEFORE anything reads currentTheme().
+  furnitureMap = {};
+  floorThemeOverride = (!tutorialActive && Math.random() < 0.28) ? pick(INDOOR_THEMES) : null;
   rollFloorMod();
   // ~35% of floors get a subtle colour wash for atmosphere.
   floorTint = Math.random() < 0.35 ? pick(FLOOR_TINTS) : null;
@@ -9235,6 +9259,9 @@ function generateMap() {
     const count = Math.random() < 0.25 ? 2 : 1; // usually one type, sometimes two
     for (let i = 0; i < count && i < hazPool.length; i++) floorHazards.add(hazPool[i]);
   }
+  // Indoor floors are built rooms — no open water or lava pools inside (spikes,
+  // a trip-trap, still make sense). Keeps the LPC-skipping draw path liquid-free.
+  if (floorThemeOverride) { floorHazards.delete('water'); floorHazards.delete('lava'); }
 
   // ── WATER POOLS (impassable) ── inside rooms, never on a room centre or start.
   if (floorHazards.has('water')) rooms.forEach(r => {
@@ -9466,6 +9493,10 @@ function generateMap() {
   // any arrow trap that fires through them. You should never take a hit just to
   // reach something you're meant to interact with.
   clearTrapsAroundInteractables();
+
+  // ── FURNITURE ── dress an indoor floor with themed props (decorative; you walk
+  // over them). Placed last so they avoid the player, stairs, features and foes.
+  if (floorThemeOverride) placeFurniture(floorThemeOverride);
 
   // With every foe (including any quest horde) now placed, make sure none is
   // stranded behind the sealed exit — otherwise the floor could never clear.
@@ -10215,6 +10246,7 @@ function buildTown() {
   enemies = []; merchant = null; mystic = null; minions = []; combatBuffs = {};
   groundItems = []; groundFood = []; groundGold = []; graveMarker = null;
   quest = null; teleporters = {}; shrineData = {};
+  floorThemeOverride = null; furnitureMap = {}; // town is never an indoor-themed floor
   traps = []; projectiles = []; bossHazards = []; // real-time hazards never linger into town
   hasFountain = false; groundKey = null; hasKey = false;
   floorMod = FLOOR_MODS[0]; floorTint = 'rgba(120,90,40,0.10)';
