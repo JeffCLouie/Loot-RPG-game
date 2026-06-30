@@ -10719,13 +10719,15 @@ function drawTownBuildings(offX, offY, tw, th) {
       ctx.fillRect(x0 + w * 0.5 - 1, y0 + h * 0.02, 2, h * 0.2);
       const tp = 0.5 + 0.5 * Math.sin(Date.now() / 300);
       ctx.save();
-      ctx.shadowColor = '#bb66ff';
+      // Town portals are BLUE (in-level teleporters are purple), so the gate that
+      // leads home reads at a glance as the safe one.
+      ctx.shadowColor = '#3aa0ff';
       ctx.shadowBlur = 14 * (tw / TILE);
-      ctx.fillStyle = `rgba(150,90,230,${0.5 + 0.32 * tp})`;
+      ctx.fillStyle = `rgba(70,150,255,${0.5 + 0.32 * tp})`;
       ctx.beginPath();
       ctx.ellipse(x0 + w / 2, y0 + h * 0.6, w * 0.24, h * 0.34, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = `rgba(225,195,255,${0.4 + 0.4 * tp})`;
+      ctx.fillStyle = `rgba(200,228,255,${0.4 + 0.4 * tp})`;
       ctx.beginPath();
       ctx.ellipse(x0 + w / 2, y0 + h * 0.6, w * 0.1, h * 0.16, 0, 0, Math.PI * 2);
       ctx.fill();
@@ -12286,10 +12288,28 @@ function draw() {
           ctx.fill();
         }
       } else if (t === 9) {
-        // Teleporter pad — DawnLike swirling portal tile.
+        // Teleporter pad — DawnLike swirling portal tile, given a PURPLE aura so an
+        // in-level warp reads distinctly from the BLUE town portals.
         drawFloorBase(px, py, tw, th, seed, C);
-        if (!(spriteReady && drawSprite('feat_portal', px, py, tw))) {
-          const tp = 0.5 + 0.5*Math.sin(Date.now()/300 + seed);
+        const tpp = 0.5 + 0.5*Math.sin(Date.now()/300 + seed);
+        ctx.save();
+        ctx.shadowColor = '#bb66ff';
+        ctx.shadowBlur = (5 + 6*tpp) * (tw/TILE);
+        const drewTele = spriteReady && drawSprite('feat_portal', px, py, tw);
+        ctx.restore();
+        if (drewTele) {
+          // Purple ring + glow on top of the neutral sprite to cement the colour.
+          ctx.save();
+          ctx.shadowColor = '#bb66ff';
+          ctx.shadowBlur = (4 + 5*tpp) * (tw/TILE);
+          ctx.strokeStyle = `rgba(190,110,255,${0.5 + 0.4*tpp})`;
+          ctx.lineWidth = Math.max(1.2, tw*0.06);
+          ctx.beginPath();
+          ctx.arc(px+tw/2, py+th/2, tw*(0.34 + 0.04*tpp), 0, Math.PI*2);
+          ctx.stroke();
+          ctx.restore();
+        } else {
+          const tp = tpp;
           ctx.save();
           ctx.shadowColor = '#bb66ff';
           ctx.shadowBlur = (5 + 6*tp) * (tw/TILE);
@@ -12839,9 +12859,21 @@ function draw() {
     const pulse = 0.55 + 0.35 * Math.sin(Date.now() / 180);
     ctx.save();
     ctx.globalAlpha = Math.max(0, Math.min(1, pulse));
+    // Town portals are BLUE — tint the swirl with a blue glow so it matches the
+    // home gate (in-level teleporters stay purple).
+    ctx.shadowColor = '#3aa0ff';
+    ctx.shadowBlur = 12 * (tw / TILE);
     if (!(spriteReady && drawSpriteC('feat_portal', px + tw / 2, py + th / 2, tw))) {
       drawEmoji('🌀', px + tw / 2, py + th / 2, tw * 0.8);
     }
+    ctx.restore();
+    // A pulsing blue ring cements the colour over the neutral portal sprite.
+    ctx.save();
+    ctx.strokeStyle = `rgba(90,180,255,${0.35 + 0.4 * pulse})`;
+    ctx.lineWidth = Math.max(1.5, tw * 0.06);
+    ctx.beginPath();
+    ctx.arc(px + tw / 2, py + th / 2, tw * 0.4, 0, Math.PI * 2);
+    ctx.stroke();
     ctx.restore();
     ctx.save();
     ctx.font = `bold ${Math.round(tw * 0.34)}px sans-serif`;
