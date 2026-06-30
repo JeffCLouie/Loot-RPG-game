@@ -1206,6 +1206,28 @@
   #hovertip .ht-name { font-weight: bold; font-size: 12px; margin-bottom: 4px; color: #e6c34a; }
   #hovertip .ht-line { color: #8899bb; }
   #hovertip .ht-sub  { color: #7a8499; font-size: 10px; margin-top: 3px; }
+
+  /* Tap-to-inspect enemy codex card. Like the hovertip but clickable (tapping it
+     closes it) and laid out as a tidy stat grid. */
+  #enemy-card {
+    position: fixed; display: none;
+    background: #0e0e1a; border: 1px solid #5a4a2a; border-radius: 7px;
+    padding: 7px 9px 8px; font-size: 11px; min-width: 150px; max-width: 220px;
+    z-index: 430; cursor: pointer; line-height: 1.5;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.6);
+    -webkit-tap-highlight-color: transparent;
+  }
+  #enemy-card .ec-head { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
+  #enemy-card .ec-name { font-weight: bold; font-size: 12px; color: #e6c34a; line-height: 1.2; }
+  #enemy-card .ec-sub  { font-size: 9px; color: #9a8a6a; letter-spacing: 0.5px; }
+  #enemy-card .ec-grid { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; }
+  #enemy-card .ec-k { color: #7f8aa8; }
+  #enemy-card .ec-v { color: #d8dcea; text-align: right; font-variant-numeric: tabular-nums; }
+  #enemy-card .ec-v.hidden { color: #6a6a7a; letter-spacing: 1px; }
+  #enemy-card .ec-foot { margin-top: 6px; padding-top: 5px; border-top: 1px solid #2a2a3a;
+    font-size: 9px; color: #8a7d63; display: flex; align-items: center; gap: 5px; }
+  #enemy-card .ec-bar { flex: 1; height: 4px; border-radius: 2px; background: #26222e; overflow: hidden; }
+  #enemy-card .ec-bar > i { display: block; height: 100%; background: linear-gradient(90deg,#b07d40,#e8c267); }
   /* Wraps a (possibly disabled) reroll button so the hover popup still fires —
      disabled buttons swallow mouse events on their own. */
   .ench-tipwrap { display: inline-flex; flex-shrink: 0; }
@@ -2815,6 +2837,7 @@
 
 <div id="tooltip"></div>
 <div id="hovertip"></div>
+<div id="enemy-card" onclick="closeEnemyCard()"></div>
 
 <!-- Shown only on a touch device held in landscape — the game is portrait-only. -->
 <div id="rotate-overlay">
@@ -5968,6 +5991,10 @@ let player = { x: 5, y: 5, facing: 'left', hp: 100, maxHp: 100, mp: 60, maxMp: 6
   // Comeback relief anchor: the floor you revived toward after a death. While you
   // climb the few floors above it, foes go easier (see spawnEnemies); null = none.
   reliefFloor: null,
+  // Bestiary: how many of each enemy type (keyed by its sprite glyph) you've
+  // slain. Drives the tap-to-inspect codex card — stats stay ??? until you've
+  // killed enough to learn them (fully revealed at 10; bosses are exempt).
+  bestiary: {},
   // Skill tree — 1 skill point earned per level (separate from attribute points),
   // spent on the class's passive/active/path nodes. `skills` maps node id → rank;
   // `skillCds` holds each active skill's independent cooldown.
@@ -7240,6 +7267,16 @@ canvas.addEventListener('pointerup', e => {
   const dx = e.clientX - gestureStart.x;
   const dy = e.clientY - gestureStart.y;
   gestureStart = null;
+  const adx = Math.abs(dx), ady = Math.abs(dy);
+  const isTap = adx <= SWIPE_PX && ady <= SWIPE_PX;
+
+  // A tap on a foe opens (or toggles) its inspect card; this works in BOTH the
+  // touch and web layouts. A tap on empty ground dismisses any open card.
+  if (isTap) {
+    const foe = enemyAtClient(e.clientX, e.clientY);
+    if (foe) { toggleEnemyCard(foe, e.clientX, e.clientY); return; }
+    if (enemyCardFor) { closeEnemyCard(); return; }
+  }
 
   if (isWebLayout()) return;
 
@@ -7248,11 +7285,117 @@ canvas.addEventListener('pointerup', e => {
 
   // Swipe → one step along the dominant axis. A plain tap does nothing (use the
   // pad), so accidental taps never send the hero wandering off.
-  const adx = Math.abs(dx), ady = Math.abs(dy);
   if (adx > SWIPE_PX || ady > SWIPE_PX) {
     if (adx > ady) move(Math.sign(dx), 0); else move(0, Math.sign(dy));
   }
 });
+
+// ── TAP-TO-INSPECT: enemy codex card ──
+// Tapping a foe shows a concise stat card. Its numbers stay hidden as ??? until
+// you've killed enough of that species to "learn" them — each kill rolls toward
+// revealing more, with the full card unlocked at 10 kills. Bosses are an open
+// book on sight. Tapping the card, the same foe, or empty space closes it.
+let enemyCardFor = null;
+const BESTIARY_FULL = 10; // kills to fully reveal a species
+const ENEMY_STYLE_LABEL = {
+  chaser: 'Hunter', swift: 'Swift', erratic: 'Erratic', lurker: 'Ambusher',
+  brute: 'Brute', caster: 'Caster', pack: 'Pack hunter',
+};
+function bestiaryKey(e) { return (e.type || e.name || '?').replace(/️/g, ''); }
+function bestiaryKills(e) { return (player.bestiary && player.bestiary[bestiaryKey(e)]) || 0; }
+// Tiny stable string hash, so each species reveals its stats in a fixed (but
+// per-species "random") order rather than flickering each time you peek.
+function hashStr(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+// Is one stat field known yet? Each field has a per-species threshold in 1..10;
+// reach it (or 10 total kills, or it's a boss) and the number shows.
+function statKnown(e, field, kills) {
+  if (e.isBoss) return true;
+  if (kills >= BESTIARY_FULL) return true;
+  const threshold = 1 + (hashStr(bestiaryKey(e) + '|' + field) % BESTIARY_FULL);
+  return kills >= threshold;
+}
+// Map a screen point to the map tile under it, using the last camera transform.
+function clientToTile(cx, cy) {
+  if (!lastCam) return null;
+  const r = canvas.getBoundingClientRect();
+  if (!r.width || !r.height) return null;
+  const sx = (cx - r.left) * (canvas.width / r.width);
+  const sy = (cy - r.top) * (canvas.height / r.height);
+  return { mx: Math.floor((sx + lastCam.camX) / lastCam.tw), my: Math.floor((sy + lastCam.camY) / lastCam.th) };
+}
+function enemyAtClient(cx, cy) {
+  const t = clientToTile(cx, cy);
+  if (!t) return null;
+  return enemies.find(en => {
+    if (en.dead || en.minion) return false;
+    const s = en.size || 1;
+    return t.mx >= en.x && t.mx < en.x + s && t.my >= en.y && t.my < en.y + s;
+  }) || null;
+}
+function toggleEnemyCard(e, cx, cy) {
+  if (enemyCardFor === e) { closeEnemyCard(); return; }
+  enemyCardFor = e;
+  renderEnemyCard(e, cx, cy);
+}
+function closeEnemyCard() {
+  enemyCardFor = null;
+  const el = document.getElementById('enemy-card');
+  if (el) el.style.display = 'none';
+}
+function renderEnemyCard(e, cx, cy) {
+  const el = document.getElementById('enemy-card');
+  if (!el) return;
+  const kills = bestiaryKills(e);
+  const spr = enemySprite(e);
+  const icon = (spr && dlIcon(spr, 22)) || `<span style="font-size:20px">${e.type || '❓'}</span>`;
+  const name = e.isBoss ? (e.name || 'Boss') : (e.name || 'Unknown foe');
+  const sub = e.isBoss ? 'BOSS' : (e.isElite ? 'ELITE' : 'CREATURE');
+  // The stat rows, each gated by its own learn-threshold.
+  const styleLbl = ENEMY_STYLE_LABEL[e.behavior] || 'Hunter';
+  const rangedLbl = (BEHAVIORS[e.behavior] && BEHAVIORS[e.behavior].ranged) ? 'Ranged' : 'Melee';
+  const fields = [
+    ['lvl',   'Level',  e.level || '—'],
+    ['hp',    'Health', e.maxHp],
+    ['dmg',   'Damage', e.dmg],
+    ['style', 'Style',  styleLbl],
+    ['reach', 'Attack', rangedLbl],
+  ];
+  const rows = fields.map(([k, label, val]) => {
+    const known = statKnown(e, k, kills);
+    return `<span class="ec-k">${label}</span><span class="ec-v${known ? '' : ' hidden'}">${known ? val : '???'}</span>`;
+  }).join('');
+  // Footer: discovery progress (bosses skip the gating entirely).
+  let foot;
+  if (e.isBoss) {
+    foot = `<div class="ec-foot">Boss — fully known</div>`;
+  } else {
+    const cap = Math.min(kills, BESTIARY_FULL);
+    const pct = Math.round(cap / BESTIARY_FULL * 100);
+    foot = `<div class="ec-foot">Slain ${cap}/${BESTIARY_FULL}<span class="ec-bar"><i style="width:${pct}%"></i></span></div>`;
+  }
+  el.innerHTML =
+    `<div class="ec-head">${icon}<div><div class="ec-name">${name}</div><div class="ec-sub">${sub}</div></div></div>` +
+    `<div class="ec-grid">${rows}</div>${foot}`;
+  // Anchor near the tap, flipping/clamping to stay on-screen.
+  el.style.display = 'block';
+  const r = el.getBoundingClientRect();
+  const gap = 12;
+  let left = cx - r.width / 2;
+  let top = cy - r.height - gap;
+  if (top < gap) top = cy + gap;
+  left = Math.max(gap, Math.min(left, window.innerWidth - r.width - gap));
+  top = Math.max(gap, Math.min(top, window.innerHeight - r.height - gap));
+  el.style.left = left + 'px';
+  el.style.top = top + 'px';
+}
+// Any tap/click outside the canvas and the card itself dismisses it.
+document.addEventListener('pointerdown', ev => {
+  if (!enemyCardFor) return;
+  const card = document.getElementById('enemy-card');
+  if (card && card.contains(ev.target)) return; // the card's own onclick closes it
+  if (ev.target === canvas) return;             // the canvas handler decides
+  closeEnemyCard();
+}, true);
 
 // Keep the floating movement pad pinned to the bottom-centre of the map. A
 // ResizeObserver re-runs it whenever the canvas changes size (rotation, the
@@ -13314,6 +13457,12 @@ function onEnemyDefeated(e) {
   // summoner boss can't be farmed by killing the fodder it spawns endlessly.
   if (e.minion) { sfx('kill'); updateFloorClear(); return; }
   fireSkillTrigger('kill', { enemy: e }); // on-kill procs: charges, heals, frenzy…
+  // Bestiary: chalk up this species so the inspect card reveals more of its stats.
+  if (!e.isGoblin) {
+    if (!player.bestiary) player.bestiary = {};
+    const bk = bestiaryKey(e);
+    player.bestiary[bk] = (player.bestiary[bk] || 0) + 1;
+  }
   const label = enemyLabel(e);
   const xpMult = e.isBoss ? 5 : (e.isElite ? 2 : 1);
   const goldMult = e.isBoss ? 3 : (e.isElite ? 2 : 1);
