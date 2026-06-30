@@ -342,8 +342,6 @@
   .death-sub b { color: #ffd24b; }
   #death-penalties { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
   .death-pen { font-size: 12px; color: #f0d8da; }
-  .death-howto { font-size: 12px; color: #ffe2b0; background: rgba(255,180,70,0.1); border: 1px solid rgba(255,180,70,0.35); border-radius: 7px; padding: 8px 10px; line-height: 1.45; margin-bottom: 16px; }
-  .death-howto b { color: #ffd24b; }
   .death-btn { background: #b3303a; border: 1px solid #ff6472; color: #fff; font-family: 'Courier New', monospace; font-size: 13px; letter-spacing: 1px; padding: 9px 22px; border-radius: 8px; cursor: pointer; }
   .death-btn:active { background: #ff4452; }
 
@@ -2696,7 +2694,6 @@
       <div class="death-title">💀 YOU DIED</div>
       <div class="death-sub">You fell in the dungeon and woke up back in <b>Town</b>.</div>
       <div id="death-penalties"></div>
-      <div class="death-howto">To keep questing, leave town through the <b>🌀 Dungeon Gate</b> (or the ✕ in the corner).</div>
       <button class="death-btn" onclick="closeDeath()">Wake up in Town →</button>
     </div>
   </div>
@@ -15585,14 +15582,9 @@ function showDeathScreen(lostGold, lostXp, returnFloor, lostBag, graveFloor, rel
   const el = document.getElementById('death-penalties');
   if (el) {
     const lines = [
-      `💰 Lost ${lostGold} gold (the healer's fee)`,
-      lostXp ? `✦ Lost ${lostXp} XP` : null,
-      `🛡️ Kept all your equipped gear`,
-      (lostBag && graveFloor) ? `🪦 Your bag (${lostBag} item${lostBag === 1 ? '' : 's'}) lies on ${floorLabel(graveFloor)} — go reclaim it` : null,
-      `❤️ Revived at half health & mana`,
-      `⬇️ Re-enter at ${floorLabel(returnFloor)}`,
-      relocked ? `🔒 Deeper floors are locked at the Gate — fight back down to re-open them` : null,
-      `💡 Stuck? Bank gear at the Vault, cook a bowl, strike a pact, or forge gear before diving back.`,
+      `💰 Lost ${lostGold}g${lostXp ? ` & ${lostXp} XP` : ''} — gear kept`,
+      (lostBag && graveFloor) ? `🪦 Bag (${lostBag} item${lostBag === 1 ? '' : 's'}) dropped on ${floorLabel(graveFloor)} — go reclaim it` : null,
+      `⬇️ Re-enter at ${floorLabel(returnFloor)}${relocked ? ' · deeper floors relock' : ''}`,
     ].filter(Boolean);
     el.innerHTML = lines.map(t => `<div class="death-pen">${t}</div>`).join('');
   }
