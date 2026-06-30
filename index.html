@@ -21006,6 +21006,18 @@ function stepWorldClock(dt) {
   if (_worldAcc > WORLD_TICK_MS) _worldAcc = WORLD_TICK_MS;
 }
 
+// Run one frame step in isolation. A thrown error in any subsystem (movement,
+// combat, the world clock, draw…) must NOT cascade and freeze the whole game —
+// otherwise a single bad frame becomes a permanent hang where movement, enemy
+// AI, cooldowns and the canvas all stop (which reads as "spells stuck on
+// cooldown"). Each step is guarded; the first error of each kind is logged once
+// so the real culprit is diagnosable without spamming the console.
+const _loopErr = {};
+function safeStep(name, fn) {
+  try { fn(); }
+  catch (e) { if (!_loopErr[name]) { _loopErr[name] = 1; console.error('[gameLoop] ' + name + ' failed:', e); } }
+}
+
 let _lastTs = null;
 function gameLoop(ts) {
   requestAnimationFrame(gameLoop);
@@ -21014,17 +21026,17 @@ function gameLoop(ts) {
   _lastTs = ts;
   if (dt > 0.1) dt = 0.1;          // clamp after a stall so nothing teleports
   if (!rtPaused()) {
-    updatePlayer(dt);              // free 8-dir movement may trigger stairs/town/death…
-    if (!rtPaused()) updatePlayerCombat(dt);
-    if (!rtPaused()) tickCooldowns(dt);   // skill / potion cooldowns burn down in seconds
-    if (!rtPaused()) stepWorldClock(dt);
-    if (!rtPaused()) { updateTraps(dt); updateProjectiles(dt); }
+    safeStep('move', () => updatePlayer(dt));              // 8-dir movement may trigger stairs/town/death…
+    if (!rtPaused()) safeStep('combat', () => updatePlayerCombat(dt));
+    if (!rtPaused()) safeStep('cooldowns', () => tickCooldowns(dt));  // skill/potion cooldowns burn in seconds
+    if (!rtPaused()) safeStep('world', () => stepWorldClock(dt));
+    if (!rtPaused()) safeStep('hazards', () => { updateTraps(dt); updateProjectiles(dt); });
   }
-  updateActorRender(dt);
-  renderStaminaBar();              // stamina drains/refills continuously — keep the END bar live
-  updateCooldownDials();           // animate the skill/potion cooldown dials in real time
-  updateHaloVignette();            // the danger halo is a DOM overlay — pulse it every frame
-  draw();
+  safeStep('actorRender', () => updateActorRender(dt));
+  safeStep('stamina', () => renderStaminaBar());   // stamina drains/refills continuously — keep the END bar live
+  safeStep('cdDials', () => updateCooldownDials()); // animate the skill/potion cooldown dials in real time
+  safeStep('halo', () => updateHaloVignette());     // the danger halo is a DOM overlay — pulse it every frame
+  safeStep('draw', () => draw());
 }
 requestAnimationFrame(gameLoop);
 </script>
