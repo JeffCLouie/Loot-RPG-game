@@ -8021,8 +8021,10 @@ function placeTraps(reach) {
   traps = [];
   if (tutorialActive || inTown) return;
   const DIRS = [[1,0],[-1,0],[0,1],[0,-1]];
-  // Arrow traps — back to a wall, clear lane ahead.
-  let arrows = Math.min(4, 1 + Math.floor(dungeonLevel / 3)), tries = 0;
+  // Arrow traps — back to a wall, clear lane ahead. Only on some floors (used to
+  // be at least one on every floor, which got repetitive), and they ramp up
+  // slowly with depth.
+  let arrows = Math.random() < 0.4 ? Math.min(3, 1 + Math.floor(dungeonLevel / 6)) : 0, tries = 0;
   while (arrows > 0 && tries++ < 300) {
     const c = randomFloorTile(reach);
     if (!c || (Math.abs(c.x - player.x) + Math.abs(c.y - player.y)) < 6) continue;
@@ -8226,8 +8228,22 @@ function generateMap() {
     if (yy > 0 && xx > 0 && yy < MAP_H-1 && xx < MAP_W-1) mapData[yy][xx] = 0;
   }
 
+  // ── PER-FLOOR HAZARD THEME ── decide WHICH terrain hazards this floor gets
+  // before placing any. Floors used to roll water, lava and spikes independently
+  // (at high odds), so nearly every floor had all three — repetitive. Now a chunk
+  // of floors are clean, and the rest usually get just one hazard type
+  // (occasionally two), never all three at once.
+  const hazPool = ['water', 'spikes'];
+  if (dungeonLevel >= 2) hazPool.push('lava'); // lava only from floor 2 on
+  const floorHazards = new Set();
+  if (Math.random() < 0.65) {            // ~35% of floors stay free of terrain hazards
+    for (let i = hazPool.length - 1; i > 0; i--) { const j = rnd(0, i); [hazPool[i], hazPool[j]] = [hazPool[j], hazPool[i]]; }
+    const count = Math.random() < 0.25 ? 2 : 1; // usually one type, sometimes two
+    for (let i = 0; i < count && i < hazPool.length; i++) floorHazards.add(hazPool[i]);
+  }
+
   // ── WATER POOLS (impassable) ── inside rooms, never on a room centre or start.
-  rooms.forEach(r => {
+  if (floorHazards.has('water')) rooms.forEach(r => {
     if (r.w >= 4 && r.h >= 4 && Math.random() < 0.4) {
       const wx = r.x + rnd(1, r.w-2), wy = r.y + rnd(1, r.h-2);
       const pw = rnd(1, 3), ph = rnd(1, 2);
@@ -8282,7 +8298,7 @@ function generateMap() {
   // rather than scattered single tiles. Lava and water must never touch (it
   // reads as wrong and the shores would clash), so any cluster tile that sits
   // next to water — orthogonally or diagonally — is left as plain floor.
-  if (dungeonLevel >= 2 && Math.random() < 0.4) {
+  if (floorHazards.has('lava')) {
     const nearWater = (x, y) => {
       for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
         const nx = x + dx, ny = y + dy;
@@ -8300,7 +8316,7 @@ function generateMap() {
     }
   }
   // ── SPIKE TRAPS (passable, stabs) ──
-  if (Math.random() < 0.6) {
+  if (floorHazards.has('spikes')) {
     const n = Math.max(2, Math.round(rnd(2, 5) * areaRatio)); // more on bigger floors so they aren't trap-sparse
     for (let i = 0; i < n; i++) { const c = randomFloorTile(reach); if (c) mapData[c.y][c.x] = 8; }
   }
