@@ -2555,6 +2555,11 @@
       <div class="bar-track"><div class="bar-fill mp-fill" id="mp-bar" style="width:100%"></div></div>
       <span id="mp-text" style="font-size:10px">60/60</span>
     </div>
+    <div class="stat-bar" data-tip="<div class='ht-name' style='color:#ffcf52'>⚡ Endurance</div><div class='ht-line'>Fuels Sprinting (hold Shift) and Dashing (Space). Drains as you exert and refills after a short pause.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
+      <span style="color:#ffcf52;font-size:11px;font-weight:bold;text-shadow:0 0 5px #ffcf52">END</span>
+      <div class="bar-track"><div class="bar-fill" id="stam-bar" style="width:100%;background:#ffcf52"></div></div>
+      <span id="stam-text" style="font-size:10px">100/100</span>
+    </div>
   </div>
   <div class="hud-item" id="floor-hud" data-tip="<div class='ht-name'>🗺️ Dungeon Depth</div><div class='ht-line'>The floor you're on, and the difficulty tier. Each floor down is tougher — but the loot gets richer too. Conquer floor 25 to unlock the next, deadlier difficulty.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">🗺️ <span class="hud-val" id="floor-num">1</span><span class="floor-diff" id="floor-diff"></span></div>
   <div class="hud-item" id="level-hud" data-tip="<div class='ht-name'>⭐ Hero Level</div><div class='ht-line'>Fill the XP bar by slaying foes to level up. Each level boosts your stats and grants an attribute point.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">Lv <span class="hud-val" id="level-num">1</span>
@@ -6162,7 +6167,7 @@ let player = { x: 5, y: 5,
 // when not engaged. Grid cells (player.x/y, e.x/y) are still the authoritative
 // LOGIC positions for collision, pathfinding, line-of-sight and targeting — the
 // float fx/fy positions only smooth out rendering and free movement.
-const WORLD_TICK_MS = 320;     // one "turn" of upkeep: DoT, regen, cooldowns, enemy actions, hazards
+const WORLD_TICK_MS = 400;     // one "turn" of upkeep: DoT, regen, cooldowns, enemy actions, hazards (also paces enemy movement)
 const PLAYER_SPEED  = 3.3;     // hero movement, tiles per second
 const PLAYER_R      = 0.34;    // hero collision half-size (tiles)
 const ENEMY_AGGRO   = 7;       // foes wake and give chase within this many tiles (+ line of sight)
@@ -6176,7 +6181,6 @@ const GROUND_FRICTION = 24;    // how fast you stop on solid ground (snappy)
 const ICE_ACCEL     = 4.5;     // sluggish control on ice…
 const ICE_FRICTION  = 0.9;     // …and you keep gliding (low friction = slide)
 const MUD_SPEED     = 0.55;    // mud / shallow water drag you to ~half speed
-const MOVE_CHOP     = 6;       // render quantisation — motion steps in 1/6-tile increments (choppy, not floaty)
 // Stamina powers sprinting and dashing; it drains while sprinting and refills
 // after a short pause.
 const MAX_STAMINA   = 100;
@@ -6207,9 +6211,6 @@ function setPlayerCell(x, y) {
   player.fx = x + 0.5; player.fy = y + 0.5;
   player.vx = 0; player.vy = 0;   // a warp/blink kills momentum (no sliding out of a teleport)
 }
-// Render quantiser — snaps a smooth tile position to 1/MOVE_CHOP steps so motion
-// reads stepped rather than buttery. Logic still uses the true float positions.
-function chop(v) { return Math.round(v * MOVE_CHOP) / MOVE_CHOP; }
 // Tile under a point (1 = wall for out-of-bounds, so callers treat the void as solid).
 function tileAtCell(x, y) { return (x >= 0 && y >= 0 && x < MAP_W && y < MAP_H) ? mapData[y][x] : 1; }
 // A movement status — slow/snare (target 'player' or an enemy object).
@@ -7155,7 +7156,8 @@ document.addEventListener('click', (e) => {
 
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
-  { date: '2026-06-30', size: 'big', v: 'Movement, speed & traps', by: 'Claude', notes: ['Movement got physical: you carry momentum, slide across patches of ice, and slog through mud and shallow muck that drag your speed. The picture also steps in crisp pixel increments rather than gliding, for a sharper retro feel.', 'Sprint by holding Shift (or pushing the mobile stick to its edge) to outrun a pack — it burns a stamina bar that refills after a breather. Tap Space to Dash: a quick stamina-fuelled burst that\'s great for dodging or closing in. Blink-type class skills still work for instant repositioning.', 'Attack speed is now a real thing. You swing about once every 1.5s — faster with light weapons (daggers) and the new Attack Speed % gear stat, slower with heavy ones (mauls, axes). Foes attack on their own per-type rhythm too, so a swift biter and a lumbering brute no longer strike in lockstep.', 'New crowd control: chilling foes can snare you, ice underfoot makes you slide, and a slow drags your top speed — positioning matters more than ever.', 'Hazards you can dodge: arrow traps loose bolts down a lane (step out of the line), and fire vents flare on and off (don\'t linger when they light). No foes spawn on top of the entry stairs anymore, and the opening tutorial foe waits for you to approach.', 'Mobile controls are now a floating analog joystick — press anywhere to steer in any direction, push to the edge to sprint, tap to use.'] },
+  { date: '2026-06-30', size: 'medium', v: 'Real-time movement tuning', by: 'Claude', notes: ['Foes move a little slower now, so you can actually create distance and kite. You also slip past enemies instead of getting stuck against them — positioning and retreating finally feel fluid (your auto-attack still hits anything in reach).', 'Movement is smooth again (the stepped/pixel-quantised look is gone).', 'Endurance is now shown as its own ⚡ END bar up in the HUD next to HP/MP, so you can watch sprint/dash fuel at a glance. Fixed a bug where, on existing save files, Endurance loaded empty — which silently disabled Sprint and let Dash fire for free; sprinting (hold Shift) works properly now.', 'Tidied up so leftover traps and bolts can no longer flicker on the town screen.'] },
+  { date: '2026-06-30', size: 'big', v: 'Movement, speed & traps', by: 'Claude', notes: ['Movement got physical: you carry momentum, slide across patches of ice, and slog through mud and shallow muck that drag your speed.', 'Sprint by holding Shift (or pushing the mobile stick to its edge) to outrun a pack — it burns a stamina bar that refills after a breather. Tap Space to Dash: a quick stamina-fuelled burst that\'s great for dodging or closing in. Blink-type class skills still work for instant repositioning.', 'Attack speed is now a real thing. You swing about once every 1.5s — faster with light weapons (daggers) and the new Attack Speed % gear stat, slower with heavy ones (mauls, axes). Foes attack on their own per-type rhythm too, so a swift biter and a lumbering brute no longer strike in lockstep.', 'New crowd control: chilling foes can snare you, ice underfoot makes you slide, and a slow drags your top speed — positioning matters more than ever.', 'Hazards you can dodge: arrow traps loose bolts down a lane (step out of the line), and fire vents flare on and off (don\'t linger when they light). No foes spawn on top of the entry stairs anymore, and the opening tutorial foe waits for you to approach.', 'Mobile controls are now a floating analog joystick — press anywhere to steer in any direction, push to the edge to sprint, tap to use.'] },
   { date: '2026-06-30', size: 'big', v: 'Real-time movement', by: 'Claude', notes: ['The dungeon is now real-time instead of turn-based. Hold the d-pad / arrows / WASD to walk freely in all 8 directions — including diagonals — and slide along walls; let go to stop.', 'You auto-attack any foe within your weapon\'s reach on a short cooldown, so positioning matters: kite slow brutes, but watch for swift foes that outrun you. Skills and potions still fire on the bar / number keys.', 'Foes now act on their own clock: they roam and wander when they haven\'t noticed you, then wake and give chase once you stray close or step into their line of sight — and break off if you lose them.', 'Status effects, regrowth, cooldowns, hazards and the town-portal channel all tick on a steady world clock rather than per step. The USE button (centre pad) grabs loot underfoot and talks to NPCs you\'re standing next to.'] },
   { date: '2026-06-30', size: 'big', v: 'Stat requirements on all gear', by: 'Claude', notes: ['The attribute requirement that gated weapons now covers EVERY gear slot — armour and jewelry too. Each base leans on the attribute its natural wearer favours, nudging every class toward gear that fits: heavy plate (a Chestplate, Greaves or Gauntlets) wants Vitality, sturdy mid armour (Cuirass, Mail, Tassets) wants Might, light leather (Cap, Tunic, Trousers) wants Agility, and cloth or caster pieces (Robe, Circlet, Gloves) want Spirit. Jewelry asks a gentler price. Meet the attribute and you can wear it, whatever your class.', 'Requirements scale with the item’s level and are gentler than weapons’ (armour is mandatory, so its gate isn’t brutal). Every item tooltip and the loot list show the requirement in green when you meet it and red when you’re short, and the LOOT tab only lets you equip pieces you actually qualify for — off-hands still also need a fitting main hand.', 'Worn gear is now protected against attribute changes: if a respec (or anything else) drops you below a piece’s requirement, that piece turns RED in the GEAR panel and is IGNORED — it lends no stats, attributes or weapon damage — until you re-invest the attribute and bring it back. No more keeping power you can no longer support.'] },
   { date: '2026-06-30', size: 'medium', v: 'Forge cost varies by base', by: 'Claude', notes: ['Crafting cost no longer depends only on rarity — the base you pick now shifts it. Bulky, heavy pieces (a Maul, a Greataxe, a Tower Shield, plate armor) drink noticeably more materials, while small, fine pieces (a Dagger, a Rapier, a wand, a ring) sip them.', 'Gold runs the other way: delicate, precise work bills more for the skilled labour, so a Dagger or a ring costs more gold than a crude Maul of the same rarity even though it needs far less metal. The Forge now shows a one-line note explaining each base’s build, and two pieces of the same rarity can have genuinely different prices.', 'The Forge’s weapon picker is now two steps: pick a category (Sword, Axe, Dagger…) then the exact type within it (Shortsword, Arming Sword, Rapier…), instead of scrolling one long list of every weapon.'] },
@@ -9170,6 +9172,7 @@ function buildTown() {
   enemies = []; merchant = null; mystic = null; minions = []; combatBuffs = {};
   groundItems = []; groundFood = []; groundGold = []; graveMarker = null;
   quest = null; teleporters = {}; shrineData = {};
+  traps = []; projectiles = []; bossHazards = []; // real-time hazards never linger into town
   hasFountain = false; groundKey = null; hasKey = false;
   floorMod = FLOOR_MODS[0]; floorTint = 'rgba(120,90,40,0.10)';
   statusEffects = statusEffects.filter(s => s.target === 'player');
@@ -12043,10 +12046,8 @@ function draw() {
   const th = tw;
 
   // Center the camera on the player, then clamp so we never scroll past edges.
-  // Camera follows the hero's quantised position so the world steps rather than
-  // glides — a deliberately choppy, pixel-art feel (chop() = 1/MOVE_CHOP steps).
-  let camX = chop(player.fx) * tw - W/2;
-  let camY = chop(player.fy) * th - H/2;
+  let camX = player.fx * tw - W/2;
+  let camY = player.fy * th - H/2;
   const maxCamX = MAP_W * tw - W;
   const maxCamY = MAP_H * th - H;
   // If the map is smaller than the viewport on an axis, center it instead.
@@ -12550,7 +12551,7 @@ function draw() {
     if (e.x + S <= x0 - 1 || e.x >= x1 + 1 || e.y + S <= y0 - 1 || e.y >= y1 + 1) return;
     // Smooth render position: e.fx/fy is the footprint CENTRE (lazy-init in
     // updateActorRender), so the top-left of the footprint is (fx - S/2, fy - S/2).
-    const efx = chop(e.fx == null ? e.x + S/2 : e.fx), efy = chop(e.fy == null ? e.y + S/2 : e.fy);
+    const efx = (e.fx == null ? e.x + S/2 : e.fx), efy = (e.fy == null ? e.y + S/2 : e.fy);
     const px = offX + (efx - S/2) * tw, py = offY + (efy - S/2) * th;
     const cw = S * tw, ch = S * th;        // full footprint in pixels
     const cx = px + cw/2;                   // footprint centre
@@ -12815,8 +12816,8 @@ function draw() {
     ctx.restore();
   });
 
-  // Player (quantised position to match the choppy camera).
-  const px = offX + (chop(player.fx) - 0.5) * tw, py = offY + (chop(player.fy) - 0.5) * th;
+  // Player (smooth float position).
+  const px = offX + (player.fx - 0.5) * tw, py = offY + (player.fy - 0.5) * th;
   // Soft under-the-feet contact shadow grounds the hero (no coloured backing
   // circle — matching the de-cluttered enemies).
   drawActorShadow(px + tw/2, py + th*0.82, tw);
@@ -13382,7 +13383,9 @@ function playerSolidCell(cx, cy) {
   if (bossWallAt(cx, cy)) return true;
   if (merchant && merchant.x === cx && merchant.y === cy) return true;
   if (mystic && mystic.x === cx && mystic.y === cy) return true;
-  if (getEnemyAt(cx, cy)) return true;
+  // Foes do NOT block the hero — you can slip past/through them so you can always
+  // disengage and kite (auto-attack still strikes anything in reach). Enemies
+  // still never step onto your cell (enemyTileFree), so they cluster, not stack.
   return false;
 }
 // Smash a cracked wall / unlock a vault door the hero is deliberately pushing INTO
@@ -15891,7 +15894,19 @@ function spendAttr(key, ev) {
 // UI
 // ══════════════════════════════════════════
 
+// The Endurance (stamina) bar updates every frame (it drains/refills continuously),
+// so it's split out and also called from the game loop, not just on updateBars().
+function renderStaminaBar() {
+  const bar = document.getElementById('stam-bar');
+  if (!bar) return;
+  const mx = player.maxStamina || MAX_STAMINA;
+  const st = Math.max(0, Math.min(mx, player.stamina || 0));
+  bar.style.width = (st / mx * 100) + '%';
+  const txt = document.getElementById('stam-text');
+  if (txt) txt.textContent = `${Math.round(st)}/${mx}`;
+}
 function updateBars() {
+  renderStaminaBar();
   const hpBar = document.getElementById('hp-bar');
   hpBar.style.width = (player.hp/player.maxHp*100)+'%';
   document.getElementById('hp-text').textContent = `${player.hp}/${player.maxHp}`;
@@ -17913,6 +17928,16 @@ function loadGame() {
     // Drop the old counters from older saves and seed the shared potion cooldown.
     delete player.healPotions; delete player.manaPotions; delete player.healthPotionsBought;
     if (player.potionCd == null) player.potionCd = 0;
+    // Real-time movement adds stamina (sprint/dash) and momentum/cooldown fields.
+    // Seed them on older saves — and repair a NaN stamina a prior buggy build may
+    // have persisted — or sprint stays dead and dashing goes free/unlimited.
+    if (typeof player.maxStamina !== 'number') player.maxStamina = MAX_STAMINA;
+    if (typeof player.stamina !== 'number' || isNaN(player.stamina)) player.stamina = player.maxStamina;
+    if (typeof player.dashCd !== 'number') player.dashCd = 0;
+    if (typeof player.dashT !== 'number') player.dashT = 0;
+    if (typeof player._stamDelay !== 'number') player._stamDelay = 0;
+    if (typeof player.vx !== 'number') player.vx = 0;
+    if (typeof player.vy !== 'number') player.vy = 0;
     // Per-character set of actives hidden from the skill bar (added later).
     if (!player.hiddenSkills || typeof player.hiddenSkills !== 'object') player.hiddenSkills = {};
     // Migrate saves that predate crafting materials: seed an empty wallet and
@@ -19693,6 +19718,7 @@ function gameLoop(ts) {
     if (!rtPaused()) { updateTraps(dt); updateProjectiles(dt); }
   }
   updateActorRender(dt);
+  renderStaminaBar();              // stamina drains/refills continuously — keep the END bar live
   updateHaloVignette();            // the danger halo is a DOM overlay — pulse it every frame
   draw();
 }
