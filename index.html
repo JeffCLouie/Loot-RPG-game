@@ -868,6 +868,13 @@
     cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
   .sk-pop .pop-hide:active { background: #4a3a7a; }
   .sk-pop .pop-hide.hidden { background: #3a2330; border-color: #7a4a5a; color: #e8a8b8; }
+  /* Auto-cast toggle for a slotted active (touch-friendly; desktop also has
+     right-click / hold-the-hotkey on the bar). Cyan when armed, matching the bar badge. */
+  .sk-pop .pop-auto { width: 100%; margin-top: 5px; padding: 5px; border: 1px solid #3a5a7a; border-radius: 5px;
+    background: #1b2634; color: #aaccee; font-family: inherit; font-size: 9.5px; font-weight: bold;
+    cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+  .sk-pop .pop-auto:active { background: #284058; }
+  .sk-pop .pop-auto.on { background: #123448; border-color: #5ec8ff; color: #cdeeff; box-shadow: 0 0 6px rgba(110,210,255,0.5); }
   /* Active node currently hidden from the bar: dimmed with a small marker. */
   .sk-tnode.barhid { opacity: 0.5; }
   .sk-tnode.barhid .ic { filter: grayscale(0.7); }
@@ -1061,6 +1068,20 @@
   .skillbar-btn.slot-drop-hot, .lt-slot.slot-drop-hot { border-color: #ffd86a !important; box-shadow: 0 0 8px #ffd86a99; transform: translateY(-2px); }
   .skillbar-btn[draggable="true"] { cursor: grab; }
   .skillbar-btn[draggable="true"]:active { cursor: grabbing; }
+  /* Auto-cast armed: a cyan corner badge (⟳ = "casts itself") plus a cyan ring so
+     the skill reads as self-firing at a glance, distinct from the gold ready pulse.
+     Toggle with right-click / hold the hotkey / the SKILLS-tab popover. */
+  .skillbar-btn.auto { border-color: #5ec8ff; box-shadow: inset 0 0 0 1px rgba(110,210,255,0.5); }
+  .skillbar-btn .sb-auto {
+    position: absolute; top: -4px; right: -4px; z-index: 4;
+    min-width: 13px; height: 13px; padding: 0 1px; border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; line-height: 1; font-weight: 700;
+    color: #04212f; background: #5ec8ff; border: 1px solid #bfeaff;
+    box-shadow: 0 0 5px rgba(110,210,255,0.85);
+    animation: autoCastPulse 1.5s ease-in-out infinite;
+  }
+  @keyframes autoCastPulse { 0%,100% { box-shadow: 0 0 4px rgba(110,210,255,0.7); } 50% { box-shadow: 0 0 10px rgba(150,225,255,1); } }
 
   /* ── IN-TOWN SKILL TRAY (web/desktop layout only) ──
      In town the bar stays put on the wide layout so you can see your kit and
@@ -1111,6 +1132,11 @@
   .lt-slot.primary .lt-key { color: var(--gold); }
   .lt-slot .lt-plus { font-size: 20px; font-weight: 700; opacity: 0.7; }
   .lt-slot .dl-ic, .lt-slot .lt-ic { pointer-events: none; }
+  /* Auto-cast armed in the loadout tray — cyan ring + corner badge, matching the bar. */
+  .lt-slot.auto { border-color: #5ec8ff; box-shadow: inset 0 0 0 1px rgba(110,210,255,0.45); }
+  .lt-slot .lt-auto { position: absolute; top: -4px; right: -4px; min-width: 14px; height: 14px; padding: 0 1px;
+    border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700;
+    color: #04212f; background: #5ec8ff; border: 1px solid #bfeaff; box-shadow: 0 0 5px rgba(110,210,255,0.8); pointer-events: none; }
 
   /* Slot-assign picker — the tap fallback (and quick desktop path) for choosing
      which learned active fills a slot, with a Clear action. */
@@ -6940,7 +6966,9 @@ let player = { x: 5, y: 5,
   // spent on the class's passive/active/path nodes. `skills` maps node id → rank;
   // `skillCds` holds each active skill's independent cooldown. `skillSlots` is the
   // ordered row of hotkey slots (id|null per slot) the player fills on the bar.
-  skillPoints: 0, skills: {}, skillCds: {}, skillSlots: [],
+  // `autoCast` maps a slotted active's id → true when it's set to fire itself the
+  // moment it's ready (off cooldown, mana, a valid target), in hotbar priority.
+  skillPoints: 0, skills: {}, skillCds: {}, skillSlots: [], autoCast: {},
   // Hero attributes — every one starts at ATTR_BASE and is raised by spending
   // points earned on level up. attrSchema marks the attribute-driven-stats model
   // (v2) so older saves can be migrated on load.
@@ -7019,6 +7047,9 @@ function clearHeld() {
   joy.active = false; joy.dx = joy.dy = joy.mag = 0;
   sprintHeld = false;
   moveTarget.active = false; moveTarget.hold = false;
+  // Drop any pending skill-key hold so a lost keyup (focus change, right-click)
+  // can't later fire a stray auto-cast toggle.
+  if (typeof skillKeyHold !== 'undefined' && skillKeyHold) { clearTimeout(skillKeyHold.timer); skillKeyHold = null; }
 }
 // Move the hero to a grid cell AND sync the smooth float position to its centre.
 // Used everywhere the hero is repositioned (spawn, stairs, teleports, blinks,
@@ -7967,6 +7998,7 @@ document.addEventListener('click', (e) => {
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
   { date: '2026-06-30', size: 'big', v: 'Bottom command bar on desktop', by: 'Claude', notes: ['On desktop, every vital readout moved off the top and into one command bar across the bottom, under the map. Big flanking Health (left) and Mana (right) bars are now the most prominent things on screen — bold, glowing, with the numbers right on them — hugging the log and loot panels.', 'Your name, Power and gold sit in the middle above a slim endurance bar, all your skill slots run across the centre, and one long experience bar — broken into segments — stretches along the very bottom. The old top stat strip is gone, so the play area runs cleaner.', 'The bar lives in the space between the side panels and reflows with them: collapse the log and the whole bar widens to match. Touch devices are untouched and keep their existing layout.'] },
+  { date: '2026-06-30', size: 'medium', v: 'Auto-cast your skills', by: 'Claude', notes: ['Any skill on your bar can now cast itself the moment it\'s ready — off cooldown, enough mana, and a valid target in range. Turn it on by right-clicking a skill on the bar, or by holding its number key for a moment (a cyan ⟳ badge marks the ones set to auto-cast). On phones, open the SKILLS tab, tap the slotted skill, and use its new Auto-cast button.', 'Auto-cast follows your hotbar order: slot 1 outranks slot 2 and so on, so when mana is tight your highest-priority skill gets first dibs and the rest wait their turn. Skills only fire when there\'s something to hit — a damage skill won\'t waste mana on an empty room, a heal holds until you\'re actually hurt, and buffs save themselves for when foes are near.', 'It\'s all opt-in and remembered per character, so your auto-cast picks stick with your hero between sessions. Tap the skill, right-click, or hold the key again to switch it back off.'] },
   { date: '2026-06-30', size: 'medium', v: 'Minimap + fixed map view', by: 'Claude', notes: ['A minimap now sits in the top-left of the dungeon view, sketching the whole floor at a glance — walls, water, lava, doors, shrines, teleporters and the all-important down-stairs (in bright green) — with live dots for you (ringed gold), foes (bosses bigger), allies, chests, loose coins, and the merchant, mystic and quest NPCs. It tucks away while you\'re in town.', 'The map view is now fixed at the most zoomed-in setting. The old Wide / Wider / Widest control has been retired from the ⚙️ menu, since the closest view is the one players kept it on.'] },
   { date: '2026-06-30', size: 'medium', v: 'Power score retuned for the new stats', by: 'Claude', notes: ['The POWER number was audited and recalibrated to match the current attribute and rating systems, so it reflects your real strength more honestly. Nothing about combat changes — only how Power is tallied and displayed.', 'Power is now class-aware: the same item can be worth different Power to different heroes, because it makes a different difference. A +Might piece is worth more to a Warrior than a Mage (it actually makes the Warrior hit harder), a +Spirit piece flips that, and a Spell Power roll counts for a caster but is near-dead weight on a pure-martial Warrior or Rogue. Your damage attribute is now visibly the one that moves your Power most.', 'An attribute point is also worth the same Power whether you spent it on level-up or it came rolled on gear (a +attribute affix used to quietly count for double). The Power tooltip and Hero sheet are reworded to match.', 'Max HP and Max MP rolls on gear no longer dominate the score — a single big HP roll used to be worth more than an entire weapon’s damage. Speed and Evasion gear now report equal Power for an equal benefit, since they do the same thing.', 'The bag and shop ↑ upgrade arrow now accounts for the off-hand a two-handed weapon makes you set down, so a green “upgrade” won’t secretly lower your Power once the off-hand is stowed.'] },
   { date: '2026-06-30', size: 'small', v: 'Click-to-move slides around walls', by: 'Claude', notes: ['Click-to-move no longer grinds the hero straight into a wall when you point past a corner. If a wall sits between you and where you clicked but the way is open above or below it, the hero now slides along the wall toward the cursor and rounds the corner instead of getting pinned.', 'The slide always heads TOWARD the click and stops at where the cursor points on that axis — so the hero rounds the wall without sailing off past where you actually aimed. Holding the button to steer in real time feels the same, just no longer snagging on corners.'] },
@@ -15722,18 +15754,27 @@ function castSkill() {
   castSkillById(pri.id);
 }
 
+// When true, the cast-failure messages (cooldown, no mana, no target) are kept
+// out of the log. Auto-cast probes a skill every frame to see if it can fire, so
+// without this it would spam "No foe within range." endlessly. Set only for the
+// duration of an auto-cast attempt — see tickAutoCast / castSkillById's `silent`.
+let _muteCastLog = false;
+function castMsg(msg, cls) { if (!_muteCastLog) log(msg, cls); }
+
 // Cast any active skill the player has learned, shared by every entry point.
-// Validates town/stun/cooldown/mana, resolves the effect, then
-// spends MP, passes a turn, and begins that skill's own cooldown. A skill that
-// can't resolve (no target, nothing to heal) costs nothing.
-function castSkillById(id) {
+// Validates town/stun/cooldown/mana, resolves the effect, then spends MP and
+// begins that skill's own cooldown. A skill that can't resolve (no target,
+// nothing to heal) costs nothing. `opts.silent` suppresses the failure log lines
+// (used by auto-cast, which probes every frame). Returns true iff the skill fired.
+function castSkillById(id, opts) {
+  _muteCastLog = !!(opts && opts.silent);
   const sk = activeSkillList().find(s => s.id === id);
-  if (!sk) { log('You haven\'t learned that skill.'); return; }
-  if (inTown) { log('Save your skills for the dungeon.'); return; }
-  if (portalChanneling()) return;   // held while a town portal channels (tap TOWN to break off)
-  if (isPlayerStunned()) { log('You are stunned and can\'t cast!'); return; }
+  if (!sk) { castMsg('You haven\'t learned that skill.'); _muteCastLog = false; return false; }
+  if (inTown) { castMsg('Save your skills for the dungeon.'); _muteCastLog = false; return false; }
+  if (portalChanneling()) { _muteCastLog = false; return false; }   // held while a town portal channels (tap TOWN to break off)
+  if (isPlayerStunned()) { castMsg('You are stunned and can\'t cast!'); _muteCastLog = false; return false; }
   const cd = skillCd(id);
-  if (cd > 0) { log(`⏳ ${sk.name} is recharging (${Math.ceil(cd)}s left).`); return; }
+  if (cd > 0) { castMsg(`⏳ ${sk.name} is recharging (${Math.ceil(cd)}s left).`); _muteCastLog = false; return false; }
   // sk.mp is the rank-scaled cost (it climbs as the skill levels up, already net
   // of the rank-3 ✦ Empowered discount). Mana Cost Reduction % (gear) trims the
   // final price of every cast on top.
@@ -15742,10 +15783,12 @@ function castSkillById(id) {
   // that frees your whole mana pool but bleeds you with every cast.
   const bloodPact = keystoneFlag('bloodpact');
   if (bloodPact) {
-    if (player.hp <= cost) { log(`🩸 Not enough life for a blood-cast of ${sk.name} — need ${cost} HP.`); return; }
-  } else if (player.mp < cost) { log(`💧 Not enough mana for ${sk.name} — need ${cost} MP.`); return; }
+    if (player.hp <= cost) { castMsg(`🩸 Not enough life for a blood-cast of ${sk.name} — need ${cost} HP.`); _muteCastLog = false; return false; }
+  } else if (player.mp < cost) { castMsg(`💧 Not enough mana for ${sk.name} — need ${cost} MP.`); _muteCastLog = false; return false; }
 
-  if (!runActiveSkill(id)) return; // no valid target / nothing to do
+  const fired = runActiveSkill(id); // false = no valid target / nothing to do
+  _muteCastLog = false;
+  if (!fired) return false;
 
   if (bloodPact) { player.hp = Math.max(1, player.hp - cost); spawnFloatingText(player.x, player.y, `-${cost}`, '#ff5a6a'); }
   else player.mp -= cost;
@@ -15760,6 +15803,7 @@ function castSkillById(id) {
   updateBars();
   renderSkillBar();
   saveGame();
+  return true;
 }
 
 // Dispatch an active skill id to its implementation. Every active is a
@@ -15769,6 +15813,59 @@ function runActiveSkill(id) {
   const node = skillNode(id);
   if (node && node.type === 'active' && node.cast) return resolveCast(node, skillRank(id));
   return false;
+}
+
+// ── AUTO-CAST ────────────────────────────────────────────────────────────────
+// Any slotted active can be flagged to fire itself the instant it's available —
+// off cooldown, affordable, and with a valid target. Auto-cast skills are tried
+// in hotbar order, so slot 1 outranks slot 2 and so on: when mana is tight the
+// higher-priority skill wins the cast and the rest wait. Toggle it by right-
+// clicking a skill on the bar (desktop), holding its hotkey (keyboard), or the
+// SKILLS-tab popover (touch). The preference lives in player.autoCast and saves.
+function isAutoCast(id) { return !!(id && player.autoCast && player.autoCast[id]); }
+function toggleAutoCast(id) {
+  if (!id) return;
+  const sk = activeSkillList().find(s => s.id === id);
+  if (!sk) return;
+  if (!player.autoCast) player.autoCast = {};
+  if (player.autoCast[id]) { delete player.autoCast[id]; log(`Auto-cast off: ${sk.name}.`); }
+  else { player.autoCast[id] = true; log(`⚡ Auto-cast on: ${sk.name} — it casts itself whenever it's ready.`, 'important'); }
+  sfx('click');
+  renderSkillBar(); renderPanel(); saveGame();
+}
+// Should an auto-cast skill actually fire right now? Damage skills defer to
+// resolveCast, which silently no-ops when nothing's in range — so they just try.
+// Pure support skills (heals, self-buffs, summons) have no target gate of their
+// own, so without this they'd burn mana topping off a full health bar or buffing
+// in an empty room. Keep it simple: heal only when actually hurt; spend buffs /
+// summons / utility only when a fight is at hand.
+function autoCastWorthwhile(node) {
+  const c = node && node.cast;
+  if (!c) return false;
+  if (c.wpn || c.spell || c.detonate) return true;                 // can deal damage → resolveCast gates on target
+  if (c.heal && !c.buff && !c.summon) return player.hp < player.maxHp * 0.85;
+  return foesInRange(10).length > 0;                               // buffs / summons / utility: only near foes
+}
+// A small global pace between auto-casts so a fully-charged bar doesn't dump every
+// skill in a single frame — instead it fires the highest-priority ready skill,
+// waits a beat, then the next. Each skill's own cooldown still governs its rate.
+const AUTOCAST_GAP = 0.4;
+let _autoCastCd = 0;
+// Called each frame (when the world isn't paused). Fires at most one auto-cast per
+// AUTOCAST_GAP, always preferring the earliest hotbar slot that can fire right now.
+function tickAutoCast(dt) {
+  if (_autoCastCd > 0) { _autoCastCd -= dt; if (_autoCastCd > 0) return; }
+  if (inTown || portalChanneling() || isPlayerStunned() || player.hp <= 0) return;
+  if (!player.autoCast) return;
+  const slots = normSkillSlots();
+  for (let i = 0; i < slots.length; i++) {
+    const id = slots[i];
+    if (!id || !player.autoCast[id]) continue;
+    if (!autoCastWorthwhile(skillNode(id))) continue;
+    // A silent probe: castSkillById bails (no log, no cost) if the skill is on
+    // cooldown, unaffordable, or has no target. A true return means it fired.
+    if (castSkillById(id, { silent: true })) { _autoCastCd = AUTOCAST_GAP; return; }
+  }
 }
 
 // Foes orthogonally/diagonally adjacent to the player.
@@ -15952,44 +16049,44 @@ function resolveCast(node, rank) {
     case 'self': case 'summon': break;
     case 'melee': {
       const adj = adjacentToPlayer().sort((a, b) => a.hp - b.hp);
-      if (!adj.length) { log(`No foe within reach.`); return false; }
+      if (!adj.length) { castMsg(`No foe within reach.`); return false; }
       targets = [adj[0]]; center = adj[0]; break;
     }
     case 'cleave': {
       targets = adjacentToPlayer();
-      if (!targets.length) { log(`No foe within reach.`); return false; }
+      if (!targets.length) { castMsg(`No foe within reach.`); return false; }
       break;
     }
     case 'nova': {
       targets = enemiesNear(c.radius || 1);
-      if (!targets.length && !c.heal && !c.buff) { log(`No foes near enough.`); return false; }
+      if (!targets.length && !c.heal && !c.buff) { castMsg(`No foes near enough.`); return false; }
       break;
     }
     case 'bolt': {
       const f = foesInRange(c.range || 6)[0];
-      if (!f) { log(`No foe within range.`); return false; }
+      if (!f) { castMsg(`No foe within range.`); return false; }
       targets = [f]; center = f; break;
     }
     case 'blast': {
       const f = foesInRange(c.range || 6)[0];
-      if (!f) { log(`No foe within range.`); return false; }
+      if (!f) { castMsg(`No foe within range.`); return false; }
       center = f; targets = enemiesNear(c.radius || 1, f.x, f.y); break;
     }
     case 'line': {
       const dir = nearestFoeDir(c.range || 5);
-      if (!dir) { log(`No foe in range.`); return false; }
+      if (!dir) { castMsg(`No foe in range.`); return false; }
       targets = foesInLine(dir, c.range || 5);
-      if (!targets.length) { log(`No foe in line.`); return false; }
+      if (!targets.length) { castMsg(`No foe in line.`); return false; }
       break;
     }
     case 'chain': {
       const first = foesInRange(c.range || 6)[0];
-      if (!first) { log(`No foe within range.`); return false; }
+      if (!first) { castMsg(`No foe within range.`); return false; }
       targets = chainTargets(first, c.chain || 3, c.range || 6); break;
     }
     case 'teleport': {
       const f = foesInRange(c.range || 6)[0];
-      if (!f) { log(`No foe within range.`); return false; }
+      if (!f) { castMsg(`No foe within range.`); return false; }
       const spot = adjacentOpenTile(f);
       if (spot) { setPlayerCell(spot.x, spot.y); }
       targets = [f]; center = f; break;
@@ -15997,7 +16094,7 @@ function resolveCast(node, rank) {
     case 'random': {
       // Strike a handful of foes anywhere on the floor — range and walls ignored.
       const pool = enemies.filter(o => !o.dead);
-      if (!pool.length) { log(`No foes to strike.`); return false; }
+      if (!pool.length) { castMsg(`No foes to strike.`); return false; }
       for (let k = pool.length - 1; k > 0; k--) { const j = (Math.random() * (k + 1)) | 0; [pool[k], pool[j]] = [pool[j], pool[k]]; }
       targets = pool.slice(0, c.count || 3);
       center = targets[0]; break;
@@ -18271,6 +18368,12 @@ function renderSkills(el) {
     const hideBtn = (sn.type === 'active' && rank > 0)
       ? `<button class="pop-hide${slotAt < 0 ? ' hidden' : ''}" onclick="toggleSkillSlot('${sn.id}')">${slotAt >= 0 ? `⚡ On bar (slot ${slotAt + 1}) — tap to remove` : '🚫 Off the bar — tap to add'}</button>`
       : '';
+    // Auto-cast toggle — only meaningful for an active that's on the bar (auto-cast
+    // walks the hotbar). This is the touch-friendly path; desktop also has right-
+    // click / hold-the-hotkey on the bar itself.
+    const autoBtn = (sn.type === 'active' && rank > 0 && slotAt >= 0)
+      ? `<button class="pop-auto${isAutoCast(sn.id) ? ' on' : ''}" onclick="toggleAutoCast('${sn.id}')">${isAutoCast(sn.id) ? '⟳ Auto-cast ON — tap to stop' : '⟳ Auto-cast OFF — tap to enable'}</button>`
+      : '';
     pop = `<div class="sk-pop" id="sk-pop" onmouseenter="cancelSkillPopClose()" onmouseleave="scheduleSkillPopClose()">
       <b>${dlIcon(sn.icon,18)||''} ${sn.name}</b>${rankTxt}
       <div class="ty">${typeTxt}</div>
@@ -18280,6 +18383,7 @@ function renderSkills(el) {
       ${reqHtml}
       ${buyBtn}
       ${hideBtn}
+      ${autoBtn}
     </div>`;
   }
 
@@ -18331,16 +18435,17 @@ function skillLoadoutTrayHtml() {
   const cells = slots.map((id, i) => {
     const s = id ? byId[id] : null;
     const key = skillKeyLabel(i + 1);
+    const auto = s && isAutoCast(s.id);
     const drag = s ? `draggable="true" ondragstart="skillDragStart(event,'${s.id}',${i})" ondragend="skillDragEnd()"` : '';
     const tip = s
-      ? `<div class='ht-name'>${dlIcon(s.icon,16)||''} ${s.name}</div><div class='ht-sub'>slot ${i + 1}${key ? ` · key ${key}` : ''} · tap to change · drag to move</div>`
+      ? `<div class='ht-name'>${dlIcon(s.icon,16)||''} ${s.name}</div><div class='ht-sub'>slot ${i + 1}${key ? ` · key ${key}` : ''} · tap to change · drag to move</div>${auto ? `<div class='ht-sub' style='color:#7fd0ff'>⟳ Auto-cast on</div>` : ''}`
       : `<div class='ht-name'>Empty slot ${i + 1}</div><div class='ht-line'>Drag a learned skill here, or tap to assign one.</div>`;
     const inner = s ? `<span class="lt-ic">${dlIcon(s.icon,28)||''}</span>` : `<span class="lt-plus">＋</span>`;
-    return `<div class="lt-slot${s ? '' : ' empty'}${i === 0 ? ' primary' : ''}" ${drag}
+    return `<div class="lt-slot${s ? '' : ' empty'}${i === 0 ? ' primary' : ''}${auto ? ' auto' : ''}" ${drag}
         data-slot="${i}" ondragover="skillSlotDragOver(event)" ondrop="skillSlotDropOn(event,${i})"
         ondragenter="skillSlotDragEnter(event,this)" ondragleave="skillSlotDragLeave(event,this)"
         onclick="openSlotPicker(${i})" ${hoverTip(tip)}>
-      <span class="lt-key">${key}</span>${inner}
+      <span class="lt-key">${key}</span>${inner}${auto ? `<span class="lt-auto" aria-label="auto-cast">⟳</span>` : ''}
     </div>`;
   }).join('');
   return `<div class="sk-loadout">
@@ -18684,13 +18789,19 @@ function renderSkillBar() {
     }
     const cd = skillCd(s.id);
     const ready = cd <= 0 && player.mp >= s.mp && player.hp > 0;
+    const auto = isAutoCast(s.id);
     // Desktop names the number/R key; touch (no keyboard, reached by long-press) says "tap to cast".
     const castHint = touchUI() ? ' · tap to cast' : (key ? ` · press ${key}` : '');
     const moveHint = touchUI() ? 'tap the SKILLS tab to re-slot' : 'drag to rearrange · drag a tree skill to swap';
-    const tip = `<div class='ht-name' style='color:#e6c34a'>${dlIcon(s.icon,16)||''} ${s.name}</div><div class='ht-line'>${s.desc}</div><div class='ht-sub'>${s.mp} MP · ${s.cd}s cooldown${castHint}</div><div class='ht-sub' style='opacity:.7'>${moveHint}</div>`;
-    return `<button class="skillbar-btn ${i === 0 ? 'baseline ' : ''}${ready ? 'ready' : 'disabled'} ${cd > 0 ? 'cooling' : ''}" draggable="true"
-      ondragstart="skillDragStart(event,'${s.id}',${i})" ondragend="skillDragEnd()" ${dropAttrs(i)} ${hoverTip(tip)} onclick="castSkillById('${s.id}')">
-      <span class="sb-key">${key}</span><span class="sb-icon big">${dlIcon(s.icon, 30)||''}</span>${cdDial('sk:' + s.id)}
+    // How to toggle auto-cast, phrased for the device's input.
+    const autoVerb = touchUI() ? 'use the SKILLS tab' : (key ? `right-click or hold ${key}` : 'right-click');
+    const autoHint = auto
+      ? `<div class='ht-sub' style='color:#7fd0ff'>⚡ Auto-cast ON — ${autoVerb} to turn off</div>`
+      : `<div class='ht-sub' style='opacity:.7'>${autoVerb} to auto-cast</div>`;
+    const tip = `<div class='ht-name' style='color:#e6c34a'>${dlIcon(s.icon,16)||''} ${s.name}</div><div class='ht-line'>${s.desc}</div><div class='ht-sub'>${s.mp} MP · ${s.cd}s cooldown${castHint}</div>${autoHint}<div class='ht-sub' style='opacity:.7'>${moveHint}</div>`;
+    return `<button class="skillbar-btn ${i === 0 ? 'baseline ' : ''}${ready ? 'ready' : 'disabled'} ${cd > 0 ? 'cooling' : ''}${auto ? ' auto' : ''}" draggable="true"
+      ondragstart="skillDragStart(event,'${s.id}',${i})" ondragend="skillDragEnd()" ${dropAttrs(i)} ${hoverTip(tip)} onclick="castSkillById('${s.id}')" oncontextmenu="event.preventDefault();toggleAutoCast('${s.id}');return false;">
+      <span class="sb-key">${key}</span><span class="sb-icon big">${dlIcon(s.icon, 30)||''}</span>${auto ? `<span class="sb-auto" aria-label="auto-cast">⟳</span>` : ''}${cdDial('sk:' + s.id)}
     </button>`;
   }).join('');
   // Desktop only: a TOWN button on the far left of the bar (the header's TOWN
@@ -18775,7 +18886,7 @@ function chooseClass(key) {
   if (!cls) return;
   player.class = key;
   player.skillCd = 0; player.ascension = null;
-  player.skills = {}; player.skillCds = {}; player.skillSlots = []; combatBuffs = {};
+  player.skills = {}; player.skillCds = {}; player.skillSlots = []; player.autoCast = {}; combatBuffs = {};
   // A fresh hero owns its full lifetime pool of skill points (the starting point
   // plus one per level) with nothing yet spent.
   player.skillPoints = earnedSkillPoints(player.level);
@@ -18803,7 +18914,7 @@ function changeClass(key) {
   const refunded = spentSkillPoints();
   player.class = key;
   player.skillCd = 0; player.ascension = null;
-  player.skills = {}; player.skillCds = {}; player.skillSlots = []; combatBuffs = {};
+  player.skills = {}; player.skillCds = {}; player.skillSlots = []; player.autoCast = {}; combatBuffs = {};
   player.skillPoints = (player.skillPoints || 0) + refunded;
   recomputeMaxStats();
   if (player.hp > player.maxHp) player.hp = player.maxHp;
@@ -19504,6 +19615,13 @@ document.addEventListener('keyup', e => {
   const d = moveKeyName(e.key);
   if (d) keyHeld[d] = false;
   if (e.key === 'Shift') sprintHeld = false;
+  // Releasing a skill key: if its hold timer hasn't fired yet, it was a tap → cast.
+  // (A completed hold already toggled auto-cast and set fired, so we skip the cast.)
+  if (skillKeyHold && actionForKey(keyTok(e)) === skillKeyHold.act) {
+    clearTimeout(skillKeyHold.timer);
+    if (!skillKeyHold.fired) castSkillById(skillKeyHold.id);
+    skillKeyHold = null;
+  }
 });
 
 // ── KEYBINDINGS ──────────────────────────────────────────────────────────────
@@ -19628,10 +19746,26 @@ document.addEventListener('keydown', e => {
   if (act === 'bag')          { togglePanel(); return; }
   if (act && act.indexOf('skill') === 0) {            // skill1..skill9 -> hotkey slot
     const sk = slotSkill(parseInt(act.slice(5), 10) - 1);
-    if (sk) castSkillById(sk.id);
+    if (!sk) return;
+    e.preventDefault();
+    if (e.repeat) return;                             // auto-repeat: a hold is timed below, not re-cast
+    // Tap to cast, hold to toggle auto-cast. We arm a hold timer here and decide on
+    // keyup: a quick release casts; holding past the threshold flips auto-cast (and
+    // skips the cast). Re-pressing while another key is mid-hold supersedes it.
+    if (skillKeyHold) clearTimeout(skillKeyHold.timer);
+    skillKeyHold = { act, id: sk.id, fired: false };
+    skillKeyHold.timer = setTimeout(() => {
+      if (skillKeyHold) { skillKeyHold.fired = true; toggleAutoCast(skillKeyHold.id); }
+    }, SKILL_HOLD_MS);
     return;
   }
 });
+
+// Hold-to-toggle-auto-cast bookkeeping for the skill hotkeys. While a skill key is
+// held, skillKeyHold tracks it; the timer above flips auto-cast once the hold
+// crosses SKILL_HOLD_MS, and keyup below casts instead if it was just a tap.
+const SKILL_HOLD_MS = 450;
+let skillKeyHold = null;
 
 // ══════════════════════════════════════════
 // HELPERS
@@ -19912,6 +20046,9 @@ function loadGame() {
       player.skillSlots = activeSkillList().filter(s => !hidden[s.id]).slice(0, SKILL_SLOTS).map(s => s.id);
     }
     normSkillSlots();
+    // Auto-cast preferences (skill id → true). Saves made before auto-cast simply
+    // have none — default to an empty map so the toggle starts off for everyone.
+    if (!player.autoCast || typeof player.autoCast !== 'object') player.autoCast = {};
     // Migrate saves that predate the deepest-floor tracker / town hub.
     if (player.maxFloor == null) player.maxFloor = data.dungeonLevel || 1;
     // Migrate saves that predate the re-enterable-floor tracker (the Gate lock).
@@ -21688,6 +21825,7 @@ function gameLoop(ts) {
     safeStep('move', () => updatePlayer(dt));              // 8-dir movement may trigger stairs/town/death…
     if (!rtPaused()) safeStep('combat', () => updatePlayerCombat(dt));
     if (!rtPaused()) safeStep('cooldowns', () => tickCooldowns(dt));  // skill/potion cooldowns burn in seconds
+    if (!rtPaused()) safeStep('autocast', () => tickAutoCast(dt));    // fire any auto-cast skills that are ready
     if (!rtPaused()) safeStep('world', () => stepWorldClock(dt));
     if (!rtPaused()) safeStep('hazards', () => { updateTraps(dt); updateProjectiles(dt); });
   }
