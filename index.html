@@ -8066,6 +8066,50 @@ function placeTraps(reach) {
   }
 }
 
+// Does an arrow trap's firing lane pass through (x,y)? (Includes the emitter tile
+// and every tile its bolt travels until a wall/water blocks the lane.)
+function arrowLaneHits(tr, x, y) {
+  let cx = tr.x, cy = tr.y;
+  for (let s = 0; s <= 6; s++) {
+    if (cx === x && cy === y) return true;
+    cx += tr.dx; cy += tr.dy;
+    const t = tileAtCell(cx, cy);
+    if (t === 1 || t === 6 || t === 10 || t === 11) break;
+  }
+  return false;
+}
+// Anything the player must walk up to (an NPC, a quest spot, a shrine/fountain)
+// should never sit in a trap path. Hazards are scattered before these are placed,
+// so clear the spikes in the ring around the spot and disarm any arrow trap that
+// fires through it — you should never be stabbed or shot just to interact.
+function clearTrapsAround(x, y) {
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+    const nx = x + dx, ny = y + dy;
+    if (nx < 1 || ny < 1 || nx >= MAP_W - 1 || ny >= MAP_H - 1) continue;
+    if (mapData[ny][nx] === 8) mapData[ny][nx] = 0; // spike → plain floor
+  }
+  if (traps && traps.length) traps = traps.filter(tr => !(tr.kind === 'arrow' && arrowLaneHits(tr, x, y)));
+}
+// Sweep every walk-up interactable on the floor and make its tile trap-safe.
+function clearTrapsAroundInteractables() {
+  const spots = [];
+  if (merchant) spots.push(merchant);
+  if (mystic) spots.push(mystic);
+  if (graveMarker) spots.push(graveMarker);
+  if (quest) {
+    if (quest.npc) spots.push(quest.npc);
+    if (quest.spot) spots.push(quest.spot);
+    if (quest.item) spots.push(quest.item);
+    if (Array.isArray(quest.markers)) for (const m of quest.markers) spots.push(m);
+  }
+  // Tile interactables: fountain (3) and shrine (5).
+  for (let y = 1; y < MAP_H - 1; y++) for (let x = 1; x < MAP_W - 1; x++) {
+    const t = mapData[y][x];
+    if (t === 3 || t === 5) spots.push({ x, y });
+  }
+  for (const s of spots) clearTrapsAround(s.x, s.y);
+}
+
 // Launch a traveling bolt from (x,y) toward (dx,dy). Dodgeable — it moves over
 // time and only lands if it reaches the hero.
 function spawnProjectile(x, y, dx, dy, dmg, color, speed) {
@@ -8461,6 +8505,12 @@ function generateMap() {
   // the foot-reachable set so quest NPCs, markers and pickups are walkable to,
   // not stranded behind a teleporter or the exit stairs.
   maybeSpawnQuest(footReach);
+
+  // Now that every interactable (NPCs, shrines, fountains, the grave) is down,
+  // make sure none sits in a trap path — clear the spikes around them and disarm
+  // any arrow trap that fires through them. You should never take a hit just to
+  // reach something you're meant to interact with.
+  clearTrapsAroundInteractables();
 
   // With every foe (including any quest horde) now placed, make sure none is
   // stranded behind the sealed exit — otherwise the floor could never clear.
