@@ -1206,6 +1206,28 @@
   #hovertip .ht-name { font-weight: bold; font-size: 12px; margin-bottom: 4px; color: #e6c34a; }
   #hovertip .ht-line { color: #8899bb; }
   #hovertip .ht-sub  { color: #7a8499; font-size: 10px; margin-top: 3px; }
+
+  /* Tap-to-inspect enemy codex card. Like the hovertip but clickable (tapping it
+     closes it) and laid out as a tidy stat grid. */
+  #enemy-card {
+    position: fixed; display: none;
+    background: #0e0e1a; border: 1px solid #5a4a2a; border-radius: 7px;
+    padding: 7px 9px 8px; font-size: 11px; min-width: 150px; max-width: 220px;
+    z-index: 430; cursor: pointer; line-height: 1.5;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.6);
+    -webkit-tap-highlight-color: transparent;
+  }
+  #enemy-card .ec-head { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
+  #enemy-card .ec-name { font-weight: bold; font-size: 12px; color: #e6c34a; line-height: 1.2; }
+  #enemy-card .ec-sub  { font-size: 9px; color: #9a8a6a; letter-spacing: 0.5px; }
+  #enemy-card .ec-grid { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; }
+  #enemy-card .ec-k { color: #7f8aa8; }
+  #enemy-card .ec-v { color: #d8dcea; text-align: right; font-variant-numeric: tabular-nums; }
+  #enemy-card .ec-v.hidden { color: #6a6a7a; letter-spacing: 1px; }
+  #enemy-card .ec-foot { margin-top: 6px; padding-top: 5px; border-top: 1px solid #2a2a3a;
+    font-size: 9px; color: #8a7d63; display: flex; align-items: center; gap: 5px; }
+  #enemy-card .ec-bar { flex: 1; height: 4px; border-radius: 2px; background: #26222e; overflow: hidden; }
+  #enemy-card .ec-bar > i { display: block; height: 100%; background: linear-gradient(90deg,#b07d40,#e8c267); }
   /* Wraps a (possibly disabled) reroll button so the hover popup still fires —
      disabled buttons swallow mouse events on their own. */
   .ench-tipwrap { display: inline-flex; flex-shrink: 0; }
@@ -1260,6 +1282,10 @@
   .pd-slot.empty { border-style: dashed; }
   .pd-slot.empty .dl-ic, .pd-slot.empty .pd-emoji { opacity: 0.28; }
   .pd-slot.filled { background: rgba(20,18,12,0.75); }
+  /* A worn piece whose attribute requirement is no longer met: greyed & desaturated
+     so the gear panel shows at a glance it's being ignored until you re-qualify. */
+  .pd-slot.pd-inactive { background: rgba(40,16,22,0.6); }
+  .pd-slot.pd-inactive .dl-ic, .pd-slot.pd-inactive .pd-emoji { opacity: 0.45; filter: grayscale(0.7); }
   .pd-emoji { font-size: 30px; line-height: 1; filter: grayscale(0.1); }
   .pd-pwr { position: absolute; bottom: 1px; right: 3px; font-size: 9px; }
   .pd-unequip {
@@ -1272,9 +1298,16 @@
   .pd-cap { font-size: 9px; color: #777; text-align: center; letter-spacing: 0.5px; max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .pd-cell.is-empty .pd-cap { color: #555; }
   /* Bottom row (hands + legs): two tiles centred across the 3-column grid, each
-     sized to match a single column so they line up with the rows above. */
-  .pd-bottom { grid-column: 1 / -1; display: flex; justify-content: center; gap: 8px; }
-  .pd-bottom .pd-cell { flex: 0 0 calc((100% - 16px) / 3); }
+     sized to match a single column so they line up with the rows above.
+     `width: 100%` is essential — the per-cell flex-basis is a percentage, which
+     otherwise leaves this spanning grid item with an indefinite width so it
+     shrink-wraps to its content. When that happens the centred flex row has no
+     spare space and each cell collapses to its content min-width, making the
+     short-named slot (e.g. "Greaves") render smaller than its neighbour. Pinning
+     the row to full width — plus `min-width: 0` so the basis (not content) sizes
+     each cell — keeps both tiles equal and column-aligned. */
+  .pd-bottom { grid-column: 1 / -1; width: 100%; display: flex; justify-content: center; gap: 8px; }
+  .pd-bottom .pd-cell { flex: 0 0 calc((100% - 16px) / 3); min-width: 0; }
   .pd-hint { grid-column: 1 / -1; margin-top: 8px; font-size: 10px; color: #555; text-align: center; }
 
   /* ── GEAR-SET SWITCH ── two-loadout toggle above the paper doll. */
@@ -1820,6 +1853,20 @@
   }
   #title-credit { color: #6b5f47; font-size: 9px; margin-top: 16px; line-height: 1.5; }
   /* Leaderboard tabs + rows */
+  /* Standard vs Hardcore board selector — a segmented toggle above the sort tabs. */
+  .lb-modes { display: flex; gap: 6px; margin-bottom: 8px; }
+  .lb-mode {
+    flex: 1; padding: 7px 4px; border: 1px solid var(--border); border-radius: 6px;
+    background: #1b160f; color: #b9a98a; font-family: 'Courier New', monospace;
+    font-size: 11px; font-weight: bold; letter-spacing: 0.5px; cursor: pointer;
+    text-align: center; -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  }
+  .lb-mode.on { border-color: var(--gold); color: var(--gold); background: #2a2113; }
+  /* The Hardcore board glows crimson when selected, matching the rest of the HC theming. */
+  .lb-mode.hc.on { border-color: #ff5a66; color: #ff8a93; background: #2a1113; }
+  .lb-mode .dl-ic { vertical-align: -2px; }
+  #lb-modal.hc .ov-title { color: #ff8a93; }
+  #lb-modal.hc .lb-row.me { border-color: #ff5a66; background: #2a1113; }
   .lb-tabs { display: flex; gap: 6px; margin-bottom: 9px; }
   .lb-tab {
     flex: 1; padding: 8px 4px; border: 1px solid var(--border); border-radius: 6px;
@@ -1917,7 +1964,13 @@
   }
   .forge-grid { display: grid; gap: 5px; }
   .forge-slots, .forge-bases { grid-template-columns: repeat(2, 1fr); }
+  .forge-cats { grid-template-columns: repeat(4, 1fr); }
   .forge-tiers { grid-template-columns: repeat(5, 1fr); }
+  /* No "loners": rather than strand a single trailing tile alone at the start of
+     a final row, centre it. The base list is two columns (centre a lone last
+     tile full-width at column size); the weapon-category grid is four. */
+  .forge-bases .forge-opt:last-child:nth-child(2n+1) { grid-column: 1 / -1; justify-self: center; min-width: calc(50% - 3px); }
+  .forge-cats .forge-opt:last-child:nth-child(4n+1) { grid-column: 2 / 4; }
   .forge-opt {
     padding: 7px 6px; border: 1px solid var(--border); border-radius: 5px;
     background: #221a10; color: #e8d5a8; font-family: 'Courier New', monospace;
@@ -1927,10 +1980,6 @@
   }
   .forge-opt:active { background: #2a2113; }
   .forge-opt.on { border-color: var(--gold); color: var(--gold); background: #2a2113; }
-  /* Off-class weapon bases at the Forge: greyed and unclickable so you can't
-     accidentally craft a weapon your class can't wield. */
-  .forge-opt-locked { opacity: 0.38; cursor: not-allowed; background: #1a150d; color: #8a7d63; }
-  .forge-opt-locked:active { background: #1a150d; }
   .forge-tiers .forge-opt { flex-direction: column; gap: 1px; padding: 6px 2px; }
 
   /* Brief full-screen colour flash for crits, low HP, and big events. */
@@ -2284,31 +2333,46 @@
   #touch-dpad .dpad-center { color: rgba(245, 240, 230, 0.5); }
   .dpad-center .dp-clock { width: 20px; height: 20px; display: block; }
 
-  /* Beach-tutorial instruction banner — pinned near the top of the play area,
-     persistent (no auto-fade) while the tutorial is active. */
+  /* Beach-tutorial hint chip — an optional "?" help affordance pinned just above
+     the bottom action bar while the tutorial is active. The whole chip is
+     clickable and opens the How to Play menu, so once you know the game it's
+     trivially ignorable (and never seen again after the tutorial). */
   #tutorial-hint {
     position: fixed;
     left: 50%;
-    top: calc(env(safe-area-inset-top, 0px) + 56px);
+    bottom: calc(var(--bar-h, 16px) + 12px);
     transform: translateX(-50%);
     z-index: 216;
     max-width: 92vw;
-    padding: 9px 14px;
-    border-radius: 12px;
+    display: none;
+    align-items: center;
+    gap: 9px;
+    padding: 7px 13px 7px 7px;
+    border-radius: 22px;
     background: rgba(20,16,32,0.94);
     border: 1px solid var(--gold);
     color: var(--text);
     font-size: 11px;
-    text-align: center;
-    line-height: 1.5;
-    pointer-events: none;
+    text-align: left;
+    line-height: 1.4;
+    cursor: pointer;
+    pointer-events: auto;
     box-shadow: 0 4px 16px rgba(0,0,0,0.6), 0 0 12px rgba(232,194,103,0.25);
-    display: none;
+    -webkit-tap-highlight-color: transparent;
   }
-  #tutorial-hint.show { display: block; animation: tutHintIn 0.4s ease-out; }
+  #tutorial-hint.show { display: inline-flex; animation: tutHintIn 0.4s ease-out; }
+  #tutorial-hint:active { background: rgba(40,32,58,0.96); }
+  #tutorial-hint .th-q {
+    flex: 0 0 auto;
+    width: 22px; height: 22px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--gold); color: #1a1405;
+    font-weight: bold; font-size: 14px; line-height: 1;
+  }
+  #tutorial-hint .th-text { flex: 1 1 auto; min-width: 0; }
   #tutorial-hint b { color: var(--gold); }
   @keyframes tutHintIn {
-    from { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+    from { opacity: 0; transform: translateX(-50%) translateY(8px); }
     to   { opacity: 1; transform: translateX(-50%) translateY(0); }
   }
 
@@ -2784,6 +2848,7 @@
 
 <div id="tooltip"></div>
 <div id="hovertip"></div>
+<div id="enemy-card" onclick="closeEnemyCard()"></div>
 
 <!-- Shown only on a touch device held in landscape — the game is portrait-only. -->
 <div id="rotate-overlay">
@@ -2801,9 +2866,14 @@
   <div class="lvl-sub">Open the 🎒 BAG → HERO tab to spend your points!</div>
 </div>
 
-<!-- Beach-tutorial instruction banner. Shown (and updated) only while the
-     one-time tutorial map is active; content is set by tutorialStage(). -->
-<div id="tutorial-hint"></div>
+<!-- Beach-tutorial hint chip — a small, optional "?" help affordance pinned
+     above the action bar while the tutorial map is active. Tapping it opens the
+     full How to Play menu. The short hint text is set by tutorialStage(). -->
+<div id="tutorial-hint" role="button" tabindex="0" title="How to play"
+     onclick="showHowTo()" aria-label="How to play — open the guide">
+  <span class="th-q" aria-hidden="true">?</span>
+  <span class="th-text"></span>
+</div>
 
 <!-- Title screen / landing page — shown on load. Surfaces the PLAY/CONTINUE
      action plus the same controls that live behind the ⚙️ settings dropdown. -->
@@ -2878,6 +2948,10 @@
   <div id="lb-modal">
     <span class="ov-title"><span data-spr="ui_trophy"></span> Leaderboards</span>
     <div class="ov-sub">The deepest, strongest, and richest heroes across everyone who plays.</div>
+    <div class="lb-modes">
+      <button class="lb-mode on" id="lb-mode-std" onclick="setLbMode('std')">Standard</button>
+      <button class="lb-mode hc" id="lb-mode-hc" onclick="setLbMode('hc')"><span data-spr="ic_cursed"></span> Hardcore</button>
+    </div>
     <div class="lb-tabs">
       <button class="lb-tab on" id="lb-tab-floor" onclick="setLbTab('floor')">⬇️ Furthest</button>
       <button class="lb-tab" id="lb-tab-level" onclick="setLbTab('level')">⭐ Level</button>
@@ -4059,10 +4133,13 @@ const ATTR_FX = {
   // Agility/Luck feed integer RATINGS contested against enemy level (see the
   // rating-vs-level block below). Agility drives BOTH evasion and accuracy; Luck
   // drives crit. No caps — the rating/(rating+opposition) curve makes runaway
-  // values mechanically unreachable rather than clamped.
-  evaPerAgi:     0.95,   // Agility → evasion rating (dodge)
+  // values mechanically unreachable rather than clamped. The evasion/crit rates
+  // are tuned high enough that a build which commits its attribute points to
+  // Agility or Luck stays meaningfully ahead of the depth-scaling opposition —
+  // so dodge and crit are viable build foundations, not just gear sprinkles.
+  evaPerAgi:     1.15,   // Agility → evasion rating (dodge)
   accPerAgi:     2.0,    // Agility → accuracy rating (hit chance)
-  critPerLuck:   0.6,    // Luck → crit rating
+  critPerLuck:   0.85,   // Luck → crit rating
 };
 // Damage scaling off the class's primary / secondary attribute (per point).
 const ATTR_DMG_PRIMARY   = 2.4;
@@ -4087,22 +4164,25 @@ function spentAttrPoints() {
 //
 // This curve is *polynomial*, not exponential — a deliberate choice. It starts
 // gentle (an easy on-ramp), rises forever so every floor is strictly harder
-// than the last, but grows slowly enough that the player's (linear) level,
-// attribute, and gear growth can always catch up with enough grinding. The gap
-// you must close keeps widening, so it gets harder and harder to push the next
-// floor — but there is intentionally NO hard wall: a pure exponential curve
-// would eventually outrun any possible build and make some floor mathematically
-// impossible, whereas this one stays beatable at every depth given the effort.
-//   floor 1 → 1.0x   floor 10 → ~2.9x   floor 20 → ~5.6x   floor 30 → ~8.6x
-//   floor 50 → ~15x   floor 100 → ~34x   (keeps rising, no ceiling)
+// than the last, but grows slowly enough that the player's level, attribute, and
+// gear growth can always catch up with enough grinding. Crucially the curve is
+// tuned to OUTPACE level/attribute growth: the gap you must close keeps widening,
+// so periodically you have to stop and grind or enhance gear to push on — and
+// that pressure grows the deeper you go. There is intentionally NO hard wall: a
+// pure exponential curve would eventually outrun any possible build and make some
+// floor mathematically impossible, whereas this one stays beatable at every depth
+// given the effort.
+//   floor 1 → 1.0x   floor 10 → ~2.9x   floor 20 → ~5.8x   floor 30 → ~9.2x
+//   floor 50 → ~17x   floor 100 → ~39x   (keeps rising, no ceiling)
 function depthThreat(level) {
-  // 1 + (depth-1)^1.2 / 7.5 — gentle start, steady polynomial climb, no cap.
-  // The growth term climbs twice as fast as the original /15 curve, so every
-  // floor's threat multiplier above the floor-1 baseline is doubled.
+  // 1 + (depth-1)^1.26 / 8.5 — a touch gentler than before through the opening
+  // floors (a softer on-ramp), then a steeper exponent so the climb pulls
+  // progressively further ahead of the hero's linear power the deeper you dive.
+  // That widening gap is what makes gear grinding/enhancing matter more and more.
   const d = Math.max(0, (level || 1) - 1);
   // Endless mode ramps a touch steeper than the raw depth continuation; a no-op
   // (×1) for the three finite difficulties (see endlessBite below).
-  return (1 + Math.pow(d, 1.2) / 7.5) * endlessBite();
+  return (1 + Math.pow(d, 1.26) / 8.5) * endlessBite();
 }
 
 // ── DUNGEON DIFFICULTY TIERS ──────────────────────────────────────────────
@@ -4229,8 +4309,10 @@ function itemPower(item) {
 // every hero starts with) plus any bonus carried on equipped gear (+13 Might,
 // etc.). This — not the raw spent value — is what every derived stat reads.
 function totalAttr(key) {
+  const active = activeSlots();
   let sum = (player.attributes?.[key] || 0);
   for (const slot of SLOT_KEYS) {
+    if (!active[slot]) continue;          // red/ignored pieces lend nothing
     const it = equipped[slot];
     if (it && it.attrs && typeof it.attrs[key] === 'number') sum += it.attrs[key];
   }
@@ -4265,9 +4347,11 @@ function attrDamage() {
 function critDamageMult() { return Math.max(0, 2.0 + totalStat('CRITDMG') / 100 + skillBonus('critDmg')); }
 
 // The player's overall power: a blend of level, spent attributes, and equipped gear.
+// Red/ignored pieces (requirement no longer met) don't count — they give nothing.
 function playerPower() {
   let p = player.level * 10;
-  for (const slot of SLOT_KEYS) if (equipped[slot]) p += itemPower(equipped[slot]);
+  const active = activeSlots();
+  for (const slot of SLOT_KEYS) if (active[slot]) p += itemPower(equipped[slot]);
   const spent = ATTR_KEYS.reduce((s, k) => s + (player.attributes?.[k] || 0), 0);
   p += spent * 3;
   p += spentSkillPoints() * 5; // skill-tree investment shows up in Power too
@@ -4355,7 +4439,9 @@ function playerEvasionRating() {
   let r = totalAttr('agility') * ATTR_FX.evaPerAgi
     + totalStat('SPD') + totalStat('DODGE')
     + ratePct(skillBonus('dodge')) + ratePct(buffMag('dodgeUp')) + ratePct(foodFx('dodgePct'));
-  if (player.class === 'rogue') r += 14;
+  // Rogue's innate evasion scales with level so "harder to pin down" stays true
+  // at depth (a flat bonus would wash out as opposition climbs each floor).
+  if (player.class === 'rogue') r += 14 + player.level * 1.2;
   return Math.max(0, r);
 }
 function playerAccuracyRating() {
@@ -4365,7 +4451,9 @@ function playerAccuracyRating() {
 function playerCritRating() {
   let r = totalAttr('luck') * ATTR_FX.critPerLuck + totalStat('CRIT') + totalStat('LCK')
     + ratePct(skillBonus('crit')) + ratePct(buffMag('critUp')) + ratePct(foodFx('critPct'));
-  if (player.class === 'rogue') r += 12;
+  // Rogue's innate crit scales with level so "keener crits" keeps pace with the
+  // rising crit opposition of deeper floors instead of fading to nothing.
+  if (player.class === 'rogue') r += 12 + player.level * 1.2;
   return Math.max(0, r);
 }
 function playerBlockRating() { return Math.max(0, totalStat('BLOCK') + ratePct(skillBonus('block'))); }
@@ -4656,7 +4744,7 @@ const WEAPON_STYLES = {
   Bow:'shot', Mace:'crush', Spear:'thrust', Scythe:'reap',
 };
 function weaponStyle() {
-  const w = equipped.weapon;
+  const w = activeWeapon();   // red/ignored weapon → unarmed style
   if (!w || !w.name) return 'fist';
   const sub = weaponSubType(w);
   if (sub) return WEAPON_SUBTYPES[sub].style;
@@ -4730,29 +4818,29 @@ function weaponRangeGridHTML(base) {
 const CLASSES = {
   warrior: {
     name: 'Warrior', icon: '⚔️', color: '#e08a3c',
-    blurb: 'A frontline bruiser — hits harder and shrugs off blows.',
-    passive: '+10% damage dealt · −15% damage taken',
+    blurb: 'A frontline bruiser — hits hardest of the melee, lightly armoured.',
+    passive: '+10% damage dealt · −10% damage taken',
     dmgAttrs: { primary: 'might', secondary: 'vitality' },
     weapons: ['Sword','Axe','Mace','Spear','Scythe'],
   },
   rogue: {
     name: 'Rogue', icon: '🗡️', color: '#5ec27a',
-    blurb: 'A nimble striker — more crits and harder to pin down.',
-    passive: 'Keener crits · harder to pin down',
+    blurb: 'A nimble striker — the deadliest weapon hits, but fragile.',
+    passive: '+12% damage · crits & dodge that scale with level',
     dmgAttrs: { primary: 'agility', secondary: 'might' },
     weapons: ['Dagger','Sword','Bow'],
   },
   mage: {
     name: 'Mage', icon: '🔮', color: '#7d9bff',
     blurb: 'A glass-cannon caster — a deep mana pool and ranged fire.',
-    passive: '+30% max MP · spell-powered Firebolt',
+    passive: '+30% max MP · +15% spell power · −10% damage taken',
     dmgAttrs: { primary: 'spirit', secondary: 'luck' },
     weapons: ['Staff','Dagger'],
   },
   templar: {
     name: 'Templar', icon: '🛡️', color: '#e8c95a',
-    blurb: 'A holy bulwark — sturdier, and able to mend its own wounds.',
-    passive: '+20% max HP · stronger regen',
+    blurb: 'A holy bulwark — the sturdiest hero, and mends its own wounds.',
+    passive: '+20% max HP · −15% damage taken · stronger regen',
     dmgAttrs: { primary: 'vitality', secondary: 'spirit' },
     weapons: ['Sword','Mace','Spear'],
   },
@@ -4773,6 +4861,135 @@ function weaponBaseType(item) {
     if (new RegExp('\\b' + base + '\\b').test(item.name)) return base;
   }
   return null;
+}
+
+// ── STAT REQUIREMENTS ──
+// EVERY gear slot — weapon, off-hand, armour AND jewelry — gates on a single
+// ATTRIBUTE REQUIREMENT, computed live from the piece's base (weapon sub-type,
+// off-hand base, or armour/jewelry base) and its ilvl — never stored on the item,
+// so legacy saves and the Enchanter's rerolls keep working with zero migration.
+// The required attribute is the one that base's natural wearer leans on, which
+// nudges every class toward gear that fits it: heavy melee / heavy plate lean on
+// Might or Vitality, finesse weapons & light armour on Agility, casting gear &
+// cloth on Spirit, and fortune trinkets on Luck. A hero CAN still pick up an
+// "off-class" piece — they just have to invest that attribute first. The gate
+// scales with ilvl, so deeper gear demands a real, growing investment:
+//   need = round(8 + ilvl * 0.9 * weight)   (heavier bases carry a bigger weight)
+// Keyed by sub-type first; the bare CATEGORY keys are the legacy fallback for old
+// bare-category weapons whose name carries no sub-type word.
+const WEAPON_REQ = {
+  // Swords
+  'Shortsword':{ attr:'might',   w:0.90 }, 'Arming Sword':{ attr:'might',   w:1.00 },
+  'Rapier':    { attr:'agility', w:0.78 }, 'Greatsword':  { attr:'might',   w:1.45 },
+  'Claymore':  { attr:'might',   w:1.40 },
+  // Axes
+  'Hatchet':   { attr:'might',   w:0.95 }, 'War Axe':     { attr:'might',   w:1.10 },
+  'Greataxe':  { attr:'might',   w:1.55 }, 'Battleaxe':   { attr:'might',   w:1.45 },
+  // Daggers (finesse → Agility)
+  'Dagger':    { attr:'agility', w:0.78 }, 'Stiletto':    { attr:'agility', w:0.75 },
+  'Kris':      { attr:'agility', w:0.82 },
+  // Maces
+  'Mace':      { attr:'might',   w:1.05 }, 'Morningstar': { attr:'might',   w:1.12 },
+  'Maul':      { attr:'might',   w:1.50 },
+  // Spears
+  'Spear':     { attr:'might',   w:0.95 }, 'Halberd':     { attr:'might',   w:1.40 },
+  'Pike':      { attr:'might',   w:1.30 },
+  // Staves (casting → Spirit)
+  'Staff':     { attr:'spirit',  w:1.00 }, 'Wand':        { attr:'spirit',  w:0.85 },
+  // Bows (ranged → Agility)
+  'Shortbow':  { attr:'agility', w:0.88 }, 'Longbow':     { attr:'agility', w:0.95 },
+  // Scythes
+  'Scythe':    { attr:'might',   w:1.15 }, 'War Scythe':  { attr:'might',   w:1.42 },
+  // Bare-category fallbacks for legacy weapons whose name has no sub-type word.
+  // (Dagger/Mace/Spear/Staff/Scythe already appear above as identically-named
+  // sub-types, so only Sword/Axe/Bow need a category-only entry here.)
+  'Sword':     { attr:'might',   w:1.00 }, 'Axe':         { attr:'might',   w:1.05 },
+  'Bow':       { attr:'agility', w:0.90 },
+};
+// Off-hands gate on the stat their family rewards: shields → Vitality (a tank
+// commitment that scales with the shield's heft), caster off-hands → Spirit,
+// quiver / parry-blade → Agility.
+const OFFHAND_REQ = {
+  'Buckler':{ attr:'vitality', w:0.55 }, 'Kite Shield':{ attr:'vitality', w:0.80 },
+  'Tower Shield':{ attr:'vitality', w:1.10 }, 'Tome':{ attr:'spirit', w:0.90 },
+  'Focus':{ attr:'spirit', w:0.70 }, 'Quiver':{ attr:'agility', w:0.70 },
+  'Parrying Dagger':{ attr:'agility', w:0.75 },
+};
+// Longest base name first so "Parrying Dagger" / "Tower Shield" win over any shorter
+// substring (mirrors SUBTYPE_KEYS' longest-first resolution).
+const OFFHAND_REQ_KEYS = Object.keys(OFFHAND_REQ).sort((a, b) => b.length - a.length);
+// Armour & jewelry, keyed by SLOT then by the base word in the item's name. The
+// attribute follows the base's character so each class is steered toward fitting
+// gear: heavy plate (Helm, Chestplate, Greaves, Gauntlets) wants Vitality, sturdy
+// mid armour (Cuirass, Mail, Tassets, Bracers) wants Might, light/leather (Cap,
+// Hood, Tunic, Grips, Trousers) wants Agility, and cloth/caster pieces (Robe,
+// Circlet, Crown, Gloves, Leggings) want Spirit. Jewelry spreads across all five
+// attributes so every class has a fitting trinket in each slot. Weights are gentler
+// than weapons' (armour is mandatory, so its gate shouldn't be brutal) and jewelry
+// gentler still. Matched against the item's OWN slot only, so base words never
+// collide across slots.
+const ARMOR_REQ = {
+  head: { 'Helm':{ attr:'vitality', w:0.80 }, 'Cap':{ attr:'agility', w:0.50 }, 'Hood':{ attr:'agility', w:0.55 },
+          'Crown':{ attr:'spirit', w:0.62 }, 'Circlet':{ attr:'spirit', w:0.55 } },
+  chest:{ 'Chestplate':{ attr:'vitality', w:0.95 }, 'Cuirass':{ attr:'might', w:0.78 }, 'Mail':{ attr:'might', w:0.82 },
+          'Tunic':{ attr:'agility', w:0.55 }, 'Robe':{ attr:'spirit', w:0.55 } },
+  hands:{ 'Gauntlets':{ attr:'might', w:0.60 }, 'Bracers':{ attr:'vitality', w:0.48 },
+          'Grips':{ attr:'agility', w:0.46 }, 'Gloves':{ attr:'spirit', w:0.42 } },
+  legs: { 'Greaves':{ attr:'vitality', w:0.78 }, 'Tassets':{ attr:'might', w:0.62 },
+          'Trousers':{ attr:'agility', w:0.48 }, 'Leggings':{ attr:'spirit', w:0.46 } },
+  ring: { 'Signet':{ attr:'might', w:0.42 }, 'Band':{ attr:'vitality', w:0.42 },
+          'Loop':{ attr:'spirit', w:0.42 }, 'Ring':{ attr:'luck', w:0.42 } },
+  amulet:{ 'Necklace':{ attr:'spirit', w:0.48 }, 'Pendant':{ attr:'vitality', w:0.45 }, 'Talisman':{ attr:'luck', w:0.42 },
+           'Amulet':{ attr:'might', w:0.45 }, 'Charm':{ attr:'agility', w:0.40 } },
+};
+// Per-slot base words, longest-first, so a substring base never shadows a longer one.
+const ARMOR_REQ_KEYS = {};
+for (const s in ARMOR_REQ) ARMOR_REQ_KEYS[s] = Object.keys(ARMOR_REQ[s]).sort((a, b) => b.length - a.length);
+// The {attr,w} an armour/jewelry item carries, found by matching its base word
+// within its OWN slot's table (so "Ring" can't shadow a chest's "Mail", etc.).
+function armorReqDef(item) {
+  const tbl = ARMOR_REQ[item.slot];
+  if (!tbl) return null;
+  const nm = item.name || '';
+  for (const k of ARMOR_REQ_KEYS[item.slot]) if (nm.includes(k)) return tbl[k];
+  return null;
+}
+// The required attribute amount for an item of the given ilvl and per-type weight.
+// Clamped so a missing/odd ilvl (very old saves) can never NaN or read as zero.
+function attrReqValue(ilvl, w) { return Math.round(8 + Math.max(1, ilvl || 1) * 0.9 * w); }
+// The {attr, need} a piece demands to equip, or null if it carries no requirement
+// (non-gear, or an unrecognisable legacy item → fail OPEN so a save never bricks).
+function itemAttrReq(item) {
+  if (!item) return null;
+  let def = null;
+  if (item.slot === 'weapon') {
+    const sub = weaponSubType(item);
+    def = (sub && WEAPON_REQ[sub]) || WEAPON_REQ[weaponBaseType(item)] || null;
+  } else if (item.slot === 'offhand') {
+    const nm = item.name || '';
+    for (const k of OFFHAND_REQ_KEYS) if (nm.includes(k)) { def = OFFHAND_REQ[k]; break; }
+  } else if (ARMOR_REQ[item.slot]) {
+    def = armorReqDef(item);
+  }
+  return def ? { attr: def.attr, need: attrReqValue(item.ilvl, def.w) } : null;
+}
+// Live status of a piece's stat gate. `have` is the attribute you have AVAILABLE to
+// meet it (see reqAttrAvail): your base points plus the +attrs from every OTHER
+// active worn piece, never the piece's own bonus. So a candidate in the bag can't
+// bootstrap its own requirement, and — crucially — a WORN piece you can no longer
+// support (e.g. after a respec) reads as NOT met, which is exactly what turns it
+// red in the gear panel and stops it counting (see activeSlots).
+function attrReqStatus(item) {
+  const r = itemAttrReq(item);
+  if (!r) return null;
+  const have = reqAttrAvail(item, r.attr);
+  return { attr: r.attr, need: r.need, have, ok: have >= r.need };
+}
+// A short reason a piece's stat gate isn't met (for the lock tooltip / log), or null.
+function attrReqError(item) {
+  const s = attrReqStatus(item);
+  if (!s || s.ok) return null;
+  return `Requires ${s.need} ${ATTRIBUTES[s.attr].short} (you have ${s.have}).`;
 }
 
 // Weapon categories that count as melee (a parrying dagger pairs with these).
@@ -4804,49 +5021,111 @@ function offhandEquipError(item, weapon) {
   return null; // shield / caster: any one-handed weapon or a free hand works
 }
 
-// Can the current class/loadout equip this item right now? Non-weapon, non-off-hand
-// gear is always allowed; a classless hero has no weapon restriction; an off-hand
-// must also pair with the equipped main-hand weapon (see offhandEquipError).
+// ── EFFECTIVE (NON-IGNORED) GEAR ──
+// A worn piece only COUNTS — for stats, attributes, weapon damage and its own frame
+// colour — while it still MEETS its attribute requirement (and, for an off-hand,
+// still pairs with the main hand). A piece you could no longer equip — the classic
+// case being a respec that drops your attributes below what a heavy chestplate or
+// greatsword demanded — turns red in the gear panel and is IGNORED until you
+// re-qualify, instead of silently keeping its power.
+//
+// Because one piece's +attributes can be exactly what lets ANOTHER piece meet its
+// gate, and an ignored piece must lend nothing, the active set is resolved by
+// FIX-POINT: assume every worn piece active, then repeatedly drop any whose gate
+// isn't met by the attributes of the pieces STILL active (a piece never counts its
+// own +attr toward its own gate — the same rule as the equip check). Dropping only
+// removes, so it settles in at most SLOT_KEYS.length passes. Computed on demand
+// (no cache): it's only hit on player actions and panel renders, never a tight loop.
+// Core resolver, parameterised by `getItem(slot)` so the SAME fix-point serves both
+// the live loadout AND a hypothetical "what if I equipped this candidate" swap (the
+// candidate occupies its slot, the piece it replaces is gone). Returns the settled
+// active map plus `attrFrom(key, exceptSlot)` = base points + the +attrs of the
+// pieces held active in that loadout, excluding one slot.
+function resolveActive(getItem) {
+  const active = {};
+  for (const slot of SLOT_KEYS) active[slot] = !!getItem(slot);
+  const attrFrom = (key, exceptSlot) => {
+    let sum = player.attributes?.[key] || 0;
+    for (const slot of SLOT_KEYS) {
+      if (slot === exceptSlot || !active[slot]) continue;
+      const it = getItem(slot);
+      if (it && it.attrs && typeof it.attrs[key] === 'number') sum += it.attrs[key];
+    }
+    return sum;
+  };
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const slot of SLOT_KEYS) {
+      if (!active[slot]) continue;
+      const it = getItem(slot);
+      const r = itemAttrReq(it);
+      const gateOk = !r || attrFrom(r.attr, slot) >= r.need;
+      // An off-hand also has to still pair with whatever is in the main hand (an
+      // unmet pairing — e.g. a quiver with no bow — also ignores the piece).
+      const pairOk = slot !== 'offhand' || !offhandEquipError(it, getItem('weapon'));
+      if (!gateOk || !pairOk) { active[slot] = false; changed = true; }
+    }
+  }
+  return { active, attrFrom };
+}
+function activeSlots() { return resolveActive(s => equipped[s]).active; }
+// Is the piece in this slot worn AND currently counting (not red/ignored)?
+function slotActive(slot) { return !!equipped[slot] && activeSlots()[slot]; }
+// The main-hand weapon IF it currently counts, else null — so a red/ignored weapon
+// falls back to bare fists for damage, attack style and reach.
+function activeWeapon() { return slotActive('weapon') ? equipped.weapon : null; }
+// The off-hand IF it currently counts, else null — so a red/ignored off-hand grants
+// no loadout-conditional passives (shield/caster/dual bonuses) either.
+function activeOffhand() { return slotActive('offhand') ? equipped.offhand : null; }
+// Attributes AVAILABLE for `item` to meet its gate IF it occupied its slot. Resolves
+// the fix-point over the SWAPPED loadout (item in its slot, the piece it would
+// replace removed), so the answer accounts for any cascade where that replaced piece
+// was propping up ANOTHER piece — a candidate the loot list would otherwise green-
+// light only to have it land red. For the piece already worn in its slot this is
+// identical to the live active set. A piece never counts its own +attr (exclude-self).
+function reqAttrAvail(item, key) {
+  const slot = item.slot;
+  return resolveActive(s => (s === slot ? item : equipped[s])).attrFrom(key, slot);
+}
+
+// Can the loadout equip this item right now? Every gear slot gates on its attribute
+// requirement; an off-hand must ALSO pair with the equipped main-hand weapon.
 function canEquipItem(item) {
   if (!item) return true;
-  if (item.slot === 'offhand') return offhandEquipError(item, equipped.weapon) === null;
-  if (item.slot !== 'weapon') return true;
-  const cls = playerClass();
-  if (!cls) return true;
-  const t = weaponBaseType(item);
-  return !t || cls.weapons.includes(t);
+  if (item.slot === 'offhand') return offhandEquipError(item, equipped.weapon) === null && attrReqError(item) === null;
+  // Weapon, armour and jewelry: the attribute requirement is the only gate.
+  return attrReqError(item) === null;
 }
 // A short, human reason this item can't be equipped right now (for the loot lock
 // tooltip), or '' if it can.
 function equipLockReason(item) {
   if (!item) return '';
-  if (item.slot === 'weapon') {
-    const cls = playerClass();
-    return (cls && !canEquipItem(item)) ? `A ${cls.name} can't wield this — ${cls.name}s use ${cls.weapons.join(', ')}.` : '';
-  }
-  if (item.slot === 'offhand') return offhandEquipError(item, equipped.weapon) || '';
-  return '';
-}
-
-// Can the current class wield this weapon BASE type (Sword, Bow, …)? Used to grey
-// out off-class bases at the Forge so you don't craft something you can't equip.
-function classCanUseWeaponBase(base) {
-  const cls = playerClass();
-  if (!cls) return true;            // a classless hero has no weapon restriction
-  // `base` may be a sub-type (Greatsword) or a bare category (Sword) — the class
-  // lock is keyed by category, so resolve sub-types down to their category first.
-  const cat = weaponCategoryOf(base) || base;
-  return cls.weapons.includes(cat);
+  // Off-hands fail for a bad main-hand pairing first, then for an unmet stat gate.
+  if (item.slot === 'offhand') return offhandEquipError(item, equipped.weapon) || attrReqError(item) || '';
+  // Weapon, armour and jewelry: the attribute requirement is the only equip lock.
+  return attrReqError(item) || '';
 }
 
 // Combat passives keyed off the chosen class — now also folding in any damage
-// passives bought on the skill tree (see skillBonus).
+// passives bought on the skill tree (see skillBonus). Every class carries an
+// innate damage-dealt / damage-taken lean so each plays to a distinct identity
+// and all four stay viable, rather than the Warrior being the one safe pick:
+//   Warrior  — the damage bruiser: hits hardest of the melee, lightly armoured.
+//   Rogue    — the glass striker: top physical multiplier, but fragile.
+//   Mage     — the glass cannon: spell power (see spellPowerMult) + thin padding.
+//   Templar  — the bulwark: takes the least and (with +20% HP & regen) outlasts
+//              everything, paying for it with no innate damage bonus.
+// Spell damage is boosted for the Mage in spellPowerMult, not here, since this
+// dealt multiplier only applies to physical hits (see applyOffenseMods).
+const CLASS_DMG_DEALT = { warrior: 1.10, rogue: 1.12, mage: 1.00, templar: 1.00 };
+const CLASS_DMG_TAKEN = { warrior: 0.90, rogue: 0.95, mage: 0.90, templar: 0.85 };
 function classDmgDealtMult() {
-  const base = player.class === 'warrior' ? 1.10 : 1;
+  const base = CLASS_DMG_DEALT[player.class] || 1;
   return base * (1 + skillBonus('dmgDealt'));
 }
 function classDmgTakenMult() {
-  const base = player.class === 'warrior' ? 0.85 : 1;
+  const base = CLASS_DMG_TAKEN[player.class] || 1;
   // Iron Hide / Aegis / Juggernaut etc. shave a slice off every blow; clamp so a
   // fully-stacked defence build can never reach zero (no free invulnerability).
   return Math.max(0.1, base * (1 - skillBonus('dmgTaken')));
@@ -5392,7 +5671,9 @@ function skillFlag(name) {
 // passives stay cheap and serialization-safe. Unknown conds are simply false.
 function condMet(cond) {
   if (!cond) return true;
-  const w = equipped.weapon, o = equipped.offhand;
+  // Red/ignored pieces grant no loadout-conditional passives, so resolve through the
+  // ACTIVE weapon/off-hand: a piece you can't currently support lends nothing here.
+  const w = activeWeapon(), o = activeOffhand();
   switch (cond) {
     case '2h':       return isTwoHander(w);
     case '1h':       return !!w && !isTwoHander(w);
@@ -5416,7 +5697,8 @@ function condMet(cond) {
 // The bonus off-hand swing fraction granted by Dual Mastery (0 if not unlocked or
 // no parry-blade off-hand equipped), scaling with the unlocking node's rank.
 function dualWieldMult() {
-  if (!equipped.offhand || equipped.offhand.off !== 'dual') return 0;
+  const o = activeOffhand();
+  if (!o || o.off !== 'dual') return 0;
   for (const n of classSkillTree()) {
     if (n.flag === 'dualwield' || n.unlock === 'dualwield') {
       const r = skillRank(n.id);
@@ -5525,7 +5807,13 @@ function applyCastMods(node, cast) {
   return c;
 }
 // Spell-damage multiplier from spell passives + gear + transient spell buffs.
-function spellPowerMult() { return 1 + skillBonus('spell') + buffMag('spellUp') + totalStat('SPELLPWR') / 100; }
+// The Mage gets a flat +15% here as its core offensive identity — the dealt
+// multiplier (classDmgDealtMult) only touches physical hits, so without this a
+// caster Mage would have no class damage bonus at all.
+function spellPowerMult() {
+  const cls = player.class === 'mage' ? 0.15 : 0;
+  return 1 + cls + skillBonus('spell') + buffMag('spellUp') + totalStat('SPELLPWR') / 100;
+}
 // Prereqs satisfied? (high enough level, ascension matches, every prereq owned).
 function skillReqMet(node) {
   if (!node) return false;
@@ -5552,7 +5840,9 @@ function activeSkillList() {
   const list = [];
   for (const n of classSkillTree()) {
     if (n.type === 'active' && skillRank(n.id) > 0) {
-      list.push({ id: n.id, name: n.name, icon: n.icon, mp: n.mp, cd: n.cd, desc: n.desc, node: n });
+      // mp is the rank-scaled cost (climbs as the skill levels up), so the skill
+      // bar, primary button, character panel, and cast logic all show/charge it.
+      list.push({ id: n.id, name: n.name, icon: n.icon, mp: skillManaCost(n, skillRank(n.id)), cd: n.cd, desc: n.desc, node: n });
     }
   }
   return list;
@@ -5638,6 +5928,10 @@ let floorMod = FLOOR_MODS[0];
 // sealed until the floor's hostiles are dealt with. `floorCleared` latches true
 // once the condition is met (a late mimic popping out won't re-seal you in).
 let floorCleared = false;
+// Arrival grace: true the moment you enter a floor, negating enemy attacks until
+// you take your first turn (so you can't be bursted down before you act). Set in
+// generateMap()/buildTutorialMap(); cleared at the end of the first runEnemyTurn.
+let entryGuard = false;
 // True while the player is on the one-time beach tutorial map (a fresh hero's
 // very first "floor"): a sandy shore with a lone skeleton to fight and a cave
 // to the north that drops them into the real dungeon. See buildTutorialMap().
@@ -5832,6 +6126,10 @@ let player = { x: 5, y: 5,
   // Comeback relief anchor: the floor you revived toward after a death. While you
   // climb the few floors above it, foes go easier (see spawnEnemies); null = none.
   reliefFloor: null,
+  // Bestiary: how many of each enemy type (keyed by its sprite glyph) you've
+  // slain. Drives the tap-to-inspect codex card — stats stay ??? until you've
+  // killed enough to learn them (fully revealed at 10; bosses are exempt).
+  bestiary: {},
   // Skill tree — 1 skill point earned per level (separate from attribute points),
   // spent on the class's passive/active/path nodes. `skills` maps node id → rank;
   // `skillCds` holds each active skill's independent cooldown.
@@ -6859,6 +7157,13 @@ document.addEventListener('click', (e) => {
 const CHANGELOG = [
   { date: '2026-06-30', size: 'big', v: 'Movement, speed & traps', by: 'Claude', notes: ['Movement got physical: you carry momentum, slide across patches of ice, and slog through mud and shallow muck that drag your speed. The picture also steps in crisp pixel increments rather than gliding, for a sharper retro feel.', 'Sprint by holding Shift (or pushing the mobile stick to its edge) to outrun a pack — it burns a stamina bar that refills after a breather. Tap Space to Dash: a quick stamina-fuelled burst that\'s great for dodging or closing in. Blink-type class skills still work for instant repositioning.', 'Attack speed is now a real thing. You swing about once every 1.5s — faster with light weapons (daggers) and the new Attack Speed % gear stat, slower with heavy ones (mauls, axes). Foes attack on their own per-type rhythm too, so a swift biter and a lumbering brute no longer strike in lockstep.', 'New crowd control: chilling foes can snare you, ice underfoot makes you slide, and a slow drags your top speed — positioning matters more than ever.', 'Hazards you can dodge: arrow traps loose bolts down a lane (step out of the line), and fire vents flare on and off (don\'t linger when they light). No foes spawn on top of the entry stairs anymore, and the opening tutorial foe waits for you to approach.', 'Mobile controls are now a floating analog joystick — press anywhere to steer in any direction, push to the edge to sprint, tap to use.'] },
   { date: '2026-06-30', size: 'big', v: 'Real-time movement', by: 'Claude', notes: ['The dungeon is now real-time instead of turn-based. Hold the d-pad / arrows / WASD to walk freely in all 8 directions — including diagonals — and slide along walls; let go to stop.', 'You auto-attack any foe within your weapon\'s reach on a short cooldown, so positioning matters: kite slow brutes, but watch for swift foes that outrun you. Skills and potions still fire on the bar / number keys.', 'Foes now act on their own clock: they roam and wander when they haven\'t noticed you, then wake and give chase once you stray close or step into their line of sight — and break off if you lose them.', 'Status effects, regrowth, cooldowns, hazards and the town-portal channel all tick on a steady world clock rather than per step. The USE button (centre pad) grabs loot underfoot and talks to NPCs you\'re standing next to.'] },
+  { date: '2026-06-30', size: 'big', v: 'Stat requirements on all gear', by: 'Claude', notes: ['The attribute requirement that gated weapons now covers EVERY gear slot — armour and jewelry too. Each base leans on the attribute its natural wearer favours, nudging every class toward gear that fits: heavy plate (a Chestplate, Greaves or Gauntlets) wants Vitality, sturdy mid armour (Cuirass, Mail, Tassets) wants Might, light leather (Cap, Tunic, Trousers) wants Agility, and cloth or caster pieces (Robe, Circlet, Gloves) want Spirit. Jewelry asks a gentler price. Meet the attribute and you can wear it, whatever your class.', 'Requirements scale with the item’s level and are gentler than weapons’ (armour is mandatory, so its gate isn’t brutal). Every item tooltip and the loot list show the requirement in green when you meet it and red when you’re short, and the LOOT tab only lets you equip pieces you actually qualify for — off-hands still also need a fitting main hand.', 'Worn gear is now protected against attribute changes: if a respec (or anything else) drops you below a piece’s requirement, that piece turns RED in the GEAR panel and is IGNORED — it lends no stats, attributes or weapon damage — until you re-invest the attribute and bring it back. No more keeping power you can no longer support.'] },
+  { date: '2026-06-30', size: 'medium', v: 'Forge cost varies by base', by: 'Claude', notes: ['Crafting cost no longer depends only on rarity — the base you pick now shifts it. Bulky, heavy pieces (a Maul, a Greataxe, a Tower Shield, plate armor) drink noticeably more materials, while small, fine pieces (a Dagger, a Rapier, a wand, a ring) sip them.', 'Gold runs the other way: delicate, precise work bills more for the skilled labour, so a Dagger or a ring costs more gold than a crude Maul of the same rarity even though it needs far less metal. The Forge now shows a one-line note explaining each base’s build, and two pieces of the same rarity can have genuinely different prices.', 'The Forge’s weapon picker is now two steps: pick a category (Sword, Axe, Dagger…) then the exact type within it (Shortsword, Arming Sword, Rapier…), instead of scrolling one long list of every weapon.'] },
+  { date: '2026-06-30', size: 'small', v: 'Even gear slots', by: 'Claude', notes: ['Fixed the GEAR paper-doll so the bottom-row slots — hands and legs — are always the same size as the slots above them. A short item name like "Greaves" no longer collapses its slot smaller than its neighbour; both bottom tiles now match the columns above and stay centred.'] },
+  { date: '2026-06-30', size: 'big', v: 'Deep difficulty rebalance', by: 'Claude', notes: ['Levelling is reshaped into a curve that starts easy and ends hard: the first levels now fly by in a couple of kills for a snappy, rewarding opening, but the cost climbs far more steeply at the top — a high level is a rare, hard-won milestone instead of a routine ding. You can no longer out-level the dungeon, so deep runs lean on gear rather than fresh levels.', 'The floor-by-floor difficulty curve was retuned to OUTPACE your levelling: a touch gentler over the opening floors, then a steeper climb that pulls progressively further ahead the deeper you dive. The gap keeps widening, so you periodically have to stop and grind or enhance your gear to break through — and that pressure grows with depth. There is still no hard wall; every floor stays beatable with enough effort.', 'All four classes were rebalanced around distinct identities so every one stays viable: the Warrior is the hardest-hitting melee (lightly armoured), the Rogue is a fragile glass striker whose crits and dodge now scale with level (so they don\'t fade on deep floors), the Mage is a glass cannon with stronger spells and thin padding, and the Templar is the true bulwark — the sturdiest hero, paying for it with no innate damage bonus.', 'Attribute tuning makes more builds viable: committing your points to Agility (dodge) or Luck (crit) now keeps you meaningfully ahead of the depth-scaling defences, so evasion and crit are real build foundations rather than just sprinkles on gear — mix stats, skills and gear to find your own meta.'] },
+  { date: '2026-06-30', size: 'small', v: 'Skills cost more mana as they level', by: 'Claude', notes: ['Ranking up an active skill now raises its mana cost a little each rank, so deepening a skill is a real mana commitment rather than free power — the per-rank power climb still outpaces it, so the trade stays worth it. The rank-3 ✦ Empowered milestone keeps its "cheaper casts" perk, which trims the cost back down at that rank.', 'The skill\'s current mana cost shows everywhere it\'s cast from — the skill bar, the ⚡ button and the hero panel — and the SKILLS-tab "On rank up" tooltip now previews the next rank\'s cost (e.g. 8 → 9 MP) right beside its power gain, so you can see exactly how much it will go up before spending the point.'] },
+  { date: '2026-06-30', size: 'big', v: 'Any weapon, with stat requirements', by: 'Claude', notes: ['Every class can now wield every weapon and pair every sensible off-hand — the old hard class-to-weapon lock is gone. What gates a piece instead is a stat requirement: a heavy Greatsword or Maul wants Might, a Rapier, dagger or bow wants Agility, a staff or wand wants Spirit, and a shield wants Vitality. Meet the attribute and you can equip it, whatever your class.', 'Requirements are per weapon TYPE, not just its category — a one-handed Rapier asks for Agility while a Greatsword of the same family asks for Might — and they scale with the item’s level, so deeper gear demands a real, growing investment. Your class still leans toward its favoured weapons in drops, and gear that grants +attributes counts toward meeting requirements.', 'Item tooltips, the loot list and the Forge now show each piece’s requirement in green when you meet it and red when you’re short, so you always know what to raise. Off-hands keep their pairing rules (a quiver needs a bow, a parrying dagger a one-handed melee weapon, a shield or focus a free hand — or any of them alongside a two-hander once you’ve learned Titan’s Grip).'] },
+  { date: '2026-06-30', size: 'medium', v: 'Hardcore leaderboards', by: 'Claude', notes: ['The global Leaderboards now have their own Hardcore ladder. A Standard / Hardcore switch at the top of the board flips every ranking — Furthest, Level, Gold and Power — between ordinary heroes and one-life Hardcore heroes.', 'Hardcore heroes are ranked only against each other, so surviving the no-revive run earns its own crimson board.'] },
   { date: '2026-06-30', size: 'small', v: 'Clearer "can\'t afford" prices', by: 'Claude', notes: ['Anywhere you spend gold or materials — the shop, gambler, forge, enchanter, mystic, healer and trainer — wares you can\'t currently afford now dim out so unavailable options read at a glance.', 'Mixed prices now pinpoint the shortfall: the exact gold or material you\'re missing turns red, so a forge or enchant cost shows at once whether you\'re short on gold, scrap, glimmer or a chaos orb.'] },
   { date: '2026-06-29', size: 'medium', v: 'Channeled town portal', by: 'Claude', notes: ['The town gate is no longer locked out while you’re in combat or on a cooldown — it’s clickable any time. Instead, opening it now CHANNELS a portal in real time.', 'Once you start it, the dungeon auto-runs one turn every half-second so you actually watch the foes take their swings and close in. Survive 3 clean turns and the gate opens; take a single blow from a foe mid-channel and the half-formed portal shatters.', 'You’re committed while it charges — your own moves are held until it resolves, with a swirling portal and a countdown over your hero showing the turns left. Tap TOWN again to break it off.'] },
   { date: '2026-06-29', size: 'medium', v: 'Bigger floors per difficulty', by: 'Claude', notes: ['Dungeon floors now grow with difficulty: Normal stays 20×20, Hardened is 24×24, Brutal 28×28, and Endless starts at 32×32 and keeps expanding the deeper you push — endlessly, but slower and slower so it never balloons into an unnavigable map.', 'Monster density is held constant, so a bigger, harder floor simply carries proportionally more foes — more rooms, hazards and enemies, at the same crowding you’re used to.', 'A generous cap keeps even the largest deep-Endless floors from spawning an unplayable swarm.'] },
@@ -7158,6 +7463,7 @@ function togglePanel() {
 const JOY_MAX = 56;   // px throw radius (full tilt)
 const JOY_TAP = 12;   // travel under this counts as a tap, not a drag
 let joyId = null, joyOX = 0, joyOY = 0, joyMoved = false;
+let gestureStart = null;   // pointerdown anchor, for tap detection in BOTH layouts
 // Floating joystick visuals (DOM, so they're crisp and ignore the choppy camera).
 const joyBase = document.createElement('div');
 const joyKnob = document.createElement('div');
@@ -7167,8 +7473,9 @@ joyBase.appendChild(joyKnob);
 document.body.appendChild(joyBase);
 
 canvas.addEventListener('pointerdown', e => {
-  if (isWebLayout()) return;
-  if (panelOpen) { togglePanel(); return; }   // an open drawer eats the touch
+  gestureStart = { x: e.clientX, y: e.clientY };   // anchor for tap-to-inspect (both layouts)
+  if (isWebLayout()) return;                        // desktop: mouse/keyboard, no joystick
+  if (panelOpen) { togglePanel(); return; }         // an open drawer eats the touch
   joyId = e.pointerId; joyOX = e.clientX; joyOY = e.clientY; joyMoved = false;
   joy.active = true; joy.dx = 0; joy.dy = 0; joy.mag = 0;
   try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
@@ -7187,14 +7494,130 @@ canvas.addEventListener('pointermove', e => {
   joy.mag = cl / JOY_MAX;
   joyKnob.style.transform = `translate(calc(-50% + ${Math.cos(ang) * cl}px), calc(-50% + ${Math.sin(ang) * cl}px))`;
 });
-function endJoy(e) {
-  if (joyId !== e.pointerId) return;
-  if (!joyMoved) pickup();          // a tap (no drag) = USE / grab / talk
-  joyId = null; joy.active = false; joy.dx = joy.dy = joy.mag = 0;
-  joyBase.style.display = 'none';
+function endJoy(e, isUp) {
+  const wasJoy = joyId === e.pointerId;
+  // Tap detection works in BOTH layouts (web has no joystick, just the anchor).
+  const moved = wasJoy ? joyMoved
+    : (gestureStart && (Math.abs(e.clientX - gestureStart.x) > JOY_TAP || Math.abs(e.clientY - gestureStart.y) > JOY_TAP));
+  gestureStart = null;
+  if (wasJoy) { joyId = null; joy.active = false; joy.dx = joy.dy = joy.mag = 0; joyBase.style.display = 'none'; }
+  if (!isUp || moved) return;       // a cancel or a drag is not a tap
+  // A tap on a foe opens its inspect card (codex); on empty ground it dismisses an
+  // open card, otherwise (touch only) it's USE / grab / talk.
+  const foe = enemyAtClient(e.clientX, e.clientY);
+  if (foe) { toggleEnemyCard(foe, e.clientX, e.clientY); return; }
+  if (enemyCardFor) { closeEnemyCard(); return; }
+  if (!isWebLayout()) pickup();
 }
-canvas.addEventListener('pointerup', endJoy);
-canvas.addEventListener('pointercancel', endJoy);
+canvas.addEventListener('pointerup', e => endJoy(e, true));
+canvas.addEventListener('pointercancel', e => endJoy(e, false));
+
+// ── TAP-TO-INSPECT: enemy codex card ──
+// Tapping a foe shows a concise stat card. Its numbers stay hidden as ??? until
+// you've killed enough of that species to "learn" them — each kill rolls toward
+// revealing more, with the full card unlocked at 10 kills. Bosses are an open
+// book on sight. Tapping the card, the same foe, or empty space closes it.
+let enemyCardFor = null;
+const BESTIARY_FULL = 10; // kills to fully reveal a species
+const ENEMY_STYLE_LABEL = {
+  chaser: 'Hunter', swift: 'Swift', erratic: 'Erratic', lurker: 'Ambusher',
+  brute: 'Brute', caster: 'Caster', pack: 'Pack hunter',
+};
+function bestiaryKey(e) { return (e.type || e.name || '?').replace(/️/g, ''); }
+function bestiaryKills(e) { return (player.bestiary && player.bestiary[bestiaryKey(e)]) || 0; }
+// Tiny stable string hash, so each species reveals its stats in a fixed (but
+// per-species "random") order rather than flickering each time you peek.
+function hashStr(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+// Is one stat field known yet? Each field has a per-species threshold in 1..10;
+// reach it (or 10 total kills, or it's a boss) and the number shows.
+function statKnown(e, field, kills) {
+  if (e.isBoss) return true;
+  if (kills >= BESTIARY_FULL) return true;
+  const threshold = 1 + (hashStr(bestiaryKey(e) + '|' + field) % BESTIARY_FULL);
+  return kills >= threshold;
+}
+// Map a screen point to the map tile under it, using the last camera transform.
+function clientToTile(cx, cy) {
+  if (!lastCam) return null;
+  const r = canvas.getBoundingClientRect();
+  if (!r.width || !r.height) return null;
+  const sx = (cx - r.left) * (canvas.width / r.width);
+  const sy = (cy - r.top) * (canvas.height / r.height);
+  return { mx: Math.floor((sx + lastCam.camX) / lastCam.tw), my: Math.floor((sy + lastCam.camY) / lastCam.th) };
+}
+function enemyAtClient(cx, cy) {
+  const t = clientToTile(cx, cy);
+  if (!t) return null;
+  return enemies.find(en => {
+    if (en.dead || en.minion) return false;
+    const s = en.size || 1;
+    return t.mx >= en.x && t.mx < en.x + s && t.my >= en.y && t.my < en.y + s;
+  }) || null;
+}
+function toggleEnemyCard(e, cx, cy) {
+  if (enemyCardFor === e) { closeEnemyCard(); return; }
+  enemyCardFor = e;
+  renderEnemyCard(e, cx, cy);
+}
+function closeEnemyCard() {
+  enemyCardFor = null;
+  const el = document.getElementById('enemy-card');
+  if (el) el.style.display = 'none';
+}
+function renderEnemyCard(e, cx, cy) {
+  const el = document.getElementById('enemy-card');
+  if (!el) return;
+  const kills = bestiaryKills(e);
+  const spr = enemySprite(e);
+  const icon = (spr && dlIcon(spr, 22)) || `<span style="font-size:20px">${e.type || '❓'}</span>`;
+  const name = e.isBoss ? (e.name || 'Boss') : (e.name || 'Unknown foe');
+  const sub = e.isBoss ? 'BOSS' : (e.isElite ? 'ELITE' : 'CREATURE');
+  // The stat rows, each gated by its own learn-threshold.
+  const styleLbl = ENEMY_STYLE_LABEL[e.behavior] || 'Hunter';
+  const rangedLbl = (BEHAVIORS[e.behavior] && BEHAVIORS[e.behavior].ranged) ? 'Ranged' : 'Melee';
+  const fields = [
+    ['lvl',   'Level',  e.level || '—'],
+    ['hp',    'Health', e.maxHp],
+    ['dmg',   'Damage', e.dmg],
+    ['style', 'Style',  styleLbl],
+    ['reach', 'Attack', rangedLbl],
+  ];
+  const rows = fields.map(([k, label, val]) => {
+    const known = statKnown(e, k, kills);
+    return `<span class="ec-k">${label}</span><span class="ec-v${known ? '' : ' hidden'}">${known ? val : '???'}</span>`;
+  }).join('');
+  // Footer: discovery progress (bosses skip the gating entirely).
+  let foot;
+  if (e.isBoss) {
+    foot = `<div class="ec-foot">Boss — fully known</div>`;
+  } else {
+    const cap = Math.min(kills, BESTIARY_FULL);
+    const pct = Math.round(cap / BESTIARY_FULL * 100);
+    foot = `<div class="ec-foot">Slain ${cap}/${BESTIARY_FULL}<span class="ec-bar"><i style="width:${pct}%"></i></span></div>`;
+  }
+  el.innerHTML =
+    `<div class="ec-head">${icon}<div><div class="ec-name">${name}</div><div class="ec-sub">${sub}</div></div></div>` +
+    `<div class="ec-grid">${rows}</div>${foot}`;
+  // Anchor near the tap, flipping/clamping to stay on-screen.
+  el.style.display = 'block';
+  const r = el.getBoundingClientRect();
+  const gap = 12;
+  let left = cx - r.width / 2;
+  let top = cy - r.height - gap;
+  if (top < gap) top = cy + gap;
+  left = Math.max(gap, Math.min(left, window.innerWidth - r.width - gap));
+  top = Math.max(gap, Math.min(top, window.innerHeight - r.height - gap));
+  el.style.left = left + 'px';
+  el.style.top = top + 'px';
+}
+// Any tap/click outside the canvas and the card itself dismisses it.
+document.addEventListener('pointerdown', ev => {
+  if (!enemyCardFor) return;
+  const card = document.getElementById('enemy-card');
+  if (card && card.contains(ev.target)) return; // the card's own onclick closes it
+  if (ev.target === canvas) return;             // the canvas handler decides
+  closeEnemyCard();
+}, true);
 
 // Keep the floating movement pad pinned to the bottom-centre of the map. A
 // ResizeObserver re-runs it whenever the canvas changes size (rotation, the
@@ -7744,6 +8167,7 @@ function tryBuildVault(reach) {
 
 function generateMap() {
   inTown = false;
+  entryGuard = true; // safe on arrival until your first turn
   // Size the floor for its difficulty BEFORE carving anything — harder tiers and
   // deeper Endless floors are larger maps (see mapSizeFor). areaRatio then scales
   // rooms, hazards and foes so a bigger map is a denser dungeon, not a sparse one.
@@ -8040,6 +8464,7 @@ function generateMap() {
 function buildTutorialMap() {
   tutorialActive = true;
   inTown = false;
+  entryGuard = true; // safe on arrival until your first turn
   floorSerial++;
   dungeonLevel = 1;
   arrivalDir = 'down';
@@ -8070,12 +8495,14 @@ function buildTutorialMap() {
   mapData[0][caveX] = 1;       // northern border wall behind it
 
   // Spawn the hero a few tiles up from the shoreline, facing the cave.
-  setPlayerCell(caveX, SHORE - 1);               // sand, with water directly below
-  // A lone skeleton a few steps north, between the hero and the cave. It lurks
-  // (stays put until you step up to it) so a brand-new hero is never jumped the
-  // instant the tutorial starts — you approach it, not the other way around.
+  setPlayerCell(caveX, SHORE - 1);               // sand, with water directly below (syncs fx/fy)
+  // A lone skeleton a few steps north, between the hero and the cave. It's
+  // neutral — static and harmless until the player strikes it, so a brand-new
+  // hero can approach safely and learn combat on their own terms. Once hit it
+  // wakes up and fights back, but only ever shambles (slow).
   const skl = { x: caveX, y: SHORE - 5, type: '🦴', name: 'Skeleton',
-    hp: 24, maxHp: 24, level: 1, dmg: 4, dead: false, behavior: 'lurker' };
+    hp: 24, maxHp: 24, level: 1, dmg: 4, dead: false, behavior: 'chaser',
+    passive: true, provoked: false, slow: true };
   enemies.push(skl);
 
   // Seal the cave until the skeleton falls, so the fight can't be skipped.
@@ -8100,22 +8527,22 @@ function finishTutorial() {
   updateBars(); renderPanel(); saveGame(); draw();
 }
 
-// ── TUTORIAL HINT BANNER ── a floating instruction that updates as the new
-// player progresses (move → fight → enter the cave).
+// ── TUTORIAL HINT CHIP ── a small "?" help affordance that updates its one-line
+// nudge as the new player progresses (move → fight → enter the cave). Tapping it
+// opens the full How to Play menu (wired on the element's onclick).
 function tutorialStage(stage) {
-  const moveHow = touchUI()
-    ? 'the on-screen d-pad'
-    : 'WASD or the arrow keys';
+  const moveHow = touchUI() ? 'the d-pad' : 'WASD / arrows';
   if (stage === 'move') {
-    setTutorialHint(`<b>You wake on a strange shore.</b><br>Use ${moveHow} to move — head up the beach toward the cave.<br>⚔️ A skeleton blocks the way: <b>walk into it</b> to attack until it falls.`);
+    setTutorialHint(`Use <b>${moveHow}</b> to move. Walk into the <b>skeleton</b> to attack it.`);
   } else if (stage === 'cave') {
-    setTutorialHint(`<b>The skeleton is dust.</b><br>🕳️ Now step into the cave (⬇) in the northern wall to descend into the dungeon.`);
+    setTutorialHint(`Step into the <b>cave</b> (⬇) up north to descend into the dungeon.`);
   }
 }
 function setTutorialHint(html) {
   const el = document.getElementById('tutorial-hint');
   if (!el) return;
-  el.innerHTML = html;
+  const txt = el.querySelector('.th-text');
+  if (txt) txt.innerHTML = html; else el.innerHTML = html;
   el.classList.add('show');
 }
 function hideTutorialHint() {
@@ -9102,6 +9529,7 @@ function renderCookingHTML() {
 const CRAFT_TIERS = ['normal', 'uncommon', 'rare', 'epic', 'legendary'];
 let forgeSlot = 'weapon';
 let forgeBase = null;   // chosen base name within the slot (drives look + name)
+let forgeCat = null;    // chosen weapon category (Sword, Axe …) for the two-step weapon picker
 let forgeTier = 'normal';
 // The Craftsman has a single bench: 🔨 Forge (build blank gear). Breaking gear
 // back down into materials moved onto the bag itself — you scrap straight from
@@ -9111,52 +9539,157 @@ let forgeTier = 'normal';
 // the town merchant's stock — so the Forge stays relevant as you descend.
 function craftIlvl() { return Math.max(1, Math.max(dungeonReturn || 1, player.maxFloor || 1)); }
 
-// Material + gold cost to craft, scaling with rarity and item level. Higher
-// rarities pull in higher-tier materials: Scrap always, Core at rare+, and a
-// Chaos Orb at legendary.
-function craftCost(tier) {
+// ── PER-BASE CRAFT CHARACTER ──
+// Two items of the same rarity shouldn't cost the same to forge: a Maul is a
+// slab of metal while a Dagger is a sliver, yet the Dagger is fussy, delicate
+// work. craftBaseFactors splits that into two multipliers fed into craftCost:
+//   • mat   scales the raw-material side (Scrap / Core) — bulk & mass. Big,
+//           two-handed weapons and heavy plate drink metal; small fine pieces sip.
+//   • labor scales the gold side — skilled labour. Precise, delicate pieces
+//           (daggers, rapiers, wands, rings, robes) bill more even when they
+//           barely touch the metal; crude bashing gear (mauls, axes) is rougher
+//           and cheaper to pay for.
+// Both default to 1 (an average piece) and are clamped so a future data tweak
+// can't produce a wild price.
+const WEAPON_LABOR = {           // how delicate a swing style is to forge
+  thrust: 1.35, flurry: 1.25, bolt: 1.30, shot: 1.20,
+  slash: 1.05, reap: 1.00, cleave: 0.85, crush: 0.72,
+};
+function craftBaseFactors(slot, baseName) {
+  let mat = 1, labor = 1;
+  if (slot === 'weapon') {
+    const cat = weaponCategoryOf(baseName);
+    const sd = WEAPON_SUBTYPES[baseName] || BASE_STATS[cat] || {};
+    const dmg = sd.dmg != null ? sd.dmg : 1;
+    const hands = (WEAPON_SUBTYPES[baseName] && WEAPON_SUBTYPES[baseName].hands) || 1;
+    const style = sd.style || WEAPON_STYLES[cat];
+    mat = 0.6 + dmg * 0.55 + (hands === 2 ? 0.1 : 0);   // mass tracks damage + a two-hand bump
+    labor = WEAPON_LABOR[style] != null ? WEAPON_LABOR[style] : 1;
+  } else if (slot === 'head' || slot === 'chest' || slot === 'hands' || slot === 'legs') {
+    const def = baseProfile(baseName).def || 1;
+    const slotSize = { chest: 1.25, legs: 1.0, head: 0.85, hands: 0.7 }[slot] || 1;
+    mat = slotSize * (0.5 + def * 0.5);                 // surface area × how heavy the plate is
+    labor = 1.25 - def * 0.25;                          // lighter, finer pieces bill a touch more
+  } else if (slot === 'offhand') {
+    const bp = baseProfile(baseName), off = bp.off || 'shield';
+    if (off === 'shield')      { mat = 0.8 + (bp.def || 1) * 0.6; labor = 0.85; } // bulky metal, rough work
+    else if (off === 'caster') { mat = 0.55; labor = 1.35; }   // fine tome / focus work
+    else if (off === 'ranged') { mat = 0.8;  labor = 1.15; }   // quiver
+    else                       { mat = 0.75; labor = 1.30; }   // dual (parrying blade) — dagger-like
+  } else if (slot === 'ring') {
+    mat = 0.4; labor = 1.5;                             // a sliver of metal, painstaking work
+  } else if (slot === 'amulet') {
+    mat = 0.5; labor = 1.4;
+  }
+  return {
+    mat:   Math.min(2,   Math.max(0.4, mat)),
+    labor: Math.min(1.6, Math.max(0.6, labor)),
+  };
+}
+
+// A one-line read on a base's forge character, derived from the same factors as
+// the price so players see *why* two same-rarity pieces cost differently.
+function craftCharacterNote(slot, baseName) {
+  const { mat, labor } = craftBaseFactors(slot, baseName);
+  const heavy = mat >= 1.35, light = mat <= 0.75;
+  const fine = labor >= 1.2, crude = labor <= 0.85;
+  if (fine && light)  return 'Delicate work — sips materials, bills high for the fine labour.';
+  if (heavy && crude) return 'Heavy build — metal-hungry, but rough, cheaper labour.';
+  if (fine)           return 'Fine work — the delicate labour costs extra.';
+  if (heavy)          return 'Bulky build — drinks extra materials.';
+  if (light)          return 'Compact build — easy on materials.';
+  return 'A balanced, average build.';
+}
+
+// Material + gold cost to craft, scaling with rarity, item level AND the chosen
+// base: bulky bases cost more materials, delicate ones cost more gold (labour).
+// Higher rarities pull in higher-tier materials: Scrap always, Core at rare+,
+// and a Chaos Orb at legendary.
+function craftCost(tier, slot = forgeSlot, baseName = forgeBase) {
   const ilvl = craftIlvl();
   const rank = CRAFT_TIERS.indexOf(tier);            // 0 (normal) .. 4 (legendary)
   const f = 1 + ilvl * 0.12;
+  const { mat, labor } = craftBaseFactors(slot, baseName);
   const cost = {
-    gold:  Math.round((25 + rank * 30) * f),
-    scrap: Math.round((4 + rank * 5) * f),
+    gold:  Math.round((25 + rank * 30) * f * labor),
+    scrap: Math.max(1, Math.round((4 + rank * 5) * f * mat)),
   };
-  if (rank >= 2) cost.core  = Math.round((1 + (rank - 2) * 2) * (1 + ilvl * 0.05)); // rare+
+  if (rank >= 2) cost.core  = Math.max(1, Math.round((1 + (rank - 2) * 2) * (1 + ilvl * 0.05) * mat)); // rare+
   if (rank >= 4) cost.chaos = 1;                                                     // legendary
   return cost;
 }
 
-function openForge() { forgeBase = null; openTownModal('🔨 Craftsman'); renderCraftsman(); }
+function openForge() { forgeBase = null; forgeCat = null; openTownModal('🔨 Craftsman'); renderCraftsman(); }
 function renderCraftsman() { renderForge(); }
-function forgeSelectSlot(slot) { forgeSlot = slot; forgeBase = null; renderForge(); }
+function forgeSelectSlot(slot) { forgeSlot = slot; forgeBase = null; forgeCat = null; renderForge(); }
 function forgeSelectBase(name) {
-  // Ignore taps on off-class weapon bases — they're greyed out for a reason.
-  if (forgeSlot === 'weapon' && !classCanUseWeaponBase(name)) return;
   forgeBase = name; renderForge();
 }
+// Weapons use a two-step picker: pick a category (Sword, Axe …) then a sub-type
+// within it. Switching category snaps the base to that category's first sub-type.
+function forgeSelectCat(cat) {
+  forgeCat = cat;
+  const subs = weaponCategoryGroups().groups[cat] || [];
+  if (!subs.includes(forgeBase)) forgeBase = subs[0];
+  renderForge();
+}
 function forgeSelectTier(tier) { forgeTier = tier; renderForge(); }
+
+// Forgeable weapon bases grouped by category for the two-step picker. Built from
+// SLOTS.weapon.names so the order matches the rest of the UI, and from each
+// sub-type's `cat` so it stays in sync with WEAPON_SUBTYPES.
+function weaponCategoryGroups() {
+  const groups = {}, order = [];
+  for (const name of SLOTS.weapon.names) {
+    const cat = (WEAPON_SUBTYPES[name] && WEAPON_SUBTYPES[name].cat) || weaponCategoryOf(name) || name;
+    if (!groups[cat]) { groups[cat] = []; order.push(cat); }
+    groups[cat].push(name);
+  }
+  return { groups, order };
+}
 
 function renderForge() {
   if (!CRAFT_TIERS.includes(forgeTier)) forgeTier = 'normal';
   if (!SLOT_KEYS.includes(forgeSlot)) forgeSlot = 'weapon';
-  const names = SLOTS[forgeSlot].names;
   const isWeapon = forgeSlot === 'weapon';
-  if (!forgeBase || !names.includes(forgeBase)) forgeBase = names[0];
-  // Default to a base this class can actually wield, so the preview never opens
-  // on a weapon you couldn't equip.
-  if (isWeapon && !classCanUseWeaponBase(forgeBase)) forgeBase = names.find(classCanUseWeaponBase) || names[0];
 
   const slotBtns = SLOT_KEYS.map(s =>
     `<button class="forge-opt ${s === forgeSlot ? 'on' : ''}" onclick="forgeSelectSlot('${s}')">${SLOTS[s].label}</button>`
   ).join('');
-  const baseBtns = names.map(n => {
-    const locked = isWeapon && !classCanUseWeaponBase(n);
-    const cls = `forge-opt${n === forgeBase ? ' on' : ''}${locked ? ' forge-opt-locked' : ''}`;
-    const hand = isWeapon ? ` <span style="opacity:.55;font-size:9px">${weaponHandsOf(n) === 2 ? '2H' : '1H'}</span>` : '';
-    const reach = isWeapon ? ` <span style="opacity:.6;font-size:9px">⟷${weaponRange(n)}</span>` : '';
-    return `<button class="${cls}" ${locked ? 'disabled' : `onclick="forgeSelectBase('${n.replace(/'/g, "\\'")}')"`}>${n}${hand}${reach}${locked ? ' 🔒' : ''}</button>`;
-  }).join('');
+
+  // Weapons get a two-step picker (category → sub-type); every other slot keeps
+  // its single flat list of bases.
+  let baseSection = '';
+  if (isWeapon) {
+    const { groups, order } = weaponCategoryGroups();
+    if (!forgeCat || !groups[forgeCat]) {
+      forgeCat = (forgeBase && WEAPON_SUBTYPES[forgeBase] && WEAPON_SUBTYPES[forgeBase].cat) || order[0];
+    }
+    const subs = groups[forgeCat] || [];
+    if (!forgeBase || !subs.includes(forgeBase)) forgeBase = subs[0];
+    const catBtns = order.map(c =>
+      `<button class="forge-opt ${c === forgeCat ? 'on' : ''}" onclick="forgeSelectCat('${c}')">${c}</button>`
+    ).join('');
+    const subBtns = subs.map(n => {
+      const hand = ` <span style="opacity:.55;font-size:9px">${weaponHandsOf(n) === 2 ? '2H' : '1H'}</span>`;
+      const reach = ` <span style="opacity:.6;font-size:9px">⟷${weaponRange(n)}</span>`;
+      return `<button class="forge-opt${n === forgeBase ? ' on' : ''}" onclick="forgeSelectBase('${n.replace(/'/g, "\\'")}')">${n}${hand}${reach}</button>`;
+    }).join('');
+    baseSection = `
+      <div class="forge-label">Weapon</div>
+      <div class="forge-grid forge-cats">${catBtns}</div>
+      <div class="forge-label">Type</div>
+      <div class="forge-grid forge-bases">${subBtns}</div>`;
+  } else {
+    const names = SLOTS[forgeSlot].names;
+    if (!forgeBase || !names.includes(forgeBase)) forgeBase = names[0];
+    const baseBtns = names.map(n =>
+      `<button class="forge-opt${n === forgeBase ? ' on' : ''}" onclick="forgeSelectBase('${n.replace(/'/g, "\\'")}')">${n}</button>`
+    ).join('');
+    baseSection = `
+      <div class="forge-label">Base</div>
+      <div class="forge-grid forge-bases">${baseBtns}</div>`;
+  }
   const tierBtns = CRAFT_TIERS.map(t => {
     const caps = TIER_AFFIX_CAPS[t] || { stat: 0, attr: 0 };
     return `<button class="forge-opt ${t === forgeTier ? 'on' : ''}" style="${t === forgeTier ? '' : `color:${TIERS[t].color}`}" onclick="forgeSelectTier('${t}')">
@@ -9172,22 +9705,26 @@ function renderForge() {
   // For weapons, surface the selected base's reach grid + how it swings, plus a
   // note that off-class bases are locked. Other slots get a one-line hint that the
   // base shapes its headline / signature stat.
-  const cls = playerClass();
   let baseHint = '';
   if (isWeapon) {
     const style = WEAPON_SUBTYPES[forgeBase] ? WEAPON_SUBTYPES[forgeBase].style : WEAPON_STYLES[forgeBase];
     baseHint = `<div style="padding:1px 2px 3px">${weaponRangeGridHTML(forgeBase)}` +
       (WEAPON_STYLE_DESC[style] ? `<div style="color:#9a8d70;font-size:9px;margin-top:3px;font-style:italic">${WEAPON_STYLE_DESC[style]}</div>` : '') +
-      (cls ? `<div style="color:#8a7d63;font-size:9px;margin-top:3px">🔒 bases are weapons your ${cls.name} can't wield</div>` : '') +
       `</div>`;
   }
+  // The attribute this base will demand to EQUIP at the forge's depth. You may still
+  // forge gear you can't yet wield — invest the stat and grow into it — so this is an
+  // amber heads-up when unmet, not a hard block.
+  const fStatus = attrReqStatus(preview);
+  const forgeReqLine = fStatus
+    ? `<div class="shop-row-sub" style="color:${fStatus.ok ? '#7ad08a' : '#e0b15a'}">Requires ${fStatus.need} ${ATTRIBUTES[fStatus.attr].short} to equip · you have ${fStatus.have}</div>`
+    : '';
 
   setTownContent(`
-    <div class="town-blurb">The Craftsman forges a <b>blank</b> piece at your current depth (ilvl ${craftIlvl()}) — its base damage or defense set by the base you pick, with empty modifier slots. Take it to the 🪄 Enchanter to fill them in. Rarity sets how many modifiers it can hold.</div>
+    <div class="town-blurb">The Craftsman forges a <b>blank</b> piece at your current depth (ilvl ${craftIlvl()}) — its base damage or defense set by the base you pick, with empty modifier slots. Take it to the 🪄 Enchanter to fill them in. Rarity sets how many modifiers it can hold. Heftier bases drink more materials; finer ones bill more for the delicate&nbsp;labour.</div>
     <div class="forge-label">Item type</div>
     <div class="forge-grid forge-slots">${slotBtns}</div>
-    <div class="forge-label">Base</div>
-    <div class="forge-grid forge-bases">${baseBtns}</div>
+    ${baseSection}
     ${baseHint}
     <div class="forge-label">Rarity <span style="opacity:.6">(stat + attr slots)</span></div>
     <div class="forge-grid forge-tiers">${tierBtns}</div>
@@ -9196,11 +9733,13 @@ function renderForge() {
       <div class="shop-row-info item-${preview.tier}">
         <div class="shop-row-name">${preview.name}${craftedMark(preview)}</div>
         <div class="shop-row-stats">${itemStatLine(preview)} · ${caps.stat} stat / ${caps.attr} attr slots</div>
+        ${forgeReqLine}
       </div>
     </div>
     <div class="shop-row">
       <div class="shop-row-info"><div class="shop-row-name">Forge cost</div>
-        <div class="shop-row-sub">${costLabelHi(cost)}</div></div>
+        <div class="shop-row-sub">${costLabelHi(cost)}</div>
+        <div class="shop-row-sub" style="color:#9a8d70;font-style:italic">${craftCharacterNote(forgeSlot, forgeBase)}</div></div>
       <button class="shop-buy-btn" ${afford ? '' : 'disabled'} onclick="craftItem()">🔨 FORGE</button>
     </div>`);
 }
@@ -9605,6 +10144,10 @@ function respecAttrs() {
   if (player.mp > player.maxMp) player.mp = player.maxMp;
   sfx('shrine');
   log(`🎓 You unlearn your attributes — ${spent} point${spent === 1 ? '' : 's'} returned to spend.`, 'important');
+  // Dropping back to base attributes can leave worn gear under its requirement; warn
+  // so the player understands why those pieces just went red and stopped helping.
+  const ignored = SLOT_KEYS.filter(s => equipped[s] && !slotActive(s)).length;
+  if (ignored) log(`⚠ ${ignored} worn piece${ignored === 1 ? '' : 's'} no longer meet${ignored === 1 ? 's' : ''} the attribute requirement — shown red in GEAR and ignored until you re-invest.`, 'important');
   updateBars(); renderPanel(); renderTrainer(); saveGame();
 }
 function respecSkills() {
@@ -10805,18 +11348,19 @@ function generateItem(rolls = 1, ilvl = null, forceTier = null, forceSlot = null
   return item;
 }
 
-// Pick the base item type for a slot. For weapons we heavily favour the types
-// the player's class can actually wield, so most weapon drops are equippable —
-// only occasionally does an off-class weapon slip through. Other slots (armour,
-// jewelry) are wearable by every class, so they just roll uniformly.
+// Pick the base item type for a slot. Every class can now wield every weapon, but
+// drops still lean toward the categories your class FAVOURS (CLASSES[*].weapons) so
+// most loot stays build-relevant — yet a healthy ~40% still rolls fully at random,
+// so off-favoured weapons you've invested the stat for turn up too. Other slots
+// (armour, jewelry) are wearable by everyone, so they just roll uniformly.
 function rollBaseName(slot) {
   const names = SLOTS[slot].names;
   if (slot === 'weapon') {
     const cls = playerClass();
     if (cls && cls.weapons && cls.weapons.length) {
-      // names are sub-types now; the class lock is by category, so resolve first.
-      const usable = names.filter(n => cls.weapons.includes(weaponCategoryOf(n)));
-      if (usable.length) return Math.random() < 0.85 ? pick(usable) : pick(names);
+      // names are sub-types; the class affinity is by category, so resolve first.
+      const favoured = names.filter(n => cls.weapons.includes(weaponCategoryOf(n)));
+      if (favoured.length) return Math.random() < 0.6 ? pick(favoured) : pick(names);
     }
   }
   return pick(names);
@@ -12575,7 +13119,7 @@ function tryBossStatusProc(e) {
 }
 
 function tryPlayerStatusProc(e) {
-  const w = equipped.weapon;
+  const w = activeWeapon();   // a red/ignored weapon procs nothing
   if (!w) return;
   // Bleed (gear stat): a chance to open a bleeding wound — a poison-style damage-
   // over-time — on hit. Unlike the epic+ proc below this fires at ANY rarity, so a
@@ -12793,6 +13337,9 @@ function applyRegen() {
 //                  clears it.
 let __turnBusy = false;
 let gameHalted = false;
+// Paused while the new-game name prompt is open, so the world can't be acted on
+// (e.g. the floating d-pad tapped) until the player finishes naming their hero.
+let namePaused = false;
 window.haltAll = function () {
   gameHalted = true;
   clearHeld();  // drop any held movement so a halted game doesn't keep the hero walking
@@ -12807,7 +13354,7 @@ window.gameBusy = () => __turnBusy;
 // single turn they belong to runs to completion uninterrupted.
 function guardAction(fn) {
   return function () {
-    if (gameHalted || __turnBusy) return undefined;
+    if (gameHalted || namePaused || __turnBusy) return undefined;
     __turnBusy = true;
     try { return fn.apply(this, arguments); }
     finally { __turnBusy = false; }
@@ -12899,6 +13446,7 @@ function doDash() {
   const m = Math.hypot(dx, dy) || 1; dx /= m; dy /= m;
   player.vx = dx * DASH_SPEED; player.vy = dy * DASH_SPEED;
   player.dashT = 0.16; player.dashCd = DASH_CD;
+  entryGuard = false;   // dashing ends arrival grace
   player.stamina = Math.max(0, player.stamina - DASH_COST); player._stamDelay = STAM_DELAY;
   sfx('teleport'); spawnParticles(player.x, player.y, '#bfe3ff', 9, 0.13);
 }
@@ -12920,7 +13468,7 @@ function updatePlayer(dt) {
   if (joy.active && joy.mag > 0.18) { ix = joy.dx; iy = joy.dy; }
   const mag = Math.hypot(ix, iy);
   const moving = mag > 0.01;
-  if (moving) { ix /= mag; iy /= mag; }   // normalise (also fixes diagonal-key speed)
+  if (moving) { ix /= mag; iy /= mag; entryGuard = false; } // first move ends arrival grace
 
   // Sprint: wanting it + moving + stamina. Drains stamina; otherwise it refills.
   const wantSprint = moving && player.stamina > 0 && (sprintHeld || (joy.active && joy.mag > 0.85));
@@ -13141,7 +13689,7 @@ function unstuck() {
 }
 
 function getWeaponDamage() {
-  const w = equipped.weapon;
+  const w = activeWeapon();   // a red/ignored weapon gives no damage — bare fists
   if (w && w.stats.DMG) {
     const [lo, hi] = w.stats.DMG.split('-').map(Number);
     return rnd(lo, hi);
@@ -13153,9 +13701,11 @@ function getWeaponDamage() {
 // wield an off-hand alongside a two-hander, but at a cost: its stats count for 60%.
 // The guard is cheap (the rare 2H+off-hand combo) so skillFlag is rarely hit.
 function totalStat(name) {
+  const active = activeSlots();
   let sum = 0;
   const tgPenalty = (equipped.offhand && isTwoHander(equipped.weapon) && skillFlag('titangrip')) ? 0.6 : 1;
   for (const slot of SLOT_KEYS) {
+    if (!active[slot]) continue;          // red/ignored pieces lend nothing
     const it = equipped[slot];
     if (it && typeof it.stats[name] === 'number') {
       sum += (slot === 'offhand' && tgPenalty !== 1) ? Math.round(it.stats[name] * tgPenalty) : it.stats[name];
@@ -13352,6 +13902,12 @@ function onEnemyDefeated(e) {
   // summoner boss can't be farmed by killing the fodder it spawns endlessly.
   if (e.minion) { sfx('kill'); updateFloorClear(); return; }
   fireSkillTrigger('kill', { enemy: e }); // on-kill procs: charges, heals, frenzy…
+  // Bestiary: chalk up this species so the inspect card reveals more of its stats.
+  if (!e.isGoblin) {
+    if (!player.bestiary) player.bestiary = {};
+    const bk = bestiaryKey(e);
+    player.bestiary[bk] = (player.bestiary[bk] || 0) + 1;
+  }
   const label = enemyLabel(e);
   const xpMult = e.isBoss ? 5 : (e.isElite ? 2 : 1);
   const goldMult = e.isBoss ? 3 : (e.isElite ? 2 : 1);
@@ -13502,6 +14058,7 @@ function onEnemyDefeated(e) {
 // ranged pokes that draw no counter. `opts.ranged` marks shots fired from afar
 // (bow/staff/spear reach), which never provoke a melee counterattack.
 function attackEnemy(e, opts = {}) {
+  if (e) e.provoked = true; // striking a neutral foe wakes it up
   const style = opts.style || weaponStyle();
   const ranged = !!opts.ranged;
   const label = enemyLabel(e);
@@ -13626,7 +14183,7 @@ function tryRangedAttack(dx, dy) {
   if (dx === 0 && dy === 0) return false;
   if (getEnemyAt(player.x + dx, player.y + dy)) return false; // adjacent → normal melee
   const style = weaponStyle();
-  const range = weaponRangeOf(equipped.weapon) || STYLE_RANGE[style] || 1;
+  const range = weaponRangeOf(activeWeapon()) || STYLE_RANGE[style] || 1;
   if (range < 2) return false;            // melee-only weapons can't poke at range
   const mpCost = style === 'bolt' ? 4 : 0; // the Staff's bolt spends a little mana
   if (mpCost && player.mp < mpCost) return false;
@@ -13679,10 +14236,10 @@ function castSkillById(id) {
   if (isPlayerStunned()) { log('You are stunned and can\'t cast!'); return; }
   const cd = skillCd(id);
   if (cd > 0) { log(`⏳ ${sk.name} is recharging (${cd} more turn${cd === 1 ? '' : 's'}).`); return; }
-  // Mana Cost Reduction % (gear) lowers the price of every cast; a rank-3 skill
-  // gets the ✦ Empowered discount on top.
-  const msMcr = skillRank(id) >= 3 ? 0.15 : 0;
-  const cost = Math.max(1, Math.round(sk.mp * (1 - Math.min(0.6, totalStat('MCR') / 100) - msMcr)));
+  // sk.mp is the rank-scaled cost (it climbs as the skill levels up, already net
+  // of the rank-3 ✦ Empowered discount). Mana Cost Reduction % (gear) trims the
+  // final price of every cast on top.
+  const cost = Math.max(1, Math.round(sk.mp * (1 - Math.min(0.6, totalStat('MCR') / 100))));
   // Blood Pact keystone: skills are paid in LIFE, not mana — a martyr's bargain
   // that frees your whole mana pool but bleeds you with every cast.
   const bloodPact = keystoneFlag('bloodpact');
@@ -13788,6 +14345,21 @@ function nextMilestone(rank) { return SKILL_MILESTONES.find(m => rank < m.rank) 
 // status chance/duration and summon counts grow more slowly, so a rank-10 skill
 // is strong but not absurd.
 function rankScale(rank) { return (1 + 0.12 * ((rank || 1) - 1)) * (1 + milestonePower(rank)); }
+
+// Skills cost progressively more mana the deeper you rank them: every rank past
+// the first adds a flat slice of the base cost, so pouring points into a skill is
+// a real mana commitment, not free power (the per-rank power climb is steeper, so
+// the trade still pays off). The rank-3 ✦ Empowered milestone trims some of that
+// back — that's its "cheaper casts" perk. This returns the skill's own MP cost at
+// a given rank, BEFORE gear Mana Cost Reduction, which castSkillById layers on at
+// cast time. Rank 0 (not yet learned) previews the rank-1 cost.
+const MANA_PER_RANK = 0.08; // +8% of base mana per rank above the first
+function skillManaCost(node, rank) {
+  if (!node || !node.mp) return 0;
+  const r = Math.max(1, rank || 1);
+  const empowered = r >= 3 ? 0.15 : 0; // rank-3 ✦ Empowered "cheaper casts" discount
+  return Math.max(1, Math.round(node.mp * (1 + MANA_PER_RANK * (r - 1)) * (1 - empowered)));
+}
 
 // Base physical magnitude for weapon actives (a normal swing's raw number, plus
 // any flat ATK passives), before per-skill multiplier and modifiers.
@@ -14158,6 +14730,8 @@ function runEnemyTurn() {
     if (dist <= 8) enemyMove(e);
   });
   if (floorSerial === serial) tickBossHazards();
+  // Your first turn on the floor is over — arrival grace ends now.
+  entryGuard = false;
   // The shared potion cooldown (and every active-skill cooldown) was just ticked
   // above, so refresh the skill bar here — the one place every turn-passing action
   // funnels through. Without this, plain moves / melee swings / waiting decrement
@@ -14262,6 +14836,14 @@ function enemyMove(e) {
   // Stunned foes lose their turn.
   if (statusEffects.some(s => s.target === e && s.effect === 'stun')) return;
 
+  // Neutral foes never initiate — they hold their ground (with the rare idle
+  // shuffle) until the player provokes them by attacking. Once provoked they
+  // fight normally.
+  if (e.passive && !e.provoked) {
+    if (Math.random() < 0.12) enemyWander(e);
+    return;
+  }
+
   const beh = BEHAVIORS[e.behavior] || BEHAVIORS.chaser;
   const dist = Math.abs(e.x - player.x) + Math.abs(e.y - player.y);
 
@@ -14284,8 +14866,9 @@ function enemyMove(e) {
   // Bosses weigh their signature ability first; some abilities end the turn.
   if (e.isBoss && bossSpecial(e, dist, beh)) return;
 
-  // Heavy brutes act only every other turn — slow, but they hit like a truck.
-  if (beh.slow) { e.tick = (e.tick || 0) + 1; if (e.tick % 2 === 1) return; }
+  // Heavy brutes (and flagged-slow foes like the tutorial skeleton) act only
+  // every other turn — slow, but they still close in.
+  if (beh.slow || e.slow) { e.tick = (e.tick || 0) + 1; if (e.tick % 2 === 1) return; }
 
   // Lurkers stay coiled until you stray close, then commit to the hunt.
   if (beh.ambush) {
@@ -14428,6 +15011,8 @@ function goblinFlee(e) {
 function enemyAttackPlayer(e) {
   if ((e.atkCd || 0) > 0) return;           // still winding up between swings
   e.atkCd = enemyAttackInterval(e);
+  // Arrival grace — no damage taken until you first move on a new floor.
+  if (entryGuard) { spawnFloatingText(player.x, player.y, '✦', '#bfe9ff'); return; }
   const beh = BEHAVIORS[e.behavior] || BEHAVIORS.chaser;
   if (rollDodge(e)) {
     spawnFloatingText(player.x, player.y, 'DODGE', '#9fe8ff');
@@ -14473,6 +15058,8 @@ function tryChillProc(e, dmg) {
 function enemyRangedAttack(e) {
   if ((e.atkCd || 0) > 0) return;           // still reloading between shots
   e.atkCd = enemyAttackInterval(e);
+  // Arrival grace — no damage taken until you first move on a new floor.
+  if (entryGuard) { spawnFloatingText(player.x, player.y, '✦', '#bfe9ff'); return; }
   if (rollDodge(e)) {
     spawnFloatingText(player.x, player.y, 'DODGE', '#9fe8ff');
     log(`💨 ${HERO} sidesteps ${enemyLabel(e)}'s bolt!`);
@@ -15243,13 +15830,18 @@ enterTown      = guardAction(enterTown);
 enterDungeonAt = guardAction(enterDungeonAt);
 openTownService = guardAction(openTownService);
 
-// XP needed to advance FROM a given level. Quadratic, so leveling slows sharply
-// as you climb: a level is now a rare milestone, not something you trip over
-// every few kills. Combined with kill XP that only scales linearly with depth,
-// this means you can't out-level the dungeon — depth always pulls ahead.
-//   Lv1→2: 150   Lv5→6: 1,310   Lv10→11: 4,560   Lv20→21: 17,060
+// XP needed to advance FROM a given level. A cubic curve, so the FEEL of
+// levelling changes dramatically as you climb: the first handful of levels fly
+// by (a couple of kills each) to give a snappy, rewarding opening, then the cost
+// ramps super-linearly into a serious grind at high level — a level there is a
+// rare, hard-won milestone rather than something you trip over. Combined with
+// kill XP that only scales linearly with depth, this means you can't out-level
+// the dungeon — depth always pulls ahead, and the deeper you are the more your
+// progress leans on gear rather than fresh levels.
+//   Lv1→2: 50   Lv5→6: 762   Lv10→11: 3,812   Lv20→21: 22,812
+//   Lv30→31: 69,012   Lv40→41: 154,412   Lv50→51: 291,012
 function xpForLevel(level) {
-  return Math.round(40 * level * level + 50 * level + 60);
+  return Math.round(2 * level * level * level + 16 * level * level + 20 * level + 12);
 }
 
 function checkLevelUp() {
@@ -15678,7 +16270,10 @@ function renderPanel() {
 // HERO tab: overall power, derived stats, and the attributes you can raise.
 function renderHero(el) {
   const pts = player.attrPoints || 0;
-  const gearPower = SLOT_KEYS.reduce((s, k) => s + (equipped[k] ? itemPower(equipped[k]) : 0), 0);
+  // Count only ACTIVE gear so this "from gear" subtotal reconciles with the headline
+  // POWER (playerPower also skips red/ignored pieces).
+  const gActive = activeSlots();
+  const gearPower = SLOT_KEYS.reduce((s, k) => s + (gActive[k] ? itemPower(equipped[k]) : 0), 0);
   const dmgA = classDmgAttrs();
   // Each attribute row shows base+spent plus any gear bonus, tags the class's
   // damage attributes, and offers a + to raise it.
@@ -15755,7 +16350,7 @@ function renderHero(el) {
           : (sig ? `<div class="hc-line" style="opacity:0.8">Spend a skill point to learn ${dlIcon(sig.icon,16)||''} <b>${sig.name}</b> (SKILLS tab)</div>` : ''); })()}
       ${ascData() ? `<div class="hc-line" style="color:${ascData().color}">${dlIcon(ascData().icon,18)||''} <b>${ascData().name}</b> — ${ascData().blurb}</div>`
         : (cls && (player.level || 1) >= ASCEND_LEVEL ? `<div class="hc-line" style="color:#e8c267">🌟 Ready to ascend — visit the Trainer 🎓</div>` : '')}
-      <div class="hc-line" style="opacity:0.75">Weapons: ${cls.weapons.join(', ')}</div>
+      <div class="hc-line" style="opacity:0.75">Favours: ${cls.weapons.join(', ')} <span style="opacity:0.7">· any weapon usable if you meet its stat</span></div>
       <div class="hc-line" style="opacity:0.6">Change class · ascend at the town Trainer 🎓</div>
     </div>` : '';
   el.innerHTML = `
@@ -15926,7 +16521,7 @@ function renderSkills(el) {
   const sn = selectedSkillId ? byId[selectedSkillId] : null;
   if (sn) {
     const rank = skillRank(sn.id);
-    const typeTxt = sn.type === 'active' ? `⚡ ACTIVE · ${sn.mp}MP · ${sn.cd}cd · ${castShapeLabel(sn.cast)}` : 'PASSIVE';
+    const typeTxt = sn.type === 'active' ? `⚡ ACTIVE · ${skillManaCost(sn, rank)}MP · ${sn.cd}cd · ${castShapeLabel(sn.cast)}` : 'PASSIVE';
     const pips = sn.type === 'active' ? milestonePips(rank) : '';
     const rankTxt = ` <span style="color:#e8c267">${rank}/${sn.max}${pips ? ' ' + pips : ''}</span>`;
     const reqRows = [];
@@ -16009,7 +16604,7 @@ function skillTipHtml(n) {
   const rank = skillRank(n.id);
   const pips = n.type === 'active' ? milestonePips(rank) : '';
   const typeTxt = n.type === 'active'
-    ? `⚡ Active · ${n.mp}MP · ${n.cd}cd · ${esc(castShapeLabel(n.cast))}`
+    ? `⚡ Active · ${skillManaCost(n, rank)}MP · ${n.cd}cd · ${esc(castShapeLabel(n.cast))}`
     : 'Passive';
   let h = `<div class='ht-name'>${esc(n.name)} <span style='color:#e8c267'>${rank}/${n.max}${pips ? ' ' + pips : ''}</span></div>`;
   h += `<div class='ht-line' style='color:#9a8fd0'>${typeTxt}</div>`;
@@ -16230,6 +16825,11 @@ function skillRankUpRows(node, rank) {
     const cur = Math.round(rankScale(rank || 1) * 100);
     const next = Math.round(rankScale(rank + 1) * 100);
     rows.push(['effect power', rank > 0 ? `${cur}% → <b>${next}%</b>` : `<b>100%</b>`]);
+    // Mana cost climbs with each rank — show the next-rank price so the trade-off
+    // (more power for more mana) is clear before you spend the point.
+    const curMp = skillManaCost(node, rank || 1);
+    const nextMp = skillManaCost(node, rank + 1);
+    rows.push(['mana cost', rank > 0 ? `${curMp} → <b>${nextMp}</b> MP` : `<b>${nextMp}</b> MP`]);
     if (node.cast.summon) {
       const base = node.cast.summon.count || 1;
       const curN = Math.min(8, base + Math.floor(((rank || 1) - 1) / 4));
@@ -16259,6 +16859,7 @@ function skillTotalSummary(node, rank) {
       const n = Math.min(8, (node.cast.summon.count || 1) + Math.floor((rank - 1) / 4));
       s += `, ${n} minion${n === 1 ? '' : 's'}`;
     }
+    s += `, ${skillManaCost(node, rank)} MP`;
     return s;
   }
   return '';
@@ -16382,14 +16983,14 @@ function showClassPick() {
   if (!ov) return;
   const title = document.getElementById('class-title');
   if (title) title.textContent = player.name ? `Choose ${player.name}'s Class` : 'Choose your Hero';
-  sub.textContent = 'Pick a class — it shapes which attributes your damage scales off, the weapons you can wield, and its skill tree. You start with one skill point to spend. You can retrain later at the town Trainer.';
+  sub.textContent = 'Pick a class — it shapes which attributes your damage scales off, the weapons it favours, and its skill tree. Any class can wield any weapon once it meets the weapon’s stat requirement. You start with one skill point to spend. You can retrain later at the town Trainer.';
   cards.innerHTML = CLASS_KEYS.map(k => {
     const c = CLASSES[k];
     const sig = classSignature(k);
     return `<button class="class-card" style="border-left-color:${c.color}" onclick="chooseClass('${k}')">
       <div class="cc-head"><span class="cc-icon">${c.icon}</span><span class="cc-name" style="color:${c.color}">${c.name}</span></div>
       <div class="cc-blurb">${c.blurb}</div>
-      <div class="cc-detail">Passive: ${c.passive}<br>${sig ? `Starting skill: ${dlIcon(sig.icon,16)||''} ${sig.name} — ${sig.desc}<br>` : ''}Weapons: ${c.weapons.join(', ')}</div>
+      <div class="cc-detail">Passive: ${c.passive}<br>${sig ? `Starting skill: ${dlIcon(sig.icon,16)||''} ${sig.name} — ${sig.desc}<br>` : ''}Favours: ${c.weapons.join(', ')}</div>
     </button>`;
   }).join('');
   ov.classList.add('open');
@@ -16410,22 +17011,12 @@ function chooseClass(key) {
   recomputeMaxStats();
   player.hp = player.maxHp;
   player.mp = player.maxMp;
-  revalidateWeapon(cls);
   const ov = document.getElementById('class-overlay');
   if (ov) ov.classList.remove('open');
   const sig = classSignature(key);
   log(`${cls.icon} You are a ${cls.name}! ${cls.passive}.${sig ? ` Spend your skill point in the SKILLS tab (${touchUI() ? 'tap 🎒 BAG' : 'press B'}) to learn ${sig.name}.` : ''}`, 'important');
   sfx('levelup');
   updateBars(); renderPanel(); renderSkillBar(); draw(); saveGame();
-}
-
-// If the (new) class can't wield the equipped weapon, stow it in the bag.
-function revalidateWeapon(cls) {
-  if (equipped.weapon && !canEquipItem(equipped.weapon)) {
-    log(`🔒 You stow the ${equipped.weapon.name} — a ${cls.name} can't wield it.`);
-    inventory.push(equipped.weapon);
-    equipped.weapon = null;
-  }
 }
 
 // Retraining at the town Trainer: change class for gold. Attributes are kept.
@@ -16446,7 +17037,6 @@ function changeClass(key) {
   recomputeMaxStats();
   if (player.hp > player.maxHp) player.hp = player.maxHp;
   if (player.mp > player.maxMp) player.mp = player.maxMp;
-  revalidateWeapon(cls);
   sfx('shrine');
   log(`${cls.icon} You retrain as a ${cls.name}!${refunded ? ` ${refunded} skill point${refunded === 1 ? '' : 's'} refunded — respend them in the SKILLS tab.` : ''}`, 'important');
   updateBars(); renderPanel(); renderSkillBar(); renderTrainer(); draw(); saveGame();
@@ -16479,14 +17069,16 @@ function renderDollSlot(slot) {
   if (slot === 'offhand' && !item && isTwoHander(equipped.weapon) && !skillFlag('titangrip')) {
     const w = equipped.weapon;
     const tic = dlIcon(dollSprite('weapon', w), 40) || `<span class="pd-emoji">🤲</span>`;
-    const tcol = (TIERS[w.tier] || {}).color || '';
+    // Mirror the weapon's own red/ignored state onto the hand it occupies.
+    const wDead = !slotActive('weapon');
+    const tcol = wDead ? '#e0556b' : ((TIERS[w.tier] || {}).color || '');
     const tstyle = tcol ? ` style="border-color:${tcol}77;box-shadow:0 0 6px ${tcol}33;opacity:.62"` : ' style="opacity:.62"';
     return `<div class="pd-cell">
-      <div class="pd-slot filled"${tstyle}
+      <div class="pd-slot filled${wDead ? ' pd-inactive' : ''}"${tstyle}
            onclick="tapSlot('weapon', this)"
            onmouseenter="hoverSlot(event,'weapon')" onmouseleave="hideTooltip()">
         ${tic}
-        <span class="item-power pd-pwr" style="background:#2a2418;color:#cdbf9a">2H</span>
+        <span class="item-power pd-pwr" style="background:#2a2418;color:${wDead ? '#e0556b' : '#cdbf9a'}">${wDead ? '⚠' : '2H'}</span>
       </div>
       <div class="pd-cap" style="color:#8a7d63">Both hands</div>
     </div>`;
@@ -16494,18 +17086,39 @@ function renderDollSlot(slot) {
   const sp = dollSprite(slot, item);
   const emoji = (SLOTS[slot].label.match(EMOJI_RE) || ['❔'])[0];
   const ic = dlIcon(sp, 40) || `<span class="pd-emoji">${emoji}</span>`;
+  // A worn piece whose attribute requirement is no longer met (e.g. after a respec)
+  // is shown RED and treated as ignored everywhere else — flag it here so the gear
+  // panel makes plain WHY it isn't helping and what to raise to bring it back.
+  const inactive = item && !slotActive(slot);
+  const reqS = inactive ? attrReqStatus(item) : null;
+  const reqShort = inactive
+    ? (reqS && !reqS.ok ? `needs ${reqS.need} ${ATTRIBUTES[reqS.attr].short}` : 'unequippable')
+    : '';
   const cap = item ? item.name : SLOTS[slot].label.replace(/^\S+\s/, '');
-  const color = item ? (TIERS[item.tier] || {}).color || '' : '';
-  const frameStyle = item && color ? ` style="border-color:${color};box-shadow:0 0 9px ${color}55"` : '';
+  const tierColor = item ? (TIERS[item.tier] || {}).color || '' : '';
+  const frameStyle = item
+    ? (inactive
+        ? ` style="border-color:#e0556b;box-shadow:0 0 9px #e0556b66;opacity:.62"`
+        : (tierColor ? ` style="border-color:${tierColor};box-shadow:0 0 9px ${tierColor}55"` : ''))
+    : '';
+  const pwrBadge = !item ? ''
+    : inactive
+      ? `<span class="item-power pd-pwr" style="background:#3a1620;color:#e0556b">⚠</span>`
+      : `<span class="item-power pd-pwr">⚡${itemPower(item)}</span>`;
+  const capHTML = !item
+    ? `<div class="pd-cap">${cap}</div>`
+    : inactive
+      ? `<div class="pd-cap" style="color:#e0556b">${cap}<br><span style="font-size:9px;opacity:.95">⚠ ${reqShort}</span></div>`
+      : `<div class="pd-cap"${tierColor ? ` style="color:${tierColor}"` : ''}>${cap}</div>`;
   return `<div class="pd-cell ${item ? '' : 'is-empty'}">
-    <div class="pd-slot ${item ? 'filled' : 'empty'}"${frameStyle}
+    <div class="pd-slot ${item ? 'filled' : 'empty'}${inactive ? ' pd-inactive' : ''}"${frameStyle}
          onclick="tapSlot('${slot}', this)"
          onmouseenter="hoverSlot(event,'${slot}')" onmouseleave="hideTooltip()">
       ${ic}
-      ${item ? `<span class="item-power pd-pwr">⚡${itemPower(item)}</span>` : ''}
+      ${pwrBadge}
       ${item ? `<button class="pd-unequip" onclick="event.stopPropagation();unequip('${slot}')" title="Unequip">✕</button>` : ''}
     </div>
-    <div class="pd-cap"${item && color ? ` style="color:${color}"` : ''}>${cap}</div>
+    ${capHTML}
   </div>`;
 }
 function renderPaperdoll() {
@@ -16549,6 +17162,11 @@ function toggleGearSet(idx) {
   hideTooltip();
   if (target === activeGearSet) return;
   activeGearSet = target;
+  // Swapping sets re-wears a loadout you already assembled — it is NOT a fresh equip
+  // event, so it is intentionally exempt from the equip BLOCK: pieces stay worn even
+  // if your attributes have since dipped below their requirement. Any such piece
+  // simply renders red and is ignored (see activeSlots) until you re-qualify, rather
+  // than being stowed.
   equipped = gearSets[activeGearSet];
   sfx('equip');
   // Worn gear feeds max HP/MP and the on-sprite look, so recompute & re-skin
@@ -16569,17 +17187,16 @@ function quickEquip(i) {
   if (!item) return;
   const slot = item.slot;
   if (!slot) { log(`${logItem(item)} can't be equipped.`); return; }
-  if (slot === 'weapon' && !canEquipItem(item)) {
-    const cls = playerClass();
-    log(`🔒 A ${cls.name} can't wield that — ${cls.name}s use ${cls.weapons.join(', ')}.`);
-    return;
-  }
-  // Off-hands must pair with your main-hand weapon (a quiver needs a bow, a parry
-  // dagger a one-handed melee weapon, a shield/focus a free hand).
+  // Off-hands must also pair with your main-hand weapon (a quiver needs a bow, a
+  // parry dagger a one-handed melee weapon, a shield/focus a free hand).
   if (slot === 'offhand') {
-    const reason = offhandEquipError(item, equipped.weapon);
-    if (reason) { sfx('denied'); log(`🔒 ${reason}`); return; }
+    const pair = offhandEquipError(item, equipped.weapon);
+    if (pair) { sfx('denied'); log(`🔒 ${pair}`); return; }
   }
+  // EVERY gear slot demands a minimum attribute now (a Greatsword wants Might, a
+  // Robe Spirit, a heavy Chestplate Vitality). Invest it before you can equip.
+  const reqReason = attrReqError(item);
+  if (reqReason) { sfx('denied'); log(`🔒 ${reqReason}`); return; }
   // Equipping a new weapon may leave the current off-hand incompatible (a two-hander
   // takes the hand, a non-bow strands a quiver, a wand strands a parry dagger) —
   // stow the off-hand back into the bag rather than silently dropping its stats.
@@ -16765,11 +17382,20 @@ function itemCardHTML(item, opts = {}) {
   const ilvlLine = (item.slot && item.ilvl)
     ? `<span style="color:#7fb0ff;font-weight:bold">ilvl ${item.ilvl}</span>` : '';
   const label = opts.label ? `<div class="tt-cardlabel">${opts.label}</div>` : '';
+  // The attribute gate to equip this weapon / off-hand — green when met, red when
+  // short — so a player reads at a glance why a piece is locked and what to raise.
+  let reqLine = '';
+  const rq = attrReqStatus(item);
+  if (rq) {
+    const col = rq.ok ? '#7ad08a' : '#e0556b';
+    reqLine = `<div style="color:${col};font-size:10px;font-weight:bold;margin:2px 0">${rq.ok ? '✓' : '⚠'} Requires ${rq.need} ${ATTRIBUTES[rq.attr].short} <span style="opacity:.75">(you have ${rq.have})</span></div>`;
+  }
   return `
     ${label}
     <div class="tt-name" style="color:${tier.color}">${item.name}</div>
     <div class="tt-tier" style="color:${tier.color}">${item.slot ? SLOTS[item.slot].label : 'potion'}${ilvlLine ? ' · ' + ilvlLine : ''}</div>
     ${item.slot ? `<div style="color:#ffd24b;font-weight:bold;font-size:11px;margin:3px 0">⚡ Power: ${power}</div>` : ''}
+    ${reqLine}
     ${stats}
     ${weaponLine}
     <div style="color:#c8a84b;font-size:10px;margin-top:3px">Value: ${item.value}g</div>
@@ -17867,6 +18493,7 @@ const LB_SORTS = {
   power: { col: 'power',     fmt: v => '⚡' + v },
 };
 let lbTab = 'floor';
+let lbMode = 'std';       // which ladder is shown: 'std' (non-hardcore) or 'hc' (hardcore only)
 let lbLastSig = '';       // last-submitted stat signature — skips no-op writes
 let lbSubmitTimer = null; // pending debounced submit, if any
 
@@ -17895,6 +18522,7 @@ function lbEntryFromPlayer() {
     level: lbInt(player.level || 1, 1),
     gold: lbInt(player.maxGold || player.gold || 0, 0),
     power: lbInt(player.maxPower || playerPower() || 1, 1),
+    hardcore: !!player.hardcore,
   };
 }
 
@@ -17904,7 +18532,7 @@ function lbScheduleSubmit() {
   if (!player || !player.name) return;
   player.maxGold = Math.max(player.maxGold || 0, player.gold || 0);
   player.maxPower = Math.max(player.maxPower || 0, playerPower() || 0);
-  const sig = [player.name, player.maxFloor || 1, player.level || 1, player.maxGold || 0, player.maxPower || 0, player.class || ''].join('|');
+  const sig = [player.name, player.maxFloor || 1, player.level || 1, player.maxGold || 0, player.maxPower || 0, player.class || '', player.hardcore ? 'hc' : ''].join('|');
   if (sig === lbLastSig) return;
   lbLastSig = sig;
   if (lbSubmitTimer) return; // a write is already queued; it'll pick up the latest stats
@@ -17918,7 +18546,7 @@ function lbSubmit() {
   lbSubmitLocal(entry);
   if (!lbEnabled()) return;
   try {
-    fetch(LB_SUPABASE_URL + '/rest/v1/leaderboard?on_conflict=name', {
+    fetch(LB_SUPABASE_URL + '/rest/v1/leaderboard?on_conflict=name,hardcore', {
       method: 'POST',
       headers: lbHeaders({ 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
       body: JSON.stringify(entry),
@@ -17931,7 +18559,9 @@ function lbSubmit() {
 function lbSubmitLocal(entry) {
   try {
     const all = JSON.parse(localStorage.getItem(LB_LOCAL_KEY) || '[]');
-    const i = all.findIndex(e => e && e.name === entry.name);
+    // Keyed by name AND hardcore flag, so a Standard and a Hardcore hero sharing
+    // a name keep separate rows (mirroring the table's composite primary key).
+    const i = all.findIndex(e => e && e.name === entry.name && !!e.hardcore === !!entry.hardcore);
     if (i >= 0) {
       all[i] = {
         name: entry.name,
@@ -17940,6 +18570,7 @@ function lbSubmitLocal(entry) {
         level: Math.max(all[i].level || 1, entry.level),
         gold: Math.max(all[i].gold || 0, entry.gold),
         power: Math.max(all[i].power || 1, entry.power),
+        hardcore: !!entry.hardcore,
       };
     } else {
       all.push(entry);
@@ -17947,10 +18578,10 @@ function lbSubmitLocal(entry) {
     localStorage.setItem(LB_LOCAL_KEY, JSON.stringify(all));
   } catch (e) {}
 }
-function lbFetchLocal(col) {
+function lbFetchLocal(col, hcOnly) {
   let all = [];
   try { all = JSON.parse(localStorage.getItem(LB_LOCAL_KEY) || '[]'); } catch (e) {}
-  return all.filter(Boolean).sort((a, b) => (b[col] || 0) - (a[col] || 0));
+  return all.filter(e => e && !!e.hardcore === !!hcOnly).sort((a, b) => (b[col] || 0) - (a[col] || 0));
 }
 
 // Fetch a board's full ranking. Returns { rows, local } — local is true when no
@@ -17960,10 +18591,11 @@ function lbFetchLocal(col) {
 // over to the local mirror instead of leaving the board stuck on "Loading…".
 async function lbFetch(tab) {
   const sort = LB_SORTS[tab] || LB_SORTS.floor;
-  if (!lbEnabled()) return { rows: lbFetchLocal(sort.col), local: true };
+  const hcOnly = lbMode === 'hc';
+  if (!lbEnabled()) return { rows: lbFetchLocal(sort.col, hcOnly), local: true };
   const url = LB_SUPABASE_URL +
-    '/rest/v1/leaderboard?select=name,player_class,max_floor,level,gold,power&order=' +
-    sort.col + '.desc';
+    '/rest/v1/leaderboard?select=name,player_class,max_floor,level,gold,power,hardcore&hardcore=eq.' +
+    hcOnly + '&order=' + sort.col + '.desc';
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 12000);
   try {
@@ -17995,18 +18627,35 @@ function showLeaderboard() {
   const settings = document.getElementById('settings-menu');
   if (settings) settings.classList.remove('open');
   ov.classList.add('open');
-  setLbTab(lbTab);
+  syncLbButtons();
+  renderLeaderboard();
 }
 function closeLeaderboard() {
   const ov = document.getElementById('lb-overlay');
   if (ov) ov.classList.remove('open');
 }
-function setLbTab(tab) {
-  lbTab = LB_SORTS[tab] ? tab : 'floor';
+// Light up the active sort tab and Standard/Hardcore mode button, and tint the
+// modal crimson while the Hardcore ladder is shown.
+function syncLbButtons() {
   ['floor', 'level', 'gold', 'power'].forEach(t => {
     const el = document.getElementById('lb-tab-' + t);
     if (el) el.classList.toggle('on', t === lbTab);
   });
+  ['std', 'hc'].forEach(m => {
+    const el = document.getElementById('lb-mode-' + m);
+    if (el) el.classList.toggle('on', m === lbMode);
+  });
+  const modal = document.getElementById('lb-modal');
+  if (modal) modal.classList.toggle('hc', lbMode === 'hc');
+}
+function setLbTab(tab) {
+  lbTab = LB_SORTS[tab] ? tab : 'floor';
+  syncLbButtons();
+  renderLeaderboard();
+}
+function setLbMode(mode) {
+  lbMode = (mode === 'hc') ? 'hc' : 'std';
+  syncLbButtons();
   renderLeaderboard();
 }
 async function renderLeaderboard() {
@@ -18022,14 +18671,14 @@ async function renderLeaderboard() {
     data = await lbFetch(lbTab);
   } catch (e) {
     // Couldn't reach the global board — fall back to the local mirror.
-    data = { rows: lbFetchLocal(sort.col), local: true, errored: true };
+    data = { rows: lbFetchLocal(sort.col, lbMode === 'hc'), local: true, errored: true };
   }
   // A slow fetch could resolve after the player switched tabs; ignore if so.
   if (!document.getElementById('lb-overlay').classList.contains('open')) return;
   const rows = data.rows || [];
   if (data.errored) status.textContent = '⚠️ Could not reach the global board — showing scores from this device.';
   else if (data.local) status.textContent = 'Local leaderboard (no backend configured yet).';
-  else status.textContent = rows.length ? 'Global · ' + rows.length + ' hero' + (rows.length === 1 ? '' : 'es') : 'Global leaderboard';
+  else { const scope = lbMode === 'hc' ? 'Hardcore' : 'Standard'; status.textContent = rows.length ? 'Global · ' + scope + ' · ' + rows.length + ' hero' + (rows.length === 1 ? '' : 'es') : 'Global ' + scope + ' leaderboard'; }
   if (!rows.length) {
     list.innerHTML = '<div class="lb-row"><span class="lb-name">No heroes yet — be the first!</span></div>';
     return;
@@ -18649,6 +19298,10 @@ function showNameEntry() {
   const lbl = document.getElementById('hc-tog-label');
   if (lbl) lbl.innerHTML = `${hcIcon(14)} HARDCORE`;
   syncHardcoreToggle();
+  // Pause the world while naming — no moving/acting (e.g. via the floating d-pad)
+  // until the name is submitted.
+  namePaused = true;
+  if (typeof clearHeldMove === 'function') clearHeldMove();
   ov.classList.add('open');
   setTimeout(() => { try { if (input) { input.focus(); input.select(); } } catch (e) {} }, 60);
 }
@@ -18670,6 +19323,7 @@ function submitName() {
   if (cb && cb.checked) player.hardcore = true;
   const ov = document.getElementById('name-overlay');
   if (ov) ov.classList.remove('open');
+  namePaused = false; // resume — naming is done
   saveGame();
   if (!player.class) showClassPick();
 }
@@ -18913,9 +19567,9 @@ if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => draw
 // Movement / combat / the world clock all freeze while a menu or overlay is up,
 // in town, or once the hero has fallen. The persistent web-layout sidebar
 // (panelOpen always true) must NOT count, or web players could never move.
-const RT_BLOCKING_OVERLAYS = ['title-overlay','class-overlay','hc-death-overlay','death-overlay',
+const RT_BLOCKING_OVERLAYS = ['title-overlay','name-overlay','class-overlay','hc-death-overlay','death-overlay',
   'shop-overlay','mystic-overlay','town-overlay','settings-menu','version-overlay','howto-overlay',
-  'playtime-overlay','autoloot-overlay',
+  'playtime-overlay','autoloot-overlay','newrun-overlay',
   // Reachable mid-dungeon (e.g. from the ⚙️ menu or on a tier conquest) — these
   // close the settings menu, so they must pause the world on their own.
   'conquest-overlay','slots-overlay','account-overlay','lb-overlay','graveyard-overlay'];
@@ -18949,6 +19603,7 @@ function updatePlayerCombat(dt) {
   if (!best) return;
   if (style === 'bolt') { if (player.mp < 4) return; player.mp -= 4; } // staff bolt spends a little MP
   if (best.x > player.x) player.facing = 'right'; else if (best.x < player.x) player.facing = 'left';
+  entryGuard = false;   // swinging ends arrival grace
   attackEnemy(best, { ranged, style });
   player.atkCd = playerAttackInterval();
 }
