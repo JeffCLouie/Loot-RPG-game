@@ -2533,7 +2533,7 @@
         <button class="dpad-btn" data-dir="up" aria-label="Move up"></button>
         <div></div>
         <button class="dpad-btn" data-dir="left" aria-label="Move left"></button>
-        <button class="dpad-btn dpad-center" data-dir="pickup" aria-label="Wait a turn"><svg class="dp-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 1.8"/></svg></button>
+        <button class="dpad-btn dpad-center" data-dir="pickup" aria-label="Use / grab"><svg class="dp-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 1.8"/></svg></button>
         <button class="dpad-btn" data-dir="right" aria-label="Move right"></button>
         <div></div>
         <button class="dpad-btn" data-dir="down" aria-label="Move down"></button>
@@ -2677,7 +2677,7 @@
       <div class="howto-sec">🎯 Goal</div>
       <div class="howto-line">Delve floor by floor, grab ever-better <b>loot</b>, and survive as deep as you can. Death sends you back to <b>Town</b>, lighter — but your hero lives on.</div>
       <div class="howto-sec">🕹️ Moving &amp; fighting</div>
-      <div class="howto-line">Move with the <b>d-pad</b> / swipe (touch) or <b>arrows / WASD</b> (keyboard). Walk into an enemy to <b>attack</b> it. The centre <b>clock</b> button waits a turn. Every step is a turn — foes act when you do.</div>
+      <div class="howto-line">Move in real time with the <b>d-pad</b> / swipe (touch) or <b>arrows / WASD</b> (keyboard) — hold to keep walking, including diagonally. You <b>auto-attack</b> foes in reach; cast skills with the bar / number keys. The centre button is <b>USE</b> (grab loot, talk to NPCs). Foes roam on their own and give chase when you get close.</div>
       <div class="howto-sec">💎 Loot rarity<span class="howto-tiers"><i style="background:#9aa0a6"></i><i style="background:#e8e8e8"></i><i style="background:#4caf50"></i><i style="background:#3a7bd5"></i><i style="background:#a45cd6"></i><i style="background:#e08a2e"></i><i style="background:#d6453a"></i></span></div>
       <div class="howto-line">Colour is rarity: grey → white → green → blue → purple → orange → red (Mythic). Tap loot in your <b>bag</b> to equip, sell, or scrap it.</div>
       <div class="howto-sec">✨ Skills &amp; potions</div>
@@ -2724,7 +2724,7 @@
   <div id="touch-dpad">
     <button class="dpad-btn" data-dir="up" aria-label="Move up"></button>
     <button class="dpad-btn" data-dir="left" aria-label="Move left"></button>
-    <button class="dpad-btn dpad-center" data-dir="pickup" aria-label="Wait a turn"><svg class="dp-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 1.8"/></svg></button>
+    <button class="dpad-btn dpad-center" data-dir="pickup" aria-label="Use / grab"><svg class="dp-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 1.8"/></svg></button>
     <button class="dpad-btn" data-dir="right" aria-label="Move right"></button>
     <button class="dpad-btn" data-dir="down" aria-label="Move down"></button>
   </div>
@@ -5788,7 +5788,13 @@ function pfx(field, dflt) { return (pact && pact.fx[field] != null) ? pact.fx[fi
 // STATE
 // ══════════════════════════════════════════
 
-let player = { x: 5, y: 5, facing: 'left', hp: 100, maxHp: 100, mp: 60, maxMp: 60, gold: 0, level: 1, xp: 0,
+let player = { x: 5, y: 5,
+  // Real-time movement: fx/fy are the hero's smooth CENTRE position in tile units
+  // (the grid cell is x = floor(fx), y = floor(fy)). faceDx/faceDy is the last
+  // movement direction (8-way), used to aim auto-attacks. atkCd is the seconds
+  // left on the auto-attack cooldown. See the game loop near the bottom.
+  fx: 5.5, fy: 5.5, faceDx: 1, faceDy: 0, atkCd: 0,
+  facing: 'left', hp: 100, maxHp: 100, mp: 60, maxMp: 60, gold: 0, level: 1, xp: 0,
   // Potions are no longer hoarded consumables — they're an always-available
   // skill gated by a shared 3-turn cooldown (see useHealthPotion/useManaPotion),
   // so you can't spam potions back-to-back. `potionCd` is that cooldown.
@@ -5847,6 +5853,39 @@ let player = { x: 5, y: 5, facing: 'left', hp: 100, maxHp: 100, mp: 60, maxMp: 6
   // to be eaten (pantry), the secret recipes found so far, and the single active
   // food buff (set when a bowl is eaten, counts down per floor in tickBuffs).
   ingredients: {}, pantry: [], discoveredRecipes: [], foodBuff: null };
+
+// ══════════════════════════════════════════
+// REAL-TIME CORE (movement, world clock, tuning)
+// ══════════════════════════════════════════
+// The game runs as a continuous real-time loop (see gameLoop at the bottom): the
+// hero moves freely in 8 directions, enemies act on their own clock and wander
+// when not engaged. Grid cells (player.x/y, e.x/y) are still the authoritative
+// LOGIC positions for collision, pathfinding, line-of-sight and targeting — the
+// float fx/fy positions only smooth out rendering and free movement.
+const WORLD_TICK_MS = 320;     // one "turn" of upkeep: DoT, regen, cooldowns, enemy actions, hazards
+const PLAYER_SPEED  = 3.3;     // hero movement, tiles per second
+const PLAYER_R      = 0.34;    // hero collision half-size (tiles)
+const ENEMY_AGGRO   = 7;       // foes wake and give chase within this many tiles (+ line of sight)
+const ENEMY_LEASH   = 11;      // ...and give up the chase (return to wandering) past this many
+const ENEMY_WANDER_RADIUS = 14;// idle foes only bother wandering this near the hero (perf)
+const ENEMY_INTERP  = 14;      // how snappily an enemy sprite glides to its logic cell
+// Held movement direction, fed by the keyboard and the touch d-pad. The most
+// recent of either source wins; both are cleared on blur/floor-change so a hero
+// never runs off on their own.
+const keyHeld   = { up: false, down: false, left: false, right: false };
+const touchHeld = { up: false, down: false, left: false, right: false };
+function heldDir(d) { return keyHeld[d] || touchHeld[d]; }
+function clearHeld() {
+  keyHeld.up = keyHeld.down = keyHeld.left = keyHeld.right = false;
+  touchHeld.up = touchHeld.down = touchHeld.left = touchHeld.right = false;
+}
+// Move the hero to a grid cell AND sync the smooth float position to its centre.
+// Used everywhere the hero is repositioned (spawn, stairs, teleports, blinks,
+// boss pulls) so the render/camera never desync from the logic cell.
+function setPlayerCell(x, y) {
+  player.x = x; player.y = y;
+  player.fx = x + 0.5; player.fy = y + 0.5;
+}
 let inventory = [];
 // The town STASH — a safe vault, completely separate from your character, and
 // SHARED across every save slot: gold and gear banked by one hero can be
@@ -6782,6 +6821,7 @@ document.addEventListener('click', (e) => {
 
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
+  { date: '2026-06-30', size: 'big', v: 'Real-time movement', by: 'Claude', notes: ['The dungeon is now real-time instead of turn-based. Hold the d-pad / arrows / WASD to walk freely in all 8 directions — including diagonals — and slide along walls; let go to stop.', 'You auto-attack any foe within your weapon\'s reach on a short cooldown, so positioning matters: kite slow brutes, but watch for swift foes that outrun you. Skills and potions still fire on the bar / number keys.', 'Foes now act on their own clock: they roam and wander when they haven\'t noticed you, then wake and give chase once you stray close or step into their line of sight — and break off if you lose them.', 'Status effects, regrowth, cooldowns, hazards and the town-portal channel all tick on a steady world clock rather than per step. The USE button (centre pad) grabs loot underfoot and talks to NPCs you\'re standing next to.'] },
   { date: '2026-06-30', size: 'small', v: 'Clearer "can\'t afford" prices', by: 'Claude', notes: ['Anywhere you spend gold or materials — the shop, gambler, forge, enchanter, mystic, healer and trainer — wares you can\'t currently afford now dim out so unavailable options read at a glance.', 'Mixed prices now pinpoint the shortfall: the exact gold or material you\'re missing turns red, so a forge or enchant cost shows at once whether you\'re short on gold, scrap, glimmer or a chaos orb.'] },
   { date: '2026-06-29', size: 'medium', v: 'Channeled town portal', by: 'Claude', notes: ['The town gate is no longer locked out while you’re in combat or on a cooldown — it’s clickable any time. Instead, opening it now CHANNELS a portal in real time.', 'Once you start it, the dungeon auto-runs one turn every half-second so you actually watch the foes take their swings and close in. Survive 3 clean turns and the gate opens; take a single blow from a foe mid-channel and the half-formed portal shatters.', 'You’re committed while it charges — your own moves are held until it resolves, with a swirling portal and a countdown over your hero showing the turns left. Tap TOWN again to break it off.'] },
   { date: '2026-06-29', size: 'medium', v: 'Bigger floors per difficulty', by: 'Claude', notes: ['Dungeon floors now grow with difficulty: Normal stays 20×20, Hardened is 24×24, Brutal 28×28, and Endless starts at 32×32 and keeps expanding the deeper you push — endlessly, but slower and slower so it never balloons into an unnavigable map.', 'Monster density is held constant, so a bigger, harder floor simply carries proportionally more foes — more rooms, hazards and enemies, at the same crowding you’re used to.', 'A generous cap keeps even the largest deep-Endless floors from spawning an unplayable swarm.'] },
@@ -7097,11 +7137,14 @@ canvas.addEventListener('pointerup', e => {
   // An open drawer eats the gesture: close it to reveal the dungeon.
   if (panelOpen) { togglePanel(); return; }
 
-  // Swipe → one step along the dominant axis. A plain tap does nothing (use the
-  // pad), so accidental taps never send the hero wandering off.
+  // Swipe → a brief nudge along the dominant axis (real-time: hold the direction
+  // for a moment). A plain tap does nothing (use the pad), so accidental taps
+  // never send the hero wandering off.
   const adx = Math.abs(dx), ady = Math.abs(dy);
   if (adx > SWIPE_PX || ady > SWIPE_PX) {
-    if (adx > ady) move(Math.sign(dx), 0); else move(0, Math.sign(dy));
+    const dir = adx > ady ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
+    touchHeld[dir] = true;
+    setTimeout(() => { touchHeld[dir] = false; }, 220);
   }
 });
 
@@ -7586,7 +7629,8 @@ function generateMap() {
   // ── PLAYER START ── first room centre, cleared of obstacles.
   const start = rooms[0];
   startPos = { x: start.cx, y: start.cy };
-  player.x = start.cx; player.y = start.cy;
+  setPlayerCell(start.cx, start.cy);
+  clearHeld();   // a fresh floor — drop any held movement so the hero doesn't run off
   for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
     const yy = player.y + dy, xx = player.x + dx;
     if (yy > 0 && xx > 0 && yy < MAP_H-1 && xx < MAP_W-1) mapData[yy][xx] = 0;
@@ -7854,7 +7898,7 @@ function buildTutorialMap() {
   mapData[0][caveX] = 1;       // northern border wall behind it
 
   // Spawn the hero a few tiles up from the shoreline, facing the cave.
-  player.x = caveX; player.y = SHORE - 1;        // sand, with water directly below
+  setPlayerCell(caveX, SHORE - 1);               // sand, with water directly below
   // A lone skeleton a few steps north, between the hero and the cave.
   const skl = { x: caveX, y: SHORE - 5, type: '🦴', name: 'Skeleton',
     hp: 24, maxHp: 24, level: 1, dmg: 4, dead: false, behavior: 'chaser' };
@@ -7875,7 +7919,7 @@ function finishTutorial() {
   statusEffects = [];
   sfx('stairs');
   log('🕳️ You step into the cave — the dungeon proper opens up below...', 'important');
-  player.x = 5; player.y = 5;
+  setPlayerCell(5, 5);
   generateMap();
   tickPact();
   maybeFloorEvent();
@@ -8467,45 +8511,30 @@ function startPortalChannel() {
   log(`🌀 You begin opening a town portal — hold out ${PORTAL_CHANNEL_TURNS} turns without being hit.`, 'important');
   sfx('teleport');
   updateBars(); renderSkillBar(); draw();
-  schedulePortalTick();
+  // Real-time: the channel counts down on the world clock (see worldTick) — no
+  // separate timer that would double-act the foes.
 }
 
 // The guarded TOWN button / hotkey handler (re-entrancy wrapper installed below).
 function enterTown() { startPortalChannel(); }
 
-function schedulePortalTick() { clearPortalTimer(); portalTimer = setTimeout(portalTick, PORTAL_TICK_MS); }
+// Legacy no-ops: the town-portal channel is now driven by the world clock
+// (worldTick), not a standalone setTimeout. Kept so any old caller is harmless.
+function schedulePortalTick() {}
+function portalTick() {}
 
-// One real-time beat of the channel: the dungeon takes a full turn on its own (foes
-// and hazards act, status & regen tick) so you can see it happen, then we judge the
-// channel. A hit this turn shatters it; otherwise it charges down, and on the final
-// clean turn the gate opens for real.
-function portalTick() {
-  portalTimer = null;
-  if (portalCharge <= 0 || inTown) { resetPortal(); return; }
-  // If the game is halted or a turn is still resolving, wait and try again shortly.
-  if (gameHalted || __turnBusy) { schedulePortalTick(); return; }
-  __turnBusy = true;
-  try {
-    tickStatusEffects();
-    applyRegen();
-    const hpBefore = player.hp;          // snapshot AFTER upkeep: only foe/hazard damage counts as a "hit"
-    runEnemyTurn();
-    moveQuestEntities();
-    if (player.hp <= 0) { resetPortal(); draw(); saveGame(); return; } // a killing blow — death takes over
-    if (player.hp < hpBefore) {          // took a hit while channeling → it breaks
-      __turnBusy = false;                // let cancelPortalChannel's redraw run outside the guard
-      cancelPortalChannel('💥 A blow shatters your half-formed town portal!');
-      saveGame();
-      return;
-    }
-    portalCharge--;
-    if (portalCharge <= 0) { resetPortal(); __turnBusy = false; warpToTown(); return; }
-    log(`🌀 The town portal swirls — ${portalCharge} turn${portalCharge === 1 ? '' : 's'} to go.`);
-    updateBars(); renderSkillBar(); draw(); saveGame();
-    schedulePortalTick();
-  } finally {
-    __turnBusy = false;
-  }
+// Count the channel down one world-tick. Called from worldTick AFTER the hero's
+// own upkeep (status/regen) and the enemies have acted: `hpBeforeEnemies` is the
+// HP going into the foe/hazard phase, so only an enemy blow (not the hero's own
+// poison/burn) shatters the gate — matching the old break rule.
+function tickPortalChannel(hpBeforeEnemies) {
+  if (portalCharge <= 0) return;
+  if (player.hp <= 0) { resetPortal(); return; }     // a killing blow — death takes over
+  if (player.hp < hpBeforeEnemies) { cancelPortalChannel('💥 A blow shatters your half-formed town portal!'); return; }
+  portalCharge--;
+  if (portalCharge <= 0) { resetPortal(); warpToTown(); return; }
+  log(`🌀 The town portal swirls — ${portalCharge} turn${portalCharge === 1 ? '' : 's'} to go.`);
+  updateBars(); renderSkillBar();
 }
 
 // Whisk the hero to town and open the hub MENU. Dungeon progress is untouched —
@@ -8596,7 +8625,7 @@ function buildTown() {
   }));
 
   // Enter near the bottom-centre of the plaza.
-  player.x = 10; player.y = MAP_H - 3;
+  setPlayerCell(10, MAP_H - 3);
   startPos = { x: player.x, y: player.y };
   recomputeMaxStats();
 }
@@ -9809,7 +9838,7 @@ function enterDungeonAt(diff, floor) {
   dungeonLevel = (diff - 1) * FLOORS_PER_DIFF + floor;
   recordDepth();
   statusEffects = [];
-  player.x = 5; player.y = 5;
+  setPlayerCell(5, 5);
   arrivalDir = 'down';
   generateMap();   // clears inTown and builds the chosen floor
   maybeFloorEvent();
@@ -11290,8 +11319,8 @@ function draw() {
   const th = tw;
 
   // Center the camera on the player, then clamp so we never scroll past edges.
-  let camX = player.x * tw + tw/2 - W/2;
-  let camY = player.y * th + th/2 - H/2;
+  let camX = player.fx * tw - W/2;
+  let camY = player.fy * th - H/2;
   const maxCamX = MAP_W * tw - W;
   const maxCamY = MAP_H * th - H;
   // If the map is smaller than the viewport on an axis, center it instead.
@@ -11773,7 +11802,10 @@ function draw() {
     if (e.dead) return;
     const S = e.size || 1;                 // multi-tile footprint span
     if (e.x + S <= x0 - 1 || e.x >= x1 + 1 || e.y + S <= y0 - 1 || e.y >= y1 + 1) return;
-    const px = offX + e.x * tw, py = offY + e.y * th;
+    // Smooth render position: e.fx/fy is the footprint CENTRE (lazy-init in
+    // updateActorRender), so the top-left of the footprint is (fx - S/2, fy - S/2).
+    const efx = (e.fx == null ? e.x + S/2 : e.fx), efy = (e.fy == null ? e.y + S/2 : e.fy);
+    const px = offX + (efx - S/2) * tw, py = offY + (efy - S/2) * th;
     const cw = S * tw, ch = S * th;        // full footprint in pixels
     const cx = px + cw/2;                   // footprint centre
     drawActorShadow(cx, py + ch*0.82, cw);
@@ -11824,7 +11856,7 @@ function draw() {
         // (like a sight-laser) instead of a solid crayon stroke. Drawn first so
         // the soft threat ring sits over its near end.
         if (inRange) {
-          const pcx = offX + player.x * tw + tw / 2, pcy = offY + player.y * th + th / 2;
+          const pcx = offX + player.fx * tw, pcy = offY + player.fy * th;
           ctx.save();
           ctx.globalAlpha = 0.16 + 0.12 * tp;
           ctx.strokeStyle = '#ff6a55';
@@ -11996,7 +12028,7 @@ function draw() {
   });
 
   // Player
-  const px = offX + player.x * tw, py = offY + player.y * th;
+  const px = offX + (player.fx - 0.5) * tw, py = offY + (player.fy - 0.5) * th;
   // Soft under-the-feet contact shadow grounds the hero (no coloured backing
   // circle — matching the de-cluttered enemies).
   drawActorShadow(px + tw/2, py + th*0.82, tw);
@@ -12351,7 +12383,6 @@ function activateShrine(nx, ny) {
   const info = shrineData[ny+','+nx];
   mapData[ny][nx] = 0;            // shrine is spent
   delete shrineData[ny+','+nx];
-  player.x = nx; player.y = ny;
   const kind = info ? info.kind : 'power';
   sfx(kind === 'blood' ? 'hurt' : 'shrine');
   switch (kind) {
@@ -12385,12 +12416,8 @@ function activateShrine(nx, ny) {
     }
   }
   updateBars();
-  // Touching a shrine is a step onto its tile — the turn passes and foes act.
-  // (move() already ran the player's upkeep before handing off to us.)
-  runEnemyTurn();
-  moveQuestEntities();
+  // Real-time: the world clock owns enemy/quest cadence — just persist the boon.
   saveGame();
-  draw();
 }
 
 // Tiny on-descent vignettes — mostly atmosphere, some with a small mechanical
@@ -12516,7 +12543,7 @@ let __turnBusy = false;
 let gameHalted = false;
 window.haltAll = function () {
   gameHalted = true;
-  if (typeof clearHeldMove === 'function') clearHeldMove();  // drop any held d-pad repeat
+  clearHeld();  // drop any held movement so a halted game doesn't keep the hero walking
 };
 window.resumeAll = function () { gameHalted = false; };
 window.gameBusy = () => __turnBusy;
@@ -12535,194 +12562,84 @@ function guardAction(fn) {
   };
 }
 
+// move(dx,dy) survives only as a compatibility shim — real movement is the
+// continuous updatePlayer() below. In town it still reopens the hub menu (the old
+// d-pad nicety); in the dungeon, movement is held-direction, so it does nothing.
 function move(dx, dy) {
-  // Town is a menu, not a walkable place — d-pad does nothing here. Reopen the
-  // hub menu in case it was dismissed, so the player is never stuck staring at
-  // the backdrop.
   if (inTown) { openTownHub(); return; }
-  // Committed to a town portal: the channel auto-runs the turns in real time, so
-  // your own moves are held until it opens or breaks. (Tap TOWN to break it off.)
-  if (portalChanneling()) return;
-  if (isPlayerStunned()) {
-    // Stunned: your action is wasted, but the turn still passes — foes act while
-    // you reel, and the stun ticks down toward wearing off.
-    tickStatusEffects();
-    applyRegen();
-    endBlockedTurn();
-    return;
-  }
-  tickStatusEffects();
-  applyRegen();
-  // Face the way you're moving — left/right flips the hero; up/down keeps the
-  // current facing. (Set on input, so bumping a wall still turns you.)
-  if (dx > 0) player.facing = 'right';
-  else if (dx < 0) player.facing = 'left';
-  const nx = player.x + dx, ny = player.y + dy;
-  // Every blocked step below still spends the turn (endBlockedTurn) — walking
-  // into the map edge, a wall, water or a barrier passes time just like waiting.
-  if (nx < 0 || ny < 0 || nx >= MAP_W || ny >= MAP_H) { endBlockedTurn(); return; }
+}
 
+// ── REAL-TIME PLAYER MOVEMENT & COLLISION ──
+// Is the grid cell (cx,cy) solid for the hero? Walls, deep water, boss walls,
+// town NPCs and live foes all block. A cracked wall is smashed and a locked door
+// is unlocked (consuming the key) ON CONTACT — both then become passable, so
+// pushing into one breaks through it just the way stepping into it used to.
+function playerSolidCell(cx, cy) {
+  if (cx < 0 || cy < 0 || cx >= MAP_W || cy >= MAP_H) return true;
+  const t = mapData[cy][cx];
+  if (t === 10) { mapData[cy][cx] = 0; log('🧱 You smash through a cracked wall!', 'loot'); return false; }
+  if (t === 11) {
+    if (hasKey) { hasKey = false; mapData[cy][cx] = 0; log('🔑 You unlock the vault door!', 'important'); return false; }
+    return true; // barred without a key
+  }
+  if (!isFloorPassable(t)) return true;
+  if (bossWallAt(cx, cy)) return true;
+  if (merchant && merchant.x === cx && merchant.y === cy) return true;
+  if (mystic && mystic.x === cx && mystic.y === cy) return true;
+  if (getEnemyAt(cx, cy)) return true;
+  return false;
+}
+// Would the hero's body (a box of half-size PLAYER_R) overlap a solid cell when
+// its centre is at (px,py)? Tests the four corners — resolving X and Y separately
+// (see updatePlayer) makes this slide along walls and never cut solid corners.
+function playerBoxBlocked(px, py) {
+  const r = PLAYER_R;
+  return playerSolidCell(Math.floor(px - r), Math.floor(py - r)) ||
+         playerSolidCell(Math.floor(px + r), Math.floor(py - r)) ||
+         playerSolidCell(Math.floor(px - r), Math.floor(py + r)) ||
+         playerSolidCell(Math.floor(px + r), Math.floor(py + r));
+}
+
+// Integrate one frame of free 8-directional movement. dt is in seconds. Resolves
+// X then Y so the hero slides along walls, then fires onEnterCell ONCE if the grid
+// cell changed (so a fast diagonal can't descend two floors in a frame). The hero
+// is rooted while channeling a portal or stunned — the world clock still ticks
+// those down.
+function updatePlayer(dt) {
+  if (portalChanneling() || isPlayerStunned()) return;
+  let vx = (heldDir('right') ? 1 : 0) - (heldDir('left') ? 1 : 0);
+  let vy = (heldDir('down') ? 1 : 0) - (heldDir('up') ? 1 : 0);
+  if (vx === 0 && vy === 0) return;
+  if (vx && vy) { vx *= Math.SQRT1_2; vy *= Math.SQRT1_2; }   // normalise diagonals
+  if (vx > 0) player.facing = 'right'; else if (vx < 0) player.facing = 'left';
+  player.faceDx = vx === 0 ? 0 : Math.sign(vx);
+  player.faceDy = vy === 0 ? 0 : Math.sign(vy);
+  const preX = player.x, preY = player.y;
+  const stepLen = PLAYER_SPEED * dt;
+  const tx = player.fx + vx * stepLen;
+  if (!playerBoxBlocked(tx, player.fy)) player.fx = tx;   // smash/unlock fires inside the test
+  const ty = player.fy + vy * stepLen;
+  if (!playerBoxBlocked(player.fx, ty)) player.fy = ty;
+  player.fx = Math.max(0.5, Math.min(MAP_W - 0.5, player.fx));
+  player.fy = Math.max(0.5, Math.min(MAP_H - 0.5, player.fy));
+  player.x = Math.floor(player.fx);
+  player.y = Math.floor(player.fy);
+  if (player.x !== preX || player.y !== preY) onEnterCell(player.x, player.y);
+}
+
+// Everything that used to happen at the tail of a turn-based move(), now driven
+// by physically walking the hero onto a new cell: stairs, fountain, shrine,
+// teleporter, quest progress and every ground pickup. No turn-passing here — the
+// world clock owns enemy/quest/save cadence.
+function onEnterCell(nx, ny) {
   const tile = mapData[ny][nx];
-  if (tile === 1) { endBlockedTurn(); return; } // wall
-  if (tile === 6) { endBlockedTurn(); return; } // deep water — impassable
-  // A boss-conjured barrier blocks the way until it crumbles.
-  if (bossWallAt(nx, ny)) { log('🧱 A wall of force blocks your path!'); endBlockedTurn(); return; }
+  if (tile === 12) { goUpStairs(nx, ny); return; }     // stairs up (or floor-1 town portal)
+  if (tile === 2)  { goDownStairs(nx, ny); return; }   // stairs down
+  if (tile === 5)  { activateShrine(nx, ny); return; } // shrine
+  if (tile === 3)  { useFountain(nx, ny); return; }    // fountain
+  if (tile === 9)  { teleportPad(nx, ny); }            // teleporter pad
 
-  // Cracked wall → smash through it (opens a shortcut), then step in.
-  if (tile === 10) {
-    mapData[ny][nx] = 0;
-    log('🧱 You smash through a cracked wall!', 'loot');
-  }
-  // Locked door → needs a key; otherwise it bars the way.
-  if (tile === 11) {
-    if (!hasKey) { log('🔒 A locked door bars the way — find its key.'); endBlockedTurn(); return; }
-    hasKey = false;
-    mapData[ny][nx] = 0;
-    log('🔑 You unlock the vault door!', 'important');
-  }
-
-  // Enemy collision → attack. The strike costs a turn, so every other enemy
-  // gets to act too: the one you hit retaliates, and the rest close in — get
-  // surrounded and you'll take hits from every side each time you swing.
-  const enemy = getEnemyAt(nx, ny);
-  if (enemy) {
-    attackEnemy(enemy);
-    runEnemyTurn();
-    moveQuestEntities();
-    draw();
-    return;
-  }
-
-  // Merchant → open shop (don't step onto them)
-  if (merchant && merchant.x === nx && merchant.y === ny) {
-    openShop();
-    return;
-  }
-
-  // Mystic → open the pact menu (don't step onto them)
-  if (mystic && mystic.x === nx && mystic.y === ny) {
-    openMystic();
-    return;
-  }
-
-  // Shrine → activate it (grants a buff or instant effect), then stand on it.
-  if (tile === 5) {
-    activateShrine(nx, ny);
-    return;
-  }
-
-  // Stairs up → climb back to the previous floor. Always open (the floor above
-  // is one you've already been through), so there's never an unlock condition.
-  if (tile === 12) {
-    // On floor 1 of a difficulty there's no floor above — the "up" stair is the
-    // way back to TOWN, so reaching it opens a town portal (same channel as the
-    // TOWN button). Call the unguarded helper directly: move() is already inside
-    // the re-entrancy guard, so the wrapped enterTown() would no-op here.
-    if (displayFloor() === 1) { player.x = nx; player.y = ny; startPortalChannel(); return; }
-    dungeonLevel--;
-    statusEffects = [];
-    tickBuffs();
-    sfx('stairs');
-    log(`Ascended to ${floorLabel()}. You return to ${currentTheme().name}.`, 'important');
-    player.x = 5; player.y = 5;
-    arrivalDir = 'up';   // spawn on the stairs DOWN that lead back the way you came
-    generateMap();
-    maybeFloorEvent();
-    updateBars();
-    saveGame();
-    draw();
-    return;
-  }
-
-  // Stairs
-  if (tile === 2) {
-    // Tutorial cave: sealed until the lone skeleton is dealt with, then it
-    // drops the new player into the real dungeon (floor 1) rather than descending.
-    if (tutorialActive) {
-      if (!floorCleared) {
-        log('🦴 Defeat the skeleton first — then the cave will let you pass.', 'important');
-        sfx('click');
-        endBlockedTurn();
-        return;
-      }
-      finishTutorial();
-      return;
-    }
-    // Sealed until the floor is cleared — no sprinting straight to the exit.
-    if (!floorCleared) {
-      log(`🔒 The stairs are sealed. ${clearConditionLabel()}`, 'important');
-      sfx('click');
-      endBlockedTurn();
-      return;
-    }
-    // Resolve an escort quest before leaving the floor.
-    if (quest && quest.type === 'escort') {
-      const near = (Math.abs(quest.npc.x - player.x) + Math.abs(quest.npc.y - player.y)) <= 3;
-      if (quest.npc.following && near) {
-        const r = questReward();
-        const reward = generateItem(4, dungeonLevel + 1);
-        inventory.push(reward);
-        log(`✅ ${quest.npc.name} reached the stairs safely! +${r.gold}g, +${r.xp} XP, reward: ${logItem(reward)}`, 'important');
-        screenFlash('#22cc66'); sfx('levelup'); checkLevelUp();
-      } else {
-        log(`😟 You descended without ${quest.npc.name} — the escort failed.`);
-      }
-      quest = null;
-    }
-    // Defensive: finite tiers have no stairs down on their last floor, so this
-    // can't normally fire there — but never let a stray stair punch past the cap.
-    if (isLastFiniteFloor()) {
-      log(`👑 This is the deepest floor of the ${diffMeta().name} dungeon — conquer its guardian, then take the next difficulty from town.`, 'important');
-      sfx('click');
-      endBlockedTurn();
-      return;
-    }
-    dungeonLevel++;
-    recordDepth();
-    statusEffects = [];
-    tickBuffs();
-    sfx('stairs');
-    log(`Descended to ${floorLabel()}! You enter ${currentTheme().name}.`, 'important');
-    player.x = 5; player.y = 5;
-    generateMap();
-    tickPact();   // floor just entered keeps the pact, then it counts down
-    maybeFloorEvent();
-    updateBars();
-    saveGame();
-    draw();
-    return;
-  }
-
-  // Fountain of Healing → full HP & MP restore, then dries up.
-  if (tile === 3) {
-    player.hp = player.maxHp;
-    player.mp = player.maxMp;
-    player.potionCd = 0; // a sip from the fountain also resets your potion cooldown
-    mapData[ny][nx] = 0; // fountain is spent
-    hasFountain = false;
-    player.x = nx; player.y = ny;
-    sfx('potion');
-    log(`⛲ The Fountain of Healing restores you to full HP and MP!`, 'important');
-    updateBars();
-    // Drinking from the fountain is a step like any other — the floor's foes act.
-    runEnemyTurn();
-    moveQuestEntities();
-    saveGame();
-    draw();
-    return;
-  }
-
-  // No one adjacent in this direction, and the tile ahead is open: a ranged or
-  // reach weapon (bow/staff/spear) looses a shot at the first foe down the line
-  // instead of stepping forward. Checked here — after NPC/shrine/stair handling
-  // — so walking into a merchant still opens their shop.
-  if (tryRangedAttack(dx, dy)) return;
-
-  player.x = nx;
-  player.y = ny;
-
-  // Quest progress for whatever the player just stepped on.
-  handleQuestStep(nx, ny);
+  handleQuestStep(nx, ny); // quest progress for whatever the hero stepped on
 
   // Auto-pickup food
   const fi = groundFood.findIndex(f => f.x === nx && f.y === ny);
@@ -12734,7 +12651,6 @@ function move(dx, dy) {
     log(`${f.emoji} Ate ${f.name}! +${healed} HP`, 'loot');
     updateBars();
   }
-
   // Auto-pickup coin piles
   const gi = groundGold.findIndex(g => g.x === nx && g.y === ny);
   if (gi !== -1) {
@@ -12745,8 +12661,7 @@ function move(dx, dy) {
     log(`🪙 Picked up ${g.amount} gold!`, 'loot');
     updateBars();
   }
-
-  // Reclaim your grave — step onto the dropped satchel to recover the whole bag.
+  // Reclaim your grave — walk onto the dropped satchel to recover the whole bag.
   if (graveMarker && graveMarker.x === nx && graveMarker.y === ny && graveSite) {
     const got = graveSite.items.length;
     inventory.push(...graveSite.items);
@@ -12758,22 +12673,17 @@ function move(dx, dy) {
     renderPanel();
     updateBars();
   }
-
   // Auto-pickup the vault key
   if (groundKey && groundKey.x === nx && groundKey.y === ny) {
     groundKey = null; hasKey = true;
     spawnFloatingText(player.x, player.y, '🗝️', '#ffd24b');
     log('🗝️ You found a vault key! Seek the locked door.', 'important');
   }
+  // Auto-pickup chests — walk onto a tile and every chest on it opens itself.
+  if (pickupChestsAt(nx, ny) > 0) { renderPanel(); updateBars(); }
 
-  // Auto-pickup chests — step onto a tile and every chest on it opens itself.
-  if (pickupChestsAt(nx, ny) > 0) {
-    renderPanel();
-    updateBars();
-  }
-
-  // Lava → burns you, scaling hard with depth and your HP pool so a careless
-  // step gets more punishing the deeper you go (never lethal on its own).
+  // Lava / spikes bite once per cell entered (never lethal on their own), exactly
+  // as a turn-based step into them used to.
   if (tile === 7) {
     const burn = Math.round(4 + dungeonLevel * 1.5 + player.maxHp * 0.05);
     player.hp = Math.max(1, player.hp - burn);
@@ -12781,7 +12691,6 @@ function move(dx, dy) {
     log(`🔥 The lava scorches you for ${burn}!`, 'important');
     updateBars();
   }
-  // Spikes → stab you, likewise ramping with depth (never lethal on their own).
   if (tile === 8) {
     const stab = Math.round(3 + dungeonLevel + player.maxHp * 0.03);
     player.hp = Math.max(1, player.hp - stab);
@@ -12789,22 +12698,87 @@ function move(dx, dy) {
     log(`🩸 Spikes stab you for ${stab}!`);
     updateBars();
   }
-  // Teleporter → warp to its partner pad.
-  if (tile === 9) {
-    const dest = teleporters[ny + ',' + nx];
-    if (dest) {
-      player.x = dest.x; player.y = dest.y;
-      spawnFloatingText(player.x, player.y, '🌀', '#bb88ff');
-      log('🌀 A teleporter whisks you across the floor!', 'important');
-    }
+}
+
+// Climb to the previous floor (or, on floor 1 of a tier, begin a town portal).
+function goUpStairs(nx, ny) {
+  if (displayFloor() === 1) { setPlayerCell(nx, ny); startPortalChannel(); return; }
+  dungeonLevel--;
+  statusEffects = [];
+  tickBuffs();
+  sfx('stairs');
+  log(`Ascended to ${floorLabel()}. You return to ${currentTheme().name}.`, 'important');
+  setPlayerCell(5, 5);
+  arrivalDir = 'up';   // spawn on the stairs DOWN that lead back the way you came
+  generateMap();
+  maybeFloorEvent();
+  updateBars();
+  saveGame();
+}
+
+// Descend to the next floor, honouring the tutorial / sealed-stairs / escort /
+// last-finite-floor guards.
+function goDownStairs(nx, ny) {
+  if (tutorialActive) {
+    if (!floorCleared) { log('🦴 Defeat the skeleton first — then the cave will let you pass.', 'important'); sfx('click'); return; }
+    finishTutorial();
+    return;
   }
+  if (!floorCleared) { log(`🔒 The stairs are sealed. ${clearConditionLabel()}`, 'important'); sfx('click'); return; }
+  if (quest && quest.type === 'escort') {
+    const near = (Math.abs(quest.npc.x - player.x) + Math.abs(quest.npc.y - player.y)) <= 3;
+    if (quest.npc.following && near) {
+      const r = questReward();
+      const reward = generateItem(4, dungeonLevel + 1);
+      inventory.push(reward);
+      log(`✅ ${quest.npc.name} reached the stairs safely! +${r.gold}g, +${r.xp} XP, reward: ${logItem(reward)}`, 'important');
+      screenFlash('#22cc66'); sfx('levelup'); checkLevelUp();
+    } else {
+      log(`😟 You descended without ${quest.npc.name} — the escort failed.`);
+    }
+    quest = null;
+  }
+  if (isLastFiniteFloor()) {
+    log(`👑 This is the deepest floor of the ${diffMeta().name} dungeon — conquer its guardian, then take the next difficulty from town.`, 'important');
+    sfx('click');
+    return;
+  }
+  dungeonLevel++;
+  recordDepth();
+  statusEffects = [];
+  tickBuffs();
+  sfx('stairs');
+  log(`Descended to ${floorLabel()}! You enter ${currentTheme().name}.`, 'important');
+  setPlayerCell(5, 5);
+  generateMap();
+  tickPact();   // floor just entered keeps the pact, then it counts down
+  maybeFloorEvent();
+  updateBars();
+  saveGame();
+}
 
-  // Enemy AI — every step is a turn for the foes too.
-  runEnemyTurn();
-  moveQuestEntities();
+// Drink from a Fountain of Healing: full restore, then it dries up.
+function useFountain(nx, ny) {
+  player.hp = player.maxHp;
+  player.mp = player.maxMp;
+  player.potionCd = 0; // a sip also resets your potion cooldown
+  mapData[ny][nx] = 0; // fountain is spent
+  hasFountain = false;
+  sfx('potion');
+  log(`⛲ The Fountain of Healing restores you to full HP and MP!`, 'important');
+  updateBars();
+  saveGame();
+}
 
-  checkPickupProximity();
-  draw();
+// Step onto a teleporter pad → warp to its partner. onEnterCell only fires on a
+// fresh cell entry, so landing on the destination pad (set programmatically) can't
+// bounce the hero straight back.
+function teleportPad(nx, ny) {
+  const dest = teleporters[ny + ',' + nx];
+  if (!dest) return;
+  setPlayerCell(dest.x, dest.y);
+  spawnFloatingText(player.x, player.y, '🌀', '#bb88ff');
+  log('🌀 A teleporter whisks you across the floor!', 'important');
 }
 
 // ── UNSTUCK ──
@@ -12831,8 +12805,7 @@ function unstuck() {
   spots.sort((a, b) => b.d - a.d);
   const pool = spots.slice(0, Math.max(1, Math.ceil(spots.length / 2)));
   const dest = pool[Math.floor(Math.random() * pool.length)];
-  player.x = dest.x;
-  player.y = dest.y;
+  setPlayerCell(dest.x, dest.y);
   sfx('teleport');
   spawnFloatingText(player.x, player.y, '🌀', '#bb88ff');
   log('🌀 You wrench yourself free and reappear elsewhere on the floor.', 'important');
@@ -13312,13 +13285,11 @@ function attackEnemy(e, opts = {}) {
   // Bloodthirst (Warrior passive): heal a slice of all damage dealt this swing.
   lifestealHeal(dealtTotal);
 
-  // Every attack costs a turn: after your swing resolves, the caller runs the
-  // enemy turn (runEnemyTurn) so the foe you hit strikes back AND any others
-  // crowding you close in or pile on. `ranged` shots simply don't pin you in
-  // melee — the distant target approaches instead of countering.
+  // Real-time: an attack no longer spends a turn — the auto-attack fires on its
+  // own cooldown (see updatePlayerCombat) and the world clock owns periodic saves,
+  // so we don't saveGame() on every swing.
   tryPlayerStatusProc(e);
   updateBars();
-  saveGame();
 }
 
 // Ranged & reach weapons: fired from move() when you press toward a foe with no
@@ -13398,17 +13369,13 @@ function castSkillById(id) {
   else player.mp -= cost;
   fireSkillTrigger('cast', {}); // on-cast procs
   updateBars();
-  // The cast costs a turn: foes act and escorts trail along. Set the cooldown
-  // AFTER runEnemyTurn so this very turn doesn't immediately tick it down.
-  runEnemyTurn();
-  moveQuestEntities();
-  // Cooldown Reduction % (gear) shortens the recharge (never below 1 turn); a
+  // Real-time: the world clock ticks cooldowns down; the cast just starts the
+  // recharge. Cooldown Reduction % (gear) shortens it (never below 1 tick); a
   // rank-7 skill gets the ✦✦ Honed reduction on top.
   const msCdr = skillRank(id) >= 7 ? 0.20 : 0;
   setSkillCd(id, Math.max(1, Math.round(sk.cd * (1 - Math.min(0.6, totalStat('CDR') / 100) - msCdr))));
   updateBars();
   renderSkillBar();
-  draw();
   saveGame();
 }
 
@@ -13626,7 +13593,7 @@ function resolveCast(node, rank) {
       const f = foesInRange(c.range || 6)[0];
       if (!f) { log(`No foe within range.`); return false; }
       const spot = adjacentOpenTile(f);
-      if (spot) { player.x = spot.x; player.y = spot.y; }
+      if (spot) { setPlayerCell(spot.x, spot.y); }
       targets = [f]; center = f; break;
     }
     case 'random': {
@@ -13743,7 +13710,7 @@ function resolveCast(node, rank) {
     const spots = openTilesNear(player.x, player.y, 40);
     let best = null, bd = -1;
     for (const s of spots) { const ne = nearestEnemyTo(s.x, s.y); const d = ne ? Math.abs(ne.x - s.x) + Math.abs(ne.y - s.y) : 99; if (d > bd) { bd = d; best = s; } }
-    if (best) { player.x = best.x; player.y = best.y; spawnFloatingText(player.x, player.y, '', '#cfe0ff'); }
+    if (best) { setPlayerCell(best.x, best.y); spawnFloatingText(player.x, player.y, '', '#cfe0ff'); }
   }
 
   log(`${HERO} casts ${node.name}${total > 0 ? ` for ${total}` : ''}${targets.length > 1 ? ` across ${targets.length} foes` : ''}!`, 'important');
@@ -14060,6 +14027,46 @@ function enemyWander(e) {
   }
 }
 
+// ── REAL-TIME ENEMY AI (wander ↔ aggro) ──
+// Idle drift for an un-engaged foe: most ticks it holds position, otherwise it
+// takes one lazy step that never closes onto the hero (it isn't hunting yet).
+function wanderStep(e) {
+  if (Math.random() < 0.55) return;                 // mostly idle
+  const dirs = ENEMY_DIRS.slice().sort(() => Math.random() - 0.5);
+  for (const [mx, my] of dirs) {
+    if (e.x + mx === player.x && e.y + my === player.y) continue; // don't drift onto the hero
+    if (enemyStep(e, mx, my)) return;
+  }
+}
+
+// One world-tick of behaviour for a single foe. Bosses always hunt. Otherwise a
+// simple aggro state machine: a foe wakes within ENEMY_AGGRO tiles (needs line of
+// sight unless almost on top of you) and gives chase via the full enemyMove()
+// logic; it gives up past ENEMY_LEASH and goes back to wandering. Lurkers and
+// fleeing goblins keep their own internal gates inside enemyMove(), so they always
+// route through it rather than the generic wander branch.
+function enemyAct(e) {
+  if (e.dead) return;
+  const beh = BEHAVIORS[e.behavior] || BEHAVIORS.chaser;
+  const dist = Math.abs(e.x - player.x) + Math.abs(e.y - player.y);
+  if (e.isBoss) { enemyMove(e); return; }
+  if (e.aggro) { if (dist > ENEMY_LEASH) e.aggro = false; }
+  else if (dist <= ENEMY_AGGRO && (dist <= 2 || hasLineToPlayer(e))) e.aggro = true;
+  if (e.aggro || beh.ambush || e.isGoblin) { enemyMove(e); return; }
+  // Not engaged → idle wander (skip far-off foes entirely to save cycles).
+  if (dist <= ENEMY_WANDER_RADIUS) wanderStep(e);
+}
+
+// Footprint-aware Chebyshev distance from the hero to the nearest cell of a foe
+// (multi-tile bosses included) — used to decide whether the hero's auto-attack
+// can reach it.
+function footChebyshev(e) {
+  const s = e.size || 1; let best = Infinity;
+  for (let dx = 0; dx < s; dx++) for (let dy = 0; dy < s; dy++)
+    best = Math.min(best, Math.max(Math.abs(e.x + dx - player.x), Math.abs(e.y + dy - player.y)));
+  return best;
+}
+
 // Back away from the player — ranged foes maintaining their distance.
 function stepAwayFromPlayer(e) {
   const away = ENEMY_DIRS
@@ -14336,7 +14343,7 @@ function bossChainPull(e, dist) {
     if (d < bd) { bd = d; best = { x: gx, y: gy }; }
   }
   if (!best) return false;
-  player.x = best.x; player.y = best.y;
+  setPlayerCell(best.x, best.y);
   spawnParticles(player.x, player.y, '#cc8844', 8, 0.1);
   const dmg = bossHitPlayer(Math.max(2, Math.round(e.dmg * 0.5)), e, '#ffaa33');
   e.cd = 5;
@@ -14375,7 +14382,7 @@ function bossShockwave(e, dist) {
   for (let i = 0; i < 3; i++) {
     const nx = player.x + dx, ny = player.y + dy;
     if (!playerCanStand(nx, ny)) break;
-    player.x = nx; player.y = ny;
+    setPlayerCell(nx, ny);
   }
   spawnParticles(player.x, player.y, '#aaddff', 10, 0.12);
   const dmg = bossHitPlayer(Math.max(2, Math.round(e.dmg * 0.6)), e, '#88ddff');
@@ -14871,18 +14878,14 @@ function pickupChestsAt(x, y) {
   return opened;
 }
 
-// The interact button / key: chests are now grabbed automatically on movement,
-// so this just opens anything already underfoot (e.g. a chest that dropped on
-// your tile) and otherwise passes the turn.
+// The USE button / key. Real-time: there's no "wait a turn" any more. Standing
+// next to a merchant/mystic opens their menu (you can't walk onto them); otherwise
+// it opens any chest already underfoot (most are auto-grabbed as you walk over).
 function pickup() {
-  if (portalChanneling()) return;   // held while a town portal channels (tap TOWN to break off)
-  const opened = pickupChestsAt(player.x, player.y);
-  if (opened === 0) { log('You wait...'); passTurn(); return; }
-  // Cracking open a chest underfoot is an action too — it costs a turn (foes act,
-  // and a sprung mimic gets to bite). passTurn handles the upkeep, draw and save.
-  renderPanel();
-  updateBars();
-  passTurn();
+  if (inTown || portalChanneling()) return;
+  if (merchant && Math.abs(merchant.x - player.x) <= 1 && Math.abs(merchant.y - player.y) <= 1) { openShop(); return; }
+  if (mystic && Math.abs(mystic.x - player.x) <= 1 && Math.abs(mystic.y - player.y) <= 1) { openMystic(); return; }
+  if (pickupChestsAt(player.x, player.y) > 0) { renderPanel(); updateBars(); saveGame(); }
 }
 
 // Install the re-entrancy / halt guard around every player-action entry point.
@@ -15151,14 +15154,11 @@ function useManaPotion() {
 // to ready. In town there are no foes, so we just refresh and skip the turn.
 function spendPotionTurn() {
   updateBars();
-  if (!inTown) {
-    runEnemyTurn();
-    moveQuestEntities();
-    player.potionCd = POTION_CD;
-  }
+  // Real-time: quaffing just starts the shared cooldown (the world clock ticks it
+  // down). In town there are no foes, so the cooldown is skipped entirely.
+  if (!inTown) player.potionCd = POTION_CD;
   updateBars();
   renderSkillBar();
-  draw();
   saveGame();
 }
 
@@ -16654,16 +16654,18 @@ function logPotion(label) {
 // INPUT
 // ══════════════════════════════════════════
 
+// Touch d-pad: a direction button holds that direction while pressed (real-time
+// movement); the centre button is USE/grab. pointerup/leave/cancel all release so
+// a finger sliding off the button can't leave the hero running.
 document.querySelectorAll('.dpad-btn').forEach(btn => {
-  const handler = () => {
-    const dir = btn.dataset.dir;
-    if (dir === 'up')     move(0,-1);
-    if (dir === 'down')   move(0, 1);
-    if (dir === 'left')   move(-1,0);
-    if (dir === 'right')  move(1, 0);
-    if (dir === 'pickup') pickup();
-  };
-  btn.addEventListener('click', handler);
+  const dir = btn.dataset.dir;
+  if (dir === 'pickup') { btn.addEventListener('click', () => pickup()); return; }
+  if (!(dir in touchHeld)) return;
+  btn.addEventListener('pointerdown', e => { e.preventDefault(); touchHeld[dir] = true; });
+  const release = () => { touchHeld[dir] = false; };
+  btn.addEventListener('pointerup', release);
+  btn.addEventListener('pointerleave', release);
+  btn.addEventListener('pointercancel', release);
 });
 
 // Esc closes whatever menu/overlay is open (topmost first). Returns true if it
@@ -16683,60 +16685,29 @@ function handleEscape() {
   return false;
 }
 
-// ── Held-key movement ────────────────────────────────────────────────────────
-// Holding a WASD/arrow key should keep you running at a steady pace. We drive
-// our own repeat rather than relying on the OS key-repeat, which has an initial
-// delay and an inconsistent cadence. The most-recently-pressed direction wins,
-// so sliding from one key to another changes course without lifting the first.
-const MOVE_REPEAT_MS = 120;
-// Wait a beat after the key goes down before the steady run kicks in, so a
-// quick tap is a single step and you don't sprint off by accident.
-const SPRINT_DELAY_MS = 250;
-let moveTimer = null;
-let sprintDelayTimer = null;
-const heldMoveKeys = [];
-
-function dirForKey(k) {
+// ── Held-direction movement ──────────────────────────────────────────────────
+// Movement is real-time (see updatePlayer): a held WASD/arrow key keeps the hero
+// walking, and multiple held keys combine into an 8-way vector. We just track
+// which directions are currently down.
+function moveKeyName(k) {
   switch (k) {
-    case 'ArrowUp':    case 'w': case 'W': return [0, -1];
-    case 'ArrowDown':  case 's': case 'S': return [0, 1];
-    case 'ArrowLeft':  case 'a': case 'A': return [-1, 0];
-    case 'ArrowRight': case 'd': case 'D': return [1, 0];
+    case 'ArrowUp':    case 'w': case 'W': return 'up';
+    case 'ArrowDown':  case 's': case 'S': return 'down';
+    case 'ArrowLeft':  case 'a': case 'A': return 'left';
+    case 'ArrowRight': case 'd': case 'D': return 'right';
   }
   return null;
 }
-function stepHeldMove() {
-  const k = heldMoveKeys[heldMoveKeys.length - 1];
-  const d = dirForKey(k);
-  if (d) move(d[0], d[1]);
-}
-function startMoveRepeat() {
-  if (moveTimer || sprintDelayTimer) return;
-  // Hold the key down for SPRINT_DELAY_MS before the steady cadence begins.
-  sprintDelayTimer = setTimeout(() => {
-    sprintDelayTimer = null;
-    moveTimer = setInterval(stepHeldMove, MOVE_REPEAT_MS);
-  }, SPRINT_DELAY_MS);
-}
-function stopMoveRepeat() {
-  if (sprintDelayTimer) { clearTimeout(sprintDelayTimer); sprintDelayTimer = null; }
-  if (moveTimer) { clearInterval(moveTimer); moveTimer = null; }
-}
-function clearHeldMove() { heldMoveKeys.length = 0; stopMoveRepeat(); }
-// If the window loses focus we never get the keyup, so drop any held keys to
-// avoid the player running off on their own when focus returns.
-window.addEventListener('blur', clearHeldMove);
-// A right-click opens the OS/desktop context menu, which swallows the keyup for
-// any held movement key — so the key would "stick" and the hero keeps running.
-// Dropping held keys on contextmenu (and when the tab is hidden, same problem)
-// stops the runaway.
-window.addEventListener('contextmenu', clearHeldMove);
-document.addEventListener('visibilitychange', () => { if (document.hidden) clearHeldMove(); });
+// A lost keyup (focus loss, right-click menu, hidden tab) would leave a direction
+// stuck "down" and the hero running forever — worse in real time — so drop every
+// held direction on any of those events.
+window.addEventListener('blur', clearHeld);
+window.addEventListener('contextmenu', clearHeld);
+document.addEventListener('visibilitychange', () => { if (document.hidden) clearHeld(); });
 
 document.addEventListener('keyup', e => {
-  const i = heldMoveKeys.indexOf(e.key);
-  if (i !== -1) heldMoveKeys.splice(i, 1);
-  if (heldMoveKeys.length === 0) stopMoveRepeat();
+  const d = moveKeyName(e.key);
+  if (d) keyHeld[d] = false;
 });
 
 document.addEventListener('keydown', e => {
@@ -16752,15 +16723,11 @@ document.addEventListener('keydown', e => {
   const hcov = document.getElementById('hc-death-overlay');
   if (hcov && hcov.classList.contains('open')) return;
   if (e.key === 'Escape') { if (handleEscape()) e.preventDefault(); return; }
-  const moveDir = dirForKey(e.key);
+  const moveDir = moveKeyName(e.key);
   if (moveDir) {
     e.preventDefault(); // arrows would otherwise scroll the page
-    // Ignore the OS auto-repeat — we run our own steady cadence below.
-    if (!e.repeat) {
-      if (!heldMoveKeys.includes(e.key)) heldMoveKeys.push(e.key);
-      move(moveDir[0], moveDir[1]); // step instantly, then repeat while held
-      startMoveRepeat();
-    }
+    if (inTown) { openTownHub(); return; }   // town is a menu — a direction reopens the hub
+    keyHeld[moveDir] = true;                  // held → updatePlayer walks the hero each frame
     return;
   }
   if (e.key===' '||e.key==='f'||e.key==='e'||e.key==='E') pickup();   // use / pick up
@@ -17123,8 +17090,9 @@ function loadGame() {
     recomputeMaxStats();
     if (player.hp == null || player.hp > player.maxHp) player.hp = player.maxHp;
     if (player.mp == null || player.mp > player.maxMp) player.mp = player.maxMp;
-    // Always spawn at the safe start tile on a freshly generated floor
-    player.x = 5; player.y = 5;
+    // Always spawn at the safe start tile on a freshly generated floor. Sync the
+    // smooth float position too (the saved player object may carry a stale fx/fy).
+    setPlayerCell(5, 5);
     return true;
   } catch (e) {
     return false;
@@ -18555,7 +18523,7 @@ log('🗡️ Every weapon fights differently — axes cleave, daggers flurry, bo
 log('🏰 Tap TOWN (or press T) to warp to the safe hub: craftsman, healer, trainer, enchanter, and a gate to re-enter any floor you\'ve reached.');
 log('🧰 Foes drop crafting materials — 🔩 Scrap, 🔆 Core, ✨ Glimmer, 🌀 Chaos Orb. The 🔨 Craftsman forges blank gear; the 🪄 Enchanter fills in its modifiers.');
 log('♻️ Tap any loot in your 🎒 BAG to Sell it for gold or Scrap it into materials — any time, no vendor needed. Use the ♻️ Auto-Loot button on the LOOT tab to do it automatically by rarity on pickup.');
-log('⚔️ Each move OR attack passes a turn — get surrounded and every foe piles on, so don\'t let them encircle you.');
+log('⚔️ Move freely in real time and auto-attack foes in reach — get surrounded and every foe piles on, so don\'t let them encircle you.');
 log('🎨 Pixel art from the DawnLike tileset by DragonDePlatino & DawnBringer (CC-BY 4.0).');
 log('🌍 Terrain tiles from "[LPC] Terrains" by bluecarrot16 & LPC contributors (CC-BY-SA 4.0).');
 
@@ -18587,21 +18555,122 @@ window.addEventListener('load', () => { syncWebPanel(); resizeCanvas(); position
 // weren't yet resident on the first frame bake into the sprite cache and show.
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => draw());
 
-// Gentle animation loop: only repaints while a merchant is on the floor,
-// so their robe glow pulses. Idle otherwise to save battery.
-let lastPulse = 0;
-function pulseLoop(ts) {
-  const hasElite = enemies.some(e => !e.dead && e.isElite);
-  const hasShrine = Object.keys(shrineData).length > 0;
-  const juicing = particles.length || tracers.length || Date.now() < shakeUntil;
-  const liquid = mapData.some(row => row && row.some(t => t === 6 || t === 7));
-  if ((inTown || merchant || mystic || hasFountain || hasShrine || quest || graveMarker || floatingTexts.length || statusEffects.length || hasElite || juicing || liquid || floorCleared || portalChanneling()) && ts - lastPulse > 30) { lastPulse = ts; draw(); }
-  // Animate the danger halo every frame — it's a DOM overlay, so it must keep
-  // pulsing even when the canvas is idle (e.g. standing still at low HP).
-  updateHaloVignette();
-  requestAnimationFrame(pulseLoop);
+// ══════════════════════════════════════════
+// REAL-TIME GAME LOOP
+// ══════════════════════════════════════════
+// One requestAnimationFrame loop drives the whole game. Every frame the hero
+// moves freely, auto-attacks foes in reach, enemy sprites glide toward their
+// logic cells, and a fixed-step "world clock" advances the old per-turn upkeep
+// (status, regen, cooldowns, enemy actions, hazards, quests). The canvas is
+// repainted every frame.
+
+// Movement / combat / the world clock all freeze while a menu or overlay is up,
+// in town, or once the hero has fallen. The persistent web-layout sidebar
+// (panelOpen always true) must NOT count, or web players could never move.
+const RT_BLOCKING_OVERLAYS = ['title-overlay','class-overlay','hc-death-overlay','death-overlay',
+  'shop-overlay','mystic-overlay','town-overlay','settings-menu','version-overlay','howto-overlay',
+  'playtime-overlay','autoloot-overlay'];
+function rtPaused() {
+  if (gameHalted || inTown || player.hp <= 0) return true;
+  for (const id of RT_BLOCKING_OVERLAYS) {
+    const el = document.getElementById(id);
+    if (el && el.classList.contains('open')) return true;
+  }
+  if (panelOpen && !isWebLayout()) return true;   // the bag drawer (touch/narrow only)
+  return false;
 }
-requestAnimationFrame(pulseLoop);
+
+// Auto-attack: when the cooldown is up, strike the nearest foe in weapon reach
+// (ranged/reach weapons need line of sight). Mirrors the old per-turn swing, just
+// fired on a timer instead of a key press. Rooted while channeling / stunned.
+function updatePlayerCombat(dt) {
+  if (player.atkCd > 0) player.atkCd -= dt;
+  if (player.atkCd > 0 || portalChanneling() || isPlayerStunned()) return;
+  const style = weaponStyle();
+  const range = weaponRangeOf(equipped.weapon) || STYLE_RANGE[style] || 1;
+  const ranged = range >= 2;
+  let best = null, bd = Infinity;
+  for (const e of enemies) {
+    if (e.dead) continue;
+    const d = footChebyshev(e);
+    if (d > range) continue;
+    if (ranged && !hasLineToPlayer(e)) continue;  // can't shoot through walls
+    if (d < bd) { bd = d; best = e; }
+  }
+  if (!best) return;
+  if (style === 'bolt') { if (player.mp < 4) return; player.mp -= 4; } // staff bolt spends a little MP
+  if (best.x > player.x) player.facing = 'right'; else if (best.x < player.x) player.facing = 'left';
+  attackEnemy(best, { ranged, style });
+  player.atkCd = PLAYER_ATK_CD;
+}
+
+// Slide every enemy sprite toward its logic cell each frame so cell-to-cell steps
+// read as smooth motion. Big displacements (knockback, blink, a 2-tile dash) snap
+// rather than drift through walls. Lazy-inits fx/fy for foes spawned mid-floor.
+function updateActorRender(dt) {
+  const k = Math.min(1, dt * ENEMY_INTERP);
+  for (const e of enemies) {
+    const s = e.size || 1;
+    const tx = e.x + s / 2, ty = e.y + s / 2;     // footprint centre
+    if (e.fx == null) { e.fx = tx; e.fy = ty; continue; }
+    if (Math.abs(tx - e.fx) > 1.5 || Math.abs(ty - e.fy) > 1.5) { e.fx = tx; e.fy = ty; }
+    else { e.fx += (tx - e.fx) * k; e.fy += (ty - e.fy) * k; }
+  }
+}
+
+const PLAYER_ATK_CD = WORLD_TICK_MS / 1000;  // hero swings about once per world tick (1:1 with foes)
+let _worldAcc = 0, _saveTick = 0;
+// One "turn" of world upkeep, on a fixed real-time cadence.
+function worldTick() {
+  // Cooldowns & transient combat buffs count down.
+  if (player.skillCds) for (const k in player.skillCds) if (player.skillCds[k] > 0) player.skillCds[k]--;
+  if (player.potionCd > 0) player.potionCd--;
+  for (const k in combatBuffs) { const b = combatBuffs[k]; if (b && b.t > 0) { b.t--; if (b.t <= 0) delete combatBuffs[k]; } }
+  // The hero's own upkeep first (DoT, regen) — this damage never breaks a portal.
+  tickStatusEffects();
+  applyRegen();
+  const hpBeforeEnemies = player.hp;   // only foe/hazard damage past here shatters a channel
+  // Allies, then foes, then hazards age — guarded against the floor being rebuilt
+  // mid-pass (a death-warp or boss kill swaps the enemies array).
+  runMinionTurn();
+  const serial = floorSerial;
+  for (const e of enemies) {
+    if (floorSerial !== serial) break;
+    if (!e.dead) enemyAct(e);
+  }
+  if (floorSerial === serial) tickBossHazards();
+  moveQuestEntities();
+  tickPortalChannel(hpBeforeEnemies);
+  renderSkillBar();
+  updateBars();
+  if ((++_saveTick % 8) === 0) saveGame();   // persist every ~8 ticks instead of every action
+}
+// Advance the world clock by dt seconds, running whole ticks. Capped at 2 catch-up
+// ticks per frame so a long stall (tab-out) can't drain many turns at once.
+function stepWorldClock(dt) {
+  _worldAcc += dt * 1000;
+  let n = 0;
+  while (_worldAcc >= WORLD_TICK_MS && n < 2) { _worldAcc -= WORLD_TICK_MS; worldTick(); n++; }
+  if (_worldAcc > WORLD_TICK_MS) _worldAcc = WORLD_TICK_MS;
+}
+
+let _lastTs = null;
+function gameLoop(ts) {
+  requestAnimationFrame(gameLoop);
+  if (_lastTs == null) _lastTs = ts;
+  let dt = (ts - _lastTs) / 1000;
+  _lastTs = ts;
+  if (dt > 0.1) dt = 0.1;          // clamp after a stall so nothing teleports
+  if (!rtPaused()) {
+    updatePlayer(dt);              // free 8-dir movement may trigger stairs/town/death…
+    if (!rtPaused()) updatePlayerCombat(dt);
+    if (!rtPaused()) stepWorldClock(dt);
+  }
+  updateActorRender(dt);
+  updateHaloVignette();            // the danger halo is a DOM overlay — pulse it every frame
+  draw();
+}
+requestAnimationFrame(gameLoop);
 </script>
 </body>
 </html>
