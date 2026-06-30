@@ -1931,7 +1931,13 @@
   }
   .forge-grid { display: grid; gap: 5px; }
   .forge-slots, .forge-bases { grid-template-columns: repeat(2, 1fr); }
+  .forge-cats { grid-template-columns: repeat(4, 1fr); }
   .forge-tiers { grid-template-columns: repeat(5, 1fr); }
+  /* No "loners": rather than strand a single trailing tile alone at the start of
+     a final row, centre it. The base list is two columns (centre a lone last
+     tile full-width at column size); the weapon-category grid is four. */
+  .forge-bases .forge-opt:last-child:nth-child(2n+1) { grid-column: 1 / -1; justify-self: center; min-width: calc(50% - 3px); }
+  .forge-cats .forge-opt:last-child:nth-child(4n+1) { grid-column: 2 / 4; }
   .forge-opt {
     padding: 7px 6px; border: 1px solid var(--border); border-radius: 5px;
     background: #221a10; color: #e8d5a8; font-family: 'Courier New', monospace;
@@ -6873,6 +6879,7 @@ document.addEventListener('click', (e) => {
 
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
+  { date: '2026-06-30', size: 'medium', v: 'Forge cost varies by base', by: 'Claude', notes: ['Crafting cost no longer depends only on rarity — the base you pick now shifts it. Bulky, heavy pieces (a Maul, a Greataxe, a Tower Shield, plate armor) drink noticeably more materials, while small, fine pieces (a Dagger, a Rapier, a wand, a ring) sip them.', 'Gold runs the other way: delicate, precise work bills more for the skilled labour, so a Dagger or a ring costs more gold than a crude Maul of the same rarity even though it needs far less metal. The Forge now shows a one-line note explaining each base’s build, and two pieces of the same rarity can have genuinely different prices.', 'The Forge’s weapon picker is now two steps: pick a category (Sword, Axe, Dagger…) then the exact type within it (Shortsword, Arming Sword, Rapier…), instead of scrolling one long list of every weapon.'] },
   { date: '2026-06-30', size: 'small', v: 'Skills cost more mana as they level', by: 'Claude', notes: ['Ranking up an active skill now raises its mana cost a little each rank, so deepening a skill is a real mana commitment rather than free power — the per-rank power climb still outpaces it, so the trade stays worth it. The rank-3 ✦ Empowered milestone keeps its "cheaper casts" perk, which trims the cost back down at that rank.', 'The skill\'s current mana cost shows everywhere it\'s cast from — the skill bar, the ⚡ button and the hero panel — and the SKILLS-tab "On rank up" tooltip now previews the next rank\'s cost (e.g. 8 → 9 MP) right beside its power gain, so you can see exactly how much it will go up before spending the point.'] },
   { date: '2026-06-30', size: 'big', v: 'Any weapon, with stat requirements', by: 'Claude', notes: ['Every class can now wield every weapon and pair every sensible off-hand — the old hard class-to-weapon lock is gone. What gates a piece instead is a stat requirement: a heavy Greatsword or Maul wants Might, a Rapier, dagger or bow wants Agility, a staff or wand wants Spirit, and a shield wants Vitality. Meet the attribute and you can equip it, whatever your class.', 'Requirements are per weapon TYPE, not just its category — a one-handed Rapier asks for Agility while a Greatsword of the same family asks for Might — and they scale with the item’s level, so deeper gear demands a real, growing investment. Your class still leans toward its favoured weapons in drops, and gear that grants +attributes counts toward meeting requirements.', 'Item tooltips, the loot list and the Forge now show each piece’s requirement in green when you meet it and red when you’re short, so you always know what to raise. Off-hands keep their pairing rules (a quiver needs a bow, a parrying dagger a one-handed melee weapon, a shield or focus a free hand — or any of them alongside a two-hander once you’ve learned Titan’s Grip).'] },
   { date: '2026-06-30', size: 'medium', v: 'Hardcore leaderboards', by: 'Claude', notes: ['The global Leaderboards now have their own Hardcore ladder. A Standard / Hardcore switch at the top of the board flips every ranking — Furthest, Level, Gold and Power — between ordinary heroes and one-life Hardcore heroes.', 'Hardcore heroes are ranked only against each other, so surviving the no-revive run earns its own crimson board.'] },
@@ -8993,6 +9000,7 @@ function renderCookingHTML() {
 const CRAFT_TIERS = ['normal', 'uncommon', 'rare', 'epic', 'legendary'];
 let forgeSlot = 'weapon';
 let forgeBase = null;   // chosen base name within the slot (drives look + name)
+let forgeCat = null;    // chosen weapon category (Sword, Axe …) for the two-step weapon picker
 let forgeTier = 'normal';
 // The Craftsman has a single bench: 🔨 Forge (build blank gear). Breaking gear
 // back down into materials moved onto the bag itself — you scrap straight from
@@ -9002,46 +9010,157 @@ let forgeTier = 'normal';
 // the town merchant's stock — so the Forge stays relevant as you descend.
 function craftIlvl() { return Math.max(1, Math.max(dungeonReturn || 1, player.maxFloor || 1)); }
 
-// Material + gold cost to craft, scaling with rarity and item level. Higher
-// rarities pull in higher-tier materials: Scrap always, Core at rare+, and a
-// Chaos Orb at legendary.
-function craftCost(tier) {
+// ── PER-BASE CRAFT CHARACTER ──
+// Two items of the same rarity shouldn't cost the same to forge: a Maul is a
+// slab of metal while a Dagger is a sliver, yet the Dagger is fussy, delicate
+// work. craftBaseFactors splits that into two multipliers fed into craftCost:
+//   • mat   scales the raw-material side (Scrap / Core) — bulk & mass. Big,
+//           two-handed weapons and heavy plate drink metal; small fine pieces sip.
+//   • labor scales the gold side — skilled labour. Precise, delicate pieces
+//           (daggers, rapiers, wands, rings, robes) bill more even when they
+//           barely touch the metal; crude bashing gear (mauls, axes) is rougher
+//           and cheaper to pay for.
+// Both default to 1 (an average piece) and are clamped so a future data tweak
+// can't produce a wild price.
+const WEAPON_LABOR = {           // how delicate a swing style is to forge
+  thrust: 1.35, flurry: 1.25, bolt: 1.30, shot: 1.20,
+  slash: 1.05, reap: 1.00, cleave: 0.85, crush: 0.72,
+};
+function craftBaseFactors(slot, baseName) {
+  let mat = 1, labor = 1;
+  if (slot === 'weapon') {
+    const cat = weaponCategoryOf(baseName);
+    const sd = WEAPON_SUBTYPES[baseName] || BASE_STATS[cat] || {};
+    const dmg = sd.dmg != null ? sd.dmg : 1;
+    const hands = (WEAPON_SUBTYPES[baseName] && WEAPON_SUBTYPES[baseName].hands) || 1;
+    const style = sd.style || WEAPON_STYLES[cat];
+    mat = 0.6 + dmg * 0.55 + (hands === 2 ? 0.1 : 0);   // mass tracks damage + a two-hand bump
+    labor = WEAPON_LABOR[style] != null ? WEAPON_LABOR[style] : 1;
+  } else if (slot === 'head' || slot === 'chest' || slot === 'hands' || slot === 'legs') {
+    const def = baseProfile(baseName).def || 1;
+    const slotSize = { chest: 1.25, legs: 1.0, head: 0.85, hands: 0.7 }[slot] || 1;
+    mat = slotSize * (0.5 + def * 0.5);                 // surface area × how heavy the plate is
+    labor = 1.25 - def * 0.25;                          // lighter, finer pieces bill a touch more
+  } else if (slot === 'offhand') {
+    const bp = baseProfile(baseName), off = bp.off || 'shield';
+    if (off === 'shield')      { mat = 0.8 + (bp.def || 1) * 0.6; labor = 0.85; } // bulky metal, rough work
+    else if (off === 'caster') { mat = 0.55; labor = 1.35; }   // fine tome / focus work
+    else if (off === 'ranged') { mat = 0.8;  labor = 1.15; }   // quiver
+    else                       { mat = 0.75; labor = 1.30; }   // dual (parrying blade) — dagger-like
+  } else if (slot === 'ring') {
+    mat = 0.4; labor = 1.5;                             // a sliver of metal, painstaking work
+  } else if (slot === 'amulet') {
+    mat = 0.5; labor = 1.4;
+  }
+  return {
+    mat:   Math.min(2,   Math.max(0.4, mat)),
+    labor: Math.min(1.6, Math.max(0.6, labor)),
+  };
+}
+
+// A one-line read on a base's forge character, derived from the same factors as
+// the price so players see *why* two same-rarity pieces cost differently.
+function craftCharacterNote(slot, baseName) {
+  const { mat, labor } = craftBaseFactors(slot, baseName);
+  const heavy = mat >= 1.35, light = mat <= 0.75;
+  const fine = labor >= 1.2, crude = labor <= 0.85;
+  if (fine && light)  return 'Delicate work — sips materials, bills high for the fine labour.';
+  if (heavy && crude) return 'Heavy build — metal-hungry, but rough, cheaper labour.';
+  if (fine)           return 'Fine work — the delicate labour costs extra.';
+  if (heavy)          return 'Bulky build — drinks extra materials.';
+  if (light)          return 'Compact build — easy on materials.';
+  return 'A balanced, average build.';
+}
+
+// Material + gold cost to craft, scaling with rarity, item level AND the chosen
+// base: bulky bases cost more materials, delicate ones cost more gold (labour).
+// Higher rarities pull in higher-tier materials: Scrap always, Core at rare+,
+// and a Chaos Orb at legendary.
+function craftCost(tier, slot = forgeSlot, baseName = forgeBase) {
   const ilvl = craftIlvl();
   const rank = CRAFT_TIERS.indexOf(tier);            // 0 (normal) .. 4 (legendary)
   const f = 1 + ilvl * 0.12;
+  const { mat, labor } = craftBaseFactors(slot, baseName);
   const cost = {
-    gold:  Math.round((25 + rank * 30) * f),
-    scrap: Math.round((4 + rank * 5) * f),
+    gold:  Math.round((25 + rank * 30) * f * labor),
+    scrap: Math.max(1, Math.round((4 + rank * 5) * f * mat)),
   };
-  if (rank >= 2) cost.core  = Math.round((1 + (rank - 2) * 2) * (1 + ilvl * 0.05)); // rare+
+  if (rank >= 2) cost.core  = Math.max(1, Math.round((1 + (rank - 2) * 2) * (1 + ilvl * 0.05) * mat)); // rare+
   if (rank >= 4) cost.chaos = 1;                                                     // legendary
   return cost;
 }
 
-function openForge() { forgeBase = null; openTownModal('🔨 Craftsman'); renderCraftsman(); }
+function openForge() { forgeBase = null; forgeCat = null; openTownModal('🔨 Craftsman'); renderCraftsman(); }
 function renderCraftsman() { renderForge(); }
-function forgeSelectSlot(slot) { forgeSlot = slot; forgeBase = null; renderForge(); }
+function forgeSelectSlot(slot) { forgeSlot = slot; forgeBase = null; forgeCat = null; renderForge(); }
 function forgeSelectBase(name) {
   forgeBase = name; renderForge();
 }
+// Weapons use a two-step picker: pick a category (Sword, Axe …) then a sub-type
+// within it. Switching category snaps the base to that category's first sub-type.
+function forgeSelectCat(cat) {
+  forgeCat = cat;
+  const subs = weaponCategoryGroups().groups[cat] || [];
+  if (!subs.includes(forgeBase)) forgeBase = subs[0];
+  renderForge();
+}
 function forgeSelectTier(tier) { forgeTier = tier; renderForge(); }
+
+// Forgeable weapon bases grouped by category for the two-step picker. Built from
+// SLOTS.weapon.names so the order matches the rest of the UI, and from each
+// sub-type's `cat` so it stays in sync with WEAPON_SUBTYPES.
+function weaponCategoryGroups() {
+  const groups = {}, order = [];
+  for (const name of SLOTS.weapon.names) {
+    const cat = (WEAPON_SUBTYPES[name] && WEAPON_SUBTYPES[name].cat) || weaponCategoryOf(name) || name;
+    if (!groups[cat]) { groups[cat] = []; order.push(cat); }
+    groups[cat].push(name);
+  }
+  return { groups, order };
+}
 
 function renderForge() {
   if (!CRAFT_TIERS.includes(forgeTier)) forgeTier = 'normal';
   if (!SLOT_KEYS.includes(forgeSlot)) forgeSlot = 'weapon';
-  const names = SLOTS[forgeSlot].names;
   const isWeapon = forgeSlot === 'weapon';
-  if (!forgeBase || !names.includes(forgeBase)) forgeBase = names[0];
 
   const slotBtns = SLOT_KEYS.map(s =>
     `<button class="forge-opt ${s === forgeSlot ? 'on' : ''}" onclick="forgeSelectSlot('${s}')">${SLOTS[s].label}</button>`
   ).join('');
-  const baseBtns = names.map(n => {
-    const cls = `forge-opt${n === forgeBase ? ' on' : ''}`;
-    const hand = isWeapon ? ` <span style="opacity:.55;font-size:9px">${weaponHandsOf(n) === 2 ? '2H' : '1H'}</span>` : '';
-    const reach = isWeapon ? ` <span style="opacity:.6;font-size:9px">⟷${weaponRange(n)}</span>` : '';
-    return `<button class="${cls}" onclick="forgeSelectBase('${n.replace(/'/g, "\\'")}')">${n}${hand}${reach}</button>`;
-  }).join('');
+
+  // Weapons get a two-step picker (category → sub-type); every other slot keeps
+  // its single flat list of bases.
+  let baseSection = '';
+  if (isWeapon) {
+    const { groups, order } = weaponCategoryGroups();
+    if (!forgeCat || !groups[forgeCat]) {
+      forgeCat = (forgeBase && WEAPON_SUBTYPES[forgeBase] && WEAPON_SUBTYPES[forgeBase].cat) || order[0];
+    }
+    const subs = groups[forgeCat] || [];
+    if (!forgeBase || !subs.includes(forgeBase)) forgeBase = subs[0];
+    const catBtns = order.map(c =>
+      `<button class="forge-opt ${c === forgeCat ? 'on' : ''}" onclick="forgeSelectCat('${c}')">${c}</button>`
+    ).join('');
+    const subBtns = subs.map(n => {
+      const hand = ` <span style="opacity:.55;font-size:9px">${weaponHandsOf(n) === 2 ? '2H' : '1H'}</span>`;
+      const reach = ` <span style="opacity:.6;font-size:9px">⟷${weaponRange(n)}</span>`;
+      return `<button class="forge-opt${n === forgeBase ? ' on' : ''}" onclick="forgeSelectBase('${n.replace(/'/g, "\\'")}')">${n}${hand}${reach}</button>`;
+    }).join('');
+    baseSection = `
+      <div class="forge-label">Weapon</div>
+      <div class="forge-grid forge-cats">${catBtns}</div>
+      <div class="forge-label">Type</div>
+      <div class="forge-grid forge-bases">${subBtns}</div>`;
+  } else {
+    const names = SLOTS[forgeSlot].names;
+    if (!forgeBase || !names.includes(forgeBase)) forgeBase = names[0];
+    const baseBtns = names.map(n =>
+      `<button class="forge-opt${n === forgeBase ? ' on' : ''}" onclick="forgeSelectBase('${n.replace(/'/g, "\\'")}')">${n}</button>`
+    ).join('');
+    baseSection = `
+      <div class="forge-label">Base</div>
+      <div class="forge-grid forge-bases">${baseBtns}</div>`;
+  }
   const tierBtns = CRAFT_TIERS.map(t => {
     const caps = TIER_AFFIX_CAPS[t] || { stat: 0, attr: 0 };
     return `<button class="forge-opt ${t === forgeTier ? 'on' : ''}" style="${t === forgeTier ? '' : `color:${TIERS[t].color}`}" onclick="forgeSelectTier('${t}')">
@@ -9073,11 +9192,10 @@ function renderForge() {
     : '';
 
   setTownContent(`
-    <div class="town-blurb">The Craftsman forges a <b>blank</b> piece at your current depth (ilvl ${craftIlvl()}) — its base damage or defense set by the base you pick, with empty modifier slots. Take it to the 🪄 Enchanter to fill them in. Rarity sets how many modifiers it can hold.</div>
+    <div class="town-blurb">The Craftsman forges a <b>blank</b> piece at your current depth (ilvl ${craftIlvl()}) — its base damage or defense set by the base you pick, with empty modifier slots. Take it to the 🪄 Enchanter to fill them in. Rarity sets how many modifiers it can hold. Heftier bases drink more materials; finer ones bill more for the delicate&nbsp;labour.</div>
     <div class="forge-label">Item type</div>
     <div class="forge-grid forge-slots">${slotBtns}</div>
-    <div class="forge-label">Base</div>
-    <div class="forge-grid forge-bases">${baseBtns}</div>
+    ${baseSection}
     ${baseHint}
     <div class="forge-label">Rarity <span style="opacity:.6">(stat + attr slots)</span></div>
     <div class="forge-grid forge-tiers">${tierBtns}</div>
@@ -9091,7 +9209,8 @@ function renderForge() {
     </div>
     <div class="shop-row">
       <div class="shop-row-info"><div class="shop-row-name">Forge cost</div>
-        <div class="shop-row-sub">${costLabelHi(cost)}</div></div>
+        <div class="shop-row-sub">${costLabelHi(cost)}</div>
+        <div class="shop-row-sub" style="color:#9a8d70;font-style:italic">${craftCharacterNote(forgeSlot, forgeBase)}</div></div>
       <button class="shop-buy-btn" ${afford ? '' : 'disabled'} onclick="craftItem()">🔨 FORGE</button>
     </div>`);
 }
