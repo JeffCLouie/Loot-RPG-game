@@ -2800,7 +2800,13 @@
 // ══════════════════════════════════════════
 
 const TILE = 16;
-const MAP_W = 20, MAP_H = 20;
+// Map dimensions in tiles. No longer fixed: floors grow with difficulty (see
+// mapSizeFor) so harder tiers and deeper Endless floors are physically larger
+// maps. generateMap() sets these per floor; buildTown() resets them to the base
+// size (the town's building layout is hand-placed for a 20×20 plaza). BASE_* is
+// the Normal / town size and the baseline for the area-ratio density scaling.
+const BASE_MAP_W = 20, BASE_MAP_H = 20;
+let MAP_W = BASE_MAP_W, MAP_H = BASE_MAP_H;
 
 // Each equipment slot, with the base item names that roll for it.
 const SLOTS = {
@@ -3988,6 +3994,30 @@ function endlessBite() {
   if (dungeonLevel <= FINITE_DEPTH) return 1;
   return 1 + Math.min(0.6, (dungeonLevel - FINITE_DEPTH) * 0.006);
 }
+
+// ── DUNGEON MAP SIZE ──────────────────────────────────────────────────────
+// Floors get physically BIGGER with difficulty, and the per-floor monster count
+// scales with the map's area so the density a player actually meets stays the
+// same (see spawnEnemies) — a harder, larger floor simply holds proportionally
+// more foes. Each finite tier is one fixed size, a step larger than the tier
+// above it; Endless keeps expanding with depth, forever but sub-linearly so it
+// never balloons into an unplayably huge, foe-choked map.
+//   Normal 20×20 · Hardened 24×24 · Brutal 28×28 · Endless 32×32 and growing
+const DIFF_SIZE_STEP = 4;  // tiles added to each side per finite tier above Normal
+function mapSizeFor(dl) {
+  const tier = diffOf(dl);                               // 1 Normal · 2 Hardened · 3 Brutal · 4 Endless
+  const base = BASE_MAP_W + (tier - 1) * DIFF_SIZE_STEP; // 20 · 24 · 28 · 32
+  if (tier < 4) return base;                             // finite tiers: one fixed size each
+  // Endless: start at the tier-4 base, then creep upward with the Endless floor
+  // number. The √ keeps it climbing endlessly while decelerating hard, so even
+  // very deep floors stay navigable (floor 1 → 32, 26 → 37, 101 → 42, 401 → 52).
+  const ef = Math.max(0, dl - (FINITE_DEPTH + 1));       // 0 on Endless floor 1, then 1, 2, 3 …
+  return base + Math.floor(Math.sqrt(ef));
+}
+// How much larger (by area) the current floor is than the base 20×20. Drives the
+// per-floor scaling of room count, hazards and monster count, so a bigger floor
+// is a genuinely bigger dungeon at the same crowding rather than a sparse one.
+function mapAreaRatio() { return (MAP_W * MAP_H) / (BASE_MAP_W * BASE_MAP_H); }
 
 // ── DIFFICULTY PROGRESSION STATE ──
 // How many finite tiers the hero has fully conquered (beaten the floor-25 boss
@@ -6602,6 +6632,7 @@ document.addEventListener('click', (e) => {
 
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
+  { date: '2026-06-29', size: 'medium', v: 'Bigger floors per difficulty', by: 'Claude', notes: ['Dungeon floors now grow with difficulty: Normal stays 20×20, Hardened is 24×24, Brutal 28×28, and Endless starts at 32×32 and keeps expanding the deeper you push — endlessly, but slower and slower so it never balloons into an unnavigable map.', 'Monster density is held constant, so a bigger, harder floor simply carries proportionally more foes — more rooms, hazards and enemies, at the same crowding you’re used to.', 'A generous cap keeps even the largest deep-Endless floors from spawning an unplayable swarm.'] },
   { date: '2026-06-29', size: 'medium', v: 'Two gear sets', by: 'Claude', notes: ['You now keep two independent equipment loadouts and switch between them in one tap. The GEAR tab has a Set 1 / Set 2 switch above the paper doll showing each set\'s worn count and power; the lit one is what you\'re wearing.', 'Tap the other set (or press G anywhere) to instantly swap your whole loadout — handy for keeping a damage set and a defensive or utility set ready. Gear parked in the set you\'re not wearing stays on that set rather than cluttering your bag, and both sets are saved with your character.'] },
   { date: '2026-06-29', size: 'small', v: 'Floor 1 portal fix', by: 'Claude', notes: ['Stepping onto the gate on the first floor of a difficulty now actually returns you to town again. It was silently doing nothing; the TOWN button still worked, but walking into the portal didn\'t.'] },
   { date: '2026-06-29', size: 'big', v: 'Rating-based combat overhaul', by: 'Claude', notes: ['Chances no longer use flat caps. Crit, dodge, hit, block and damage reduction are now Path-of-Exile-style RATINGS — integer stats you build from attributes and gear — and the actual % is your rating measured against the enemy you\'re facing: chance = rating / (rating + opposition). It can approach 100% but never reach it, so absurd numbers are mechanically impossible rather than clamped.', 'Opposition grows with depth, so a rating that gives big % on floor 5 gives much less on floor 50 — you have to keep investing to stay sharp, and there\'s no maxing a stat once and coasting. In true endgame you can still stack a stat very high; it\'s just never trivial or absolute.', 'Combat is now two-sided: enemies have Accuracy (which eats your dodge) and Evasion (so your weapon attacks can MISS). You have an Accuracy rating too — Agility and the new ACC gear affix raise it. Most attacks still land, but "Accurate" foes punch through evasion and slippery "Evasive" foes need real Accuracy to hit. (Spells never miss.)', 'Agility now drives both Evasion and Accuracy; Luck drives Crit; gear CRIT/SPD/DODGE/BLOCK/DR read as ratings (shown as flat numbers, with the live % on the HERO sheet vs your current floor). Crit damage is uncapped again — it\'s a magnitude, not a chance.', 'Health and mana stay finite (from the prior pass): slower HP/MP regen, level-ups mend ~40% instead of a full refill, smaller potions, and burst-heals capped per use.'] },
@@ -7348,6 +7379,12 @@ function tryBuildVault(reach) {
 
 function generateMap() {
   inTown = false;
+  // Size the floor for its difficulty BEFORE carving anything — harder tiers and
+  // deeper Endless floors are larger maps (see mapSizeFor). areaRatio then scales
+  // rooms, hazards and foes so a bigger map is a denser dungeon, not a sparse one.
+  const mapSize = mapSizeFor(dungeonLevel);
+  MAP_W = mapSize; MAP_H = mapSize;
+  const areaRatio = mapAreaRatio();
   floorSerial++;
   player.lastStandReady = true; // a fresh Last Stand each floor
   rollFloorMod();
@@ -7365,7 +7402,9 @@ function generateMap() {
 
   // ── ROOMS ── a handful of rectangles, occasionally one big grand hall.
   const rooms = [];
-  const roomCount = rnd(5, 8);
+  // More rooms on bigger floors, so a larger map is a denser dungeon rather than
+  // the same handful of rooms marooned in acres of rock.
+  const roomCount = Math.max(5, Math.round(rnd(5, 8) * areaRatio));
   const grandHall = Math.random() < 0.3;
   for (let i = 0; i < roomCount; i++) {
     const big = grandHall && i === 0;
@@ -7388,7 +7427,8 @@ function generateMap() {
 
   // ── CORRIDORS ── connect rooms in a chain, plus a couple of loops for choice.
   for (let i = 1; i < rooms.length; i++) carveCorridor(rooms[i-1].cx, rooms[i-1].cy, rooms[i].cx, rooms[i].cy);
-  for (let k = 0; k < 2; k++) { const a = pick(rooms), b = pick(rooms); if (a !== b) carveCorridor(a.cx, a.cy, b.cx, b.cy); }
+  const extraLoops = Math.max(2, Math.round(2 * areaRatio)); // more alternate routes on bigger floors
+  for (let k = 0; k < extraLoops; k++) { const a = pick(rooms), b = pick(rooms); if (a !== b) carveCorridor(a.cx, a.cy, b.cx, b.cy); }
 
   // ── PLAYER START ── first room centre, cleared of obstacles.
   const start = rooms[0];
@@ -7463,7 +7503,7 @@ function generateMap() {
       }
       return false;
     };
-    const pools = rnd(1, 2);
+    const pools = Math.min(5, Math.max(1, Math.round(rnd(1, 2) * areaRatio))); // more (but capped) on bigger floors
     for (let p = 0; p < pools; p++) {
       const seed = randomFloorTile(reach);
       if (!seed || nearWater(seed.x, seed.y)) continue; // keep pools clear of water
@@ -7474,7 +7514,7 @@ function generateMap() {
   }
   // ── SPIKE TRAPS (passable, stabs) ──
   if (Math.random() < 0.6) {
-    const n = rnd(2, 5);
+    const n = Math.max(2, Math.round(rnd(2, 5) * areaRatio)); // more on bigger floors so they aren't trap-sparse
     for (let i = 0; i < n; i++) { const c = randomFloorTile(reach); if (c) mapData[c.y][c.x] = 8; }
   }
   // With traps down, melt any that sit on the only route somewhere so the
@@ -7483,7 +7523,9 @@ function generateMap() {
   // ── TELEPORTER PAIR ── rare, and the two pads must sit far apart so a warp
   // is a meaningful shortcut rather than a tiny hop.
   if (rooms.length >= 2 && Math.random() < 0.18) {
-    const MIN_TP_DIST = 22; // Manhattan tiles between the paired pads
+    // Scale the minimum warp distance with the map so a teleporter stays a real
+    // shortcut on bigger floors (≈22 on the base 20×20).
+    const MIN_TP_DIST = Math.round(Math.min(MAP_W, MAP_H) * 1.1); // Manhattan tiles between the paired pads
     let a = null, b = null;
     for (let tries = 0; tries < 60; tries++) {
       const p = randomFloorTile(reach), q = randomFloorTile(reach);
@@ -7504,7 +7546,7 @@ function generateMap() {
   // -looking area can actually be walked to.
   ensureFootConnected();
   // ── CRACKED WALLS ── breakable walls with open floor on opposite sides.
-  let cracks = rnd(2, 4);
+  let cracks = Math.max(2, Math.round(rnd(2, 4) * areaRatio)); // scale breakable walls with floor size
   for (let tries = 0; tries < 150 && cracks > 0; tries++) {
     const x = rnd(1, MAP_W-2), y = rnd(1, MAP_H-2);
     if (mapData[y][x] !== 1) continue;
@@ -8171,6 +8213,10 @@ function enterTown() {
 // Lay out the walled town plaza and place its NPCs.
 function buildTown() {
   inTown = true;
+  // The town's buildings, NPCs and entry point are hand-placed for the base 20×20
+  // plaza, so always rebuild it at the base size — a dungeon floor may have grown
+  // MAP_W/MAP_H for a harder tier.
+  MAP_W = BASE_MAP_W; MAP_H = BASE_MAP_H;
   floorSerial++;
   // Clear every dungeon-only entity so nothing lingers into the safe hub.
   enemies = []; merchant = null; mystic = null; minions = []; combatBuffs = {};
@@ -9710,15 +9756,23 @@ function spawnEnemies() {
   // Summoned minions, transient combat buffs and skill charges don't carry between floors.
   minions = []; combatBuffs = {}; clearCharges();
   const isBossFloor = dungeonLevel % 5 === 0;
+  // Hold monster DENSITY constant as floors grow: the regular per-floor foe count
+  // is scaled by how much bigger this floor is than the base 20×20 (mapAreaRatio),
+  // so a larger, harder map carries proportionally more foes at the same crowding.
+  // A generous ceiling keeps even the largest deep-Endless floors from spawning an
+  // unnavigable mob. Boss floors keep their own tuned, depth-based roster.
   let count = isBossFloor
     ? 1 + Math.min(9, Math.floor(dungeonLevel / 5))   // boss + minions, capped so deep Endless boss floors aren't a wall of 40 foes
-    : Math.min(3 + Math.floor(dungeonLevel * 0.7), 10);
+    : Math.min(Math.round(Math.min(3 + Math.floor(dungeonLevel * 0.7), 10) * mapAreaRatio()), 40);
   // Some floor modifiers crowd the level with extra foes.
   if (!isBossFloor && floorMod.enemyMult) count = Math.round(count * floorMod.enemyMult);
   if (!isBossFloor && pfx('enemy', 1) !== 1) count = Math.max(1, Math.round(count * pfx('enemy', 1)));
   // Floors 2-3 pack one extra foe so the opening isn't a total faceroll — but
   // floor 1 is left alone so a fresh, gearless hero gets a fair first dive.
   if (!isBossFloor && dungeonLevel >= 2 && dungeonLevel <= 3) count += 1;
+  // Final safety ceiling (after modifiers): no floor, however large or heavily
+  // modified, spawns an unplayable swarm.
+  if (!isBossFloor) count = Math.min(count, 48);
 
   // Pick 2-3 enemy types for this floor from the depth-appropriate band, so
   // each floor has variety while every monster stays around the same level.
