@@ -3946,19 +3946,22 @@ spriteSheet.onload = () => { spriteReady = true; try { document.documentElement.
 // `not-allowed`. Falls back to `auto` until the atlas has loaded or if generation fails.
 // Pointer options, ALL drawn from the existing DawnLike atlas so the cursor
 // always matches the game's art style. Each is a 16px atlas tile baked to a 32px
-// PNG; `flip` mirrors it so the point lands at the top-left (the click hotspot at
-// 0,0). The default is the classic blade.
+// PNG. `flip` orients the tile so its weapon points UP-LEFT like a normal
+// pointer — most of these tiles already point up-left raw, so only the blade
+// (which is drawn pointing up-right) is mirrored. `hotX`/`hotY` then place the
+// click hotspot right on that up-left tip, in 32px-image pixels. The default is
+// the classic blade.
 const CURSOR_OPTIONS = [
-  { id: 'blade',  name: 'Blade',  idx: 1482, flip: true },
-  { id: 'sword',  name: 'Sword',  idx: 67,   flip: true },
-  { id: 'dagger', name: 'Dagger', idx: 69,   flip: true },
-  { id: 'spear',  name: 'Spear',  idx: 73,   flip: true },
-  { id: 'scythe', name: 'Scythe', idx: 74,   flip: true },
-  { id: 'staff',  name: 'Staff',  idx: 70,   flip: true },
-  { id: 'axe',    name: 'Axe',    idx: 68,   flip: true },
-  { id: 'mace',   name: 'Mace',   idx: 72,   flip: true },
-  { id: 'bow',    name: 'Bow',    idx: 71,   flip: true },
-  { id: 'key',    name: 'Key',    idx: 86,   flip: true },
+  { id: 'blade',  name: 'Blade',  idx: 1482, flip: true,  hotX: 0, hotY: 0 },
+  { id: 'sword',  name: 'Sword',  idx: 67,   flip: false, hotX: 0, hotY: 0 },
+  { id: 'dagger', name: 'Dagger', idx: 69,   flip: false, hotX: 8, hotY: 4 },
+  { id: 'spear',  name: 'Spear',  idx: 73,   flip: false, hotX: 0, hotY: 0 },
+  { id: 'scythe', name: 'Scythe', idx: 74,   flip: false, hotX: 0, hotY: 0 },
+  { id: 'staff',  name: 'Staff',  idx: 70,   flip: false, hotX: 2, hotY: 0 },
+  { id: 'axe',    name: 'Axe',    idx: 68,   flip: false, hotX: 2, hotY: 2 },
+  { id: 'mace',   name: 'Mace',   idx: 72,   flip: false, hotX: 4, hotY: 4 },
+  { id: 'bow',    name: 'Bow',    idx: 71,   flip: false, hotX: 2, hotY: 2 },
+  { id: 'key',    name: 'Key',    idx: 86,   flip: false, hotX: 8, hotY: 4 },
 ];
 let cursorChoice = 'blade';
 try { const _cc = localStorage.getItem('cursorChoice'); if (_cc) cursorChoice = _cc; } catch (e) {}
@@ -4005,8 +4008,9 @@ function applyGameCursor() {
   const g = c.getContext('2d'); g.imageSmoothingEnabled = false;
   if (opt.flip) { g.translate(OUT, 0); g.scale(-1, 1); } // flip so the tip points up-left
   g.drawImage(spriteSheet, sx, sy, ATLAS_TS, ATLAS_TS, 0, 0, OUT, OUT);
-  // The point sits at the top-left, so the click hotspot is (0,0).
-  const cur = 'url(' + c.toDataURL('image/png') + ') 0 0, auto';
+  // The click hotspot sits on this weapon's up-left tip (per-option, in 32px px).
+  const hx = opt.hotX || 0, hy = opt.hotY || 0;
+  const cur = 'url(' + c.toDataURL('image/png') + ') ' + hx + ' ' + hy + ', auto';
   document.documentElement.style.cursor = cur; // default + fallback for any unstyled node
   // Force the blade over clickable elements too: they set their own `cursor: pointer`,
   // which inheritance can't override, so push it through a stylesheet — while keeping the
@@ -8059,6 +8063,7 @@ document.addEventListener('click', (e) => {
 
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
+  { date: '2026-06-30', size: 'small', v: 'Consistent cursor pointers', by: 'Claude', notes: ['Every cursor you can pick in ⚙️ → CURSOR now points up and to the left, like a normal pointer — the sword, dagger, spear, scythe, staff, axe, mace, bow and key no longer point the opposite way to the blade.', 'The click point of each cursor now sits right on the tip of its weapon, so what you click is exactly where the point lands.'] },
   { date: '2026-06-30', size: 'small', v: 'Collapsible loot drawer on desktop', by: 'Claude', notes: ['On the desktop layout the loot/bag drawer on the right can now be folded away, just like the combat log on the left — click its vertical bar to collapse it to a slim spine and hand the reclaimed width back to the map. Your choice is remembered.', 'Both collapse toggles are now matching vertical bars on the edge facing the map (the log\'s used to be a strip across the top of its column), so the two panels open and close the same way and the little arrow always points the way it will go.', 'The map now fills its whole area instead of sitting as a centred square, so all that reclaimed space actually goes to the dungeon — collapse a panel and you simply see more of the floor. Tiles stay perfectly square; a wider view just reveals more map.'] },
   { date: '2026-06-30', size: 'big', v: 'Bottom command bar on desktop', by: 'Claude', notes: ['On desktop, every vital readout moved off the top and into one command bar across the bottom, under the map. Big flanking Health (left) and Mana (right) bars are now the most prominent things on screen — bold, glowing, with the numbers right on them — hugging the log and loot panels.', 'Your name, Power and gold sit in the middle above a slim endurance bar, all your skill slots run across the centre, and one long experience bar — broken into segments — stretches along the very bottom. The old top stat strip is gone, so the play area runs cleaner.', 'The bar lives in the space between the side panels and reflows with them: collapse the log and the whole bar widens to match. Touch devices are untouched and keep their existing layout.'] },
   { date: '2026-06-30', size: 'medium', v: 'Auto-cast your skills', by: 'Claude', notes: ['Any skill on your bar can now cast itself the moment it\'s ready — off cooldown, enough mana, and a valid target in range. Turn it on by right-clicking a skill on the bar, or by holding its number key for a moment (a cyan ⟳ badge marks the ones set to auto-cast). On phones, open the SKILLS tab, tap the slotted skill, and use its new Auto-cast button.', 'Auto-cast follows your hotbar order: slot 1 outranks slot 2 and so on, so when mana is tight your highest-priority skill gets first dibs and the rest wait their turn. Skills only fire when there\'s something to hit — a damage skill won\'t waste mana on an empty room, a heal holds until you\'re actually hurt, and buffs save themselves for when foes are near.', 'It\'s all opt-in and remembered per character, so your auto-cast picks stick with your hero between sessions. Tap the skill, right-click, or hold the key again to switch it back off.'] },
