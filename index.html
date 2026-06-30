@@ -2760,7 +2760,7 @@
       <div class="howto-sec">🎯 Goal</div>
       <div class="howto-line">Delve floor by floor, grab ever-better <b>loot</b>, and survive as deep as you can. Death sends you back to <b>Town</b>, lighter — but your hero lives on.</div>
       <div class="howto-sec">🕹️ Moving &amp; fighting</div>
-      <div class="howto-line">Move in real time with the <b>joystick</b> (touch — drag anywhere) or <b>arrows / WASD</b> (keyboard) — hold to keep walking, including diagonally. <b>Sprint</b> by holding <b>Shift</b> (or pushing the stick to its edge) and <b>Dash</b> with <b>Space</b> — both burn stamina that refills when you ease off. You <b>auto-attack</b> foes in reach; cast skills with the bar / number keys. <b>USE</b> (E / tap) grabs loot and talks to NPCs. Watch your footing: ice is slippery, mud is slow, and arrow traps &amp; fire vents can be dodged. Foes roam on their own and give chase when you get close.</div>
+      <div class="howto-line">Move in real time with the <b>joystick</b> (touch — drag anywhere), <b>arrows / WASD</b> (keyboard), or just <b>click the map</b> (mouse) to walk there — <b>hold the button</b> to keep heading toward the cursor, including diagonally. <b>Sprint</b> by holding <b>Shift</b> (or pushing the stick to its edge) and <b>Dash</b> with <b>Space</b> — both burn stamina that refills when you ease off. You <b>auto-attack</b> foes in reach; cast skills with the bar / number keys. <b>USE</b> (E / tap) grabs loot and talks to NPCs. Watch your footing: ice is slippery, mud is slow, and arrow traps &amp; fire vents can be dodged. Foes roam on their own and give chase when you get close.</div>
       <div class="howto-sec">💎 Loot rarity<span class="howto-tiers"><i style="background:#9aa0a6"></i><i style="background:#e8e8e8"></i><i style="background:#4caf50"></i><i style="background:#3a7bd5"></i><i style="background:#a45cd6"></i><i style="background:#e08a2e"></i><i style="background:#d6453a"></i></span></div>
       <div class="howto-line">Colour is rarity: grey → white → green → blue → purple → orange → red (Mythic). Tap loot in your <b>bag</b> to equip, sell, or scrap it.</div>
       <div class="howto-sec">✨ Skills &amp; potions</div>
@@ -6213,12 +6213,19 @@ const keyHeld   = { up: false, down: false, left: false, right: false };
 const touchHeld = { up: false, down: false, left: false, right: false };
 const joy = { active: false, dx: 0, dy: 0, mag: 0 };   // analog joystick vector (mobile)
 let sprintHeld = false;                                 // Shift / sprint button
+// Click-to-move (desktop): a world point (in tile units, matching player.fx/fy)
+// the hero walks toward. `hold` means the button is still down, so the target
+// keeps tracking the cursor and the hero only stops when you let go. A plain
+// click leaves `hold` false: the hero walks to the point once and stops there.
+const moveTarget = { active: false, hold: false, wx: 0, wy: 0, _stallT: 0, _lastDist: Infinity };
+const MOVE_ARRIVE = 0.18;   // tiles — how close counts as "reached the click point"
 function heldDir(d) { return keyHeld[d] || touchHeld[d]; }
 function clearHeld() {
   keyHeld.up = keyHeld.down = keyHeld.left = keyHeld.right = false;
   touchHeld.up = touchHeld.down = touchHeld.left = touchHeld.right = false;
   joy.active = false; joy.dx = joy.dy = joy.mag = 0;
   sprintHeld = false;
+  moveTarget.active = false; moveTarget.hold = false;
 }
 // Move the hero to a grid cell AND sync the smooth float position to its centre.
 // Used everywhere the hero is repositioned (spawn, stairs, teleports, blinks,
@@ -7173,6 +7180,7 @@ document.addEventListener('click', (e) => {
 
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
+  { date: '2026-06-30', size: 'medium', v: 'Click to move', by: 'Claude', notes: ['On mouse-and-keyboard, you can now click the map to walk the hero to that spot — a glowing ring marks where you\'re headed. Hold the button (and drag) to keep moving toward the cursor in real time, so you can steer just by pointing. Pressing arrows / WASD instantly takes back manual control, and clicking a foe still opens its info card rather than walking into it. Touch devices keep their floating joystick.'] },
   { date: '2026-06-30', size: 'small', v: 'Cooldowns in seconds', by: 'ASuiter89', notes: ['Skill and potion cooldowns now count down in real seconds — the number on each bar button is the seconds left to wait, matching the real-time pace of combat.', 'Potions share a 5-second cooldown (up from a near-instant recharge), so a sip is a real decision instead of a spam button. Skill cooldowns read in seconds too, tuned to sit naturally alongside the ~1.5s attack rhythm.'] },
   { date: '2026-06-30', size: 'medium', v: 'Real-time movement tuning', by: 'Claude', notes: ['Foes move a little slower now, so you can actually create distance and kite — step away from a foe you\'re next to instead of being pinned against it. Enemies are still solid (no walking through them).', 'Movement is smooth again (the stepped/pixel-quantised look is gone).', 'Endurance is now shown as its own ⚡ END bar up in the HUD next to HP/MP, so you can watch sprint/dash fuel at a glance. Fixed a bug where, on existing save files, Endurance loaded empty — which silently disabled Sprint and let Dash fire for free; sprinting (hold Shift) works properly now.', 'Tidied up so leftover traps and bolts can no longer flicker on the town screen.'] },
   { date: '2026-06-30', size: 'big', v: 'Movement, speed & traps', by: 'Claude', notes: ['Movement got physical: you carry momentum, slide across patches of ice, and slog through mud and shallow muck that drag your speed.', 'Sprint by holding Shift (or pushing the mobile stick to its edge) to outrun a pack — it burns a stamina bar that refills after a breather. Tap Space to Dash: a quick stamina-fuelled burst that\'s great for dodging or closing in. Blink-type class skills still work for instant repositioning.', 'Attack speed is now a real thing. You swing about once every 1.5s — faster with light weapons (daggers) and the new Attack Speed % gear stat, slower with heavy ones (mauls, axes). Foes attack on their own per-type rhythm too, so a swift biter and a lumbering brute no longer strike in lockstep.', 'New crowd control: chilling foes can snare you, ice underfoot makes you slide, and a slow drags your top speed — positioning matters more than ever.', 'Hazards you can dodge: arrow traps loose bolts down a lane (step out of the line), and fire vents flare on and off (don\'t linger when they light). No foes spawn on top of the entry stairs anymore, and the opening tutorial foe waits for you to approach.', 'Mobile controls are now a floating analog joystick — press anywhere to steer in any direction, push to the edge to sprint, tap to use.'] },
@@ -7492,9 +7500,29 @@ joyKnob.style.cssText = 'position:absolute;left:50%;top:50%;width:52px;height:52
 joyBase.appendChild(joyKnob);
 document.body.appendChild(joyBase);
 
+// ── DESKTOP CLICK-TO-MOVE ──
+// On the web (mouse) layout there's no joystick: left-clicking the map walks the
+// hero to that spot, and holding the button (dragging) keeps the hero chasing the
+// cursor in real time. Steering lives in updatePlayer; here we just set the target.
+let clickMoveId = null;
+function setMoveTargetFromClient(cx, cy) {
+  const w = clientToWorld(cx, cy);
+  if (!w) return;
+  moveTarget.wx = Math.max(0.5, Math.min(MAP_W - 0.5, w.wx));
+  moveTarget.wy = Math.max(0.5, Math.min(MAP_H - 0.5, w.wy));
+  moveTarget.active = true;
+  moveTarget._stallT = 0; moveTarget._lastDist = Infinity;
+}
 canvas.addEventListener('pointerdown', e => {
   gestureStart = { x: e.clientX, y: e.clientY };   // anchor for tap-to-inspect (both layouts)
-  if (isWebLayout()) return;                        // desktop: mouse/keyboard, no joystick
+  if (isWebLayout()) {                              // desktop: click / hold-to-move, no joystick
+    if (e.button !== 0 || rtPaused()) return;      // left button only; not while a menu/town/death pauses play
+    clickMoveId = e.pointerId;
+    moveTarget.hold = true;                         // track the cursor until the button comes up
+    try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+    setMoveTargetFromClient(e.clientX, e.clientY);
+    return;
+  }
   if (panelOpen) { togglePanel(); return; }         // an open drawer eats the touch
   joyId = e.pointerId; joyOX = e.clientX; joyOY = e.clientY; joyMoved = false;
   joy.active = true; joy.dx = 0; joy.dy = 0; joy.mag = 0;
@@ -7504,6 +7532,8 @@ canvas.addEventListener('pointerdown', e => {
   joyBase.style.display = 'block';
 });
 canvas.addEventListener('pointermove', e => {
+  // Desktop: while the button is held, keep the move target glued to the cursor.
+  if (clickMoveId === e.pointerId) { if (moveTarget.hold) setMoveTargetFromClient(e.clientX, e.clientY); return; }
   if (joyId !== e.pointerId) return;
   const dx = e.clientX - joyOX, dy = e.clientY - joyOY;
   const d = Math.hypot(dx, dy);
@@ -7516,16 +7546,24 @@ canvas.addEventListener('pointermove', e => {
 });
 function endJoy(e, isUp) {
   const wasJoy = joyId === e.pointerId;
+  const wasClickMove = clickMoveId === e.pointerId;
   // Tap detection works in BOTH layouts (web has no joystick, just the anchor).
   const moved = wasJoy ? joyMoved
     : (gestureStart && (Math.abs(e.clientX - gestureStart.x) > JOY_TAP || Math.abs(e.clientY - gestureStart.y) > JOY_TAP));
   gestureStart = null;
   if (wasJoy) { joyId = null; joy.active = false; joy.dx = joy.dy = joy.mag = 0; joyBase.style.display = 'none'; }
+  if (wasClickMove) {
+    clickMoveId = null;
+    moveTarget.hold = false;        // release: stop chasing the cursor (the held part)…
+    if (!isUp) moveTarget.active = false;   // …and on a cancel, stop outright
+    // On a plain release (isUp) moveTarget stays active for a click-to-move tap, so the
+    // hero finishes walking to the spot and stops on arrival (handled in updatePlayer).
+  }
   if (!isUp || moved) return;       // a cancel or a drag is not a tap
-  // A tap on a foe opens its inspect card (codex); on empty ground it dismisses an
-  // open card, otherwise (touch only) it's USE / grab / talk.
+  // A tap on a foe opens its inspect card (codex) instead of walking to it; on empty
+  // ground it dismisses an open card, otherwise (touch only) it's USE / grab / talk.
   const foe = enemyAtClient(e.clientX, e.clientY);
-  if (foe) { toggleEnemyCard(foe, e.clientX, e.clientY); return; }
+  if (foe) { if (wasClickMove) moveTarget.active = false; toggleEnemyCard(foe, e.clientX, e.clientY); return; }
   if (enemyCardFor) { closeEnemyCard(); return; }
   if (!isWebLayout()) pickup();
 }
@@ -7564,6 +7602,16 @@ function clientToTile(cx, cy) {
   const sx = (cx - r.left) * (canvas.width / r.width);
   const sy = (cy - r.top) * (canvas.height / r.height);
   return { mx: Math.floor((sx + lastCam.camX) / lastCam.tw), my: Math.floor((sy + lastCam.camY) / lastCam.th) };
+}
+// Same, but to a fractional world point (tile units, matching player.fx/fy) so
+// click-to-move can target the exact spot under the cursor, not just its cell.
+function clientToWorld(cx, cy) {
+  if (!lastCam) return null;
+  const r = canvas.getBoundingClientRect();
+  if (!r.width || !r.height) return null;
+  const sx = (cx - r.left) * (canvas.width / r.width);
+  const sy = (cy - r.top) * (canvas.height / r.height);
+  return { wx: (sx + lastCam.camX) / lastCam.tw, wy: (sy + lastCam.camY) / lastCam.th };
 }
 function enemyAtClient(cx, cy) {
   const t = clientToTile(cx, cy);
@@ -12502,6 +12550,26 @@ function draw() {
     }
   }
 
+  // Click-to-move destination marker (desktop): a small pulsing gold ring on the
+  // ground where the hero is headed, so the click target reads at a glance. Drawn
+  // on the floor, beneath actors. Procedural UI overlay, not a world asset.
+  if (moveTarget.active && !inTown) {
+    const mxp = offX + moveTarget.wx * tw, myp = offY + moveTarget.wy * th;
+    const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 180);
+    const rad = tw * (0.18 + 0.05 * pulse);
+    ctx.save();
+    ctx.lineWidth = Math.max(1.5, tw * 0.05);
+    ctx.strokeStyle = `rgba(232,194,103,${0.5 + 0.4 * pulse})`;
+    ctx.shadowColor = 'rgba(232,194,103,0.85)';
+    ctx.shadowBlur = tw * 0.18;
+    ctx.beginPath(); ctx.arc(mxp, myp, rad, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(mxp - rad * 0.55, myp); ctx.lineTo(mxp + rad * 0.55, myp);
+    ctx.moveTo(mxp, myp - rad * 0.55); ctx.lineTo(mxp, myp + rad * 0.55);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   // Boss-conjured hazards — walls of flame and arcane barriers. Drawn over the
   // floor but beneath actors. Fire uses the DawnLike flame tile; the barrier is a
   // procedural magical construct (terrain-like, so procedural is fine).
@@ -13591,6 +13659,11 @@ function doDash() {
   let dx = (heldDir('right') ? 1 : 0) - (heldDir('left') ? 1 : 0);
   let dy = (heldDir('down') ? 1 : 0) - (heldDir('up') ? 1 : 0);
   if (joy.active && joy.mag > 0.18) { dx = joy.dx; dy = joy.dy; }
+  // Click-to-move: with no manual direction, dash toward the cursor target.
+  if (dx === 0 && dy === 0 && moveTarget.active) {
+    const tdx = moveTarget.wx - player.fx, tdy = moveTarget.wy - player.fy;
+    if (Math.hypot(tdx, tdy) > 0.1) { dx = tdx; dy = tdy; }
+  }
   if (dx === 0 && dy === 0) { dx = player.faceDx || 0; dy = player.faceDy || 0; if (dx === 0 && dy === 0) dx = player.facing === 'left' ? -1 : 1; }
   const m = Math.hypot(dx, dy) || 1; dx /= m; dy /= m;
   player.vx = dx * DASH_SPEED; player.vy = dy * DASH_SPEED;
@@ -13615,6 +13688,26 @@ function updatePlayer(dt) {
   let ix = (heldDir('right') ? 1 : 0) - (heldDir('left') ? 1 : 0);
   let iy = (heldDir('down') ? 1 : 0) - (heldDir('up') ? 1 : 0);
   if (joy.active && joy.mag > 0.18) { ix = joy.dx; iy = joy.dy; }
+  // Click-to-move: with no keyboard/joystick input, steer toward the click target.
+  // Any manual input cancels it (you take back the wheel). While the button is held
+  // the target tracks the cursor, so the hero keeps walking toward it; a plain click
+  // walks to the point and stops on arrival. We straight-line it and let movePlayerBy
+  // slide along walls — no pathfinding — and bail if we stall against one.
+  if (Math.abs(ix) > 0.01 || Math.abs(iy) > 0.01) {
+    moveTarget.active = false;
+  } else if (moveTarget.active) {
+    const tdx = moveTarget.wx - player.fx, tdy = moveTarget.wy - player.fy;
+    const td = Math.hypot(tdx, tdy);
+    if (!moveTarget.hold && td <= MOVE_ARRIVE) {
+      moveTarget.active = false;            // reached the clicked point — stop
+    } else if (td > 0.02) {
+      ix = tdx / td; iy = tdy / td;
+      if (!moveTarget.hold) {                // give up if pinned on a wall (no headway)
+        if (td < moveTarget._lastDist - 0.01) { moveTarget._lastDist = td; moveTarget._stallT = 0; }
+        else if ((moveTarget._stallT += dt) > 0.6) moveTarget.active = false;
+      }
+    }
+  }
   const mag = Math.hypot(ix, iy);
   const moving = mag > 0.01;
   if (moving) { ix /= mag; iy /= mag; entryGuard = false; } // first move ends arrival grace
