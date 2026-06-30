@@ -7848,10 +7848,10 @@ function buildTutorialMap() {
       else mapData[y][x] = 0;                 // sand (north)
     }
   }
-  // The cave: a down-stair set into the northern wall, dead centre.
+  // The cave: a down-stair near the northern end of the beach, dead centre.
   const caveX = MAP_W >> 1;
-  mapData[1][caveX] = 2;       // down-stairs tile (the cave mouth)
-  mapData[0][caveX] = 1;       // wall above keeps it reading as a cave in the wall
+  mapData[4][caveX] = 2;       // down-stairs tile (the cave mouth)
+  mapData[0][caveX] = 1;       // northern border wall behind it
 
   // Spawn the hero a few tiles up from the shoreline, facing the cave.
   player.x = caveX; player.y = SHORE - 1;        // sand, with water directly below
