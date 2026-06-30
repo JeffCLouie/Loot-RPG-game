@@ -2300,31 +2300,46 @@
   #touch-dpad .dpad-center { color: rgba(245, 240, 230, 0.5); }
   .dpad-center .dp-clock { width: 20px; height: 20px; display: block; }
 
-  /* Beach-tutorial instruction banner — pinned near the top of the play area,
-     persistent (no auto-fade) while the tutorial is active. */
+  /* Beach-tutorial hint chip — an optional "?" help affordance pinned just above
+     the bottom action bar while the tutorial is active. The whole chip is
+     clickable and opens the How to Play menu, so once you know the game it's
+     trivially ignorable (and never seen again after the tutorial). */
   #tutorial-hint {
     position: fixed;
     left: 50%;
-    top: calc(env(safe-area-inset-top, 0px) + 56px);
+    bottom: calc(var(--bar-h, 16px) + 12px);
     transform: translateX(-50%);
     z-index: 216;
     max-width: 92vw;
-    padding: 9px 14px;
-    border-radius: 12px;
+    display: none;
+    align-items: center;
+    gap: 9px;
+    padding: 7px 13px 7px 7px;
+    border-radius: 22px;
     background: rgba(20,16,32,0.94);
     border: 1px solid var(--gold);
     color: var(--text);
     font-size: 11px;
-    text-align: center;
-    line-height: 1.5;
-    pointer-events: none;
+    text-align: left;
+    line-height: 1.4;
+    cursor: pointer;
+    pointer-events: auto;
     box-shadow: 0 4px 16px rgba(0,0,0,0.6), 0 0 12px rgba(232,194,103,0.25);
-    display: none;
+    -webkit-tap-highlight-color: transparent;
   }
-  #tutorial-hint.show { display: block; animation: tutHintIn 0.4s ease-out; }
+  #tutorial-hint.show { display: inline-flex; animation: tutHintIn 0.4s ease-out; }
+  #tutorial-hint:active { background: rgba(40,32,58,0.96); }
+  #tutorial-hint .th-q {
+    flex: 0 0 auto;
+    width: 22px; height: 22px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--gold); color: #1a1405;
+    font-weight: bold; font-size: 14px; line-height: 1;
+  }
+  #tutorial-hint .th-text { flex: 1 1 auto; min-width: 0; }
   #tutorial-hint b { color: var(--gold); }
   @keyframes tutHintIn {
-    from { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+    from { opacity: 0; transform: translateX(-50%) translateY(8px); }
     to   { opacity: 1; transform: translateX(-50%) translateY(0); }
   }
 
@@ -2817,9 +2832,14 @@
   <div class="lvl-sub">Open the 🎒 BAG → HERO tab to spend your points!</div>
 </div>
 
-<!-- Beach-tutorial instruction banner. Shown (and updated) only while the
-     one-time tutorial map is active; content is set by tutorialStage(). -->
-<div id="tutorial-hint"></div>
+<!-- Beach-tutorial hint chip — a small, optional "?" help affordance pinned
+     above the action bar while the tutorial map is active. Tapping it opens the
+     full How to Play menu. The short hint text is set by tutorialStage(). -->
+<div id="tutorial-hint" role="button" tabindex="0" title="How to play"
+     onclick="showHowTo()" aria-label="How to play — open the guide">
+  <span class="th-q" aria-hidden="true">?</span>
+  <span class="th-text"></span>
+</div>
 
 <!-- Title screen / landing page — shown on load. Surfaces the PLAY/CONTINUE
      action plus the same controls that live behind the ⚙️ settings dropdown. -->
@@ -8011,22 +8031,22 @@ function finishTutorial() {
   updateBars(); renderPanel(); saveGame(); draw();
 }
 
-// ── TUTORIAL HINT BANNER ── a floating instruction that updates as the new
-// player progresses (move → fight → enter the cave).
+// ── TUTORIAL HINT CHIP ── a small "?" help affordance that updates its one-line
+// nudge as the new player progresses (move → fight → enter the cave). Tapping it
+// opens the full How to Play menu (wired on the element's onclick).
 function tutorialStage(stage) {
-  const moveHow = touchUI()
-    ? 'the on-screen d-pad'
-    : 'WASD or the arrow keys';
+  const moveHow = touchUI() ? 'the d-pad' : 'WASD / arrows';
   if (stage === 'move') {
-    setTutorialHint(`<b>You wake on a strange shore.</b><br>Use ${moveHow} to move — head up the beach toward the cave.<br>⚔️ A skeleton blocks the way: <b>walk into it</b> to attack until it falls.`);
+    setTutorialHint(`Use <b>${moveHow}</b> to move. Walk into the <b>skeleton</b> to attack it.`);
   } else if (stage === 'cave') {
-    setTutorialHint(`<b>The skeleton is dust.</b><br>🕳️ Now step into the cave (⬇) in the northern wall to descend into the dungeon.`);
+    setTutorialHint(`Step into the <b>cave</b> (⬇) up north to descend into the dungeon.`);
   }
 }
 function setTutorialHint(html) {
   const el = document.getElementById('tutorial-hint');
   if (!el) return;
-  el.innerHTML = html;
+  const txt = el.querySelector('.th-text');
+  if (txt) txt.innerHTML = html; else el.innerHTML = html;
   el.classList.add('show');
 }
 function hideTutorialHint() {
