@@ -8272,9 +8272,13 @@ function buildTutorialMap() {
 
   // Spawn the hero a few tiles up from the shoreline, facing the cave.
   player.x = caveX; player.y = SHORE - 1;        // sand, with water directly below
-  // A lone skeleton a few steps north, between the hero and the cave.
+  // A lone skeleton a few steps north, between the hero and the cave. It's
+  // neutral — static and harmless until the player strikes it, so a brand-new
+  // hero can approach safely and learn combat on their own terms. Once hit it
+  // wakes up and fights back, but only ever shambles (slow).
   const skl = { x: caveX, y: SHORE - 5, type: '🦴', name: 'Skeleton',
-    hp: 24, maxHp: 24, level: 1, dmg: 4, dead: false, behavior: 'chaser' };
+    hp: 24, maxHp: 24, level: 1, dmg: 4, dead: false, behavior: 'chaser',
+    passive: true, provoked: false, slow: true };
   enemies.push(skl);
 
   // Seal the cave until the skeleton falls, so the fight can't be skipped.
@@ -13048,6 +13052,9 @@ function applyRegen() {
 //                  clears it.
 let __turnBusy = false;
 let gameHalted = false;
+// Paused while the new-game name prompt is open, so the world can't be acted on
+// (e.g. the floating d-pad tapped) until the player finishes naming their hero.
+let namePaused = false;
 window.haltAll = function () {
   gameHalted = true;
   if (typeof clearHeldMove === 'function') clearHeldMove();  // drop any held d-pad repeat
@@ -13062,7 +13069,7 @@ window.gameBusy = () => __turnBusy;
 // single turn they belong to runs to completion uninterrupted.
 function guardAction(fn) {
   return function () {
-    if (gameHalted || __turnBusy) return undefined;
+    if (gameHalted || namePaused || __turnBusy) return undefined;
     __turnBusy = true;
     try { return fn.apply(this, arguments); }
     finally { __turnBusy = false; }
@@ -13744,6 +13751,7 @@ function onEnemyDefeated(e) {
 // ranged pokes that draw no counter. `opts.ranged` marks shots fired from afar
 // (bow/staff/spear reach), which never provoke a melee counterattack.
 function attackEnemy(e, opts = {}) {
+  if (e) e.provoked = true; // striking a neutral foe wakes it up
   const style = opts.style || weaponStyle();
   const ranged = !!opts.ranged;
   const label = enemyLabel(e);
@@ -14525,6 +14533,14 @@ function enemyMove(e) {
   // Stunned foes lose their turn.
   if (statusEffects.some(s => s.target === e && s.effect === 'stun')) return;
 
+  // Neutral foes never initiate — they hold their ground (with the rare idle
+  // shuffle) until the player provokes them by attacking. Once provoked they
+  // fight normally.
+  if (e.passive && !e.provoked) {
+    if (Math.random() < 0.12) enemyWander(e);
+    return;
+  }
+
   const beh = BEHAVIORS[e.behavior] || BEHAVIORS.chaser;
   const dist = Math.abs(e.x - player.x) + Math.abs(e.y - player.y);
 
@@ -14547,8 +14563,9 @@ function enemyMove(e) {
   // Bosses weigh their signature ability first; some abilities end the turn.
   if (e.isBoss && bossSpecial(e, dist, beh)) return;
 
-  // Heavy brutes act only every other turn — slow, but they hit like a truck.
-  if (beh.slow) { e.tick = (e.tick || 0) + 1; if (e.tick % 2 === 1) return; }
+  // Heavy brutes (and flagged-slow foes like the tutorial skeleton) act only
+  // every other turn — slow, but they still close in.
+  if (beh.slow || e.slow) { e.tick = (e.tick || 0) + 1; if (e.tick % 2 === 1) return; }
 
   // Lurkers stay coiled until you stray close, then commit to the hunt.
   if (beh.ambush) {
@@ -18954,6 +18971,10 @@ function showNameEntry() {
   const lbl = document.getElementById('hc-tog-label');
   if (lbl) lbl.innerHTML = `${hcIcon(14)} HARDCORE`;
   syncHardcoreToggle();
+  // Pause the world while naming — no moving/acting (e.g. via the floating d-pad)
+  // until the name is submitted.
+  namePaused = true;
+  if (typeof clearHeldMove === 'function') clearHeldMove();
   ov.classList.add('open');
   setTimeout(() => { try { if (input) { input.focus(); input.select(); } } catch (e) {} }, 60);
 }
@@ -18975,6 +18996,7 @@ function submitName() {
   if (cb && cb.checked) player.hardcore = true;
   const ov = document.getElementById('name-overlay');
   if (ov) ov.classList.remove('open');
+  namePaused = false; // resume — naming is done
   saveGame();
   if (!player.class) showClassPick();
 }
