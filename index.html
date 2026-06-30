@@ -975,6 +975,26 @@
   .skillbar-btn.slot-drop-hot, .lt-slot.slot-drop-hot { border-color: #ffd86a !important; box-shadow: 0 0 8px #ffd86a99; transform: translateY(-2px); }
   .skillbar-btn[draggable="true"] { cursor: grab; }
   .skillbar-btn[draggable="true"]:active { cursor: grabbing; }
+
+  /* ── IN-TOWN SKILL TRAY (web/desktop layout only) ──
+     In town the bar stays put on the wide layout so you can see your kit and
+     rearrange slots there (the SKILLS-tab slot tray is hidden on desktop; on touch
+     it's still present, so the bar is hidden in town instead — see renderSkillBar).
+     It parks as a solid tray over a clean strip (not the town plaza) and lifts above
+     the town/shop/mystic menus, which reserve its height (--town-bar-reserve,
+     measured in JS) so they end above it. The reserve itself lives in the web-layout
+     media query below; here is just the tray's look and the locked-potion styling. */
+  #skill-bar.in-town {
+    background: #15101f;
+    border-top: 1px solid var(--frame);
+    box-shadow: 0 -5px 16px rgba(0,0,0,0.55);
+    padding-top: 6px; padding-bottom: 6px;
+  }
+  /* Locked potions in town: greyed and inert — no ready pulse, no press feedback. */
+  .skillbar-btn.town-locked { opacity: 0.4; filter: grayscale(0.7); cursor: not-allowed; animation: none; }
+  .skillbar-btn.town-locked:active { transform: none; background: #6a1a2a; }
+  .skillbar-btn.town-locked.mana:active { background: #1a2a6a; }
+
   /* On touch devices the cast bar is your only way to fire spells/potions, so make
      the buttons and their icons noticeably bigger for easier tapping. (Desktop has
      its own larger sizing in the wide-layout media query above.) */
@@ -1585,7 +1605,7 @@
     background: linear-gradient(90deg,#3a2a5a,#5a3a7a);
     border-bottom: 1px solid #6b4f9f;
   }
-  #shop-title { color: #e8d5ff; font-size: 14px; font-weight: bold; }
+  #shop-title { color: #e8d5ff; font-size: 14px; font-weight: bold; flex: 1; text-align: center; }
   #shop-close {
     background: none; border: none; color: #c8b5e8;
     font-size: 18px; cursor: pointer; padding: 0 4px;
@@ -1673,7 +1693,7 @@
     padding: 10px 12px; background: linear-gradient(90deg,#143a44,#1d5a66);
     border-bottom: 1px solid #2f7f8a;
   }
-  #mystic-title { color: #cffaf2; font-size: 14px; font-weight: bold; }
+  #mystic-title { color: #cffaf2; font-size: 14px; font-weight: bold; flex: 1; text-align: center; }
   #mystic-close {
     background: none; border: none; color: #a5e8e0;
     font-size: 18px; cursor: pointer; padding: 0 4px;
@@ -1727,11 +1747,7 @@
     padding: 10px 12px; background: linear-gradient(90deg,#3a2e14,#5a4520);
     border-bottom: 1px solid #9f7a3f;
   }
-  #town-title { color: #ffe9b0; font-size: 14px; font-weight: bold; }
-  #town-close {
-    background: none; border: none; color: #e8d5a8;
-    font-size: 18px; cursor: pointer; padding: 0 4px;
-  }
+  #town-title { color: #ffe9b0; font-size: 14px; font-weight: bold; flex: 1; text-align: center; }
   #town-gold {
     padding: 8px 12px; font-size: 12px; color: var(--gold);
     border-bottom: 1px solid var(--border);
@@ -2227,6 +2243,14 @@
       border-radius: 0;
       box-shadow: none;
     }
+    /* In town the parked skill tray sits above the town menu (still tucked under
+       the loot drawer); the menus reserve its height as a bottom gap so they end
+       above it rather than overlapping. The full-height modal just fills the
+       shortened overlay unchanged. */
+    body.town-bar #town-overlay,
+    body.town-bar #shop-overlay,
+    body.town-bar #mystic-overlay { bottom: var(--town-bar-reserve, 0); }
+    #skill-bar.in-town { z-index: 246; bottom: 0; }
 
     /* Desktop header is a centred two-row grid, truly centred in the viewport:
          row 1   HP — Name — MP        row 2   Power — Level — Gold
@@ -3084,7 +3108,6 @@
       <div id="town-header">
         <button id="town-back" onclick="townBack()" style="display:none" data-tip="<div class='ht-name'>← Back</div><div class='ht-line'>Return to the town menu.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">←</button>
         <span id="town-title">Town</span>
-        <button id="town-close" onclick="leaveTown()" data-tip="<div class='ht-name'>✕ Leave Town</div><div class='ht-line'>Head back down into the dungeon.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">✕</button>
       </div>
       <div id="town-gold">Your gold: <span id="town-gold-count">0</span>g</div>
       <div id="town-mats"></div>
@@ -7621,6 +7644,8 @@ document.addEventListener('click', (e) => {
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
   { date: '2026-06-30', size: 'medium', v: 'Minimap + fixed map view', by: 'Claude', notes: ['A minimap now sits in the top-left of the dungeon view, sketching the whole floor at a glance — walls, water, lava, doors, shrines, teleporters and the all-important down-stairs (in bright green) — with live dots for you (ringed gold), foes (bosses bigger), allies, chests, loose coins, and the merchant, mystic and quest NPCs. It tucks away while you\'re in town.', 'The map view is now fixed at the most zoomed-in setting. The old Wide / Wider / Widest control has been retired from the ⚙️ menu, since the closest view is the one players kept it on.'] },
+  { date: '2026-06-30', size: 'small', v: 'Dungeon Gate is the only way down', by: 'Claude', notes: ['The ✕ in the corner of the town menus no longer drops you back into the dungeon. The Town menu lost its ✕ entirely, and the town Merchant and Mystic panels now show only ← back to the hub — their ✕ is hidden while you\'re in town.', 'To head back down you now take the 🌀 Dungeon Gate, where you pick your floor and difficulty, so you can\'t accidentally bail out of town onto your old return floor by tapping the corner. Pressing Esc in a town panel steps back toward the hub instead of leaving. A Merchant or Mystic you meet while wandering the dungeon still has its ✕ to dismiss the panel.'] },
+  { date: '2026-06-30', size: 'small', v: 'Skill bar stays in town', by: 'Claude', notes: ['On the desktop layout your skill bar no longer vanishes when you step into town — it parks as a tray along the bottom so you can see your kit and rearrange your slots while you shop and plan. The town menu ends just above it instead of covering it, and the tray sits on its own clean strip. (On phones nothing changes: the SKILLS tab already shows your slot row, so the bar stays tucked away in town there.)', 'The Health and Mana potions on that tray are greyed out and locked while you\'re in town: there\'s nothing to fight, and resting already restores you for free, so a potion can\'t be wasted there. They light back up the moment you take the gate back down.'] },
   { date: '2026-06-30', size: 'small', v: 'Tidier SKILLS tab on desktop', by: 'Claude', notes: ['On the wide desktop layout, the SKILLS tab no longer repeats the row of skill slots above the tree. Your bottom skill bar is already on screen there — you can drag a learned skill straight onto it, or rearrange the slots in place — so the second copy was redundant clutter.', 'On phones and tablets the slot tray stays exactly as it was: it\'s the comfortable place to tap a slot and assign a skill, and the only slot editor available while you\'re in town.'] },
   { date: '2026-06-30', size: 'medium', v: 'Might fuels Endurance + Sprint toggle', by: 'Claude', notes: ['Might now does more than raise Attack power: it also DEEPENS your Endurance pool and SPEEDS its recharge. A mighty hero sprints longer and recovers stamina sooner, so pouring points (or stacking +Might gear) into it pays off for footwork, not just damage. The HERO sheet now lists your Max Endurance and Endurance regen.', 'New Sprint setting in the ⚙️ menu: leave it on HOLD to sprint only while Shift is down, or flip it to TOGGLE so a single tap of Shift latches auto-sprint on (tap again to stop) — sprint without keeping a finger on the key. Your choice is remembered across sessions.'] },
   { date: '2026-06-30', size: 'medium', v: 'Drag-and-drop skill slots', by: 'Claude', notes: ['The skill bar now shows every hotkey slot (keys 1–9), empty ones included, as a dashed open slot — so you can see at a glance how many skills you can bind and where the gaps are. Slot 1 is still the gold primary the R key / ⚡ button cast.', 'Drag a learned active skill straight from its node in the SKILLS tab onto a slot to bind it, and drag a slot onto another to rearrange — including onto an empty slot to move it there. A learned skill that isn\'t in any slot reads as "off the bar" (🚫) and simply isn\'t keyed until you slot it.', 'A new loadout tray sits above the ACTIVE tree showing all your slots together, so the skills and the slots are side by side to drag between. On touch (or as a quick desktop path) just tap any slot to pick which learned skill fills it, or clear it. Your slot layout is saved with the character; existing heroes keep their current bar.'] },
@@ -7909,7 +7934,7 @@ function resizeCanvas() {
   canvas.height = canvas.offsetHeight;
 }
 resizeCanvas();
-window.addEventListener('resize', () => { resizeCanvas(); draw(); });
+window.addEventListener('resize', () => { resizeCanvas(); if (inTown) syncTownBarReserve(); draw(); });
 
 // On the web/desktop layout the loot drawer is a permanent column, so it's
 // always open and tapping the map should not close it.
@@ -8223,7 +8248,7 @@ applyDpadSettings();
 function syncWebPanel() {
   if (isWebLayout()) { panelOpen = true; renderPanel(); }
 }
-WEB_MQ.addEventListener('change', () => { syncWebPanel(); resizeCanvas(); draw(); });
+WEB_MQ.addEventListener('change', () => { syncWebPanel(); resizeCanvas(); if (inTown) renderSkillBar(); draw(); });
 
 // ══════════════════════════════════════════
 // MAP GENERATION
@@ -9546,8 +9571,11 @@ function openShop() {
   if (!merchant) return;
   document.getElementById('shop-overlay').classList.add('open');
   // Opened from the town hub, the ← returns there; as a dungeon wanderer there's
-  // nowhere to go back to, so the arrow stays hidden.
+  // nowhere to go back to, so the arrow stays hidden. In town the ✕ is hidden too:
+  // the only way back into the dungeon is the Dungeon Gate, so a town shop offers
+  // only ← back to the hub. A dungeon merchant keeps its ✕ to dismiss the wares.
   document.getElementById('shop-back').style.display = merchant.town ? '' : 'none';
+  document.getElementById('shop-close').style.display = merchant.town ? 'none' : '';
   renderShop();
   log('The merchant spreads out their wares.');
 }
@@ -9556,11 +9584,12 @@ function closeShop() {
   document.getElementById('shop-overlay').classList.remove('open');
 }
 
-// Town header buttons mirror the other service panels: ← returns to the hub,
-// ✕ leaves town for the dungeon. As a dungeon wanderer the ✕ just closes the shop.
+// ← returns to the town hub. In town there's no ✕ (the Dungeon Gate is the only
+// way back down), so dismissing a town shop just returns to the hub — that's what
+// Esc does. A dungeon merchant has no hub, so its ✕ / Esc simply closes the shop.
 function shopBack() { closeShop(); openTownHub(); }
 function shopClose() {
-  if (merchant && merchant.town) { leaveTown(); return; }
+  if (merchant && merchant.town) { shopBack(); return; }
   closeShop();
 }
 
@@ -9632,8 +9661,11 @@ function openMystic() {
   if (!mystic) return;
   document.getElementById('mystic-overlay').classList.add('open');
   // Show the ← only when summoned from the town hub (see openShop for the same
-  // pattern); a dungeon mystic has nowhere to go back to.
+  // pattern); a dungeon mystic has nowhere to go back to. In town the ✕ is hidden
+  // — the Dungeon Gate is the only way back down — so a town mystic offers only
+  // ← back to the hub; a dungeon mystic keeps its ✕ to dismiss the panel.
   document.getElementById('mystic-back').style.display = mystic.town ? '' : 'none';
+  document.getElementById('mystic-close').style.display = mystic.town ? 'none' : '';
   renderMystic();
   log('The mystic studies you, weighing what the depths might become.');
 }
@@ -9642,11 +9674,12 @@ function closeMystic() {
   document.getElementById('mystic-overlay').classList.remove('open');
 }
 
-// Match the other town service panels: ← returns to the hub, ✕ leaves town.
-// As a dungeon wanderer the ✕ simply closes the mystic.
+// Match the other town service panels: ← returns to the hub. In town there's no ✕
+// (only the Dungeon Gate leads back down), so dismissing a town mystic returns to
+// the hub. As a dungeon wanderer the ✕ / Esc simply closes the mystic.
 function mysticBack() { closeMystic(); openTownHub(); }
 function mysticClose() {
-  if (mystic && mystic.town) { leaveTown(); return; }
+  if (mystic && mystic.town) { mysticBack(); return; }
   closeMystic();
 }
 
@@ -9950,21 +9983,19 @@ function openTownHub() {
        <span class="tm-text"><span class="tm-name">Dungeon Gate</span><span class="tm-desc">${revivedInTown ? 'Head back down to keep questing' : `Back to ${floorLabel(returnFloor)}, or pick a difficulty`}</span></span>
      </button>`;
   const blurb = revivedInTown
-    ? `<div class="town-blurb town-blurb-revived">💀 You were slain and revived here in <b>Town</b>. Stock up if you like — then take the <b>🌀 Dungeon Gate</b> below (or the ✕ above) to head back down and keep questing.</div>`
+    ? `<div class="town-blurb town-blurb-revived">💀 You were slain and revived here in <b>Town</b>. Stock up if you like — then take the <b>🌀 Dungeon&nbsp;Gate</b> below to head back down and keep questing.</div>`
     : `<div class="town-blurb">A safe haven away from the dungeon. Pick a service, then take the Dungeon Gate when you're ready to delve again.</div>`;
   setTownContent(`${blurb}<div class="town-menu">${tiles}${gateTile}</div>`);
+  // Render the bar in its town form (potions locked) and measure the gap the menu
+  // reserves for it, now that the town overlay is open.
+  renderSkillBar();
 }
-// Return from a service panel to the hub menu (also used by the backdrop tap).
+// Return from a service panel to the hub menu (also used by the backdrop tap and
+// by Esc). Town has no "leave" button anymore — the Dungeon Gate service is the
+// only way back down — so stepping back from any town panel lands on the hub.
 function townBack() {
   if (!inTown) { closeTown(); return; }
   openTownHub();
-}
-// Leave town entirely (the ✕). Re-enter the dungeon on your return floor, which
-// rebuilds it from scratch — stepping out of town restarts that floor.
-function leaveTown() {
-  if (!inTown) { closeTown(); return; }
-  const f = Math.max(1, dungeonReturn || player.maxFloor || dungeonLevel || 1);
-  enterDungeonAt(f);
 }
 
 // One reusable overlay backs the craftsman / healer / trainer / gate panels.
@@ -11167,8 +11198,8 @@ function renderGate() {
     <div class="gate-grid">${buttons}</div>`);
 }
 function enterDungeonAt(diff, floor) {
-  // Back-compat: a single argument is a continuous depth (leaveTown re-enters you
-  // exactly where you left off).
+  // Back-compat: a single argument is a continuous depth — re-enter exactly where
+  // you left off, splitting it back into difficulty + floor.
   if (floor == null) { const dl = Math.max(1, Math.round(diff) || 1); diff = diffOf(dl); floor = displayFloor(dl); }
   const front = frontierDiff();
   diff = Math.max(1, Math.min(front, Math.round(diff) || 1));
@@ -11186,7 +11217,7 @@ function enterDungeonAt(diff, floor) {
   maybeFloorEvent();
   sfx('stairs');
   log(`🌀 You step through the gate into ${floorLabel()}.`, 'important');
-  updateBars(); draw(); saveGame();
+  updateBars(); renderSkillBar(); draw(); saveGame();
 }
 
 // ── GAMBLER — wager gold for a random piece of loot ──
@@ -17187,6 +17218,7 @@ const POTION_CD = 5;            // shared cooldown — 5 real seconds between si
 function healPotionAmount() { return Math.max(1, Math.round(player.maxHp * HEAL_PERCENT)); }
 function potionReady() { return (player.potionCd || 0) <= 0; }
 function useHealthPotion() {
+  if (inTown) return;               // potions are locked in town (see renderSkillBar) — no free heals
   if (portalChanneling()) return;   // held while a town portal channels (tap TOWN to break off)
   if (!potionReady()) { log(`⏳ Potions recharge — ${Math.ceil(player.potionCd)}s left.`); return; }
   if (player.hp >= player.maxHp) { log('Already at full health.'); return; }
@@ -17202,6 +17234,7 @@ function useHealthPotion() {
 const MANA_PERCENT = 0.25;
 function manaPotionAmount() { return Math.max(10, Math.round(player.maxMp * MANA_PERCENT)); }
 function useManaPotion() {
+  if (inTown) return;               // potions are locked in town (see renderSkillBar) — no free refills
   if (portalChanneling()) return;   // held while a town portal channels (tap TOWN to break off)
   if (!potionReady()) { log(`⏳ Potions recharge — ${Math.ceil(player.potionCd)}s left.`); return; }
   if (player.mp >= player.maxMp) { log('Already at full mana.'); return; }
@@ -18071,28 +18104,38 @@ function renderSkillBar() {
   // cancels the drop (the world clock re-renders the bar every tick). Hold the
   // current markup steady until the drag ends — skillDragEnd / the drop re-render.
   if (skillDrag) return;
-  // Hide the bar only in town. Out in the dungeon it always renders, even with
-  // no active skills learned yet, because the far-left Health/Mana potion
-  // buttons are baseline kit every hero needs from the start.
-  if (inTown) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+  // In town the bar is only worth showing on the desktop/web layout: there the
+  // SKILLS-tab slot tray is hidden, so this parked bar is how you see and rearrange
+  // slots in town. On touch the SKILLS tab still carries that tray, so the bar would
+  // just be a redundant second copy — keep the old behavior and hide it in town.
+  const town = inTown && isWebLayout();
+  if (inTown && !town) { bar.style.display = 'none'; bar.innerHTML = ''; document.body.classList.remove('town-bar'); syncTownBarReserve(); return; }
+  // On the web layout the in-town bar parks as a solid tray the town menu leaves
+  // room for (see syncTownBarReserve), with its potions inert. Out in the dungeon
+  // it's the live combat bar, and it always renders even before any active is
+  // learned because the Health/Mana potions are baseline kit.
   bar.style.display = 'flex';
+  bar.classList.toggle('in-town', town);
+  document.body.classList.toggle('town-bar', town);
   // Potion skills pinned to the far left of the bar: Health (Q) then Mana (E).
   // They're unlimited but share a 5-second cooldown, so the info slot shows the
-  // remaining seconds when recharging (blank when ready).
+  // remaining seconds when recharging (blank when ready). In town they're locked —
+  // rendered greyed and click-dead — so a potion can't be spent where there's
+  // nothing to fight and resting already restores you for free.
   const pcd = player.potionCd || 0;
   const potReady = pcd <= 0;
   const hpFull = player.hp >= player.maxHp;
   const mpFull = player.mp >= player.maxMp;
-  const urgent = potReady && player.hp < player.maxHp * 0.35;
-  const healHint = touchUI() ? 'tap to drink' : 'press ' + kbLabel('healthPotion');
-  const manaHint = touchUI() ? 'tap to drink' : 'press ' + kbLabel('manaPotion');
-  const healTip = `<div class='ht-name' style='color:var(--hp)'>❤️ Health Potion</div><div class='ht-line'>Quaff to restore a burst of health.</div><div class='ht-sub'>${healHint} · ${POTION_CD}-second cooldown</div>`;
-  const manaTip = `<div class='ht-name' style='color:var(--mp)'>🔷 Mana Potion</div><div class='ht-line'>Quaff to restore a burst of mana.</div><div class='ht-sub'>${manaHint} · ${POTION_CD}-second cooldown</div>`;
+  const urgent = !town && potReady && player.hp < player.maxHp * 0.35;
+  const healHint = town ? 'locked in town' : (touchUI() ? 'tap to drink' : 'press ' + kbLabel('healthPotion'));
+  const manaHint = town ? 'locked in town' : (touchUI() ? 'tap to drink' : 'press ' + kbLabel('manaPotion'));
+  const healTip = `<div class='ht-name' style='color:var(--hp)'>❤️ Health Potion</div><div class='ht-line'>${town ? 'Saved for the dungeon — rest in town to heal for free instead.' : 'Quaff to restore a burst of health.'}</div><div class='ht-sub'>${healHint}${town ? '' : ` · ${POTION_CD}-second cooldown`}</div>`;
+  const manaTip = `<div class='ht-name' style='color:var(--mp)'>🔷 Mana Potion</div><div class='ht-line'>${town ? 'Saved for the dungeon — rest in town to refill for free instead.' : 'Quaff to restore a burst of mana.'}</div><div class='ht-sub'>${manaHint}${town ? '' : ` · ${POTION_CD}-second cooldown`}</div>`;
   const cdDial = (key) => `<span class="sb-cd" data-cd="${key}"></span>`;
-  const healBtn = `<button class="skillbar-btn potion ${potReady && !hpFull ? 'ready' : 'empty'} ${urgent ? 'urgent' : ''} ${pcd > 0 ? 'cooling' : ''}" ${hoverTip(healTip)} onclick="useHealthPotion()">
+  const healBtn = `<button class="skillbar-btn potion ${town ? 'town-locked' : (potReady && !hpFull ? 'ready' : 'empty')} ${urgent ? 'urgent' : ''} ${pcd > 0 ? 'cooling' : ''}" ${hoverTip(healTip)} ${town ? '' : 'onclick="useHealthPotion()"'}>
       <span class="sb-key">${kbLabel('healthPotion')}</span><span class="sb-icon">${HEAL_POTION_SVG}</span><span class="sb-info" id="heal-label">${pcd > 0 ? Math.ceil(pcd) + 's' : ''}</span>${cdDial('pot')}
     </button>`;
-  const manaBtn = `<button class="skillbar-btn potion mana ${potReady && !mpFull ? 'ready' : 'empty'} ${pcd > 0 ? 'cooling' : ''}" ${hoverTip(manaTip)} onclick="useManaPotion()">
+  const manaBtn = `<button class="skillbar-btn potion mana ${town ? 'town-locked' : (potReady && !mpFull ? 'ready' : 'empty')} ${pcd > 0 ? 'cooling' : ''}" ${hoverTip(manaTip)} ${town ? '' : 'onclick="useManaPotion()"'}>
       <span class="sb-key">${kbLabel('manaPotion')}</span><span class="sb-icon">${MANA_POTION_SVG}</span><span class="sb-info">${pcd > 0 ? Math.ceil(pcd) + 's' : ''}</span>${cdDial('pot')}
     </button>`;
   // Every hotkey slot is rendered, filled or empty (keys 1–9; slot 1 is the gold
@@ -18130,8 +18173,10 @@ function renderSkillBar() {
   // opening it channels a town portal in real time, so while it's charging the
   // button shows the countdown and a cyan pulse.
   // Hidden on touch — mobile keeps TOWN in the bottom control bar, unchanged.
+  // Also hidden while in town: a "go to town" button is meaningless once you're
+  // already there (you leave via the Dungeon Gate in the town menu).
   let townBtn = '';
-  if (!touchUI()) {
+  if (!touchUI() && !town) {
     const ch = portalChanneling();
     const townTip = ch
       ? `<div class='ht-name'>🌀 Town Portal</div><div class='ht-line'>Opening… ${portalCharge} turn${portalCharge === 1 ? '' : 's'} left. A foe's hit shatters it.</div><div class='ht-sub'>press ${kbLabel('portal')} to cancel</div>`
@@ -18141,6 +18186,20 @@ function renderSkillBar() {
     </button>`;
   }
   bar.innerHTML = townBtn + healBtn + manaBtn + skillsHtml;
+  syncTownBarReserve();
+}
+
+// In town the skill bar parks as a bottom tray; the town/shop/mystic menus reserve
+// exactly its height at their own bottom so they never overlap it. Measure the
+// parked bar and publish that height as --town-bar-reserve for the overlay CSS.
+// Outside town it clears the variable and is otherwise a no-op.
+function syncTownBarReserve() {
+  const root = document.documentElement;
+  const bar = document.getElementById('skill-bar');
+  if (!inTown || !bar || bar.style.display === 'none') { root.style.removeProperty('--town-bar-reserve'); return; }
+  const top = bar.getBoundingClientRect().top;
+  const reserve = Math.max(0, Math.round(window.innerHeight - top + 6));
+  root.style.setProperty('--town-bar-reserve', reserve + 'px');
 }
 
 // The potion flasks used by the skill-bar Health (red) and Mana (blue) buttons.
@@ -18867,7 +18926,9 @@ function handleEscape() {
   if (close('settings-menu', () => document.getElementById('settings-menu').classList.remove('open'))) return true;
   if (close('shop-overlay', shopClose)) return true;
   if (close('mystic-overlay', mysticClose)) return true;
-  if (close('town-overlay', leaveTown)) return true;
+  // Esc in town steps back to the hub rather than leaving — the Dungeon Gate is
+  // the only way back down into the dungeon.
+  if (close('town-overlay', townBack)) return true;
   if (panelOpen && !isWebLayout()) { togglePanel(); return true; }
   // Nothing was open — in real-time play, Escape now opens the ⚙️ settings menu,
   // which pauses the game (settings-menu is an RT-blocking overlay). Skip this on
@@ -21074,6 +21135,18 @@ function stepWorldClock(dt) {
   if (_worldAcc > WORLD_TICK_MS) _worldAcc = WORLD_TICK_MS;
 }
 
+// Run one frame step in isolation. A thrown error in any subsystem (movement,
+// combat, the world clock, draw…) must NOT cascade and freeze the whole game —
+// otherwise a single bad frame becomes a permanent hang where movement, enemy
+// AI, cooldowns and the canvas all stop (which reads as "spells stuck on
+// cooldown"). Each step is guarded; the first error of each kind is logged once
+// so the real culprit is diagnosable without spamming the console.
+const _loopErr = {};
+function safeStep(name, fn) {
+  try { fn(); }
+  catch (e) { if (!_loopErr[name]) { _loopErr[name] = 1; console.error('[gameLoop] ' + name + ' failed:', e); } }
+}
+
 let _lastTs = null;
 function gameLoop(ts) {
   requestAnimationFrame(gameLoop);
@@ -21082,17 +21155,17 @@ function gameLoop(ts) {
   _lastTs = ts;
   if (dt > 0.1) dt = 0.1;          // clamp after a stall so nothing teleports
   if (!rtPaused()) {
-    updatePlayer(dt);              // free 8-dir movement may trigger stairs/town/death…
-    if (!rtPaused()) updatePlayerCombat(dt);
-    if (!rtPaused()) tickCooldowns(dt);   // skill / potion cooldowns burn down in seconds
-    if (!rtPaused()) stepWorldClock(dt);
-    if (!rtPaused()) { updateTraps(dt); updateProjectiles(dt); }
+    safeStep('move', () => updatePlayer(dt));              // 8-dir movement may trigger stairs/town/death…
+    if (!rtPaused()) safeStep('combat', () => updatePlayerCombat(dt));
+    if (!rtPaused()) safeStep('cooldowns', () => tickCooldowns(dt));  // skill/potion cooldowns burn in seconds
+    if (!rtPaused()) safeStep('world', () => stepWorldClock(dt));
+    if (!rtPaused()) safeStep('hazards', () => { updateTraps(dt); updateProjectiles(dt); });
   }
-  updateActorRender(dt);
-  renderStaminaBar();              // stamina drains/refills continuously — keep the END bar live
-  updateCooldownDials();           // animate the skill/potion cooldown dials in real time
-  updateHaloVignette();            // the danger halo is a DOM overlay — pulse it every frame
-  draw();
+  safeStep('actorRender', () => updateActorRender(dt));
+  safeStep('stamina', () => renderStaminaBar());   // stamina drains/refills continuously — keep the END bar live
+  safeStep('cdDials', () => updateCooldownDials()); // animate the skill/potion cooldown dials in real time
+  safeStep('halo', () => updateHaloVignette());     // the danger halo is a DOM overlay — pulse it every frame
+  safeStep('draw', () => draw());
 }
 requestAnimationFrame(gameLoop);
 </script>
