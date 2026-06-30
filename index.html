@@ -1758,20 +1758,18 @@
     background: #1b160f; border: 1px solid var(--border); border-radius: 6px;
     font-size: 12px;
   }
-  .lb-row.me { border-color: var(--gold); background: #241d10; }
   .lb-rank { width: 26px; color: #8a7d63; font-weight: bold; text-align: right; flex: 0 0 auto; }
-  /* Top-3 medal discs: gold / silver / bronze circles with a bold rank number
-     inside, set apart in colour from the muted plain numbers below them. */
-  .lb-medal {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 20px; height: 20px; border-radius: 50%;
-    font-size: 11px; font-weight: bold; line-height: 1;
-    color: #2a1d08; text-shadow: 0 1px 0 rgba(255,255,255,0.25);
-    box-shadow: inset 0 1px 1px rgba(255,255,255,0.45), inset 0 -2px 2px rgba(0,0,0,0.3);
-  }
-  .lb-medal-1 { background: radial-gradient(circle at 35% 30%, #ffe98a, #d8a614 70%); border: 1px solid #a8780a; }
-  .lb-medal-2 { background: radial-gradient(circle at 35% 30%, #f4f4f6, #a6a8b2 70%); border: 1px solid #80828c; color: #2a2a30; }
-  .lb-medal-3 { background: radial-gradient(circle at 35% 30%, #f0b27e, #aa5f29 70%); border: 1px solid #84481d; color: #2e1a08; }
+  /* Top-3 ranks: instead of a medal disc, the whole row gets a soft gold / silver
+     / bronze wash plus a matching metal-tinted border and rank number. */
+  .lb-row.lb-top-1 { background: linear-gradient(90deg, rgba(255,209,90,0.20), rgba(255,209,90,0.05)); border-color: rgba(216,166,20,0.6); }
+  .lb-row.lb-top-2 { background: linear-gradient(90deg, rgba(222,226,234,0.17), rgba(222,226,234,0.04)); border-color: rgba(150,153,165,0.55); }
+  .lb-row.lb-top-3 { background: linear-gradient(90deg, rgba(222,142,72,0.17), rgba(222,142,72,0.04)); border-color: rgba(170,95,41,0.55); }
+  .lb-top-1 .lb-rank { color: #ffd24b; }
+  .lb-top-2 .lb-rank { color: #d2d5de; }
+  .lb-top-3 .lb-rank { color: #e3a06a; }
+  /* The "me" highlight always wins over the top-rank wash so you can still spot
+     your own row at a glance. */
+  .lb-row.me { border-color: var(--gold); background: #241d10; }
   .lb-class { font-size: 14px; flex: 0 0 auto; width: 18px; text-align: center; }
   .lb-name { flex: 1 1 auto; color: #e8d5a8; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .lb-val { color: var(--gold); font-weight: bold; flex: 0 0 auto; white-space: nowrap; }
@@ -2208,6 +2206,34 @@
   /* Centre button is a "wait/pass turn" control — a faint, colourless clock. */
   #touch-dpad .dpad-center { color: rgba(245, 240, 230, 0.5); }
   .dpad-center .dp-clock { width: 20px; height: 20px; display: block; }
+
+  /* Beach-tutorial instruction banner — pinned near the top of the play area,
+     persistent (no auto-fade) while the tutorial is active. */
+  #tutorial-hint {
+    position: fixed;
+    left: 50%;
+    top: calc(env(safe-area-inset-top, 0px) + 56px);
+    transform: translateX(-50%);
+    z-index: 216;
+    max-width: 92vw;
+    padding: 9px 14px;
+    border-radius: 12px;
+    background: rgba(20,16,32,0.94);
+    border: 1px solid var(--gold);
+    color: var(--text);
+    font-size: 11px;
+    text-align: center;
+    line-height: 1.5;
+    pointer-events: none;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.6), 0 0 12px rgba(232,194,103,0.25);
+    display: none;
+  }
+  #tutorial-hint.show { display: block; animation: tutHintIn 0.4s ease-out; }
+  #tutorial-hint b { color: var(--gold); }
+  @keyframes tutHintIn {
+    from { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+    to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+  }
 
   /* One-time hint that teaches the movement pad after the d-pad's removal.
      Floats just above the bottom bar and fades itself out. */
@@ -2680,6 +2706,10 @@
   <div class="lvl-title">⭐ LEVEL UP!</div>
   <div class="lvl-sub">Open the 🎒 BAG → HERO tab to spend your points!</div>
 </div>
+
+<!-- Beach-tutorial instruction banner. Shown (and updated) only while the
+     one-time tutorial map is active; content is set by tutorialStage(). -->
+<div id="tutorial-hint"></div>
 
 <!-- Title screen / landing page — shown on load. Surfaces the PLAY/CONTINUE
      action plus the same controls that live behind the ⚙️ settings dropdown. -->
@@ -3353,6 +3383,7 @@ const ENEMY_SPRITE = {
   '\u{1F432}':'b_dragon','\u{1F99E}':'e_lobster',
   '\u{1F451}':'b_ratking','\u{1F525}':'b_inferno','\u{1F480}':'b_deathknight',
   '\u{1F441}':'b_allseer','\u{1F9F0}':'mimic',
+  '\u{1F9B4}':'m_skeleton',  // 🦴 bone → DawnLike skeleton (used by the tutorial foe)
 };
 function enemySprite(e) {
   return ENEMY_SPRITE[e.type] || ENEMY_SPRITE[(e.type || '').replace(/\uFE0F/g, '')] || null;
@@ -3391,6 +3422,8 @@ const LPC_BIOME = {
   'the Crystal Cavern':      { floor:'Gravel_1',      wall:'Rock_Dark',   water:'Water' },
   'the Coral Lagoon':        { floor:'Sand',          wall:'Rock_Gray',   water:'Water' },
   'the Obsidian Wastes':     { floor:'Rock_Dark',     wall:'Rock_Black',  water:'Water' },
+  // The one-time beach tutorial map: sandy ground meeting the sea.
+  'the Sunlit Shore':        { floor:'Sand',          wall:'Rock_Gray',   water:'Water' },
 };
 const lpcSheet = new Image();
 let lpcReady = false;
@@ -5488,6 +5521,10 @@ let floorMod = FLOOR_MODS[0];
 // sealed until the floor's hostiles are dealt with. `floorCleared` latches true
 // once the condition is met (a late mimic popping out won't re-seal you in).
 let floorCleared = false;
+// True while the player is on the one-time beach tutorial map (a fresh hero's
+// very first "floor"): a sandy shore with a lone skeleton to fight and a cave
+// to the north that drops them into the real dungeon. See buildTutorialMap().
+let tutorialActive = false;
 // ── TOWN GATE ACCESS ──
 // The town gate is no longer locked behind a combat / cooldown check — it's always
 // clickable. The restriction lives in the CHANNEL instead (see the TOWN PORTAL
@@ -5509,6 +5546,11 @@ function updateFloorClear() {
       // unlocks the next tier (chosen back in town) and brands a permanent scar.
       sfx('bosskill');
       conquerDifficulty();
+    } else if (tutorialActive) {
+      // Beach tutorial: point the new player at the cave instead of "stairs".
+      log('🔓 The skeleton falls — the cave to the north is open!', 'important');
+      sfx('stairs');
+      tutorialStage('cave');
     } else {
       log('🔓 The floor is clear — the stairs down unseal!', 'important');
       sfx('stairs');
@@ -7654,6 +7696,95 @@ function generateMap() {
   arrivalDir = 'down';
 }
 
+// ── BEACH TUTORIAL ───────────────────────────────────────────────────────────
+// A fresh hero's very first map. They wake on a sandy shore (sand to the north,
+// sea to the south), learn to move, fight one lone skeleton, then step into the
+// cave set into the northern wall — which descends into the real dungeon. Built
+// once per new hero; `player.tutorialDone` keeps it from ever showing again.
+function buildTutorialMap() {
+  tutorialActive = true;
+  inTown = false;
+  floorSerial++;
+  dungeonLevel = 1;
+  arrivalDir = 'down';
+  player.lastStandReady = true;
+  // Wipe any lingering floor state so nothing bleeds into the tutorial.
+  enemies = []; merchant = null; mystic = null; minions = []; combatBuffs = {};
+  groundItems = []; groundFood = []; groundGold = []; graveMarker = null;
+  quest = null; teleporters = {}; shrineData = {}; bossHazards = [];
+  hasFountain = false; groundKey = null; hasKey = false;
+  floorMod = FLOOR_MODS[0]; floorTint = null;
+  floatingTexts = [];
+  statusEffects = (statusEffects || []).filter(s => s.target === 'player');
+
+  // Solid rock border, sandy beach up top, sea along the bottom.
+  const SHORE = 12; // first row (from the top) that is water
+  mapData = [];
+  for (let y = 0; y < MAP_H; y++) {
+    mapData[y] = [];
+    for (let x = 0; x < MAP_W; x++) {
+      if (x === 0 || y === 0 || x === MAP_W - 1 || y === MAP_H - 1) mapData[y][x] = 1; // wall
+      else if (y >= SHORE) mapData[y][x] = 6; // water (south)
+      else mapData[y][x] = 0;                 // sand (north)
+    }
+  }
+  // The cave: a down-stair set into the northern wall, dead centre.
+  const caveX = MAP_W >> 1;
+  mapData[1][caveX] = 2;       // down-stairs tile (the cave mouth)
+  mapData[0][caveX] = 1;       // wall above keeps it reading as a cave in the wall
+
+  // Spawn the hero a few tiles up from the shoreline, facing the cave.
+  player.x = caveX; player.y = SHORE - 1;        // sand, with water directly below
+  // A lone skeleton a few steps north, between the hero and the cave.
+  const skl = { x: caveX, y: SHORE - 5, type: '🦴', name: 'Skeleton',
+    hp: 24, maxHp: 24, level: 1, dmg: 4, dead: false, behavior: 'chaser' };
+  enemies.push(skl);
+
+  // Seal the cave until the skeleton falls, so the fight can't be skipped.
+  floorCleared = false;
+  tutorialStage('move');
+}
+
+// Leaving the beach: step into the cave to begin the real dungeon on floor 1.
+function finishTutorial() {
+  tutorialActive = false;
+  player.tutorialDone = true;
+  hideTutorialHint();
+  dungeonLevel = 1;
+  arrivalDir = 'down';
+  statusEffects = [];
+  sfx('stairs');
+  log('🕳️ You step into the cave — the dungeon proper opens up below...', 'important');
+  player.x = 5; player.y = 5;
+  generateMap();
+  tickPact();
+  maybeFloorEvent();
+  updateBars(); renderPanel(); saveGame(); draw();
+}
+
+// ── TUTORIAL HINT BANNER ── a floating instruction that updates as the new
+// player progresses (move → fight → enter the cave).
+function tutorialStage(stage) {
+  const moveHow = touchUI()
+    ? 'the on-screen d-pad'
+    : 'WASD or the arrow keys';
+  if (stage === 'move') {
+    setTutorialHint(`<b>You wake on a strange shore.</b><br>Use ${moveHow} to move — head up the beach toward the cave.<br>⚔️ A skeleton blocks the way: <b>walk into it</b> to attack until it falls.`);
+  } else if (stage === 'cave') {
+    setTutorialHint(`<b>The skeleton is dust.</b><br>🕳️ Now step into the cave (⬇) in the northern wall to descend into the dungeon.`);
+  }
+}
+function setTutorialHint(html) {
+  const el = document.getElementById('tutorial-hint');
+  if (!el) return;
+  el.innerHTML = html;
+  el.classList.add('show');
+}
+function hideTutorialHint() {
+  const el = document.getElementById('tutorial-hint');
+  if (el) el.classList.remove('show');
+}
+
 // Build a standard floor-level foe at a tile (used for quest hordes).
 function makeQuestFoe(x, y) {
   const bandIdx = Math.min(Math.floor((dungeonLevel - 1) / 3), ENEMY_POOL.length - 1);
@@ -8210,6 +8341,7 @@ function cancelPortalChannel(reason) {
 // the hub menu; in the dungeon it begins the channel, or breaks off one already going.
 function startPortalChannel() {
   if (inTown) { openTownHub(); return; }
+  if (tutorialActive) { log('🏖️ Head north into the cave to begin your descent first.'); sfx('denied'); return; }
   if (portalCharge > 0) { cancelPortalChannel('🌀 You let the town portal fade.'); return; }
   portalCharge = PORTAL_CHANNEL_TURNS;
   log(`🌀 You begin opening a town portal — hold out ${PORTAL_CHANNEL_TURNS} turns without being hit.`, 'important');
@@ -10467,9 +10599,18 @@ const THEMES = [
     brickA:'#6a3a4a', brickB:'#241820', mortar:'#161016', crack:'#ff7a3a',
     seam:'#1e161e', speckle:'#5a3a44', accent:'rgba(255,120,50,0.28)', stairsGlow:'#ff9a4b' },
 ];
+// The beach tutorial's own look — warm sand floor, rocky shore wall. Its name
+// matches the LPC_BIOME entry above so the autotiled ground paints as Sand.
+const TUTORIAL_THEME = {
+  name: 'the Sunlit Shore',
+  floor:'#d8c382', floorAlt:'#cdb673', wall:'#7a6a44', wallTop:'#b8a06a',
+  brickA:'#8a7748', brickB:'#766239', mortar:'#4a3e24', crack:'#3a2e18',
+  seam:'#5a4a2a', speckle:'#e6d49a', accent:'rgba(255,236,170,0.28)', stairsGlow:'#ffe9b0',
+};
 // Themed by the DISPLAYED floor, so each difficulty replays the same visual
 // progression (floor 1 always looks like floor 1) — only the red wash deepens.
-function currentTheme() { return THEMES[(displayFloor() - 1) % THEMES.length]; }
+// The tutorial beach overrides this with its own sandy palette.
+function currentTheme() { return tutorialActive ? TUTORIAL_THEME : THEMES[(displayFloor() - 1) % THEMES.length]; }
 
 // Rounded-rect helper (older canvases lack ctx.roundRect).
 function roundRectPath(x, y, w, h, r) {
@@ -12343,6 +12484,18 @@ function move(dx, dy) {
 
   // Stairs
   if (tile === 2) {
+    // Tutorial cave: sealed until the lone skeleton is dealt with, then it
+    // drops the new player into the real dungeon (floor 1) rather than descending.
+    if (tutorialActive) {
+      if (!floorCleared) {
+        log('🦴 Defeat the skeleton first — then the cave will let you pass.', 'important');
+        sfx('click');
+        endBlockedTurn();
+        return;
+      }
+      finishTutorial();
+      return;
+    }
     // Sealed until the floor is cleared — no sprinting straight to the exit.
     if (!floorCleared) {
       log(`🔒 The stairs are sealed. ${clearConditionLabel()}`, 'important');
@@ -17195,15 +17348,12 @@ async function renderLeaderboard() {
   }
   list.innerHTML = rows.map((r, i) => {
     const cls = r.player_class && CLASSES[r.player_class] ? CLASSES[r.player_class].icon : '🧙';
-    // Top three get a gold/silver/bronze medal disc with the rank number
-    // inside (DawnLike has no number tiles, so these are styled text badges);
-    // everyone else gets a plain muted number.
-    const rank = i < 3
-      ? `<span class="lb-medal lb-medal-${i + 1}">${i + 1}</span>`
-      : (i + 1);
+    // Top three shade the whole row gold / silver / bronze (no medal disc);
+    // everyone else is a plain row. The rank is always a plain number.
+    const top = i < 3 ? ` lb-top-${i + 1}` : '';
     const me = myName && r.name === myName ? ' me' : '';
-    return `<div class="lb-row${me}">
-      <span class="lb-rank">${rank}</span>
+    return `<div class="lb-row${top}${me}">
+      <span class="lb-rank">${i + 1}</span>
       <span class="lb-class">${cls}</span>
       <span class="lb-name">${escapeHtml(r.name)}</span>
       <span class="lb-val">${sort.fmt(r[sort.col] || 0)}</span>
@@ -17829,8 +17979,11 @@ const hadSave = loadGame();
 // per-character stashes into the pool). It lives outside the save slots, so it
 // loads even when the active slot is empty.
 loadStash();
-// Resume in town if that's where the save left off; otherwise build the floor.
-if (inTown) { buildTown(); openTownHub(); } else generateMap();
+// Resume in town if that's where the save left off; a brand-new hero who hasn't
+// done the beach tutorial gets it first; otherwise build the dungeon floor.
+if (inTown) { buildTown(); openTownHub(); }
+else if (!hadSave && !player.tutorialDone) buildTutorialMap();
+else generateMap();
 draw();
 updateBars();
 renderPanel();
