@@ -9292,7 +9292,7 @@ function generateMap() {
   // ── TREASURE HOARD ROOM (rare) ── a whole room packed with chests. A jackpot
   // find — but cracking that many is a gamble (mimics and chest-ambushes lurk).
   // Chests are laid in a checkerboard so you can still weave between them.
-  if (rooms.length && Math.random() < 0.04) {
+  if (rooms.length && Math.random() < 0.001) {
     const far = rooms.filter(r => Math.abs(r.cx - player.x) + Math.abs(r.cy - player.y) >= 6);
     const room = pick(far.length ? far : rooms);
     if (room) {
