@@ -32,6 +32,21 @@
     --unique:    #ff2222;
   }
 
+  /* Unified themed scrollbar. The LOOT panel's slim purple-on-dark bar is the
+     look we want everywhere; without this, menus/shops/popups fall back to the
+     OS's fat default scrollbar. Applied globally so every scrollable surface
+     (shops, town, the crafting/enchant panels, version & how-to popups, …)
+     scrolls with the same thin themed bar. Specific overrides like
+     #panel-content / #log still win on their own elements via higher
+     specificity. */
+  * {
+    scrollbar-width: thin;                       /* Firefox */
+    scrollbar-color: var(--border) var(--bg);    /* thumb, track */
+  }
+  *::-webkit-scrollbar { width: 4px; height: 4px; }
+  *::-webkit-scrollbar-track { background: var(--bg); }
+  *::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
   body {
     background:
       radial-gradient(circle at 50% -10%, #2a2148 0%, #150f26 55%, var(--bg) 100%);
@@ -1191,6 +1206,19 @@
   .pd-bottom { grid-column: 1 / -1; display: flex; justify-content: center; gap: 8px; }
   .pd-bottom .pd-cell { flex: 0 0 calc((100% - 16px) / 3); }
   .pd-hint { grid-column: 1 / -1; margin-top: 8px; font-size: 10px; color: #555; text-align: center; }
+
+  /* ── GEAR-SET SWITCH ── two-loadout toggle above the paper doll. */
+  .gearset-bar { display: flex; gap: 8px; padding: 2px 4px 0; }
+  .gearset-btn {
+    flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
+    padding: 6px 4px; border: 1px solid var(--border); border-radius: 5px;
+    background: rgba(8,8,12,0.5); color: #8a8475; cursor: pointer;
+    font-size: 11px; letter-spacing: 0.5px;
+  }
+  .gearset-btn .gs-name { font-weight: bold; }
+  .gearset-btn .gs-meta { font-size: 9px; color: #6a6456; }
+  .gearset-btn.active { border-color: var(--gold); background: #241d10; color: var(--gold); }
+  .gearset-btn.active .gs-meta { color: #c9b079; }
 
   /* ── LOG ── */
   /* ── BOTTOM ROW: log (left) + dpad (right) ── */
@@ -2779,7 +2807,13 @@
 // ══════════════════════════════════════════
 
 const TILE = 16;
-const MAP_W = 20, MAP_H = 20;
+// Map dimensions in tiles. No longer fixed: floors grow with difficulty (see
+// mapSizeFor) so harder tiers and deeper Endless floors are physically larger
+// maps. generateMap() sets these per floor; buildTown() resets them to the base
+// size (the town's building layout is hand-placed for a 20×20 plaza). BASE_* is
+// the Normal / town size and the baseline for the area-ratio density scaling.
+const BASE_MAP_W = 20, BASE_MAP_H = 20;
+let MAP_W = BASE_MAP_W, MAP_H = BASE_MAP_H;
 
 // Each equipment slot, with the base item names that roll for it.
 const SLOTS = {
@@ -3968,6 +4002,30 @@ function endlessBite() {
   return 1 + Math.min(0.6, (dungeonLevel - FINITE_DEPTH) * 0.006);
 }
 
+// ── DUNGEON MAP SIZE ──────────────────────────────────────────────────────
+// Floors get physically BIGGER with difficulty, and the per-floor monster count
+// scales with the map's area so the density a player actually meets stays the
+// same (see spawnEnemies) — a harder, larger floor simply holds proportionally
+// more foes. Each finite tier is one fixed size, a step larger than the tier
+// above it; Endless keeps expanding with depth, forever but sub-linearly so it
+// never balloons into an unplayably huge, foe-choked map.
+//   Normal 20×20 · Hardened 24×24 · Brutal 28×28 · Endless 32×32 and growing
+const DIFF_SIZE_STEP = 4;  // tiles added to each side per finite tier above Normal
+function mapSizeFor(dl) {
+  const tier = diffOf(dl);                               // 1 Normal · 2 Hardened · 3 Brutal · 4 Endless
+  const base = BASE_MAP_W + (tier - 1) * DIFF_SIZE_STEP; // 20 · 24 · 28 · 32
+  if (tier < 4) return base;                             // finite tiers: one fixed size each
+  // Endless: start at the tier-4 base, then creep upward with the Endless floor
+  // number. The √ keeps it climbing endlessly while decelerating hard, so even
+  // very deep floors stay navigable (floor 1 → 32, 26 → 37, 101 → 42, 401 → 52).
+  const ef = Math.max(0, dl - (FINITE_DEPTH + 1));       // 0 on Endless floor 1, then 1, 2, 3 …
+  return base + Math.floor(Math.sqrt(ef));
+}
+// How much larger (by area) the current floor is than the base 20×20. Drives the
+// per-floor scaling of room count, hazards and monster count, so a bigger floor
+// is a genuinely bigger dungeon at the same crowding rather than a sparse one.
+function mapAreaRatio() { return (MAP_W * MAP_H) / (BASE_MAP_W * BASE_MAP_H); }
+
 // ── DIFFICULTY PROGRESSION STATE ──
 // How many finite tiers the hero has fully conquered (beaten the floor-25 boss
 // of): 0 none, 1 Normal, 2 Hardened, 3 Brutal. The next tier up is then unlocked
@@ -4781,7 +4839,7 @@ const SKILL_TREES = {
       {"id":"w_a21","name":"Rampage","icon":"sk_wa_rampage","mp":18,"cd":5,"cast":{"shape":"melee","wpn":1.6,"repeat":2,"lifesteal":0.2},"desc":"A frenzy of strikes hitting twice and stealing heavy life.","br":1,"x":0.72,"y":0.34,"band":1,"req":["w_a01"]},
       {"id":"w_a22","name":"Slam","icon":"sk_wa_slam","mp":12,"cd":5,"cast":{"shape":"nova","radius":2,"wpn":1.9,"status":{"effect":"stun","dur":2,"chance":0.6}},"desc":"Smash the ground for a shockwave that stuns nearby foes.","br":2,"x":0.72,"y":0.34,"band":1,"req":["w_a02"]},
       {"id":"w_a23","name":"Impale","icon":"sk_wa_impale","mp":12,"cd":5,"cast":{"shape":"line","range":5,"wpn":2,"crit":true,"execute":0.25},"desc":"A piercing line strike that executes weakened foes.","br":3,"x":0.72,"y":0.34,"band":1,"req":["w_a03"]},
-      {"id":"w_a24","name":"Shield Charge","icon":"sk_wa_charge","mp":12,"cd":6,"cast":{"shape":"blast","range":5,"radius":2,"wpn":1.6,"status":{"effect":"stun","dur":2,"chance":1},"buff":[{"id":"shield","dur":5,"mag":70}]},"desc":"Charge a foe to stun it and raise a protective shield.","br":4,"x":0.72,"y":0.34,"band":1,"req":["w_a04"]},
+      {"id":"w_a24","name":"Shield Charge","icon":"sk_wa_charge","mp":12,"cd":6,"cast":{"shape":"teleport","range":5,"wpn":1.6,"status":{"effect":"stun","dur":2,"chance":1},"buff":[{"id":"shield","dur":5,"mag":70}]},"desc":"Charge across the gap to the nearest foe — slam it for a stun and raise a protective shield. Your way onto a ranged attacker.","br":4,"x":0.72,"y":0.34,"band":1,"req":["w_a04"]},
       {"id":"w_a30","name":"Warstomp","icon":"sk_wa_warstomp","mp":14,"cd":6,"cast":{"shape":"nova","radius":3,"wpn":1.6,"knockback":2,"status":{"effect":"stun","dur":2,"chance":0.8}},"desc":"Stomp the earth to knock back and stun all around you.","br":0,"x":0.28,"y":0.58,"band":2,"req":["w_a10"]},
       {"id":"w_a31","name":"Blood Frenzy","icon":"sk_wa_warcry","mp":14,"cd":7,"cast":{"shape":"self","buff":[{"id":"dmgUp","dur":7,"mag":0.4},{"id":"lifestealUp","dur":7,"mag":0.15}]},"desc":"Enter a rage boosting damage and lifesteal as you fight.","br":1,"x":0.28,"y":0.58,"band":2,"req":["w_a11"]},
       {"id":"w_a32","name":"Whirlwind","icon":"sk_wa_whirl","mp":15,"cd":5,"syn":{"skill":"w_p22","per":0.05},"cast":{"shape":"nova","radius":2,"wpn":1.7,"repeat":2},"desc":"Spin furiously, striking everything around you twice.","br":2,"x":0.28,"y":0.58,"band":2,"req":["w_a12"]},
@@ -4795,7 +4853,7 @@ const SKILL_TREES = {
       {"id":"w_a50","name":"Avatar","icon":"sk_wa_avatar","mp":30,"cd":12,"cast":{"shape":"self","buff":[{"id":"shield","dur":10,"mag":260},{"id":"defUp","dur":10,"mag":0.6},{"id":"dmgUp","dur":10,"mag":0.5},{"id":"regen","dur":10,"mag":16}]},"desc":"Transform into an unstoppable titan with a colossal shield and surging power.","br":0,"x":0.5,"y":0.82,"band":3,"reqAny":["w_a30","w_a40"]},
       {"id":"w_a51","name":"Apocalypse","icon":"sk_wa_apocalypse","mp":28,"cd":8,"cast":{"shape":"melee","wpn":2.4,"repeat":3,"lifesteal":0.35,"execute":0.3},"desc":"A storm of bloody strikes hitting three times, draining heavy life and executing the wounded.","br":1,"x":0.5,"y":0.82,"band":3,"reqAny":["w_a31","w_a41"]},
       {"id":"w_a52","name":"Cataclysm","icon":"sk_wa_cataclysm","mp":34,"cd":11,"syn":{"skill":"w_p42","per":0.04},"cast":{"shape":"nova","radius":4,"wpn":3.4,"knockback":2,"status":{"effect":"stun","dur":3,"chance":0.8}},"desc":"A titanic two-handed quake that obliterates everything around you.","br":2,"x":0.5,"y":0.82,"band":3,"reqAny":["w_a32","w_a42"]},
-      {"id":"w_a53","name":"Decapitate","icon":"sk_wa_titanleap","mp":24,"cd":9,"cast":{"shape":"blast","range":7,"radius":2,"wpn":3,"crit":true,"execute":0.4,"status":{"effect":"vuln","dur":4,"chance":1}},"desc":"Leap to a foe with a guaranteed crit that executes all but bosses.","br":3,"x":0.5,"y":0.82,"band":3,"reqAny":["w_a33","w_a43"]},
+      {"id":"w_a53","name":"Decapitate","icon":"sk_wa_titanleap","mp":24,"cd":9,"cast":{"shape":"teleport","range":7,"wpn":3,"crit":true,"execute":0.4,"status":{"effect":"vuln","dur":4,"chance":1}},"desc":"Leap across the battlefield onto a foe with a guaranteed crit that executes all but bosses — runs down fleeing archers and casters.","br":3,"x":0.5,"y":0.82,"band":3,"reqAny":["w_a33","w_a43"]},
       {"id":"w_a54","name":"War Machine","icon":"sk_wa_warmachine","mp":30,"cd":12,"cast":{"shape":"self","buff":[{"id":"shield","dur":12,"mag":300},{"id":"thorns","dur":12,"mag":110},{"id":"defUp","dur":12,"mag":0.5},{"id":"regen","dur":12,"mag":18}]},"desc":"Become an impregnable fortress with an immense shield, thorns, and relentless regeneration.","br":4,"x":0.5,"y":0.82,"band":3,"reqAny":["w_a34","w_a44"]}
     ], 'active'),
   },
@@ -4978,7 +5036,7 @@ const SKILL_TREES = {
       {"id":"t_a12","name":"Retribution","icon":"sk_ta_strike","mp":9,"cd":4,"syn":{"skill":"t_p02","per":0.05},"cast":{"shape":"cleave","wpn":1.6,"status":{"effect":"vuln","dur":3,"chance":1}},"desc":"A vengeful cleave that leaves struck foes vulnerable.","br":2,"x":0.28,"y":0.34,"band":1,"req":["t_a02"]},
       {"id":"t_a13","name":"Bless","icon":"sk_ta_blessbuff","mp":10,"cd":5,"cast":{"shape":"self","buff":[{"id":"regen","dur":7,"mag":10},{"id":"dmgUp","dur":7,"mag":0.2}]},"desc":"Bless yourself with renewing regeneration and surging might.","br":3,"x":0.28,"y":0.34,"band":1,"req":["t_a03"]},
       {"id":"t_a14","name":"Holy Fire","icon":"sk_ta_holyfire","mp":12,"cd":5,"syn":{"skill":"t_p04","per":0.05},"cast":{"shape":"nova","spell":1.3,"radius":2,"status":{"effect":"burn","dur":3,"chance":0.8}},"desc":"Erupt in holy flame, scorching all foes around you.","br":4,"x":0.28,"y":0.34,"band":1,"req":["t_a04"]},
-      {"id":"t_a20","name":"Zealous Strike","icon":"sk_ta_strike","mp":12,"cd":5,"syn":{"skill":"t_p20","per":0.05},"cast":{"shape":"melee","wpn":1.7,"spell":0.9,"lifesteal":0.15,"repeat":2},"desc":"A flurry of two holy strikes that drains the life of the wicked.","br":0,"x":0.72,"y":0.34,"band":1,"req":["t_a00"]},
+      {"id":"t_a20","name":"Zealous Charge","icon":"sk_ta_strike","mp":12,"cd":5,"syn":{"skill":"t_p20","per":0.05},"cast":{"shape":"teleport","range":5,"wpn":1.7,"spell":0.9,"lifesteal":0.15,"repeat":2,"buff":[{"id":"dodgeUp","dur":2,"mag":0.3}]},"desc":"Charge the nearest foe in a burst of holy fervor, striking twice and draining life — closes on archers and casters, dodging as you go.","br":0,"x":0.72,"y":0.34,"band":1,"req":["t_a00"]},
       {"id":"t_a21","name":"Aegis Field","icon":"sk_ta_aegisfield","mp":14,"cd":7,"cast":{"shape":"self","buff":[{"id":"shield","dur":8,"mag":130},{"id":"defUp","dur":8,"mag":0.35},{"id":"regen","dur":8,"mag":10}]},"desc":"Project a vast aegis granting a great shield, defense, and regeneration.","br":1,"x":0.72,"y":0.34,"band":1,"req":["t_a01"]},
       {"id":"t_a22","name":"Condemn","icon":"sk_ta_condemn","mp":12,"cd":5,"syn":{"skill":"t_p22","per":0.05},"cast":{"shape":"blast","spell":1.4,"radius":2,"range":5,"knockback":2,"status":{"effect":"stun","dur":2,"chance":0.7}},"desc":"Hurl a damning blast that knocks back and stuns the guilty.","br":2,"x":0.72,"y":0.34,"band":1,"req":["t_a02"]},
       {"id":"t_a23","name":"Consecrate","icon":"sk_ta_consecrate","mp":18,"cd":6,"syn":{"skill":"t_p23","per":0.05},"cast":{"shape":"nova","spell":1,"radius":3,"heal":{"flat":50,"perLevel":4},"buff":[{"id":"regen","dur":6,"mag":12}]},"desc":"Hallow the ground, searing foes while mending your wounds.","br":3,"x":0.72,"y":0.34,"band":1,"req":["t_a03"]},
@@ -5639,7 +5697,16 @@ let inventory = [];
 // is only reachable from the Vault in town. `ts` is the last-write time, used to
 // pick the newest copy when syncing.
 let stash = { gold: 0, items: [], ts: 0 };
-let equipped = { head: null, chest: null, hands: null, legs: null, weapon: null, offhand: null, ring: null, amulet: null };
+// ── GEAR SETS ── You keep TWO independent equipment loadouts and toggle between
+// them (Set 1 / Set 2). `equipped` always points at the ACTIVE set, so every
+// read/write of equipped[slot] elsewhere keeps working untouched — only the
+// toggle and save/load are aware there are two. The inactive set's items stay
+// parked in its own slots (never the bag), so switching re-equips a whole
+// loadout in one tap.
+function emptyGearSet() { return { head: null, chest: null, hands: null, legs: null, weapon: null, offhand: null, ring: null, amulet: null }; }
+let gearSets = [emptyGearSet(), emptyGearSet()];
+let activeGearSet = 0;
+let equipped = gearSets[activeGearSet];
 let groundItems = []; // chests on the floor: { x, y } — loot is rolled when opened
 // Death drop: when you fall, your whole bag is left as a recoverable grave on the
 // floor where you died. `graveSite` is the persistent record { floor, items, gold };
@@ -5822,6 +5889,7 @@ window.gameState = function gameState(radius) {
       townView: inTown ? townView : null,
       pointsToSpend: { attribute: player.attrPoints || 0, skill: player.skillPoints || 0 },
       gold: player.gold,
+      activeGearSet: (activeGearSet || 0) + 1,  // 1 or 2 — which loadout is worn
       equipped: Object.fromEntries(Object.entries(equipped || {}).map(([slot, it]) => [slot, brief(it)])),
       inventory: (inventory || []).map((it, i) => Object.assign({ i }, brief(it))),
       shop: (merchant && merchant.stock) ? merchant.stock.map((row, i) => {
@@ -6556,6 +6624,8 @@ document.addEventListener('click', (e) => {
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
   { date: '2026-06-29', size: 'medium', v: 'Channeled town portal', by: 'Claude', notes: ['The town gate is no longer locked out while you’re in combat or on a cooldown — it’s clickable any time. Instead, opening it now CHANNELS a portal in real time.', 'Once you start it, the dungeon auto-runs one turn every half-second so you actually watch the foes take their swings and close in. Survive 3 clean turns and the gate opens; take a single blow from a foe mid-channel and the half-formed portal shatters.', 'You’re committed while it charges — your own moves are held until it resolves, with a swirling portal and a countdown over your hero showing the turns left. Tap TOWN again to break it off.'] },
+  { date: '2026-06-29', size: 'medium', v: 'Bigger floors per difficulty', by: 'Claude', notes: ['Dungeon floors now grow with difficulty: Normal stays 20×20, Hardened is 24×24, Brutal 28×28, and Endless starts at 32×32 and keeps expanding the deeper you push — endlessly, but slower and slower so it never balloons into an unnavigable map.', 'Monster density is held constant, so a bigger, harder floor simply carries proportionally more foes — more rooms, hazards and enemies, at the same crowding you’re used to.', 'A generous cap keeps even the largest deep-Endless floors from spawning an unplayable swarm.'] },
+  { date: '2026-06-29', size: 'medium', v: 'Two gear sets', by: 'Claude', notes: ['You now keep two independent equipment loadouts and switch between them in one tap. The GEAR tab has a Set 1 / Set 2 switch above the paper doll showing each set\'s worn count and power; the lit one is what you\'re wearing.', 'Tap the other set (or press G anywhere) to instantly swap your whole loadout — handy for keeping a damage set and a defensive or utility set ready. Gear parked in the set you\'re not wearing stays on that set rather than cluttering your bag, and both sets are saved with your character.'] },
   { date: '2026-06-29', size: 'big', v: 'Rating-based combat overhaul', by: 'Claude', notes: ['Chances no longer use flat caps. Crit, dodge, hit, block and damage reduction are now Path-of-Exile-style RATINGS — integer stats you build from attributes and gear — and the actual % is your rating measured against the enemy you\'re facing: chance = rating / (rating + opposition). It can approach 100% but never reach it, so absurd numbers are mechanically impossible rather than clamped.', 'Opposition grows with depth, so a rating that gives big % on floor 5 gives much less on floor 50 — you have to keep investing to stay sharp, and there\'s no maxing a stat once and coasting. In true endgame you can still stack a stat very high; it\'s just never trivial or absolute.', 'Combat is now two-sided: enemies have Accuracy (which eats your dodge) and Evasion (so your weapon attacks can MISS). You have an Accuracy rating too — Agility and the new ACC gear affix raise it. Most attacks still land, but "Accurate" foes punch through evasion and slippery "Evasive" foes need real Accuracy to hit. (Spells never miss.)', 'Agility now drives both Evasion and Accuracy; Luck drives Crit; gear CRIT/SPD/DODGE/BLOCK/DR read as ratings (shown as flat numbers, with the live % on the HERO sheet vs your current floor). Crit damage is uncapped again — it\'s a magnitude, not a chance.', 'Health and mana stay finite (from the prior pass): slower HP/MP regen, level-ups mend ~40% instead of a full refill, smaller potions, and burst-heals capped per use.'] },
   { date: '2026-06-29', size: 'medium', v: 'Every action costs a turn', by: 'Claude', notes: ['Anything you do on a floor now passes a turn, so the world keeps moving even when you can’t. Bumping a wall, the map edge, deep water, a locked door or sealed stairs all tick the clock just like the Wait button.', 'Walking into a boss’s wall of force now passes a turn too, so the barriers pinning you in crumble on their own — no more mashing the Wait button to escape the Rat King’s cage.', 'Being stunned no longer freezes the dungeon: a wasted action still lets foes act while the stun wears off. Drinking from a fountain, touching a shrine and cracking open a chest underfoot are all turns as well.'] },
   { date: '2026-06-29', size: 'big', v: 'Rebalanced loot drops', by: 'ASuiter89', notes: ['Loot rarity is rebalanced so you stop drowning in high-end gear: instead of rolling the rarity table several times and keeping the rarest (which buried you in oranges), each drop now makes one independent check per tier from rarest down, so a baseline drop is ~50% normal, ~21% junk, ~19% uncommon, ~6% rare, ~2% epic, ~0.6% legendary, ~0.15% unique.', 'Magic Find, your Luck and deeper floors still raise the odds — but with diminishing returns that barely move legendary/unique and hard per-tier caps, so stacking Magic Find now floods you with greens and blues rather than legendaries.', 'Tougher foes drop MORE items, not just luckier ones: every kill makes a number of independent “picks” (ordinary foes 1, elites 3, bosses 5), each either dropping nothing or one item — so a boss sprays a pile of loot while a trash mob mostly drops nothing. Elites and bosses are still guaranteed at least one piece.'] },
@@ -7300,6 +7370,12 @@ function tryBuildVault(reach) {
 
 function generateMap() {
   inTown = false;
+  // Size the floor for its difficulty BEFORE carving anything — harder tiers and
+  // deeper Endless floors are larger maps (see mapSizeFor). areaRatio then scales
+  // rooms, hazards and foes so a bigger map is a denser dungeon, not a sparse one.
+  const mapSize = mapSizeFor(dungeonLevel);
+  MAP_W = mapSize; MAP_H = mapSize;
+  const areaRatio = mapAreaRatio();
   floorSerial++;
   player.lastStandReady = true; // a fresh Last Stand each floor
   rollFloorMod();
@@ -7317,7 +7393,9 @@ function generateMap() {
 
   // ── ROOMS ── a handful of rectangles, occasionally one big grand hall.
   const rooms = [];
-  const roomCount = rnd(5, 8);
+  // More rooms on bigger floors, so a larger map is a denser dungeon rather than
+  // the same handful of rooms marooned in acres of rock.
+  const roomCount = Math.max(5, Math.round(rnd(5, 8) * areaRatio));
   const grandHall = Math.random() < 0.3;
   for (let i = 0; i < roomCount; i++) {
     const big = grandHall && i === 0;
@@ -7340,7 +7418,8 @@ function generateMap() {
 
   // ── CORRIDORS ── connect rooms in a chain, plus a couple of loops for choice.
   for (let i = 1; i < rooms.length; i++) carveCorridor(rooms[i-1].cx, rooms[i-1].cy, rooms[i].cx, rooms[i].cy);
-  for (let k = 0; k < 2; k++) { const a = pick(rooms), b = pick(rooms); if (a !== b) carveCorridor(a.cx, a.cy, b.cx, b.cy); }
+  const extraLoops = Math.max(2, Math.round(2 * areaRatio)); // more alternate routes on bigger floors
+  for (let k = 0; k < extraLoops; k++) { const a = pick(rooms), b = pick(rooms); if (a !== b) carveCorridor(a.cx, a.cy, b.cx, b.cy); }
 
   // ── PLAYER START ── first room centre, cleared of obstacles.
   const start = rooms[0];
@@ -7415,7 +7494,7 @@ function generateMap() {
       }
       return false;
     };
-    const pools = rnd(1, 2);
+    const pools = Math.min(5, Math.max(1, Math.round(rnd(1, 2) * areaRatio))); // more (but capped) on bigger floors
     for (let p = 0; p < pools; p++) {
       const seed = randomFloorTile(reach);
       if (!seed || nearWater(seed.x, seed.y)) continue; // keep pools clear of water
@@ -7426,7 +7505,7 @@ function generateMap() {
   }
   // ── SPIKE TRAPS (passable, stabs) ──
   if (Math.random() < 0.6) {
-    const n = rnd(2, 5);
+    const n = Math.max(2, Math.round(rnd(2, 5) * areaRatio)); // more on bigger floors so they aren't trap-sparse
     for (let i = 0; i < n; i++) { const c = randomFloorTile(reach); if (c) mapData[c.y][c.x] = 8; }
   }
   // With traps down, melt any that sit on the only route somewhere so the
@@ -7435,7 +7514,9 @@ function generateMap() {
   // ── TELEPORTER PAIR ── rare, and the two pads must sit far apart so a warp
   // is a meaningful shortcut rather than a tiny hop.
   if (rooms.length >= 2 && Math.random() < 0.18) {
-    const MIN_TP_DIST = 22; // Manhattan tiles between the paired pads
+    // Scale the minimum warp distance with the map so a teleporter stays a real
+    // shortcut on bigger floors (≈22 on the base 20×20).
+    const MIN_TP_DIST = Math.round(Math.min(MAP_W, MAP_H) * 1.1); // Manhattan tiles between the paired pads
     let a = null, b = null;
     for (let tries = 0; tries < 60; tries++) {
       const p = randomFloorTile(reach), q = randomFloorTile(reach);
@@ -7456,7 +7537,7 @@ function generateMap() {
   // -looking area can actually be walked to.
   ensureFootConnected();
   // ── CRACKED WALLS ── breakable walls with open floor on opposite sides.
-  let cracks = rnd(2, 4);
+  let cracks = Math.max(2, Math.round(rnd(2, 4) * areaRatio)); // scale breakable walls with floor size
   for (let tries = 0; tries < 150 && cracks > 0; tries++) {
     const x = rnd(1, MAP_W-2), y = rnd(1, MAP_H-2);
     if (mapData[y][x] !== 1) continue;
@@ -7842,8 +7923,8 @@ function handleQuestStep(nx, ny) {
 function spawnMerchant(footReach) {
   merchant = null;
   if (floorMod.noMerchant) return;
-  // The roaming merchant appears on roughly 1 in 3 floors.
-  if (Math.random() > 0.34) return;
+  // The roaming merchant appears on roughly 1 in 5 floors.
+  if (Math.random() > 0.20) return;
   let mx, my, tries = 0;
   do {
     mx = rnd(1, MAP_W-1); my = rnd(1, MAP_H-1); tries++;
@@ -7868,11 +7949,11 @@ function spawnMerchant(footReach) {
 }
 
 // The Wandering Mystic — a second wanderer who takes gold to bend the next
-// 1/10/30 floors to a pact of your choosing. Appears on roughly 1 in 4 floors,
+// 1/10/30 floors to a pact of your choosing. Appears on roughly 1 in 6 floors,
 // independent of the merchant (but never sharing a tile with one).
 function spawnMystic(footReach) {
   mystic = null;
-  if (Math.random() > 0.26) return;
+  if (Math.random() > 0.16) return;
   let mx, my, tries = 0;
   do {
     mx = rnd(1, MAP_W-1); my = rnd(1, MAP_H-1); tries++;
@@ -8198,6 +8279,10 @@ function warpToTown() {
 // Lay out the walled town plaza and place its NPCs.
 function buildTown() {
   inTown = true;
+  // The town's buildings, NPCs and entry point are hand-placed for the base 20×20
+  // plaza, so always rebuild it at the base size — a dungeon floor may have grown
+  // MAP_W/MAP_H for a harder tier.
+  MAP_W = BASE_MAP_W; MAP_H = BASE_MAP_H;
   floorSerial++;
   // Clear every dungeon-only entity so nothing lingers into the safe hub.
   enemies = []; merchant = null; mystic = null; minions = []; combatBuffs = {};
@@ -9736,15 +9821,23 @@ function spawnEnemies() {
   // Summoned minions, transient combat buffs and skill charges don't carry between floors.
   minions = []; combatBuffs = {}; clearCharges();
   const isBossFloor = dungeonLevel % 5 === 0;
+  // Hold monster DENSITY constant as floors grow: the regular per-floor foe count
+  // is scaled by how much bigger this floor is than the base 20×20 (mapAreaRatio),
+  // so a larger, harder map carries proportionally more foes at the same crowding.
+  // A generous ceiling keeps even the largest deep-Endless floors from spawning an
+  // unnavigable mob. Boss floors keep their own tuned, depth-based roster.
   let count = isBossFloor
     ? 1 + Math.min(9, Math.floor(dungeonLevel / 5))   // boss + minions, capped so deep Endless boss floors aren't a wall of 40 foes
-    : Math.min(3 + Math.floor(dungeonLevel * 0.7), 10);
+    : Math.min(Math.round(Math.min(3 + Math.floor(dungeonLevel * 0.7), 10) * mapAreaRatio()), 40);
   // Some floor modifiers crowd the level with extra foes.
   if (!isBossFloor && floorMod.enemyMult) count = Math.round(count * floorMod.enemyMult);
   if (!isBossFloor && pfx('enemy', 1) !== 1) count = Math.max(1, Math.round(count * pfx('enemy', 1)));
   // Floors 2-3 pack one extra foe so the opening isn't a total faceroll — but
   // floor 1 is left alone so a fresh, gearless hero gets a fair first dive.
   if (!isBossFloor && dungeonLevel >= 2 && dungeonLevel <= 3) count += 1;
+  // Final safety ceiling (after modifiers): no floor, however large or heavily
+  // modified, spawns an unplayable swarm.
+  if (!isBossFloor) count = Math.min(count, 48);
 
   // Pick 2-3 enemy types for this floor from the depth-appropriate band, so
   // each floor has variety while every monster stays around the same level.
@@ -14382,6 +14475,8 @@ function pickup() {
 // Install the re-entrancy / halt guard around every player-action entry point.
 // Done here (after all are defined) by reassigning the binding, so both internal
 // callers and inline onclick="…" handlers route through the guarded version.
+// (The floor-1 up-stair deliberately calls the unguarded startPortalChannel()
+// directly, since it fires from inside move()'s already-guarded turn.)
 move           = guardAction(move);
 pickup         = guardAction(pickup);
 castSkillById  = guardAction(castSkillById);
@@ -15263,6 +15358,10 @@ const BUFF_LABEL = {
   lifestealUp: 'lifesteal',
 };
 const turnsTxt = d => `${d} turn${d === 1 ? '' : 's'}`;
+// shield/regen/thorns buffs carry a FLAT magnitude (HP / reflect), the rest a
+// fraction shown as a percent — matches how resolveCast applies them.
+const FLAT_BUFFS = new Set(['shield', 'regen', 'thorns']);
+const buffAmt = b => FLAT_BUFFS.has(b.id) ? `+${Math.round(b.mag)}` : `+${Math.round((b.mag || 0) * 100)}%`;
 // fx object → compact per-rank one-liner ("+1.5% crit, +3 attack"), for charges.
 function fxOneLine(fx) {
   return Object.keys(fx).map(k => {
@@ -15273,7 +15372,7 @@ function fxOneLine(fx) {
 function trigEffectLabel(e) {
   const p = [];
   if (e.charge) p.push(`gain ${e.amt && e.amt > 1 ? e.amt + ' ' : ''}<b>${e.charge}</b>`);
-  if (e.buff) p.push(`+${Math.round((e.buff.mag || 0) * 100)}% ${BUFF_LABEL[e.buff.id] || e.buff.id} (${turnsTxt(e.buff.dur)})`);
+  if (e.buff) p.push(`${buffAmt(e.buff)} ${BUFF_LABEL[e.buff.id] || e.buff.id} (${turnsTxt(e.buff.dur)})`);
   if (typeof e.heal === 'number') p.push(`heal ${Math.round(e.heal * 100)}% HP`);
   if (typeof e.mana === 'number') p.push(`restore ${Math.round(e.mana * 100)}% MP`);
   if (e.nextCrit) p.push('next hit crits');
@@ -15320,10 +15419,14 @@ function skillMechList(n) {
   }
   if (n.cast) {
     const c = n.cast;
+    // Movement first — gap-closers/pulls/escapes are the headline of a mobility skill.
+    if (c.shape === 'teleport') add('Gap-closer', '#5fc9c0', `Blink up to ${c.range || 6} tiles onto the nearest foe and strike — closes on ranged attackers.`);
+    if (c.pull) add('Pull', '#5fc9c0', 'Yanks a distant foe across the gap to you.');
+    if (c.recall) add('Escape', '#5fc9c0', 'Blink away to the spot furthest from any foe.');
     if (c.status) add('Status', '#d98a6f', `Inflicts ${c.status.effect} (${turnsTxt(c.status.dur)}).`);
     if (c.detonate) add('Detonate', '#e07a3a', `Explodes vuln-marked foes for ${Math.round(c.detonate * 100)}% damage.`);
     if (c.summon) add('Summon', '#7ad08a', `Calls ${c.summon.count > 1 ? c.summon.count + ' ' : ''}${c.summon.kind}${c.summon.count > 1 ? 's' : ''} for ${turnsTxt(c.summon.ttl)}.`);
-    if (Array.isArray(c.buff)) for (const b of c.buff) add('Buff', '#6fb7d9', `+${Math.round((b.mag || 0) * 100)}% ${BUFF_LABEL[b.id] || b.id} (${turnsTxt(b.dur)}).`);
+    if (Array.isArray(c.buff)) for (const b of c.buff) add('Buff', '#6fb7d9', `${buffAmt(b)} ${BUFF_LABEL[b.id] || b.id} (${turnsTxt(b.dur)}).`);
     if (c.heal) {
       const parts = [];
       if (c.heal.flat) parts.push(`${c.heal.flat} HP`);
@@ -15663,9 +15766,45 @@ function renderPaperdoll() {
     renderDollSlot('weapon'), renderDollSlot('chest'), renderDollSlot('offhand'),
   ].join('');
   const bottom = `<div class="pd-bottom">${renderDollSlot('hands')}${renderDollSlot('legs')}</div>`;
-  return `<div class="paperdoll">${bodyHTML}${cells}${bottom}
+  return gearSetBarHTML() + `<div class="paperdoll">${bodyHTML}${cells}${bottom}
     <div class="pd-hint">Tap a slot for details · ✕ to unequip · EQUIP loot from the LOOT tab</div>
+    <div class="pd-hint">Two loadouts — switch sets above or press G</div>
   </div>`;
+}
+
+// ── GEAR-SET SWITCH ── the Set 1 / Set 2 toggle that sits above the paper doll.
+function gearSetPower(set) { return SLOT_KEYS.reduce((s, k) => s + (set[k] ? itemPower(set[k]) : 0), 0); }
+function gearSetCount(set) { return SLOT_KEYS.reduce((n, k) => n + (set[k] ? 1 : 0), 0); }
+// The active set is lit gold; tapping the other one swaps your whole loadout.
+function gearSetBarHTML() {
+  return `<div class="gearset-bar">${[0, 1].map(i => {
+    const set = gearSets[i];
+    const n = gearSetCount(set);
+    const meta = n ? `${n} worn · ⚡${gearSetPower(set)}` : 'empty';
+    return `<button class="gearset-btn${i === activeGearSet ? ' active' : ''}" onclick="toggleGearSet(${i})">
+      <span class="gs-name">Set ${i + 1}</span><span class="gs-meta">${meta}</span>
+    </button>`;
+  }).join('')}</div>`;
+}
+// Swap which loadout is worn. Called with no/invalid index from the G hotkey to
+// flip to the other set; with 0/1 from the on-screen buttons to pick one.
+function toggleGearSet(idx) {
+  const target = (idx === 0 || idx === 1) ? idx : (activeGearSet === 0 ? 1 : 0);
+  hideTooltip();
+  if (target === activeGearSet) return;
+  activeGearSet = target;
+  equipped = gearSets[activeGearSet];
+  sfx('equip');
+  // Worn gear feeds max HP/MP and the on-sprite look, so recompute & re-skin
+  // (and clamp current HP/MP) exactly like equipping a single piece does.
+  recomputeMaxStats();
+  if (player.hp > player.maxHp) player.hp = player.maxHp;
+  if (player.mp > player.maxMp) player.mp = player.maxMp;
+  log(`Switched to Gear Set ${activeGearSet + 1}.`, 'loot');
+  updateBars();
+  renderPanel();
+  draw();          // re-skin the sprite with the newly worn set
+  saveGame();
 }
 
 // One-tap equip: route an item straight to its own slot.
@@ -16220,6 +16359,7 @@ document.addEventListener('keydown', e => {
   }
   if (e.key==='t'||e.key==='T'||e.key==='0') enterTown();   // 0 mirrors the skill-bar TOWN button
   if (e.key==='b'||e.key==='B'||e.key==='i'||e.key==='I') togglePanel();
+  if (e.key==='g'||e.key==='G') toggleGearSet();             // swap between gear set 1 and 2
 });
 
 // ══════════════════════════════════════════
@@ -16381,7 +16521,9 @@ function saveGame() {
     const data = {
       // The stash is shared across every slot, so it is NOT part of a character's
       // save — it's persisted separately by saveStash() under STASH_KEY.
-      player, inventory, equipped, dungeonLevel, buffs, pact,
+      // `equipped` is still written (it's the active set) for forward-compat; the
+      // two-loadout state lives in gearSets + activeGearSet.
+      player, inventory, equipped, gearSets, activeGearSet, dungeonLevel, buffs, pact,
       inTown, dungeonReturn, graveSite,
       ts: Date.now(),
     };
@@ -16500,19 +16642,25 @@ function loadGame() {
     // The town stash is shared across every save slot, so it is NOT restored from
     // this character's save. loadStash() (called once at boot) loads it from its
     // own key and folds any per-character stashes from older saves into the pool.
-    // Rebuild equipped into the new 7-slot shape; salvage any still-valid pieces into the bag.
-    // Off-hand is additive: old saves simply have no off-hand, so it defaults null
-    // and the salvage loop below routes any unknown-slot gear safely to the bag.
-    const freshEquipped = { head:null, chest:null, hands:null, legs:null, weapon:null, offhand:null, ring:null, amulet:null };
-    const old = data.equipped || {};
-    Object.values(old).forEach(it => {
-      if (it && it.slot && freshEquipped.hasOwnProperty(it.slot) && !freshEquipped[it.slot]) {
-        freshEquipped[it.slot] = it;
-      } else if (it && it.slot) {
-        inventory.push(it);
-      }
-    });
-    equipped = freshEquipped;
+    // Rebuild each gear set into the canonical 8-slot shape; salvage any extra or
+    // unknown-slot pieces into the bag. Off-hand is additive: old saves simply have
+    // no off-hand, so it defaults null and the salvage loop routes it safely.
+    const rebuildSet = (raw) => {
+      const set = emptyGearSet();
+      Object.values(raw || {}).forEach(it => {
+        if (it && it.slot && set.hasOwnProperty(it.slot) && !set[it.slot]) set[it.slot] = it;
+        else if (it && it.slot) inventory.push(it);
+      });
+      return set;
+    };
+    // New saves carry both loadouts in gearSets; older saves only have `equipped`,
+    // which becomes Set 1 with an empty Set 2 alongside it.
+    const rawSets = (Array.isArray(data.gearSets) && data.gearSets.length)
+      ? [data.gearSets[0], data.gearSets[1]]
+      : [data.equipped || {}, null];
+    gearSets = [rebuildSet(rawSets[0]), rebuildSet(rawSets[1])];
+    activeGearSet = (data.activeGearSet === 1) ? 1 : 0;
+    equipped = gearSets[activeGearSet];
     // Migrate saves that predate cosmetics: ensure the shape exists, then seed the
     // wardrobe from whatever gear the player is already carrying or wearing.
     if (!player.cosmetics) player.cosmetics = { head:null, chest:null, weapon:null };
@@ -16521,12 +16669,14 @@ function loadGame() {
     // Migrate icons from the old emoji system to vector-icon keys: re-stamp gear,
     // rebuild each saved wardrobe look from its name (deduping by key), and convert
     // any chosen cosmetic. Gear without a recognised key heals on next access.
+    // Worn items from BOTH gear sets get the same migrations as the bag.
+    const wornItems = gearSets.flatMap(s => Object.values(s)).filter(it => it && it.slot);
     inventory.forEach(it => { if (it.slot) it.icon = itemIcon(it); });
-    Object.values(equipped).forEach(it => { if (it && it.slot) it.icon = itemIcon(it); });
+    wornItems.forEach(it => { it.icon = itemIcon(it); });
     // Older items predate attribute affixes — give them an empty attrs block so
     // the affix/enchant code can treat every item uniformly.
     inventory.forEach(it => { if (it && !it.attrs) it.attrs = {}; });
-    Object.values(equipped).forEach(it => { if (it && !it.attrs) it.attrs = {}; });
+    wornItems.forEach(it => { if (!it.attrs) it.attrs = {}; });
     for (const slot of VISUAL_SLOTS) {
       const seen = new Set();
       player.wardrobe[slot] = (player.wardrobe[slot] || [])
@@ -16536,7 +16686,7 @@ function loadGame() {
       if (cur && !ICON_PATHS[cur]) player.cosmetics[slot] = LEGACY_EMOJI_KEYS[cur] || null;
     }
     inventory.forEach(recordWardrobe);
-    Object.values(equipped).forEach(recordWardrobe);
+    wornItems.forEach(recordWardrobe);
     dungeonLevel = data.dungeonLevel || 1;
     // Restore shrine buffs, tolerating older saves that predate them.
     buffs = Object.assign({ power: 0, guard: 0, fortune: 0 }, data.buffs || {});
