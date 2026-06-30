@@ -578,6 +578,25 @@
     border-top: 1px solid var(--border);
   }
   @media (pointer: coarse) { #dpad-settings { display: flex; } }
+  /* Cursor picker is the opposite: only useful where there's a real mouse. */
+  #cursor-settings {
+    display: none;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 2px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+  }
+  @media (hover: hover) and (pointer: fine) { #cursor-settings { display: flex; } }
+  #cursor-style-row {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: 8px;
+    padding-bottom: 6px;
+    scrollbar-width: thin;
+    max-width: 100%;
+    min-width: 0;
+  }
   .settings-dpad-label {
     font-family: 'Courier New', monospace;
     font-size: 10px;
@@ -2925,6 +2944,12 @@
         <button class="settings-item sprint-action" id="sprint-action" onclick="toggleSprintMode()" data-tip="<div class='ht-name'>🏃 Sprint Mode</div><div class='ht-line'><b>HOLD:</b> sprint only while Shift is down.<br><b>TOGGLE:</b> tap Shift to auto-sprint, tap again to stop — no need to hold.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
           <span class="action-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="13 19 22 12 13 5"/><polyline points="2 19 11 12 2 5"/></svg></span><span class="action-label" id="sprint-label">SPRINT: HOLD</span>
         </button>
+        <!-- Mouse-pointer picker. Shown only on mouse (fine pointer); populated by
+             renderCursorControls() when the menu opens. -->
+        <div id="cursor-settings">
+          <div class="settings-dpad-label">CURSOR</div>
+          <div class="settings-dpad-row" id="cursor-style-row"></div>
+        </div>
         <!-- Movement-pad position & opacity. Hidden on desktop (no touch d-pad);
              populated by renderDpadControls() when the menu opens. -->
         <div id="dpad-settings">
@@ -3738,15 +3763,68 @@ spriteSheet.onload = () => { spriteReady = true; try { document.documentElement.
 // d-pad, loot rows etc. all use it too. Only two semantic cursors are kept: text
 // fields keep the I-beam (`text`) for typing, and disabled controls keep
 // `not-allowed`. Falls back to `auto` until the atlas has loaded or if generation fails.
+// Pointer options, ALL drawn from the existing DawnLike atlas so the cursor
+// always matches the game's art style. Each is a 16px atlas tile baked to a 32px
+// PNG; `flip` mirrors it so the point lands at the top-left (the click hotspot at
+// 0,0). The default is the classic blade.
+const CURSOR_OPTIONS = [
+  { id: 'blade',  name: 'Blade',  idx: 1482, flip: true },
+  { id: 'sword',  name: 'Sword',  idx: 67,   flip: true },
+  { id: 'dagger', name: 'Dagger', idx: 69,   flip: true },
+  { id: 'spear',  name: 'Spear',  idx: 73,   flip: true },
+  { id: 'scythe', name: 'Scythe', idx: 74,   flip: true },
+  { id: 'staff',  name: 'Staff',  idx: 70,   flip: true },
+  { id: 'axe',    name: 'Axe',    idx: 68,   flip: true },
+  { id: 'mace',   name: 'Mace',   idx: 72,   flip: true },
+  { id: 'bow',    name: 'Bow',    idx: 71,   flip: true },
+  { id: 'key',    name: 'Key',    idx: 86,   flip: true },
+];
+let cursorChoice = 'blade';
+try { const _cc = localStorage.getItem('cursorChoice'); if (_cc) cursorChoice = _cc; } catch (e) {}
+function cursorOption() { return CURSOR_OPTIONS.find(o => o.id === cursorChoice) || CURSOR_OPTIONS[0]; }
+function setCursorChoice(id) {
+  if (!CURSOR_OPTIONS.some(o => o.id === id)) return;
+  cursorChoice = id;
+  try { localStorage.setItem('cursorChoice', id); } catch (e) {}
+  applyGameCursor();
+  renderCursorControls();
+  if (typeof sfx === 'function') sfx('click');
+}
+// A picker swatch showing an atlas tile the same way the cursor will look (same
+// flip), reusing the shared atlas-backed .dl-ic span.
+function cursorSwatchIcon(idx, flip) {
+  const cols = ATLAS_COLS, rows = (spriteSheet.naturalHeight || 2672) / ATLAS_TS;
+  const col = idx % cols, row = (idx / cols) | 0;
+  const t = flip ? 'transform:scaleX(-1);' : '';
+  return `<span class="dl-ic dl-fill" style="${t}background-size:${cols * 100}% ${rows * 100}%;` +
+    `background-position:${(col / (cols - 1) * 100).toFixed(3)}% ${(row / (rows - 1) * 100).toFixed(3)}%"></span>`;
+}
+function renderCursorControls() {
+  const row = document.getElementById('cursor-style-row');
+  if (!row) return;
+  row.innerHTML = CURSOR_OPTIONS.map(o =>
+    `<div class="dp-sw ${cursorChoice === o.id ? 'sel' : ''}" title="${o.name}" onclick="setCursorChoice('${o.id}')">`
+    + `<div class="dp-sw-face">${cursorSwatchIcon(o.idx, o.flip)}</div></div>`).join('');
+}
+
+// Custom mouse cursor: a DawnLike atlas tile (chosen in ⚙️ → CURSOR, default a
+// blade), flipped so its tip points up-left like a normal pointer, baked to a
+// crisp 32px PNG. It replaces BOTH the stock OS arrow and the hand/finger pointer
+// shown over clickable things — forced onto every element via an injected
+// stylesheet so buttons, the d-pad, loot rows etc. all use it too. Only two
+// semantic cursors are kept: text fields keep the I-beam (`text`) for typing, and
+// disabled controls keep `not-allowed`. Falls back to `auto` until the atlas has
+// loaded or if generation fails.
 function applyGameCursor() {
   if (!spriteReady) return;
-  const SRC_IDX = 1482, OUT = 32; // 16px atlas tile scaled 2x to a standard cursor size
-  const sx = (SRC_IDX % ATLAS_COLS) * ATLAS_TS, sy = ((SRC_IDX / ATLAS_COLS) | 0) * ATLAS_TS;
+  const opt = cursorOption();
+  const OUT = 32; // 16px atlas tile scaled 2x to a standard cursor size
+  const sx = (opt.idx % ATLAS_COLS) * ATLAS_TS, sy = ((opt.idx / ATLAS_COLS) | 0) * ATLAS_TS;
   const c = document.createElement('canvas'); c.width = OUT; c.height = OUT;
   const g = c.getContext('2d'); g.imageSmoothingEnabled = false;
-  g.translate(OUT, 0); g.scale(-1, 1); // flip horizontally
+  if (opt.flip) { g.translate(OUT, 0); g.scale(-1, 1); } // flip so the tip points up-left
   g.drawImage(spriteSheet, sx, sy, ATLAS_TS, ATLAS_TS, 0, 0, OUT, OUT);
-  // After the flip the blade tip sits at the top-left, so the click hotspot is (0,0).
+  // The point sits at the top-left, so the click hotspot is (0,0).
   const cur = 'url(' + c.toDataURL('image/png') + ') 0 0, auto';
   document.documentElement.style.cursor = cur; // default + fallback for any unstyled node
   // Force the blade over clickable elements too: they set their own `cursor: pointer`,
@@ -7632,7 +7710,7 @@ function toggleSettingsMenu(e) {
   if (e) e.stopPropagation();
   const menu = document.getElementById('settings-menu');
   if (!menu) return;
-  if (menu.classList.toggle('open')) { sfx('click'); renderDpadControls(); }
+  if (menu.classList.toggle('open')) { sfx('click'); renderDpadControls(); renderCursorControls(); }
 }
 document.addEventListener('click', (e) => {
   const menu = document.getElementById('settings-menu');
