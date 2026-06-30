@@ -330,7 +330,7 @@
     display: inline-flex; align-items: center; justify-content: center;
     font-size: 18px; line-height: 1;
   }
-  .settings-item .action-label { font-size: 12px; letter-spacing: 0.5px; }
+  .settings-item .action-label { font-size: 12px; letter-spacing: 0.5px; white-space: nowrap; }
 
   /* ── KEYBINDINGS OVERLAY ── */
   #keybind-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.72); z-index: 600; display: none; align-items: center; justify-content: center; padding: 18px; }
@@ -606,6 +606,10 @@
 
   /* Sound off is a real state, so it stays dimmed/greyed even at rest. */
   .sound-action.muted { background: #1c1726; border-color: #322c44; color: #8c84a0; }
+
+  /* Sprint set to TOGGLE is an active state, so it lights amber (the Endurance
+     colour) to show auto-sprint is the live mode. */
+  .sprint-action.on { background: #2c2410; border-color: #ffcf52; color: #ffe08a; }
 
   /* New Run is destructive: neutral at rest like every other row, but turns red
      the moment it's armed (and while pressed) to flag the wipe. */
@@ -2642,7 +2646,7 @@
       <div class="bar-track"><div class="bar-fill mp-fill" id="mp-bar" style="width:100%"></div></div>
       <span id="mp-text" style="font-size:10px">60/60</span>
     </div>
-    <div class="stat-bar" data-tip="<div class='ht-name' style='color:#ffcf52'>⚡ Endurance</div><div class='ht-line'>Fuels Sprinting (hold Shift) and Dashing (Space). Drains as you exert and refills after a short pause.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
+    <div class="stat-bar" data-tip="<div class='ht-name' style='color:#ffcf52'>⚡ Endurance</div><div class='ht-line'>Fuels Sprinting (Shift) and Dashing (Space). Drains as you exert and refills after a short pause. Might deepens the pool and speeds its recharge.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
       <span style="color:#ffcf52;font-size:11px;font-weight:bold;text-shadow:0 0 5px #ffcf52">END</span>
       <div class="bar-track"><div class="bar-fill" id="stam-bar" style="width:100%;background:#ffcf52"></div></div>
       <span id="stam-text" style="font-size:10px">100/100</span>
@@ -2769,6 +2773,11 @@
         <button class="settings-item" onclick="openKeybinds()">
           <span class="action-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><line x1="6" y1="10" x2="6" y2="10"/><line x1="10" y1="10" x2="10" y2="10"/><line x1="14" y1="10" x2="14" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/></svg></span><span class="action-label">KEYS</span>
         </button>
+        <!-- Sprint mode: HOLD (sprint only while Shift is down) ↔ TOGGLE (tap Shift
+             to auto-sprint, tap again to stop), so you can sprint without holding. -->
+        <button class="settings-item sprint-action" id="sprint-action" onclick="toggleSprintMode()" data-tip="<div class='ht-name'>🏃 Sprint Mode</div><div class='ht-line'><b>HOLD:</b> sprint only while Shift is down.<br><b>TOGGLE:</b> tap Shift to auto-sprint, tap again to stop — no need to hold.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
+          <span class="action-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="13 19 22 12 13 5"/><polyline points="2 19 11 12 2 5"/></svg></span><span class="action-label" id="sprint-label">SPRINT: HOLD</span>
+        </button>
         <!-- Movement-pad position & opacity. Hidden on desktop (no touch d-pad);
              populated by renderDpadControls() when the menu opens. -->
         <div id="dpad-settings">
@@ -2789,7 +2798,7 @@
   <div id="keybind-overlay" onclick="if(event.target.id==='keybind-overlay')closeKeybinds()">
     <div id="keybind-card">
       <div class="kb-title">⌨️ Keybindings</div>
-      <div class="kb-sub">Click an action, then press the key to bind it. Movement is always WASD / arrow keys; hold Shift to sprint.</div>
+      <div class="kb-sub">Click an action, then press the key to bind it. Movement is always WASD / arrow keys; Shift sprints (hold, or set Sprint to TOGGLE in ⚙️ to auto-sprint).</div>
       <div id="keybind-list"></div>
       <div class="kb-foot">
         <button class="kb-reset" onclick="resetKeybinds()">Reset to defaults</button>
@@ -4247,7 +4256,7 @@ const TIER_POWER_BONUS = { junk:0, normal:1, uncommon:2, rare:4, epic:7, legenda
 // points per level, and each point is correspondingly small, so the per-level
 // power gain — and thus the difficulty curve — stays close to the old design.
 const ATTRIBUTES = {
-  might:    { label: '💪 Might',    short: 'MIG', desc: 'raises Attack power (most for Warrior & Rogue)' },
+  might:    { label: '💪 Might',    short: 'MIG', desc: 'raises Attack power (most for Warrior & Rogue), max Endurance & Endurance recharge' },
   vitality: { label: '❤️ Vitality', short: 'VIT', desc: 'raises max HP, Defense & HP regen' },
   agility:  { label: '🎯 Agility',  short: 'AGI', desc: 'raises Evasion, Accuracy, move & attack speed' },
   spirit:   { label: '🌌 Spirit',   short: 'SPR', desc: 'raises max MP, MP regen & spell power' },
@@ -4284,6 +4293,14 @@ const ATTR_FX = {
   evaPerAgi:     1.15,   // Agility → evasion rating (dodge)
   accPerAgi:     2.0,    // Agility → accuracy rating (hit chance)
   critPerLuck:   0.85,   // Luck → crit rating
+  // Might isn't only Attack power: a mighty body has more stamina and recovers
+  // it faster, so Might also DEEPENS the Endurance pool and SPEEDS its recharge.
+  // Both are measured from Might ABOVE the starting base (see mightAboveBase) so a
+  // fresh hero sits at the tuned MAX_STAMINA / STAM_REGEN baseline and every point
+  // of Might — spent or carried on gear — visibly buys more sprint and faster
+  // refills. Drain is left alone, so the gain is "sprint longer, recover sooner".
+  enduPerMight:      1.6,   // Might → +max Endurance (per point above base)
+  enduRegenPerMight: 0.22,  // Might → +Endurance recharge /sec (per point above base)
 };
 // Agility also quickens the body: it speeds up both your movement and your
 // auto-attack swing rhythm — so a finesse build doesn't just dodge and hit, it
@@ -4531,6 +4548,17 @@ function baseMaxMp() {
   mp = mp * (1 + skillBonus('maxMpPct') + foodFx('maxMpPct')); // skills + ramen
   return Math.max(0, Math.round(mp));
 }
+// Max Endurance: the flat MAX_STAMINA baseline plus a Might bonus, so a mighty
+// hero carries a deeper sprint/dash reserve. Measured from Might above base so a
+// fresh hero stays at the tuned 100.
+function baseMaxStamina() {
+  return Math.round(MAX_STAMINA + mightAboveBase() * ATTR_FX.enduPerMight);
+}
+// How fast Endurance refills (per second) once you stop exerting: the STAM_REGEN
+// baseline plus a Might bonus, so Might shortens the downtime between sprints.
+function staminaRegenPerSec() {
+  return STAM_REGEN + mightAboveBase() * ATTR_FX.enduRegenPerMight;
+}
 
 // Total Defense: gear DEF plus a contribution from Vitality.
 function playerDefense() {
@@ -4609,6 +4637,9 @@ function playerAccuracyRating() {
 // so a fresh hero (base Agility) sits at the tuned baseline and only investment
 // or gear makes you faster. Never negative.
 function agilityAboveBase() { return Math.max(0, totalAttr('agility') - ATTR_BASE); }
+// Might beyond the starting base — feeds the Endurance pool/recharge bonuses so a
+// fresh hero keeps the tuned baseline and only invested/geared Might raises them.
+function mightAboveBase() { return Math.max(0, totalAttr('might') - ATTR_BASE); }
 // Move-speed multiplier (≥1) from Agility: a soft-capping curve that always
 // rewards more Agility yet never lets you blur past the AGI_MOVE_CAP ceiling.
 function agiMoveMult() {
@@ -4645,8 +4676,10 @@ function playerDodge() { return dodgeChanceVs({ level: curDepth() }); }
 function recomputeMaxStats() {
   player.maxHp = baseMaxHp();
   player.maxMp = baseMaxMp();
+  player.maxStamina = baseMaxStamina();
   if (player.hp > player.maxHp) player.hp = player.maxHp;
   if (player.mp > player.maxMp) player.mp = player.maxMp;
+  if (player.stamina > player.maxStamina) player.stamina = player.maxStamina;
 }
 
 // Per-turn HP/MP regeneration. Defined here as the single source of truth so the
@@ -6494,7 +6527,15 @@ const DASH_SPEED    = 13;      // dash launch velocity (tiles/sec)
 const keyHeld   = { up: false, down: false, left: false, right: false };
 const touchHeld = { up: false, down: false, left: false, right: false };
 const joy = { active: false, dx: 0, dy: 0, mag: 0 };   // analog joystick vector (mobile)
-let sprintHeld = false;                                 // Shift / sprint button
+let sprintHeld = false;                                 // Shift held right now (HOLD mode)
+// Sprint can run in two modes. HOLD (default): you sprint only while Shift is
+// down. TOGGLE: tap Shift once to LATCH auto-sprint on (you keep sprinting
+// whenever you're moving and have Endurance), tap again to release it — so you
+// can sprint without keeping a finger on Shift. The mode is saved across sessions.
+const SPRINT_MODE_KEY = 'dungeonLoot_sprintMode';
+let sprintMode = 'hold';
+try { if (localStorage.getItem(SPRINT_MODE_KEY) === 'toggle') sprintMode = 'toggle'; } catch (e) {}
+let sprintLatched = false;                              // auto-sprint engaged (TOGGLE mode)
 // Click-to-move (desktop): a world point (in tile units, matching player.fx/fy)
 // the hero walks toward. `hold` means the button is still down, so the target
 // keeps tracking the cursor and the hero only stops when you let go. A plain
@@ -7445,6 +7486,23 @@ function updateZoomButton() {
   if (lbl) lbl.textContent = ZOOM_LABELS[zoomLevel];
 }
 
+// Flip the sprint control between HOLD and TOGGLE. Switching to HOLD also drops
+// any latched auto-sprint so it can't stay stuck on. Persisted so the choice
+// survives reloads.
+function toggleSprintMode() {
+  sprintMode = sprintMode === 'hold' ? 'toggle' : 'hold';
+  if (sprintMode === 'hold') sprintLatched = false;
+  try { localStorage.setItem(SPRINT_MODE_KEY, sprintMode); } catch (e) {}
+  sfx('click');
+  updateSprintButton();
+}
+function updateSprintButton() {
+  const lbl = document.getElementById('sprint-label');
+  if (lbl) lbl.textContent = sprintMode === 'toggle' ? 'SPRINT: TOGGLE' : 'SPRINT: HOLD';
+  const btn = document.getElementById('sprint-action');
+  if (btn) btn.classList.toggle('on', sprintMode === 'toggle');
+}
+
 // Settings popup: holds the Sound toggle + New Game controls behind the ⚙️
 // button. The menu's own clicks stopPropagation (see the markup) so it stays
 // open while you toggle sound or arm New Game; an outside click closes it.
@@ -7463,6 +7521,7 @@ document.addEventListener('click', (e) => {
 
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
+  { date: '2026-06-30', size: 'medium', v: 'Might fuels Endurance + Sprint toggle', by: 'Claude', notes: ['Might now does more than raise Attack power: it also DEEPENS your Endurance pool and SPEEDS its recharge. A mighty hero sprints longer and recovers stamina sooner, so pouring points (or stacking +Might gear) into it pays off for footwork, not just damage. The HERO sheet now lists your Max Endurance and Endurance regen.', 'New Sprint setting in the ⚙️ menu: leave it on HOLD to sprint only while Shift is down, or flip it to TOGGLE so a single tap of Shift latches auto-sprint on (tap again to stop) — sprint without keeping a finger on the key. Your choice is remembered across sessions.'] },
   { date: '2026-06-30', size: 'medium', v: 'Drag-and-drop skill slots', by: 'Claude', notes: ['The skill bar now shows every hotkey slot (keys 1–9), empty ones included, as a dashed open slot — so you can see at a glance how many skills you can bind and where the gaps are. Slot 1 is still the gold primary the R key / ⚡ button cast.', 'Drag a learned active skill straight from its node in the SKILLS tab onto a slot to bind it, and drag a slot onto another to rearrange — including onto an empty slot to move it there. A learned skill that isn\'t in any slot reads as "off the bar" (🚫) and simply isn\'t keyed until you slot it.', 'A new loadout tray sits above the ACTIVE tree showing all your slots together, so the skills and the slots are side by side to drag between. On touch (or as a quick desktop path) just tap any slot to pick which learned skill fills it, or clear it. Your slot layout is saved with the character; existing heroes keep their current bar.'] },
   { date: '2026-06-30', size: 'small', v: 'One skill card on hover', by: 'Claude', notes: ['Skill nodes no longer show a plain hover tooltip and a separate, nicer card on click — there\'s just one card now. Pointing at a skill opens its full detail card (mechanics, the rank-up preview, and the Learn / Hide buttons), and it stays open while your cursor is over the node or the card, so you can move onto it and click Learn without it vanishing.', 'On touch, nothing changes — a tap still opens the same card.'] },
   { date: '2026-06-30', size: 'medium', v: 'Agility speeds you up', by: 'Claude', notes: ['Agility now does more than dodge and hit: it also raises your Move speed and Attack speed, so a nimble build kites faster AND swings faster. Pour points (or stack +Agility gear) into it and you visibly quicken on both counts.', 'Both speeds use a soft cap that always rewards more Agility but eases off at the top, so you keep getting faster without becoming uncontrollable. The HERO sheet now lists Attack speed (with your live swings-per-second) and Move speed so you can see exactly what your Agility is buying.', 'The other four attributes were reviewed and left as-is — they already map cleanly: Might → Attack power, Vitality → HP / Defense / HP regen, Spirit → MP / MP regen / spell power, Luck → Crit & loot quality.'] },
@@ -14102,7 +14161,7 @@ function movePlayerBy(ddx, ddy) {
 // Stamina trickles back after a short pause once you stop exerting.
 function regenStamina(dt) {
   if (player._stamDelay > 0) { player._stamDelay -= dt; return; }
-  if (player.stamina < player.maxStamina) player.stamina = Math.min(player.maxStamina, player.stamina + STAM_REGEN * dt);
+  if (player.stamina < player.maxStamina) player.stamina = Math.min(player.maxStamina, player.stamina + staminaRegenPerSec() * dt);
 }
 
 // A burst of speed in the current input/facing direction, fuelled by stamina.
@@ -14166,8 +14225,10 @@ function updatePlayer(dt) {
   const moving = mag > 0.01;
   if (moving) { ix /= mag; iy /= mag; entryGuard = false; } // first move ends arrival grace
 
-  // Sprint: wanting it + moving + stamina. Drains stamina; otherwise it refills.
-  const wantSprint = moving && player.stamina > 0 && (sprintHeld || (joy.active && joy.mag > 0.85));
+  // Sprint: wanting it + moving + stamina. Held Shift, a latched auto-sprint
+  // toggle, or shoving the joystick to its edge all count. Drains stamina;
+  // otherwise it refills.
+  const wantSprint = moving && player.stamina > 0 && (sprintHeld || sprintLatched || (joy.active && joy.mag > 0.85));
   if (wantSprint) { player.stamina = Math.max(0, player.stamina - SPRINT_DRAIN * dt); player._stamDelay = STAM_DELAY; }
   else regenStamina(dt);
 
@@ -16575,9 +16636,10 @@ function spendAttr(key, ev) {
   const amount = Math.min(bulk ? 5 : 1, player.attrPoints);
   player.attributes[key] = (player.attributes[key] || 0) + amount;
   player.attrPoints -= amount;
-  // Raising Vitality/Spirit immediately grants the extra HP/MP it unlocks.
+  // Raising Vitality/Spirit/Might immediately grants the extra HP/MP/Endurance it unlocks.
   if (key === 'vitality') { const before = player.maxHp; recomputeMaxStats(); player.hp += (player.maxHp - before); }
   else if (key === 'spirit') { const before = player.maxMp; recomputeMaxStats(); player.mp += (player.maxMp - before); }
+  else if (key === 'might') { const before = player.maxStamina || MAX_STAMINA; recomputeMaxStats(); player.stamina = Math.min(player.maxStamina, (player.stamina || 0) + (player.maxStamina - before)); }
   log(`${ATTRIBUTES[key].label} raised to ${player.attributes[key]}.`, 'loot');
   updateBars();
   renderPanel();
@@ -17037,6 +17099,8 @@ function renderHero(el) {
       ${stat('Attack power', Math.round(totalStat('ATK') + attrDamage()))}
       ${stat('Attack speed', '+' + Math.round(playerAttackSpeedPct()) + '% <span style="opacity:0.6">→ ' + (1 / playerAttackInterval()).toFixed(2) + '/s</span>')}
       ${stat('Move speed', '+' + Math.round(((1 + totalStat('MOVESPD') / 100) * agiMoveMult() - 1) * 100) + '%')}
+      ${stat('Max Endurance', Math.round(player.maxStamina || baseMaxStamina()))}
+      ${stat('Endurance regen', '+' + (Math.round(staminaRegenPerSec() * 10) / 10) + '/s')}
       ${stat('Defense', Math.round(playerDefense()))}
       ${stat('Max HP', player.maxHp)}
       ${stat('Max MP', player.maxMp)}
@@ -18455,7 +18519,7 @@ document.addEventListener('keyup', e => {
 
 // ── KEYBINDINGS ──────────────────────────────────────────────────────────────
 // Remappable action -> key, editable from the gear menu (KEYS) and saved to
-// localStorage. Movement (WASD / arrows) and Sprint (hold Shift) stay fixed.
+// localStorage. Movement (WASD / arrows) and Sprint (Shift — hold or toggle) stay fixed.
 // The Town Portal default is the tilde/backquote key (stored as '\u0060').
 const KEYBIND_ACTIONS = [
   { id:'healthPotion', label:'Health Potion',     def:'q' },
@@ -18559,7 +18623,11 @@ document.addEventListener('keydown', e => {
     keyHeld[moveDir] = true;                  // held → updatePlayer walks the hero each frame
     return;
   }
-  if (e.key === 'Shift')                 { sprintHeld = true; return; } // hold to sprint
+  if (e.key === 'Shift') {                                // sprint: hold, or tap to toggle
+    if (sprintMode === 'toggle') { if (!e.repeat) { sprintLatched = !sprintLatched; sfx('click'); } }
+    else sprintHeld = true;
+    return;
+  }
   // Everything else routes through the remappable keybinds (see KEYBIND_ACTIONS).
   const act = actionForKey(keyTok(e));
   if (act === 'dash')         { e.preventDefault(); doDash(); return; }
@@ -20415,6 +20483,7 @@ log('🌍 Terrain tiles from "[LPC] Terrains" by bluecarrot16 & LPC contributors
 // gesture resumes the context and kicks off the looping music.
 updateSoundButtons();
 updateZoomButton();
+updateSprintButton();
 ['pointerdown', 'keydown', 'touchstart'].forEach(ev =>
   window.addEventListener(ev, audioUnlock, { passive: true }));
 
