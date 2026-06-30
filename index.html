@@ -723,6 +723,21 @@
     opacity: 0;
     pointer-events: none;
   }
+  /* Desktop-only collapse spine for the loot drawer — the twin of #log-toggle.
+     Hidden on touch/mobile (the BAG button drives the drawer there); the desktop
+     media query stands it up as a vertical bar on the drawer's inner edge. */
+  #panel-toggle {
+    display: none;
+    align-items: center; gap: 6px;
+    background: #14141c; color: #8a8a9a;
+    border: none;
+    font-family: inherit; font-size: 10px; letter-spacing: 1px; text-transform: uppercase;
+    cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  #panel-toggle .log-caret { transition: transform 0.15s; font-size: 9px; }
+  /* Wraps the tabs + content so the drawer body can sit BESIDE the vertical spine
+     on desktop while still stacking the tab row over the scrolling content. */
+  #panel-body { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 
   .panel-tab {
     display: flex;
@@ -2212,6 +2227,10 @@
        and the freed width is handed to the (usually cramped) loot/bag drawer. */
     :root { --log-col: clamp(250px, 24vw, 480px); --panel-col: clamp(210px, 22vw, 440px); }
     body.log-collapsed { --log-col: 30px; --panel-col: clamp(280px, 30vw, 600px); }
+    /* Folding the loot drawer shrinks its column to a slim spine and hands the
+       reclaimed width to the map. Listed after the log rule so a collapsed
+       drawer wins even when the log is collapsed too (equal specificity). */
+    body.panel-collapsed { --panel-col: 30px; }
 
     /* Loot drawer: a real column in the flow (not an overlay), always open.
        It grows with the viewport so wide screens don't leave dead space beside
@@ -2221,12 +2240,32 @@
       z-index: 250;
       flex: 0 0 var(--panel-col);
       width: var(--panel-col);
+      flex-direction: row; /* vertical collapse spine on the left, body fills the rest */
       transform: none;
       opacity: 1;
       pointer-events: auto;
       box-shadow: none;
     }
     #side-panel.collapsed { transform: none; opacity: 1; pointer-events: auto; }
+
+    /* Loot-drawer collapse spine: a vertical bar on the drawer's inner (map-facing)
+       edge, mirroring the combat-log toggle. The label stands up the same way and
+       the caret flips with state. */
+    #panel-toggle {
+      display: flex;
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+      flex: 0 0 28px;
+      height: 100%;
+      justify-content: center;
+      padding: 8px 0;
+      border-right: 1px solid var(--border);
+    }
+    #panel-toggle .log-caret { transform: rotate(90deg); }
+    body.panel-collapsed #panel-toggle .log-caret { transform: rotate(-90deg); }
+    /* Collapsed: hide the drawer body so only the slim spine fills the strip. */
+    body.panel-collapsed #panel-body { display: none; }
+    body.panel-collapsed #panel-toggle { flex: 1; border-right: none; }
 
     /* The SKILLS-tab "Skill slots" tray is a second copy of the same hotkey
        slots the bottom combat bar already shows. Desktop has that bar on screen
@@ -2332,27 +2371,41 @@
          below) rather than taking its own row, so it never shrinks the map. */
       grid-template-rows: 1fr;
     }
-    /* Log: full-height left column, spanning both rows. */
+    /* Log: full-height left column, spanning both rows. Row-reverse puts the
+       toggle spine on the inner (map-facing) edge with the log text to its left. */
     #bottom-row {
       grid-column: 1;
       grid-row: 1;
       flex: none;
+      flex-direction: row-reverse;
       max-height: none;
       min-height: 0;
       border-top: none;
       border-right: 1px solid var(--border);
     }
-    /* Collapsed on desktop: the column is now a slim strip, so stand the toggle
-       up vertically to fill it (and the freed width has already gone to the loot
-       drawer via --panel-col above). */
-    body.log-collapsed #log-toggle {
+    /* The combat-log toggle is a vertical spine on the log's inner edge at all
+       times on desktop — the same slim bar whether the log is open or folded;
+       only the caret flips direction. */
+    #log-toggle {
       writing-mode: vertical-rl;
       transform: rotate(180deg);
+      flex: 0 0 28px;
+      width: auto;  /* drop the base width:100% so the flex-basis (28px) governs */
       height: 100%;
       justify-content: center;
       padding: 8px 0;
       border-bottom: none;
+      border-left: 1px solid var(--border);
     }
+    /* Caret points at the screen edge it folds toward when open, and back at the
+       map when collapsed — mirrored on the right-hand drawer so the pair reads
+       symmetrically. The collapsed selector is extra-specific to beat the shared
+       mobile rule (#bottom-row.log-collapsed …) that points it the other way. */
+    #log-toggle .log-caret { transform: rotate(-90deg); }
+    body.log-collapsed #bottom-row #log-toggle .log-caret { transform: rotate(90deg); }
+    /* Collapsed: the log text is hidden (base rule), so the spine fills the
+       slim strip (the freed width has gone to the loot drawer via --panel-col). */
+    body.log-collapsed #log-toggle { flex: 1; border-left: none; }
     /* Skill bar: overlaid across the bottom of the map column rather than
        taking its own grid row, so it renders over the bottom of the map
        instead of pushing it up and shrinking it. #game-wrap is positioned,
@@ -3090,13 +3143,22 @@
   </div>
 
   <div id="side-panel" class="collapsed">
-    <div class="panel-tab">
-      <button class="tab-btn active" id="tab-inv" onclick="switchTab('inv')">LOOT</button>
-      <button class="tab-btn" id="tab-equip" onclick="switchTab('equip')">GEAR</button>
-      <button class="tab-btn" id="tab-hero" onclick="switchTab('hero')">HERO</button>
-      <button class="tab-btn" id="tab-skills" onclick="switchTab('skills')">SKILLS</button>
+    <!-- Desktop-only collapse spine on the drawer's inner (map-facing) edge — a
+         vertical bar that folds the loot drawer down to a slim strip, mirroring
+         the combat log's toggle. Hidden on mobile, where the BAG button opens
+         the full-screen drawer instead. -->
+    <button id="panel-toggle" onclick="togglePanelCollapse()" aria-label="Toggle loot drawer">
+      <span class="log-caret">▾</span><span>Bag</span>
+    </button>
+    <div id="panel-body">
+      <div class="panel-tab">
+        <button class="tab-btn active" id="tab-inv" onclick="switchTab('inv')">LOOT</button>
+        <button class="tab-btn" id="tab-equip" onclick="switchTab('equip')">GEAR</button>
+        <button class="tab-btn" id="tab-hero" onclick="switchTab('hero')">HERO</button>
+        <button class="tab-btn" id="tab-skills" onclick="switchTab('skills')">SKILLS</button>
+      </div>
+      <div id="panel-content"></div>
     </div>
-    <div id="panel-content"></div>
   </div>
 
   <!-- Town / shop / mystic service menus live INSIDE #main so that on web they
@@ -7784,6 +7846,7 @@ document.addEventListener('click', (e) => {
 
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
+  { date: '2026-06-30', size: 'small', v: 'Collapsible loot drawer on desktop', by: 'Claude', notes: ['On the desktop layout the loot/bag drawer on the right can now be folded away, just like the combat log on the left — click its vertical bar to collapse it to a slim spine and hand the reclaimed width back to the map. Your choice is remembered.', 'Both collapse toggles are now matching vertical bars on the edge facing the map (the log\'s used to be a strip across the top of its column), so the two panels open and close the same way and the little arrow always points the way it will go.'] },
   { date: '2026-06-30', size: 'medium', v: 'Minimap + fixed map view', by: 'Claude', notes: ['A minimap now sits in the top-left of the dungeon view, sketching the whole floor at a glance — walls, water, lava, doors, shrines, teleporters and the all-important down-stairs (in bright green) — with live dots for you (ringed gold), foes (bosses bigger), allies, chests, loose coins, and the merchant, mystic and quest NPCs. It tucks away while you\'re in town.', 'The map view is now fixed at the most zoomed-in setting. The old Wide / Wider / Widest control has been retired from the ⚙️ menu, since the closest view is the one players kept it on.'] },
   { date: '2026-06-30', size: 'medium', v: 'Power score retuned for the new stats', by: 'Claude', notes: ['The POWER number was audited and recalibrated to match the current attribute and rating systems, so it reflects your real strength more honestly. Nothing about combat changes — only how Power is tallied and displayed.', 'Power is now class-aware: the same item can be worth different Power to different heroes, because it makes a different difference. A +Might piece is worth more to a Warrior than a Mage (it actually makes the Warrior hit harder), a +Spirit piece flips that, and a Spell Power roll counts for a caster but is near-dead weight on a pure-martial Warrior or Rogue. Your damage attribute is now visibly the one that moves your Power most.', 'An attribute point is also worth the same Power whether you spent it on level-up or it came rolled on gear (a +attribute affix used to quietly count for double). The Power tooltip and Hero sheet are reworded to match.', 'Max HP and Max MP rolls on gear no longer dominate the score — a single big HP roll used to be worth more than an entire weapon’s damage. Speed and Evasion gear now report equal Power for an equal benefit, since they do the same thing.', 'The bag and shop ↑ upgrade arrow now accounts for the off-hand a two-handed weapon makes you set down, so a green “upgrade” won’t secretly lower your Power once the off-hand is stowed.'] },
   { date: '2026-06-30', size: 'small', v: 'Dungeon Gate is the only way down', by: 'Claude', notes: ['The ✕ in the corner of the town menus no longer drops you back into the dungeon. The Town menu lost its ✕ entirely, and the town Merchant and Mystic panels now show only ← back to the hub — their ✕ is hidden while you\'re in town.', 'To head back down you now take the 🌀 Dungeon Gate, where you pick your floor and difficulty, so you can\'t accidentally bail out of town onto your old return floor by tapping the corner. Pressing Esc in a town panel steps back toward the hub instead of leaving. A Merchant or Mystic you meet while wandering the dungeon still has its ✕ to dismiss the panel.'] },
@@ -19022,6 +19085,27 @@ function toggleLog() {
   // so it stays responsive until the player makes an explicit choice.
   if (pref === null) setLogCollapsed(!isWebLayout(), false);
   else setLogCollapsed(pref === '1');
+})();
+
+// ── COLLAPSIBLE LOOT DRAWER (desktop) ──
+// The twin of the combat-log toggle: on the web layout the loot/bag drawer folds
+// down to a slim vertical spine, handing its column width back to the map. The
+// choice is remembered. Only the desktop layout reads the body class, so it stays
+// harmless on mobile (where the BAG button drives the full-screen drawer).
+const PANEL_COLLAPSE_KEY = 'panelCollapsed';
+function setPanelCollapsed(collapsed, persist = true) {
+  document.body.classList.toggle('panel-collapsed', collapsed);
+  if (persist) { try { localStorage.setItem(PANEL_COLLAPSE_KEY, collapsed ? '1' : '0'); } catch (e) {} }
+}
+function togglePanelCollapse() {
+  setPanelCollapsed(!document.body.classList.contains('panel-collapsed'));
+  if (typeof sfx === 'function') sfx('click');
+}
+(function initPanelCollapsed() {
+  let pref = null;
+  try { pref = localStorage.getItem(PANEL_COLLAPSE_KEY); } catch (e) {}
+  // Default open; only an explicit saved choice collapses it.
+  if (pref !== null) setPanelCollapsed(pref === '1');
 })();
 
 // Potions get their own signature colour wherever they're named in the log.
