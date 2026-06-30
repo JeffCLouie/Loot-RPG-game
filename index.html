@@ -8614,6 +8614,7 @@ function generateMap() {
   scatterTerrain(reach);
   projectiles = [];
   placeTraps(reach);
+  floorRooms = rooms;
   spawnEnemies();
   spawnGroundLoot();
   // Tiles you can actually WALK to (stairs/teleporters are dead-ends, not
@@ -8670,6 +8671,9 @@ function generateMap() {
       log('🪦 Your lost satchel lies somewhere on this floor — reclaim it.', 'important');
     }
   }
+
+  // Fill any room the random scatter left barren so no carved room is wasted space.
+  populateEmptyRooms();
 
   // A mini-quest may take over the floor (after enemies/loot are placed). Use
   // the foot-reachable set so quest NPCs, markers and pickups are walkable to,
@@ -11071,6 +11075,21 @@ function drawTownNpcs(offX, offY, tw, th, scale) {
   });
 }
 
+// Floor-scoped data shared with the no-empty-rooms pass (populateEmptyRooms): the
+// room rectangles for this floor and the regular-foe template (types + rolled
+// HP/damage) so a filled-in foe matches the ones the scatter loop placed.
+let floorRooms = [];
+let floorMobSpec = null;
+// Spawn one ordinary (non-elite) foe of a random floor type at (ex,ey).
+function spawnFloorMob(ex, ey) {
+  if (!floorMobSpec) return null;
+  const t = pick(floorMobSpec.types);
+  const mob = { x: ex, y: ey, hp: floorMobSpec.hp, maxHp: floorMobSpec.hp, type: t, level: floorMobSpec.level, dmg: floorMobSpec.dmg, dead: false, behavior: behaviorFor(t) };
+  if (Math.random() < 0.22) applyAffix(mob); // ~22% carry a fight-shaking affix
+  enemies.push(mob);
+  return mob;
+}
+
 function spawnEnemies() {
   enemies = [];
   // Summoned minions, transient combat buffs and skill charges don't carry between floors.
@@ -11137,6 +11156,15 @@ function spawnEnemies() {
     else if (into >= ramp.length) player.reliefFloor = null; // recovered — clear it
   }
 
+  // Regular-foe stats are constant across the floor (only elites/affixes vary), so
+  // roll them once and share them via floorMobSpec with both the scatter loop below
+  // and the no-empty-rooms pass (populateEmptyRooms).
+  const mobLevel = dungeonLevel;
+  const threat = depthThreat(mobLevel);   // compounds with depth — deep is deadly
+  const baseHp = Math.max(1, Math.round((10 + mobLevel * 8) * threat * (floorMod.hpMult || 1) * pfx('hp', 1) * threatScale * reliefEase));
+  const baseDmg = Math.max(1, Math.round((3.5 + mobLevel * 1.9 + bandIdx) * threat * (floorMod.dmgMult || 1) * pfx('dmg', 1) * threatScale * earlyBite * reliefEase));
+  floorMobSpec = { types: floorTypes, hp: baseHp, dmg: baseDmg, level: mobLevel };
+
   for (let i = 0; i < count; i++) {
     let ex, ey;
     let tries = 0;
@@ -11202,17 +11230,7 @@ function spawnEnemies() {
         });
         log(`⚠️ ${boss.name} ${boss.type} guards this floor — it ${boss.blurb}!`, 'important');
       } else {
-        // Every monster is the level of its floor, so foes get incrementally
-        // harder the deeper you dive. HP and damage scale off that level (floor
-        // modifiers and any active mystic pact still nudge them up or down).
-        // Damage is meaningful because armor now mitigates by a percentage
-        // rather than a flat subtraction.
-        const mobLevel = dungeonLevel;
-        // depthThreat compounds with depth (deep is deadly); threatScale layers
-        // main's anti-grind nudge on top (out-leveling a floor toughens its foes).
-        const threat = depthThreat(mobLevel);
-        const baseHp = Math.max(1, Math.round((10 + mobLevel * 8) * threat * (floorMod.hpMult || 1) * pfx('hp', 1) * threatScale * reliefEase));
-        const baseDmg = Math.max(1, Math.round((3.5 + mobLevel * 1.9 + bandIdx) * threat * (floorMod.dmgMult || 1) * pfx('dmg', 1) * threatScale * earlyBite * reliefEase));
+        // Regular-foe stats (baseHp / baseDmg / mobLevel) were rolled once above.
         if (i === eliteIndex) {
           const eHp = Math.round(baseHp * 2.2);
           const eName = pick(ELITE_NAMES);
@@ -11229,19 +11247,7 @@ function spawnEnemies() {
           });
           log(`✨ ${eName}, a glowing elite, prowls this floor — slay it for richer loot!`, 'important');
         } else {
-          const mType = pick(floorTypes);
-          const mob = {
-            x: ex, y: ey,
-            hp: baseHp, maxHp: baseHp,
-            type: mType,
-            level: mobLevel,
-            dmg: baseDmg,
-            dead: false,
-            behavior: behaviorFor(mType),
-          };
-          // ~22% of regular foes carry a random affix that shakes up the fight.
-          if (Math.random() < 0.22) applyAffix(mob);
-          enemies.push(mob);
+          spawnFloorMob(ex, ey);
         }
       }
     }
@@ -11264,6 +11270,41 @@ function spawnEnemies() {
       });
       log('👺 A Treasure Goblin scurries about — catch it before it escapes!', 'important');
     }
+  }
+}
+
+// No carved room should be dead space. After enemies AND loot are placed, walk the
+// room list and give anything still barren a reason to exist: a foe if the room has
+// a tile safely outside the hero's entry aggro bubble, otherwise (the entry room and
+// its neighbours) a small coin pile so arriving still feels rewarding rather than
+// landing you in an empty hall. Rooms that already hold a foe, chest, food, coins,
+// the grave, or a feature (shrine/fountain/teleporter/stairs/vault) are left alone,
+// and boss floors are skipped (their arena is the whole point).
+function populateEmptyRooms() {
+  if (dungeonLevel % 5 === 0) return;
+  if (!floorRooms || !floorRooms.length) return;
+  const inB = (o, r) => o && o.x >= r.x && o.x < r.x + r.w && o.y >= r.y && o.y < r.y + r.h;
+  const hasContent = (r) => {
+    if (enemies.some(e => !e.dead && inB(e, r))) return true;
+    if ((groundItems || []).some(o => inB(o, r)) || (groundFood || []).some(o => inB(o, r)) || (groundGold || []).some(o => inB(o, r))) return true;
+    if (graveMarker && inB(graveMarker, r)) return true;
+    for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) {
+      const t = mapData[y] && mapData[y][x];
+      if (t === 2 || t === 3 || t === 5 || t === 9 || t === 11) return true; // a feature (entry stair 12 doesn't count)
+    }
+    return false;
+  };
+  for (const r of floorRooms) {
+    if (hasContent(r)) continue;
+    let far = null, near = null;
+    for (let tr = 0; tr < 60 && !far; tr++) {
+      const sx = rnd(r.x, r.x + r.w - 1), sy = rnd(r.y, r.y + r.h - 1);
+      if (mapData[sy][sx] !== 0 || getEnemyAt(sx, sy)) continue;
+      if ((Math.abs(sx - player.x) + Math.abs(sy - player.y)) > ENEMY_AGGRO + 1) far = { x: sx, y: sy };
+      else if (!near) near = { x: sx, y: sy };
+    }
+    if (far) spawnFloorMob(far.x, far.y);
+    else if (near) groundGold.push({ x: near.x, y: near.y, amount: rnd(3, 10) + dungeonLevel * 2 });
   }
 }
 
