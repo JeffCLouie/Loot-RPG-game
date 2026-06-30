@@ -5641,7 +5641,9 @@ function activeSkillList() {
   const list = [];
   for (const n of classSkillTree()) {
     if (n.type === 'active' && skillRank(n.id) > 0) {
-      list.push({ id: n.id, name: n.name, icon: n.icon, mp: n.mp, cd: n.cd, desc: n.desc, node: n });
+      // mp is the rank-scaled cost (climbs as the skill levels up), so the skill
+      // bar, primary button, character panel, and cast logic all show/charge it.
+      list.push({ id: n.id, name: n.name, icon: n.icon, mp: skillManaCost(n, skillRank(n.id)), cd: n.cd, desc: n.desc, node: n });
     }
   }
   return list;
@@ -6871,6 +6873,7 @@ document.addEventListener('click', (e) => {
 
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
+  { date: '2026-06-30', size: 'small', v: 'Skills cost more mana as they level', by: 'Claude', notes: ['Ranking up an active skill now raises its mana cost a little each rank, so deepening a skill is a real mana commitment rather than free power — the per-rank power climb still outpaces it, so the trade stays worth it. The rank-3 ✦ Empowered milestone keeps its "cheaper casts" perk, which trims the cost back down at that rank.', 'The skill\'s current mana cost shows everywhere it\'s cast from — the skill bar, the ⚡ button and the hero panel — and the SKILLS-tab "On rank up" tooltip now previews the next rank\'s cost (e.g. 8 → 9 MP) right beside its power gain, so you can see exactly how much it will go up before spending the point.'] },
   { date: '2026-06-30', size: 'big', v: 'Any weapon, with stat requirements', by: 'Claude', notes: ['Every class can now wield every weapon and pair every sensible off-hand — the old hard class-to-weapon lock is gone. What gates a piece instead is a stat requirement: a heavy Greatsword or Maul wants Might, a Rapier, dagger or bow wants Agility, a staff or wand wants Spirit, and a shield wants Vitality. Meet the attribute and you can equip it, whatever your class.', 'Requirements are per weapon TYPE, not just its category — a one-handed Rapier asks for Agility while a Greatsword of the same family asks for Might — and they scale with the item’s level, so deeper gear demands a real, growing investment. Your class still leans toward its favoured weapons in drops, and gear that grants +attributes counts toward meeting requirements.', 'Item tooltips, the loot list and the Forge now show each piece’s requirement in green when you meet it and red when you’re short, so you always know what to raise. Off-hands keep their pairing rules (a quiver needs a bow, a parrying dagger a one-handed melee weapon, a shield or focus a free hand — or any of them alongside a two-hander once you’ve learned Titan’s Grip).'] },
   { date: '2026-06-30', size: 'medium', v: 'Hardcore leaderboards', by: 'Claude', notes: ['The global Leaderboards now have their own Hardcore ladder. A Standard / Hardcore switch at the top of the board flips every ranking — Furthest, Level, Gold and Power — between ordinary heroes and one-life Hardcore heroes.', 'Hardcore heroes are ranked only against each other, so surviving the no-revive run earns its own crimson board.'] },
   { date: '2026-06-30', size: 'small', v: 'Clearer "can\'t afford" prices', by: 'Claude', notes: ['Anywhere you spend gold or materials — the shop, gambler, forge, enchanter, mystic, healer and trainer — wares you can\'t currently afford now dim out so unavailable options read at a glance.', 'Mixed prices now pinpoint the shortfall: the exact gold or material you\'re missing turns red, so a forge or enchant cost shows at once whether you\'re short on gold, scrap, glimmer or a chaos orb.'] },
@@ -13473,10 +13476,10 @@ function castSkillById(id) {
   if (isPlayerStunned()) { log('You are stunned and can\'t cast!'); return; }
   const cd = skillCd(id);
   if (cd > 0) { log(`⏳ ${sk.name} is recharging (${cd} more turn${cd === 1 ? '' : 's'}).`); return; }
-  // Mana Cost Reduction % (gear) lowers the price of every cast; a rank-3 skill
-  // gets the ✦ Empowered discount on top.
-  const msMcr = skillRank(id) >= 3 ? 0.15 : 0;
-  const cost = Math.max(1, Math.round(sk.mp * (1 - Math.min(0.6, totalStat('MCR') / 100) - msMcr)));
+  // sk.mp is the rank-scaled cost (it climbs as the skill levels up, already net
+  // of the rank-3 ✦ Empowered discount). Mana Cost Reduction % (gear) trims the
+  // final price of every cast on top.
+  const cost = Math.max(1, Math.round(sk.mp * (1 - Math.min(0.6, totalStat('MCR') / 100))));
   // Blood Pact keystone: skills are paid in LIFE, not mana — a martyr's bargain
   // that frees your whole mana pool but bleeds you with every cast.
   const bloodPact = keystoneFlag('bloodpact');
@@ -13586,6 +13589,21 @@ function nextMilestone(rank) { return SKILL_MILESTONES.find(m => rank < m.rank) 
 // status chance/duration and summon counts grow more slowly, so a rank-10 skill
 // is strong but not absurd.
 function rankScale(rank) { return (1 + 0.12 * ((rank || 1) - 1)) * (1 + milestonePower(rank)); }
+
+// Skills cost progressively more mana the deeper you rank them: every rank past
+// the first adds a flat slice of the base cost, so pouring points into a skill is
+// a real mana commitment, not free power (the per-rank power climb is steeper, so
+// the trade still pays off). The rank-3 ✦ Empowered milestone trims some of that
+// back — that's its "cheaper casts" perk. This returns the skill's own MP cost at
+// a given rank, BEFORE gear Mana Cost Reduction, which castSkillById layers on at
+// cast time. Rank 0 (not yet learned) previews the rank-1 cost.
+const MANA_PER_RANK = 0.08; // +8% of base mana per rank above the first
+function skillManaCost(node, rank) {
+  if (!node || !node.mp) return 0;
+  const r = Math.max(1, rank || 1);
+  const empowered = r >= 3 ? 0.15 : 0; // rank-3 ✦ Empowered "cheaper casts" discount
+  return Math.max(1, Math.round(node.mp * (1 + MANA_PER_RANK * (r - 1)) * (1 - empowered)));
+}
 
 // Base physical magnitude for weapon actives (a normal swing's raw number, plus
 // any flat ATK passives), before per-skill multiplier and modifiers.
@@ -15675,7 +15693,7 @@ function renderSkills(el) {
   const sn = selectedSkillId ? byId[selectedSkillId] : null;
   if (sn) {
     const rank = skillRank(sn.id);
-    const typeTxt = sn.type === 'active' ? `⚡ ACTIVE · ${sn.mp}MP · ${sn.cd}cd · ${castShapeLabel(sn.cast)}` : 'PASSIVE';
+    const typeTxt = sn.type === 'active' ? `⚡ ACTIVE · ${skillManaCost(sn, rank)}MP · ${sn.cd}cd · ${castShapeLabel(sn.cast)}` : 'PASSIVE';
     const pips = sn.type === 'active' ? milestonePips(rank) : '';
     const rankTxt = ` <span style="color:#e8c267">${rank}/${sn.max}${pips ? ' ' + pips : ''}</span>`;
     const reqRows = [];
@@ -15758,7 +15776,7 @@ function skillTipHtml(n) {
   const rank = skillRank(n.id);
   const pips = n.type === 'active' ? milestonePips(rank) : '';
   const typeTxt = n.type === 'active'
-    ? `⚡ Active · ${n.mp}MP · ${n.cd}cd · ${esc(castShapeLabel(n.cast))}`
+    ? `⚡ Active · ${skillManaCost(n, rank)}MP · ${n.cd}cd · ${esc(castShapeLabel(n.cast))}`
     : 'Passive';
   let h = `<div class='ht-name'>${esc(n.name)} <span style='color:#e8c267'>${rank}/${n.max}${pips ? ' ' + pips : ''}</span></div>`;
   h += `<div class='ht-line' style='color:#9a8fd0'>${typeTxt}</div>`;
@@ -15979,6 +15997,11 @@ function skillRankUpRows(node, rank) {
     const cur = Math.round(rankScale(rank || 1) * 100);
     const next = Math.round(rankScale(rank + 1) * 100);
     rows.push(['effect power', rank > 0 ? `${cur}% → <b>${next}%</b>` : `<b>100%</b>`]);
+    // Mana cost climbs with each rank — show the next-rank price so the trade-off
+    // (more power for more mana) is clear before you spend the point.
+    const curMp = skillManaCost(node, rank || 1);
+    const nextMp = skillManaCost(node, rank + 1);
+    rows.push(['mana cost', rank > 0 ? `${curMp} → <b>${nextMp}</b> MP` : `<b>${nextMp}</b> MP`]);
     if (node.cast.summon) {
       const base = node.cast.summon.count || 1;
       const curN = Math.min(8, base + Math.floor(((rank || 1) - 1) / 4));
@@ -16008,6 +16031,7 @@ function skillTotalSummary(node, rank) {
       const n = Math.min(8, (node.cast.summon.count || 1) + Math.floor((rank - 1) / 4));
       s += `, ${n} minion${n === 1 ? '' : 's'}`;
     }
+    s += `, ${skillManaCost(node, rank)} MP`;
     return s;
   }
   return '';
