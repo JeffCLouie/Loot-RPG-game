@@ -12944,6 +12944,7 @@ function isWallTile(x, y) {
 // faces exposed to open floor get lit rims / cast shadows for depth. A wall mass
 // is sunlit only along its crest (top tile), so stacked walls read as one cliff.
 function drawWall(px, py, tw, th, x, y, seed, C, cracked) {
+  if (C.indoor) { drawIndoorWall(px, py, tw, th, x, y, seed, C, cracked); return; } // built interior wall
   if (lpcReady && !inTown) { if (cracked) lpcCrackOverlay(px, py, tw, th); return; }
   if (C.wallStyle === 'forest') { drawForestWall(px, py, tw, th, x, y, seed, C, cracked); return; }
   if (C.wallStyle === 'pine') { drawPineWall(px, py, tw, th, x, y, seed, C, cracked); return; }
@@ -13199,7 +13200,7 @@ function draw() {
   const y1 = Math.min(MAP_H, Math.ceil((camY + H) / th));
 
   // LPC terrain — real autotiled pixel ground replaces the procedural fill.
-  if (lpcReady && !inTown) drawLPCTerrain(offX, offY, tw, x0, y0, x1, y1);
+  if (lpcReady && !inTown && !C.indoor) drawLPCTerrain(offX, offY, tw, x0, y0, x1, y1); // indoor floors draw per-tile
 
   // Draw tiles
   for (let y = y0; y < y1; y++) {
@@ -13488,6 +13489,10 @@ function draw() {
         ctx.fillRect(px, py, tw, Math.max(1, th*0.5));
         ctx.strokeStyle = 'rgba(255,255,255,0.32)'; ctx.lineWidth = Math.max(1, tw*0.025);
         ctx.beginPath(); ctx.moveTo(px+tw*0.2, py+th*0.72); ctx.lineTo(px+tw*0.55, py+th*0.26); ctx.stroke();
+      } else if (C.indoor) {
+        // Built interior: procedural plank/tile/stone floor + any furniture prop.
+        drawIndoorFloor(px, py, tw, th, seed, C);
+        drawFurnitureAt(x, y, px, py, tw, th);
       } else if (!(lpcReady && !inTown)) {
         // Floor base — organic per-tile variation instead of a checkerboard:
         // most tiles use the base colour, a few the alt, and every tile gets a
