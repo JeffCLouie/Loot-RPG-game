@@ -2139,6 +2139,14 @@
     }
     #side-panel.collapsed { transform: none; opacity: 1; pointer-events: auto; }
 
+    /* The SKILLS-tab "Skill slots" tray is a second copy of the same hotkey
+       slots the bottom combat bar already shows. Desktop has that bar on screen
+       and lets you drag a tree skill straight onto it (or rearrange in place),
+       so the in-panel tray is redundant here — hide it on the web layout. Touch
+       keeps it: dragging on the small combat bar is fiddly there, and it's the
+       only slot editor available in town, where the bar is hidden. */
+    .sk-loadout { display: none; }
+
     /* Town / shop / mystic menus REPLACE the map on web: they sit inside #main
        and occupy exactly the map column — left edge starts after the log,
        right edge stops before the loot drawer. The header, log, and
@@ -7562,6 +7570,7 @@ document.addEventListener('click', (e) => {
 
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
+  { date: '2026-06-30', size: 'small', v: 'Tidier SKILLS tab on desktop', by: 'Claude', notes: ['On the wide desktop layout, the SKILLS tab no longer repeats the row of skill slots above the tree. Your bottom skill bar is already on screen there — you can drag a learned skill straight onto it, or rearrange the slots in place — so the second copy was redundant clutter.', 'On phones and tablets the slot tray stays exactly as it was: it\'s the comfortable place to tap a slot and assign a skill, and the only slot editor available while you\'re in town.'] },
   { date: '2026-06-30', size: 'medium', v: 'Might fuels Endurance + Sprint toggle', by: 'Claude', notes: ['Might now does more than raise Attack power: it also DEEPENS your Endurance pool and SPEEDS its recharge. A mighty hero sprints longer and recovers stamina sooner, so pouring points (or stacking +Might gear) into it pays off for footwork, not just damage. The HERO sheet now lists your Max Endurance and Endurance regen.', 'New Sprint setting in the ⚙️ menu: leave it on HOLD to sprint only while Shift is down, or flip it to TOGGLE so a single tap of Shift latches auto-sprint on (tap again to stop) — sprint without keeping a finger on the key. Your choice is remembered across sessions.'] },
   { date: '2026-06-30', size: 'medium', v: 'Drag-and-drop skill slots', by: 'Claude', notes: ['The skill bar now shows every hotkey slot (keys 1–9), empty ones included, as a dashed open slot — so you can see at a glance how many skills you can bind and where the gaps are. Slot 1 is still the gold primary the R key / ⚡ button cast.', 'Drag a learned active skill straight from its node in the SKILLS tab onto a slot to bind it, and drag a slot onto another to rearrange — including onto an empty slot to move it there. A learned skill that isn\'t in any slot reads as "off the bar" (🚫) and simply isn\'t keyed until you slot it.', 'A new loadout tray sits above the ACTIVE tree showing all your slots together, so the skills and the slots are side by side to drag between. On touch (or as a quick desktop path) just tap any slot to pick which learned skill fills it, or clear it. Your slot layout is saved with the character; existing heroes keep their current bar.'] },
   { date: '2026-06-30', size: 'small', v: 'One skill card on hover', by: 'Claude', notes: ['Skill nodes no longer show a plain hover tooltip and a separate, nicer card on click — there\'s just one card now. Pointing at a skill opens its full detail card (mechanics, the rank-up preview, and the Learn / Hide buttons), and it stays open while your cursor is over the node or the card, so you can move onto it and click Learn without it vanishing.', 'On touch, nothing changes — a tap still opens the same card.'] },
