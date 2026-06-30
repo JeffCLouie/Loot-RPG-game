@@ -917,6 +917,73 @@
   }
   .skillbar-btn.town.channeling { border-color: #6ec8ff; background: #1c3550; color: #d6ecff; animation: portalCharging 1s ease-in-out infinite; }
   .action-btn.town-action.channeling { animation: portalCharging 1s ease-in-out infinite; }
+
+  /* ── DESKTOP BOTTOM HUD (flanking HP/MP bars) ──
+     Shown only on the web layout (the desktop media query flips it on, places it
+     in its own row under the map, hides the top header, and re-homes #skill-bar
+     into the belt). Big HP (left) & MP (right) bars dominate; the middle holds the
+     name, power/gold, a slim endurance bar and the skill slots; a segmented XP bar
+     runs along the bottom. */
+  #desktop-hud { display: none; }
+  .dh-top { display: flex; align-items: center; gap: 12px; padding: 7px 14px 5px; }
+  /* Flanking vital bars — the dominant, most-visible elements. */
+  .dh-vital { flex: 1 1 0; min-width: 0; display: flex; align-items: center; gap: 8px; }
+  .dh-vital-tag { font-size: 14px; font-weight: bold; letter-spacing: 1px; }
+  .dh-hp .dh-vital-tag { color: var(--hp); text-shadow: 0 0 7px var(--hp); }
+  .dh-mp .dh-vital-tag { color: var(--mp); text-shadow: 0 0 7px var(--mp); }
+  .dh-vital-track {
+    position: relative; flex: 1 1 0; min-width: 0; height: 28px; border-radius: 7px;
+    background: #15111f; border: 1px solid #000; overflow: hidden;
+    box-shadow: inset 0 2px 5px rgba(0,0,0,0.75);
+  }
+  .dh-vital-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 100%; border-radius: 6px; transition: width 0.22s ease; }
+  .dh-vital-fill.hp { background: linear-gradient(180deg, #ff8088 0%, var(--hp) 50%, #ab1020 100%); box-shadow: 0 0 12px rgba(255,60,80,0.65), inset 0 1px 0 rgba(255,255,255,0.4); }
+  .dh-vital-fill.mp { background: linear-gradient(180deg, #88baff 0%, var(--mp) 50%, #103f8c 100%); box-shadow: 0 0 12px rgba(60,140,255,0.65), inset 0 1px 0 rgba(255,255,255,0.4); }
+  /* MP drains from the inner edge so both bars empty toward the centre, mirroring. */
+  .dh-mp .dh-vital-fill { left: auto; right: 0; }
+  .dh-vital-val {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-family: 'Courier New', monospace; font-weight: bold; font-size: 15px; color: #fff;
+    letter-spacing: 0.5px; text-shadow: 0 1px 2px #000, 0 0 6px rgba(0,0,0,0.95); pointer-events: none;
+  }
+  .dh-vital-fill.hp.hp-low { animation: dhHpLow 0.7s ease-in-out infinite; }
+  @keyframes dhHpLow { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.6); } }
+
+  /* Middle: name + power/gold chips, then a slim endurance bar. */
+  .dh-mid { flex: 0 1 auto; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; padding: 0 4px; }
+  .dh-info { display: flex; align-items: center; gap: 14px; white-space: nowrap; }
+  .dh-name { font-weight: bold; color: var(--gold); font-size: 14px; letter-spacing: 0.5px; text-shadow: 0 0 6px rgba(232,194,103,0.5); max-width: 190px; overflow: hidden; text-overflow: ellipsis; }
+  .dh-chip { display: flex; align-items: center; gap: 5px; font-size: 13px; font-weight: bold; }
+  .dh-chip .dl-ic { vertical-align: middle; }
+  .dh-power { color: #ffd24b; }
+  .dh-gold { color: var(--gold); }
+  .dh-buffs { display: flex; align-items: center; gap: 10px; }
+  .dh-buffs:empty { display: none; }
+  .dh-end {
+    position: relative; width: 100%; min-width: 160px; height: 9px; border-radius: 5px;
+    background: #241c30; border: 1px solid #000; overflow: hidden; box-shadow: inset 0 1px 2px rgba(0,0,0,0.7);
+  }
+  .dh-end-fill {
+    height: 100%; width: 100%; border-radius: 4px;
+    background: linear-gradient(180deg, #ffe79a, #ffcf52 60%, #e0a52a);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.4); transition: width 0.12s linear;
+  }
+  .dh-end-tag {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-size: 7px; font-weight: bold; letter-spacing: 2px; color: #3a2c08; pointer-events: none;
+  }
+  /* Skill belt: the re-homed #skill-bar, one centred row of all slots. */
+  .dh-belt { display: flex; align-items: center; justify-content: center; min-height: 56px; padding: 0 8px; overflow-x: auto; }
+  .dh-belt::-webkit-scrollbar { height: 0; }
+  /* Segmented experience bar along the very bottom. */
+  #dh-xp { position: relative; height: 14px; background: linear-gradient(180deg, #15101f, #0c0814); border-top: 1px solid var(--frame); overflow: hidden; cursor: default; }
+  #dh-xp-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; background: linear-gradient(180deg, #ffe9a0, var(--gold)); box-shadow: 0 0 8px var(--gold); transition: width 0.3s ease; }
+  #dh-xp .dh-xp-notches {
+    position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(90deg, rgba(0,0,0,0) 0, rgba(0,0,0,0) calc(5% - 2px), rgba(0,0,0,0.6) calc(5% - 2px), rgba(0,0,0,0.6) 5%);
+  }
+  #dh-xp .dh-xp-lvl { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-family: 'Courier New', monospace; font-size: 10px; font-weight: bold; color: #fff4d6; text-shadow: 0 1px 2px #000, 0 0 4px rgba(0,0,0,0.8); }
+
   /* Every hotkey slot is rendered, even unassigned ones, as a dashed drop target
      you can drag a learned skill onto (or tap to assign). Kept compact and dim so
      a row of open slots reads as "space to fill", not clutter. */
@@ -2128,7 +2195,7 @@
     /* Column widths are driven by variables so collapsing the log can reflow the
        whole desktop layout in one place: the log column shrinks to a slim strip
        and the freed width is handed to the (usually cramped) loot/bag drawer. */
-    :root { --log-col: clamp(250px, 24vw, 480px); --panel-col: clamp(210px, 22vw, 440px); }
+    :root { --log-col: clamp(250px, 24vw, 480px); --panel-col: clamp(210px, 22vw, 440px); --dhud-h: 122px; }
     body.log-collapsed { --log-col: 30px; --panel-col: clamp(280px, 30vw, 600px); }
 
     /* Loot drawer: a real column in the flow (not an overlay), always open.
@@ -2162,7 +2229,7 @@
        window popping up over everything. */
     #town-overlay, #shop-overlay, #mystic-overlay {
       position: absolute;
-      top: 0; bottom: 0;
+      top: 0; bottom: var(--dhud-h);   /* stop above the bottom HUD so HP/MP/skills stay visible */
       left: var(--log-col);
       right: var(--panel-col);
       padding: 0;
@@ -2181,38 +2248,27 @@
       box-shadow: none;
     }
 
-    /* Desktop header is a centred two-row grid, truly centred in the viewport:
-         row 1   HP — Name — MP        row 2   Power — Level — Gold
-       The side columns are equal (1fr) so the name/level sit dead-centre. The
-       lone SETTINGS button still floats top-right (TOWN moved to the skill bar),
-       so the left/right padding is symmetric to keep the centre line honest. */
-    #header {
-      display: grid;
-      grid-template-columns: 1fr auto 1fr;
-      align-items: center;
-      justify-items: center;
-      column-gap: 18px;
-      row-gap: 4px;
-      flex-wrap: nowrap;
-      min-height: 46px;
-      padding: 6px 64px;
+    /* The web layout relocates every vital readout to the bottom HUD (big
+       flanking HP/MP bars, the skill slots and a segmented XP bar — see
+       #desktop-hud), so the top header is hidden entirely. Floor / foes still read
+       from the map-corner pill; the lone SETTINGS gear stays pinned top-right via
+       #control-bar. */
+    #header { display: none; }
+    /* Bottom HUD: its own row under the map (grid row 2 of #game-wrap), spanning
+       only the map column so the log (left) and loot drawer (right) stay
+       full-height beside it and the HP/MP bars hug the column edges. */
+    #desktop-hud {
+      grid-column: 2;
+      grid-row: 2;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      position: relative;
+      z-index: 6;
+      background: linear-gradient(180deg, #221a36, #14101f);
+      border-top: 2px solid var(--frame);
+      box-shadow: inset 0 1px 0 rgba(232,194,103,0.22), 0 -3px 10px rgba(0,0,0,0.5);
     }
-    /* #stats holds name + HP + MP; dissolve its box so those three promote to
-       header grid cells and can be placed individually (font-size still
-       inherits to them). */
-    #stats { display: contents; font-size: 14px; }
-    #header #hero-name-hud { grid-column: 2; grid-row: 1; max-width: 220px; }
-    #header #stats .stat-bar:nth-child(2) { grid-column: 1; grid-row: 1; justify-self: end; }   /* HP, left of name */
-    #header #stats .stat-bar:nth-child(3) { grid-column: 3; grid-row: 1; justify-self: start; }  /* MP, right of name */
-    #header #power-hud    { grid-column: 1; grid-row: 2; justify-self: end; }
-    #header #level-hud    { grid-column: 2; grid-row: 2; }
-    #header #gold-display { grid-column: 3; grid-row: 2; justify-self: start; }
-    /* Pact / food buff timers (only shown when active) tuck into centred rows
-       below so they never knock the main two rows off-centre. */
-    #header #pact-hud { grid-column: 1 / -1; grid-row: 3; }
-    #header #food-hud { grid-column: 1 / -1; grid-row: 4; }
-    /* Floor and foes move out of the header to the top-left of the map. */
-    #header #floor-hud, #header #enemies-hud { display: none; }
     /* Show the map-corner floor / foes readout (mobile keeps these in header). */
     #map-info {
       display: flex; flex-direction: column; gap: 4px;
@@ -2233,14 +2289,14 @@
       /* Log column also grows with the viewport so the left-hand slack beside
          the centered map is filled too. The map ('1fr') keeps the remainder. */
       grid-template-columns: var(--log-col) 1fr;
-      /* Single map row — the skill bar overlays the bottom of the map (see
-         below) rather than taking its own row, so it never shrinks the map. */
-      grid-template-rows: 1fr;
+      /* Map fills the upper row; the bottom HUD takes its own fixed row under the
+         map only, so the log stays full-height beside it. */
+      grid-template-rows: 1fr var(--dhud-h);
     }
     /* Log: full-height left column, spanning both rows. */
     #bottom-row {
       grid-column: 1;
-      grid-row: 1;
+      grid-row: 1 / -1;
       flex: none;
       max-height: none;
       min-height: 0;
@@ -2258,25 +2314,16 @@
       padding: 8px 0;
       border-bottom: none;
     }
-    /* Skill bar: overlaid across the bottom of the map column rather than
-       taking its own grid row, so it renders over the bottom of the map
-       instead of pushing it up and shrinking it. #game-wrap is positioned,
-       so this anchors to the map column (left edge starts after the log). */
+    /* Skill bar: re-homed into the bottom HUD's belt (syncDesktopHud), so it sits
+       inline in its row rather than floating over the map. */
     #skill-bar {
-      position: absolute;
-      left: var(--log-col);
-      right: 0;
-      bottom: 10px;
-      z-index: 50;
-      gap: 7px;
-      pointer-events: none;
+      gap: 6px;
+      flex-wrap: nowrap;
+      pointer-events: auto;
     }
-    /* Only the buttons themselves capture clicks — the transparent gaps let
-       map interaction through. */
-    #skill-bar .skillbar-btn { pointer-events: auto; }
-    /* On PC there's plenty of room, so make the potion / spell buttons and
-       their icons noticeably larger by default for easier clicking. */
-    #skill-bar .skillbar-btn { min-width: 54px; padding: 5px 7px; }
+    /* Big enough to read, but allowed to shrink so all 12 slots stay one row even
+       when the log is open and the map column is narrow. */
+    #skill-bar .skillbar-btn { min-width: 46px; padding: 5px 6px; flex: 0 1 auto; }
     #skill-bar .skillbar-btn .sb-icon { font-size: 24px; }
     /* Spell icons (no MP label) fill the larger tile here. */
     #skill-bar .skillbar-btn .sb-icon.big { font-size: 34px; }
@@ -2558,6 +2605,13 @@
     100% { opacity: 0; transform: translateX(-50%) translateY(8px); }
   }
 
+  /* On the web layout the bottom HUD takes a tall row, so lift the floating
+     tutorial / move hint chips clear of it — they sit just above the HUD over the
+     map. Placed after the base rules so it wins on source order. */
+  @media (min-width: 760px) and (hover: hover) and (pointer: fine) {
+    #tutorial-hint, #move-hint { bottom: calc(var(--dhud-h, 122px) + 14px); }
+  }
+
   /* ── MOBILE PORTRAIT LAYOUT ──
      A phone held upright. The old design crammed a 3×3 d-pad plus a tall column
      of action buttons into the bottom, and the loot/stats drawer ran the full
@@ -2747,6 +2801,44 @@
          thumb zone on mobile. Populated by renderSkillBar(); hidden in town /
          before any active is learned. -->
     <div id="skill-bar" style="display:none"></div>
+    <!-- ── DESKTOP BOTTOM HUD ── (web layout only; see the desktop media query)
+         Takes its own row under the map, spanning the space BETWEEN the log and
+         loot panels, so it reflows when the log collapses or the drawer widens.
+         Big flanking HP (left) and MP (right) bars are the dominant elements; the
+         middle carries the name, power/gold, a slim endurance bar and all the
+         skill slots (the #skill-bar is re-homed here by syncDesktopHud). A
+         segmented XP bar runs along the very bottom. Hidden on mobile; the bars /
+         XP / END are filled by updateBars + renderStaminaBar. -->
+    <div id="desktop-hud">
+      <div class="dh-top">
+        <div class="dh-vital dh-hp" data-tip="<div class='ht-name' style='color:var(--hp)'>❤️ Health (HP)</div><div class='ht-line'>Your life. When it hits 0 you die. Restore it with potions, resting in town, and levelling up.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
+          <span class="dh-vital-tag">HP</span>
+          <div class="dh-vital-track"><div class="dh-vital-fill hp" id="dh-hp-fill"></div><span class="dh-vital-val" id="dh-hp-val">100/100</span></div>
+        </div>
+        <div class="dh-mid">
+          <div class="dh-info">
+            <span class="dh-chip dh-power" data-tip="<div class='ht-name'><span data-spr='ui_power'></span> Power</div><div class='ht-line'>A rough measure of your overall strength, combining your level, equipped gear, spent attributes and skills.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()"><span data-spr="ui_power"></span> <span id="dh-power-num">0</span></span>
+            <span class="dh-name" id="dh-name"></span>
+            <span class="dh-chip dh-gold" data-tip="<div class='ht-name' style='color:var(--gold)'>💰 Gold</div><div class='ht-line'>The dungeon's main currency. Spend it at the town shops, the Forge, the Enchanter, and the Stash.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">💰 <span id="dh-gold-num">0</span></span>
+            <span class="dh-buffs" id="hud-buffs"></span>
+          </div>
+          <div class="dh-end" data-tip="<div class='ht-name' style='color:#ffcf52'>⚡ Endurance</div><div class='ht-line'>Fuels Sprinting (Shift) and Dashing (Space). Drains as you exert and refills after a short pause. Might deepens the pool and speeds its recharge.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
+            <div class="dh-end-fill" id="dh-end-fill"></div>
+            <span class="dh-end-tag">END</span>
+          </div>
+        </div>
+        <div class="dh-vital dh-mp" data-tip="<div class='ht-name' style='color:var(--mp)'>🔷 Mana (MP)</div><div class='ht-line'>Spent to cast class skills and spells. Regenerates slowly over time and partly recovers when you level up.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
+          <div class="dh-vital-track"><div class="dh-vital-fill mp" id="dh-mp-fill"></div><span class="dh-vital-val" id="dh-mp-val">60/60</span></div>
+          <span class="dh-vital-tag">MP</span>
+        </div>
+      </div>
+      <div class="dh-belt" id="hud-belt"></div>
+      <div id="dh-xp" data-tip="<div class='ht-name'>⭐ Experience</div><div class='ht-line'>Slay foes to fill the bar and level up — each level boosts your stats and grants an attribute point.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
+        <div id="dh-xp-fill"></div>
+        <div class="dh-xp-notches"></div>
+        <span class="dh-xp-lvl" id="dh-xp-lvl">Lv 1</span>
+      </div>
+    </div>
     <div id="bottom-row">
       <button id="log-toggle" onclick="toggleLog()" aria-label="Toggle combat log">
         <span class="log-caret">▾</span><span>Log</span>
@@ -7588,6 +7680,7 @@ document.addEventListener('click', (e) => {
 
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
+  { date: '2026-06-30', size: 'big', v: 'Bottom command bar on desktop', by: 'Claude', notes: ['On desktop, every vital readout moved off the top and into one command bar across the bottom, under the map. Big flanking Health (left) and Mana (right) bars are now the most prominent things on screen — bold, glowing, with the numbers right on them — hugging the log and loot panels.', 'Your name, Power and gold sit in the middle above a slim endurance bar, all your skill slots run across the centre, and one long experience bar — broken into segments — stretches along the very bottom. The old top stat strip is gone, so the play area runs cleaner.', 'The bar lives in the space between the side panels and reflows with them: collapse the log and the whole bar widens to match. Touch devices are untouched and keep their existing layout.'] },
   { date: '2026-06-30', size: 'small', v: 'Tidier SKILLS tab on desktop', by: 'Claude', notes: ['On the wide desktop layout, the SKILLS tab no longer repeats the row of skill slots above the tree. Your bottom skill bar is already on screen there — you can drag a learned skill straight onto it, or rearrange the slots in place — so the second copy was redundant clutter.', 'On phones and tablets the slot tray stays exactly as it was: it\'s the comfortable place to tap a slot and assign a skill, and the only slot editor available while you\'re in town.'] },
   { date: '2026-06-30', size: 'medium', v: 'Might fuels Endurance + Sprint toggle', by: 'Claude', notes: ['Might now does more than raise Attack power: it also DEEPENS your Endurance pool and SPEEDS its recharge. A mighty hero sprints longer and recovers stamina sooner, so pouring points (or stacking +Might gear) into it pays off for footwork, not just damage. The HERO sheet now lists your Max Endurance and Endurance regen.', 'New Sprint setting in the ⚙️ menu: leave it on HOLD to sprint only while Shift is down, or flip it to TOGGLE so a single tap of Shift latches auto-sprint on (tap again to stop) — sprint without keeping a finger on the key. Your choice is remembered across sessions.'] },
   { date: '2026-06-30', size: 'medium', v: 'Drag-and-drop skill slots', by: 'Claude', notes: ['The skill bar now shows every hotkey slot (keys 1–9), empty ones included, as a dashed open slot — so you can see at a glance how many skills you can bind and where the gaps are. Slot 1 is still the gold primary the R key / ⚡ button cast.', 'Drag a learned active skill straight from its node in the SKILLS tab onto a slot to bind it, and drag a slot onto another to rearrange — including onto an empty slot to move it there. A learned skill that isn\'t in any slot reads as "off the bar" (🚫) and simply isn\'t keyed until you slot it.', 'A new loadout tray sits above the ACTIVE tree showing all your slots together, so the skills and the slots are side by side to drag between. On touch (or as a quick desktop path) just tap any slot to pick which learned skill fills it, or clear it. Your slot layout is saved with the character; existing heroes keep their current bar.'] },
@@ -8189,7 +8282,47 @@ applyDpadSettings();
 function syncWebPanel() {
   if (isWebLayout()) { panelOpen = true; renderPanel(); }
 }
-WEB_MQ.addEventListener('change', () => { syncWebPanel(); resizeCanvas(); draw(); });
+
+// On the web layout the skill slots and the pact / food buff chips live INSIDE
+// the bottom HUD (#desktop-hud); on mobile they stay in their original spots (the
+// skill bar above the log, the buff chips in the header). We physically re-home
+// the existing elements rather than duplicate them, so all the code that finds
+// them by id (renderSkillBar, updateCooldownDials, drag-and-drop, the pact/food
+// updates) keeps working untouched. Each node's original home is recorded once,
+// the first time this runs, so it can be put back if the window crosses the
+// breakpoint. Real touch devices never match WEB_MQ, so their DOM is unchanged.
+const HUD_REHOME = [
+  ['skill-bar', 'hud-belt'],
+  ['pact-hud',  'hud-buffs'],
+  ['food-hud',  'hud-buffs'],
+];
+let _hudHomes = null;
+function syncDesktopHud() {
+  if (!_hudHomes) {
+    _hudHomes = {};
+    for (const [id] of HUD_REHOME) {
+      const el = document.getElementById(id);
+      if (el) _hudHomes[id] = { parent: el.parentNode, next: el.nextSibling };
+    }
+  }
+  const web = isWebLayout();
+  for (const [id, dest] of HUD_REHOME) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    if (web) {
+      const d = document.getElementById(dest);
+      if (d && el.parentNode !== d) d.appendChild(el);
+    } else {
+      const home = _hudHomes[id];
+      if (home && el.parentNode !== home.parent) {
+        if (home.next && home.next.parentNode === home.parent) home.parent.insertBefore(el, home.next);
+        else home.parent.appendChild(el);
+      }
+    }
+  }
+}
+syncDesktopHud();
+WEB_MQ.addEventListener('change', () => { syncDesktopHud(); syncWebPanel(); resizeCanvas(); draw(); });
 
 // ══════════════════════════════════════════
 // MAP GENERATION
@@ -16845,6 +16978,11 @@ function renderStaminaBar() {
   bar.style.width = (st / mx * 100) + '%';
   const txt = document.getElementById('stam-text');
   if (txt) txt.textContent = `${Math.round(st)}/${mx}`;
+  // Mirror onto the desktop bottom-HUD endurance bar (web layout only).
+  if (isWebLayout()) {
+    const dhEnd = document.getElementById('dh-end-fill');
+    if (dhEnd) dhEnd.style.width = (st / mx * 100) + '%';
+  }
 }
 function updateBars() {
   renderStaminaBar();
@@ -16858,6 +16996,25 @@ function updateBars() {
   document.getElementById('mp-bar').style.width = (player.mp/player.maxMp*100)+'%';
   document.getElementById('mp-text').textContent = `${player.mp}/${player.maxMp}`;
   document.getElementById('gold-count').textContent = fmtGold(player.gold);
+
+  // ── Desktop bottom HUD (web layout only): big flanking HP/MP bars, the
+  // segmented XP strip, and the name / power / gold chips mirror the same data. ──
+  if (isWebLayout()) {
+    const dset = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+    const dhHp = document.getElementById('dh-hp-fill');
+    if (dhHp) { dhHp.style.width = Math.max(0, Math.min(100, player.hp / player.maxHp * 100)) + '%'; dhHp.classList.toggle('hp-low', hpLow); }
+    dset('dh-hp-val', `${player.hp}/${player.maxHp}`);
+    const dhMp = document.getElementById('dh-mp-fill');
+    if (dhMp) dhMp.style.width = Math.max(0, Math.min(100, player.mp / player.maxMp * 100)) + '%';
+    dset('dh-mp-val', `${player.mp}/${player.maxMp}`);
+    const dhXp = document.getElementById('dh-xp-fill');
+    if (dhXp) dhXp.style.width = Math.min(100, player.xp / xpForLevel(player.level) * 100) + '%';
+    dset('dh-xp-lvl', 'Lv ' + player.level);
+    dset('dh-power-num', playerPower());
+    dset('dh-gold-num', fmtGold(player.gold));
+    const dhName = document.getElementById('dh-name');
+    if (dhName) { dhName.textContent = player.name || ''; dhName.style.display = player.name ? '' : 'none'; }
+  }
 
   // Hero nameplate at the far left of the header (hidden until a name is set).
   const nameHud = document.getElementById('hero-name-hud');
