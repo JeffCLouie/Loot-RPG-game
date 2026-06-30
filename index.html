@@ -841,6 +841,21 @@
     50%     { box-shadow: 0 0 14px rgba(255,215,110,0.9); border-color: #ffe39a; }
   }
   .skillbar-btn.disabled { background: #211c2a; border-color: #33304a; color: #6a647a; }
+  /* League-style cooldown dial: a faint grey radial sweep that covers the
+     still-recharging fraction and clears as the skill readies, with a live
+     countdown (whole seconds, then one decimal under 1s) centred on top. The
+     --cd-frac CSS var (1→0) is driven each frame by updateCooldownDials(). */
+  .skillbar-btn .sb-cd {
+    position: absolute; inset: 0; border-radius: inherit; z-index: 3;
+    display: none; align-items: center; justify-content: center;
+    font-family: 'Courier New', monospace; font-weight: bold; font-size: 13px;
+    color: #f2f2f8; text-shadow: 0 1px 2px #000, 0 0 5px #000;
+    background: conic-gradient(rgba(38,38,50,0.62) calc(var(--cd-frac,0) * 360deg), rgba(0,0,0,0.16) 0);
+    pointer-events: none;
+  }
+  .skillbar-btn.cooling .sb-cd { display: flex; }
+  .skillbar-btn.cooling .sb-info { visibility: hidden; }
+  .skillbar-btn.cooling.ready { animation: none; }
   /* Potion skills pinned to the far left of the bar — red Health flask, blue Mana flask. */
   .skillbar-btn.potion { border-color: #a03048; background: #6a1a2a; color: #ffd5dd; }
   .skillbar-btn.potion .sb-key { color: #ffb3c0; }
@@ -2749,7 +2764,7 @@
       <div class="howto-sec">💎 Loot rarity<span class="howto-tiers"><i style="background:#9aa0a6"></i><i style="background:#e8e8e8"></i><i style="background:#4caf50"></i><i style="background:#3a7bd5"></i><i style="background:#a45cd6"></i><i style="background:#e08a2e"></i><i style="background:#d6453a"></i></span></div>
       <div class="howto-line">Colour is rarity: grey → white → green → blue → purple → orange → red (Mythic). Tap loot in your <b>bag</b> to equip, sell, or scrap it.</div>
       <div class="howto-sec">✨ Skills &amp; potions</div>
-      <div class="howto-line">Skills cost <b>MP</b> and share cooldowns; their buttons glow gold when ready. Health &amp; mana <b>potions</b> share a short cooldown and pulse when ready to drink.</div>
+      <div class="howto-line">Skills cost <b>MP</b> and each has its own cooldown in <b>seconds</b>; their buttons glow gold when ready. Health &amp; mana <b>potions</b> share a 5-second cooldown and pulse when ready to drink.</div>
       <div class="howto-sec">🔥 Hazards</div>
       <div class="howto-line"><b>Lava</b> and <b>spikes</b> hurt more the deeper you go — step around them (you're never forced through one).</div>
       <div class="howto-sec">🔒 Stairs &amp; Town</div>
@@ -5868,7 +5883,10 @@ function toggleSkillHidden(id) {
   renderPanel(); renderSkillBar(); saveGame();
 }
 function skillCd(id) { return (player.skillCds && player.skillCds[id]) || 0; }
-function setSkillCd(id, v) { if (!player.skillCds) player.skillCds = {}; player.skillCds[id] = v; }
+// Remembers each skill's full cooldown (seconds) at cast time, so the cooldown
+// dial can draw remaining/total as a sweep. In-memory only (cosmetic).
+let skillCdMax = {};
+function setSkillCd(id, v) { if (!player.skillCds) player.skillCds = {}; player.skillCds[id] = v; if (v > 0) skillCdMax[id] = v; }
 // Buy / rank up a skill node, spending one skill point.
 function buySkill(id) {
   const node = skillNode(id);
@@ -6096,8 +6114,8 @@ let player = { x: 5, y: 5,
   stamina: 100, maxStamina: 100,
   facing: 'left', hp: 100, maxHp: 100, mp: 60, maxMp: 60, gold: 0, level: 1, xp: 0,
   // Potions are no longer hoarded consumables — they're an always-available
-  // skill gated by a shared 3-turn cooldown (see useHealthPotion/useManaPotion),
-  // so you can't spam potions back-to-back. `potionCd` is that cooldown.
+  // skill gated by a shared 5-second cooldown (see useHealthPotion/useManaPotion),
+  // so you can't spam potions back-to-back. `potionCd` is that cooldown, in seconds.
   potionCd: 0,
   // Chosen character name (null until entered on a new game) and the peak gold
   // and Power ever reached — all feed the global leaderboards.
@@ -7163,7 +7181,8 @@ document.addEventListener('click', (e) => {
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
   { date: '2026-06-30', size: 'medium', v: 'Click to move', by: 'Claude', notes: ['On mouse-and-keyboard, you can now click the map to walk the hero to that spot — a glowing ring marks where you\'re headed. Hold the button (and drag) to keep moving toward the cursor in real time, so you can steer just by pointing. Pressing arrows / WASD instantly takes back manual control, and clicking a foe still opens its info card rather than walking into it. Touch devices keep their floating joystick.'] },
-  { date: '2026-06-30', size: 'medium', v: 'Real-time movement tuning', by: 'Claude', notes: ['Foes move a little slower now, so you can actually create distance and kite. You also slip past enemies instead of getting stuck against them — positioning and retreating finally feel fluid (your auto-attack still hits anything in reach).', 'Movement is smooth again (the stepped/pixel-quantised look is gone).', 'Endurance is now shown as its own ⚡ END bar up in the HUD next to HP/MP, so you can watch sprint/dash fuel at a glance. Fixed a bug where, on existing save files, Endurance loaded empty — which silently disabled Sprint and let Dash fire for free; sprinting (hold Shift) works properly now.', 'Tidied up so leftover traps and bolts can no longer flicker on the town screen.'] },
+  { date: '2026-06-30', size: 'small', v: 'Cooldowns in seconds', by: 'ASuiter89', notes: ['Skill and potion cooldowns now count down in real seconds — the number on each bar button is the seconds left to wait, matching the real-time pace of combat.', 'Potions share a 5-second cooldown (up from a near-instant recharge), so a sip is a real decision instead of a spam button. Skill cooldowns read in seconds too, tuned to sit naturally alongside the ~1.5s attack rhythm.'] },
+  { date: '2026-06-30', size: 'medium', v: 'Real-time movement tuning', by: 'Claude', notes: ['Foes move a little slower now, so you can actually create distance and kite — step away from a foe you\'re next to instead of being pinned against it. Enemies are still solid (no walking through them).', 'Movement is smooth again (the stepped/pixel-quantised look is gone).', 'Endurance is now shown as its own ⚡ END bar up in the HUD next to HP/MP, so you can watch sprint/dash fuel at a glance. Fixed a bug where, on existing save files, Endurance loaded empty — which silently disabled Sprint and let Dash fire for free; sprinting (hold Shift) works properly now.', 'Tidied up so leftover traps and bolts can no longer flicker on the town screen.'] },
   { date: '2026-06-30', size: 'big', v: 'Movement, speed & traps', by: 'Claude', notes: ['Movement got physical: you carry momentum, slide across patches of ice, and slog through mud and shallow muck that drag your speed.', 'Sprint by holding Shift (or pushing the mobile stick to its edge) to outrun a pack — it burns a stamina bar that refills after a breather. Tap Space to Dash: a quick stamina-fuelled burst that\'s great for dodging or closing in. Blink-type class skills still work for instant repositioning.', 'Attack speed is now a real thing. You swing about once every 1.5s — faster with light weapons (daggers) and the new Attack Speed % gear stat, slower with heavy ones (mauls, axes). Foes attack on their own per-type rhythm too, so a swift biter and a lumbering brute no longer strike in lockstep.', 'New crowd control: chilling foes can snare you, ice underfoot makes you slide, and a slow drags your top speed — positioning matters more than ever.', 'Hazards you can dodge: arrow traps loose bolts down a lane (step out of the line), and fire vents flare on and off (don\'t linger when they light). No foes spawn on top of the entry stairs anymore, and the opening tutorial foe waits for you to approach.', 'Mobile controls are now a floating analog joystick — press anywhere to steer in any direction, push to the edge to sprint, tap to use.'] },
   { date: '2026-06-30', size: 'big', v: 'Real-time movement', by: 'Claude', notes: ['The dungeon is now real-time instead of turn-based. Hold the d-pad / arrows / WASD to walk freely in all 8 directions — including diagonals — and slide along walls; let go to stop.', 'You auto-attack any foe within your weapon\'s reach on a short cooldown, so positioning matters: kite slow brutes, but watch for swift foes that outrun you. Skills and potions still fire on the bar / number keys.', 'Foes now act on their own clock: they roam and wander when they haven\'t noticed you, then wake and give chase once you stray close or step into their line of sight — and break off if you lose them.', 'Status effects, regrowth, cooldowns, hazards and the town-portal channel all tick on a steady world clock rather than per step. The USE button (centre pad) grabs loot underfoot and talks to NPCs you\'re standing next to.'] },
   { date: '2026-06-30', size: 'big', v: 'Stat requirements on all gear', by: 'Claude', notes: ['The attribute requirement that gated weapons now covers EVERY gear slot — armour and jewelry too. Each base leans on the attribute its natural wearer favours, nudging every class toward gear that fits: heavy plate (a Chestplate, Greaves or Gauntlets) wants Vitality, sturdy mid armour (Cuirass, Mail, Tassets) wants Might, light leather (Cap, Tunic, Trousers) wants Agility, and cloth or caster pieces (Robe, Circlet, Gloves) want Spirit. Jewelry asks a gentler price. Meet the attribute and you can wear it, whatever your class.', 'Requirements scale with the item’s level and are gentler than weapons’ (armour is mandatory, so its gate isn’t brutal). Every item tooltip and the loot list show the requirement in green when you meet it and red when you’re short, and the LOOT tab only lets you equip pieces you actually qualify for — off-hands still also need a fitting main hand.', 'Worn gear is now protected against attribute changes: if a respec (or anything else) drops you below a piece’s requirement, that piece turns RED in the GEAR panel and is IGNORED — it lends no stats, attributes or weapon damage — until you re-invest the attribute and bring it back. No more keeping power you can no longer support.'] },
@@ -8078,14 +8097,27 @@ function placeTraps(reach) {
   // be at least one on every floor, which got repetitive), and they ramp up
   // slowly with depth.
   let arrows = Math.random() < 0.4 ? Math.min(3, 1 + Math.floor(dungeonLevel / 6)) : 0, tries = 0;
-  while (arrows > 0 && tries++ < 300) {
+  while (arrows > 0 && tries++ < 600) {
     const c = randomFloorTile(reach);
     if (!c || (Math.abs(c.x - player.x) + Math.abs(c.y - player.y)) < 6) continue;
     const d = pick(DIRS);
     if (tileAtCell(c.x - d[0], c.y - d[1]) !== 1) continue; // want a wall at its back
-    let lane = 0, x = c.x, y = c.y;
-    for (let s = 0; s < 6; s++) { x += d[0]; y += d[1]; const t = tileAtCell(x, y); if (t === 1 || t === 6 || t === 10 || t === 11) break; lane++; }
+    const px = -d[1], py = d[0]; // perpendicular to the firing line
+    let lane = 0, walled = 0, x = c.x, y = c.y;
+    for (let s = 0; s < 6; s++) {
+      x += d[0]; y += d[1];
+      const t = tileAtCell(x, y);
+      if (t === 1 || t === 6 || t === 10 || t === 11) break;
+      lane++;
+      // A lane tile boxed in by walls on both sides is a true 1-wide hallway.
+      if (tileAtCell(x + px, y + py) === 1 && tileAtCell(x - px, y - py) === 1) walled++;
+    }
     if (lane < 3) continue;
+    // Strongly prefer firing down a hallway: for most of the search insist the
+    // lane is mostly flanked by walls. Only late in the search do we accept an
+    // open-room lane, so a wall-sparse floor still gets traps rather than none.
+    const hallway = walled >= Math.min(lane, 3);
+    if (!hallway && tries < 450) continue;
     traps.push({ kind: 'arrow', x: c.x, y: c.y, dx: d[0], dy: d[1], cd: Math.random() * 2, interval: rnd(18, 28) / 10, dmg: Math.round(5 + dungeonLevel * 1.6) });
     arrows--;
   }
@@ -8099,6 +8131,50 @@ function placeTraps(reach) {
       traps.push({ kind: 'fire', x: c.x, y: c.y, t: Math.random() * 3, period: rnd(26, 38) / 10, onFrac: 0.4, dmgCd: 0, dmg: Math.round(6 + dungeonLevel * 1.8) });
     }
   }
+}
+
+// Does an arrow trap's firing lane pass through (x,y)? (Includes the emitter tile
+// and every tile its bolt travels until a wall/water blocks the lane.)
+function arrowLaneHits(tr, x, y) {
+  let cx = tr.x, cy = tr.y;
+  for (let s = 0; s <= 6; s++) {
+    if (cx === x && cy === y) return true;
+    cx += tr.dx; cy += tr.dy;
+    const t = tileAtCell(cx, cy);
+    if (t === 1 || t === 6 || t === 10 || t === 11) break;
+  }
+  return false;
+}
+// Anything the player must walk up to (an NPC, a quest spot, a shrine/fountain)
+// should never sit in a trap path. Hazards are scattered before these are placed,
+// so clear the spikes in the ring around the spot and disarm any arrow trap that
+// fires through it — you should never be stabbed or shot just to interact.
+function clearTrapsAround(x, y) {
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+    const nx = x + dx, ny = y + dy;
+    if (nx < 1 || ny < 1 || nx >= MAP_W - 1 || ny >= MAP_H - 1) continue;
+    if (mapData[ny][nx] === 8) mapData[ny][nx] = 0; // spike → plain floor
+  }
+  if (traps && traps.length) traps = traps.filter(tr => !(tr.kind === 'arrow' && arrowLaneHits(tr, x, y)));
+}
+// Sweep every walk-up interactable on the floor and make its tile trap-safe.
+function clearTrapsAroundInteractables() {
+  const spots = [];
+  if (merchant) spots.push(merchant);
+  if (mystic) spots.push(mystic);
+  if (graveMarker) spots.push(graveMarker);
+  if (quest) {
+    if (quest.npc) spots.push(quest.npc);
+    if (quest.spot) spots.push(quest.spot);
+    if (quest.item) spots.push(quest.item);
+    if (Array.isArray(quest.markers)) for (const m of quest.markers) spots.push(m);
+  }
+  // Tile interactables: fountain (3) and shrine (5).
+  for (let y = 1; y < MAP_H - 1; y++) for (let x = 1; x < MAP_W - 1; x++) {
+    const t = mapData[y][x];
+    if (t === 3 || t === 5) spots.push({ x, y });
+  }
+  for (const s of spots) clearTrapsAround(s.x, s.y);
 }
 
 // Launch a traveling bolt from (x,y) toward (dx,dy). Dodgeable — it moves over
@@ -8138,7 +8214,7 @@ function updateTraps(dt) {
     if (tr.kind === 'arrow') {
       tr.cd -= dt;
       if (tr.cd <= 0) {
-        spawnProjectile(tr.x + 0.5, tr.y + 0.5, tr.dx, tr.dy, tr.dmg, '#ffe08a');
+        spawnProjectile(tr.x + 0.5, tr.y + 0.5, tr.dx, tr.dy, tr.dmg, '#ffe08a', 5.5);
         tr.cd = tr.interval;
         if (Math.abs(tr.x - player.x) + Math.abs(tr.y - player.y) < 12) sfx('click');
       }
@@ -8496,6 +8572,12 @@ function generateMap() {
   // the foot-reachable set so quest NPCs, markers and pickups are walkable to,
   // not stranded behind a teleporter or the exit stairs.
   maybeSpawnQuest(footReach);
+
+  // Now that every interactable (NPCs, shrines, fountains, the grave) is down,
+  // make sure none sits in a trap path — clear the spikes around them and disarm
+  // any arrow trap that fires through them. You should never take a hit just to
+  // reach something you're meant to interact with.
+  clearTrapsAroundInteractables();
 
   // With every foe (including any quest horde) now placed, make sure none is
   // stranded behind the sealed exit — otherwise the floor could never clear.
@@ -9990,7 +10072,7 @@ function renderHealer() {
       <button class="shop-buy-btn" ${(full || !afford) ? 'disabled' : ''} onclick="restHeal()">REST</button>
     </div>
     ${(!full && !afford) ? `<div class="town-blurb" style="color:var(--hp)">You can't cover the ${cost}g fee — earn more gold, or quaff a free potion instead.</div>` : ''}
-    <div class="town-blurb" style="opacity:0.8">Need a quick top-up mid-fight? Quaff a Health (Q) or Mana (E) potion — they're a skill now, free to use but share a 3-turn cooldown.</div>`);
+    <div class="town-blurb" style="opacity:0.8">Need a quick top-up mid-fight? Quaff a Health (Q) or Mana (E) potion — they're a skill now, free to use but share a 5-second cooldown.</div>`);
 }
 function restHeal() {
   if (player.hp >= player.maxHp && player.mp >= player.maxMp) return;
@@ -12910,13 +12992,27 @@ function draw() {
   });
   projectiles.forEach(p => {
     const ppx = offX + p.x * tw, ppy = offY + p.y * th;     // bolts stay smooth (fast hazards)
-    const m = Math.hypot(p.vx, p.vy) || 1, ux = p.vx / m, uy = p.vy / m;
+    const m = Math.hypot(p.vx, p.vy) || 1, ux = p.vx / m, uy = p.vy / m; // forward
+    const nx = -uy, ny = ux;                                // perpendicular (barbs / fletching)
+    const half = tw * 0.24, head = tw * 0.17;               // shaft half-length, head size
+    const tipx = ppx + ux * half, tipy = ppy + uy * half;   // arrow tip (leading)
+    const tailx = ppx - ux * half, taily = ppy - uy * half; // nock (trailing)
     ctx.save();
-    ctx.shadowColor = p.color; ctx.shadowBlur = tw * 0.3;
-    ctx.strokeStyle = p.color; ctx.lineWidth = Math.max(1.5, tw * 0.06); ctx.lineCap = 'round';
+    ctx.shadowColor = p.color; ctx.shadowBlur = tw * 0.25;
+    ctx.strokeStyle = p.color; ctx.fillStyle = p.color;
+    ctx.lineWidth = Math.max(1.3, tw * 0.05); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    // Shaft
+    ctx.beginPath(); ctx.moveTo(tailx, taily); ctx.lineTo(tipx, tipy); ctx.stroke();
+    // Arrowhead — a filled triangle at the tip
     ctx.beginPath();
-    ctx.moveTo(ppx - ux * tw * 0.22, ppy - uy * th * 0.22);
-    ctx.lineTo(ppx + ux * tw * 0.22, ppy + uy * th * 0.22);
+    ctx.moveTo(tipx, tipy);
+    ctx.lineTo(tipx - ux * head + nx * head * 0.55, tipy - uy * head + ny * head * 0.55);
+    ctx.lineTo(tipx - ux * head - nx * head * 0.55, tipy - uy * head - ny * head * 0.55);
+    ctx.closePath(); ctx.fill();
+    // Fletching — two short barbs at the nock
+    ctx.beginPath();
+    ctx.moveTo(tailx, taily); ctx.lineTo(tailx - ux * head * 0.7 + nx * head * 0.7, taily - uy * head * 0.7 + ny * head * 0.7);
+    ctx.moveTo(tailx, taily); ctx.lineTo(tailx - ux * head * 0.7 - nx * head * 0.7, taily - uy * head * 0.7 - ny * head * 0.7);
     ctx.stroke();
     ctx.restore();
   });
@@ -13500,9 +13596,10 @@ function playerSolidCell(cx, cy) {
   if (bossWallAt(cx, cy)) return true;
   if (merchant && merchant.x === cx && merchant.y === cy) return true;
   if (mystic && mystic.x === cx && mystic.y === cy) return true;
-  // Foes do NOT block the hero — you can slip past/through them so you can always
-  // disengage and kite (auto-attack still strikes anything in reach). Enemies
-  // still never step onto your cell (enemyTileFree), so they cluster, not stack.
+  // Foes are solid — you can't walk through them. You can still always retreat:
+  // they move slower than you (WORLD_TICK), and resting flush against a foe leaves
+  // your box just shy of its cell, so you can slide along it and step away.
+  if (getEnemyAt(cx, cy)) return true;
   return false;
 }
 // Smash a cracked wall / unlock a vault door the hero is deliberately pushing INTO
@@ -14380,7 +14477,7 @@ function castSkillById(id) {
   if (portalChanneling()) return;   // held while a town portal channels (tap TOWN to break off)
   if (isPlayerStunned()) { log('You are stunned and can\'t cast!'); return; }
   const cd = skillCd(id);
-  if (cd > 0) { log(`⏳ ${sk.name} is recharging (${cd} more turn${cd === 1 ? '' : 's'}).`); return; }
+  if (cd > 0) { log(`⏳ ${sk.name} is recharging (${Math.ceil(cd)}s left).`); return; }
   // sk.mp is the rank-scaled cost (it climbs as the skill levels up, already net
   // of the rank-3 ✦ Empowered discount). Mana Cost Reduction % (gear) trims the
   // final price of every cast on top.
@@ -14398,11 +14495,12 @@ function castSkillById(id) {
   else player.mp -= cost;
   fireSkillTrigger('cast', {}); // on-cast procs
   updateBars();
-  // Real-time: the world clock ticks cooldowns down; the cast just starts the
-  // recharge. Cooldown Reduction % (gear) shortens it (never below 1 tick); a
-  // rank-7 skill gets the ✦✦ Honed reduction on top.
+  // Real-time: the cast just starts the recharge, which then burns down in real
+  // seconds (see tickCooldowns). sk.cd is the cooldown in seconds; Cooldown
+  // Reduction % (gear) shortens it (never below 0.5s), and a rank-7 skill gets the
+  // ✦✦ Honed reduction on top.
   const msCdr = skillRank(id) >= 7 ? 0.20 : 0;
-  setSkillCd(id, Math.max(1, Math.round(sk.cd * (1 - Math.min(0.6, totalStat('CDR') / 100) - msCdr))));
+  setSkillCd(id, Math.max(0.5, sk.cd * (1 - Math.min(0.6, totalStat('CDR') / 100) - msCdr)));
   updateBars();
   renderSkillBar();
   saveGame();
@@ -14860,10 +14958,9 @@ function minionAttack(m, e, ranged) {
 // Run every nearby living enemy's turn once, bailing if the floor changes
 // mid-turn (e.g. a death warps you to the previous floor and rebuilds it).
 function runEnemyTurn() {
-  // Every passed turn (move, attack, or skill) ticks down active-skill cooldowns
-  // and any transient combat buffs (War Cry, Sanctuary, …).
-  if (player.skillCds) for (const k in player.skillCds) if (player.skillCds[k] > 0) player.skillCds[k]--;
-  if (player.potionCd > 0) player.potionCd--;
+  // Every passed turn (move, attack, or skill) ages transient combat buffs (War
+  // Cry, Sanctuary, …). Skill / potion cooldowns count down in real seconds now
+  // (see tickCooldowns), so they're no longer decremented here.
   for (const k in combatBuffs) { const b = combatBuffs[k]; if (b && b.t > 0) { b.t--; if (b.t <= 0) delete combatBuffs[k]; } }
   // Summoned minions act on the hero's turn — before foes, so they can soak and
   // strike — then count down their lifespan.
@@ -16170,9 +16267,9 @@ function updateBars() {
       const label = document.getElementById('skill-label');
       if (icon) icon.innerHTML = dlIcon(sk.icon,28) || '';
       const cd = skillCd(sk.id);
-      const ready = cd === 0 && player.mp >= sk.mp && !inTown;
-      if (label) label.textContent = cd > 0 ? `${cd}` : `${sk.mp}MP`;
-      skillBtn.dataset.tip = `<div class='ht-name' style='color:#e6c34a'>${dlIcon(sk.icon,16)||''} ${sk.name}</div><div class='ht-line'>${sk.desc}</div><div class='ht-sub'>${sk.mp} MP · ${sk.cd}-turn cooldown · ${touchUI() ? 'tap to cast' : 'press R'}</div>`;
+      const ready = cd <= 0 && player.mp >= sk.mp && !inTown;
+      if (label) label.textContent = cd > 0 ? `${Math.ceil(cd)}s` : `${sk.mp}MP`;
+      skillBtn.dataset.tip = `<div class='ht-name' style='color:#e6c34a'>${dlIcon(sk.icon,16)||''} ${sk.name}</div><div class='ht-line'>${sk.desc}</div><div class='ht-sub'>${sk.mp} MP · ${sk.cd}s cooldown · ${touchUI() ? 'tap to cast' : 'press R'}</div>`;
       skillBtn.classList.toggle('disabled', !ready);
       skillBtn.classList.toggle('ready', ready && player.hp > 0);
     } else {
@@ -16206,12 +16303,12 @@ function updateBars() {
 // percentage of max HP so they scale with you instead of becoming useless at
 // high levels.
 const HEAL_PERCENT = 0.25;     // a sip mends 25% of max HP — sustain, not a reset
-const POTION_CD = 3;            // shared cooldown — recharges over 3 turns
+const POTION_CD = 5;            // shared cooldown — 5 real seconds between sips
 function healPotionAmount() { return Math.max(1, Math.round(player.maxHp * HEAL_PERCENT)); }
-function potionReady() { return (player.potionCd || 0) === 0; }
+function potionReady() { return (player.potionCd || 0) <= 0; }
 function useHealthPotion() {
   if (portalChanneling()) return;   // held while a town portal channels (tap TOWN to break off)
-  if (!potionReady()) { log(`⏳ Potions recharge — ${player.potionCd} turn${player.potionCd === 1 ? '' : 's'} left.`); return; }
+  if (!potionReady()) { log(`⏳ Potions recharge — ${Math.ceil(player.potionCd)}s left.`); return; }
   if (player.hp >= player.maxHp) { log('Already at full health.'); return; }
   const heal = Math.min(player.maxHp - player.hp, healPotionAmount());
   player.hp += heal;
@@ -16226,7 +16323,7 @@ const MANA_PERCENT = 0.25;
 function manaPotionAmount() { return Math.max(10, Math.round(player.maxMp * MANA_PERCENT)); }
 function useManaPotion() {
   if (portalChanneling()) return;   // held while a town portal channels (tap TOWN to break off)
-  if (!potionReady()) { log(`⏳ Potions recharge — ${player.potionCd} turn${player.potionCd === 1 ? '' : 's'} left.`); return; }
+  if (!potionReady()) { log(`⏳ Potions recharge — ${Math.ceil(player.potionCd)}s left.`); return; }
   if (player.mp >= player.maxMp) { log('Already at full mana.'); return; }
   const restore = Math.min(player.maxMp - player.mp, manaPotionAmount());
   player.mp += restore;
@@ -16241,8 +16338,8 @@ function useManaPotion() {
 // to ready. In town there are no foes, so we just refresh and skip the turn.
 function spendPotionTurn() {
   updateBars();
-  // Real-time: quaffing just starts the shared cooldown (the world clock ticks it
-  // down). In town there are no foes, so the cooldown is skipped entirely.
+  // Real-time: quaffing just starts the shared cooldown (it burns down in real
+  // seconds — see tickCooldowns). In town there are no foes, so it's skipped.
   if (!inTown) player.potionCd = POTION_CD;
   updateBars();
   renderSkillBar();
@@ -16673,7 +16770,7 @@ function renderSkills(el) {
   const sn = selectedSkillId ? byId[selectedSkillId] : null;
   if (sn) {
     const rank = skillRank(sn.id);
-    const typeTxt = sn.type === 'active' ? `⚡ ACTIVE · ${skillManaCost(sn, rank)}MP · ${sn.cd}cd · ${castShapeLabel(sn.cast)}` : 'PASSIVE';
+    const typeTxt = sn.type === 'active' ? `⚡ ACTIVE · ${skillManaCost(sn, rank)}MP · ${sn.cd}s cd · ${castShapeLabel(sn.cast)}` : 'PASSIVE';
     const pips = sn.type === 'active' ? milestonePips(rank) : '';
     const rankTxt = ` <span style="color:#e8c267">${rank}/${sn.max}${pips ? ' ' + pips : ''}</span>`;
     const reqRows = [];
@@ -16756,7 +16853,7 @@ function skillTipHtml(n) {
   const rank = skillRank(n.id);
   const pips = n.type === 'active' ? milestonePips(rank) : '';
   const typeTxt = n.type === 'active'
-    ? `⚡ Active · ${skillManaCost(n, rank)}MP · ${n.cd}cd · ${esc(castShapeLabel(n.cast))}`
+    ? `⚡ Active · ${skillManaCost(n, rank)}MP · ${n.cd}s cd · ${esc(castShapeLabel(n.cast))}`
     : 'Passive';
   let h = `<div class='ht-name'>${esc(n.name)} <span style='color:#e8c267'>${rank}/${n.max}${pips ? ' ' + pips : ''}</span></div>`;
   h += `<div class='ht-line' style='color:#9a8fd0'>${typeTxt}</div>`;
@@ -17065,27 +17162,28 @@ function renderSkillBar() {
   if (inTown) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
   bar.style.display = 'flex';
   // Potion skills pinned to the far left of the bar: Health (Q) then Mana (E).
-  // They're unlimited but share a one-turn cooldown, so the info slot shows the
-  // remaining cooldown when recharging (blank when ready).
+  // They're unlimited but share a 5-second cooldown, so the info slot shows the
+  // remaining seconds when recharging (blank when ready).
   const pcd = player.potionCd || 0;
-  const potReady = pcd === 0;
+  const potReady = pcd <= 0;
   const hpFull = player.hp >= player.maxHp;
   const mpFull = player.mp >= player.maxMp;
   const urgent = potReady && player.hp < player.maxHp * 0.35;
   const healHint = touchUI() ? 'tap to drink' : 'press 1';
   const manaHint = touchUI() ? 'tap to drink' : 'press 2';
-  const healTip = `<div class='ht-name' style='color:var(--hp)'>❤️ Health Potion</div><div class='ht-line'>Quaff to restore a burst of health.</div><div class='ht-sub'>${healHint} · 3-turn cooldown</div>`;
-  const manaTip = `<div class='ht-name' style='color:var(--mp)'>🔷 Mana Potion</div><div class='ht-line'>Quaff to restore a burst of mana.</div><div class='ht-sub'>${manaHint} · 3-turn cooldown</div>`;
-  const healBtn = `<button class="skillbar-btn potion ${potReady && !hpFull ? 'ready' : 'empty'} ${urgent ? 'urgent' : ''}" ${hoverTip(healTip)} onclick="useHealthPotion()">
-      <span class="sb-key">1</span><span class="sb-icon">${HEAL_POTION_SVG}</span><span class="sb-info" id="heal-label">${pcd > 0 ? pcd : ''}</span>
+  const healTip = `<div class='ht-name' style='color:var(--hp)'>❤️ Health Potion</div><div class='ht-line'>Quaff to restore a burst of health.</div><div class='ht-sub'>${healHint} · ${POTION_CD}-second cooldown</div>`;
+  const manaTip = `<div class='ht-name' style='color:var(--mp)'>🔷 Mana Potion</div><div class='ht-line'>Quaff to restore a burst of mana.</div><div class='ht-sub'>${manaHint} · ${POTION_CD}-second cooldown</div>`;
+  const cdDial = (key) => `<span class="sb-cd" data-cd="${key}"></span>`;
+  const healBtn = `<button class="skillbar-btn potion ${potReady && !hpFull ? 'ready' : 'empty'} ${urgent ? 'urgent' : ''} ${pcd > 0 ? 'cooling' : ''}" ${hoverTip(healTip)} onclick="useHealthPotion()">
+      <span class="sb-key">1</span><span class="sb-icon">${HEAL_POTION_SVG}</span><span class="sb-info" id="heal-label">${pcd > 0 ? Math.ceil(pcd) + 's' : ''}</span>${cdDial('pot')}
     </button>`;
-  const manaBtn = `<button class="skillbar-btn potion mana ${potReady && !mpFull ? 'ready' : 'empty'}" ${hoverTip(manaTip)} onclick="useManaPotion()">
-      <span class="sb-key">2</span><span class="sb-icon">${MANA_POTION_SVG}</span><span class="sb-info">${pcd > 0 ? pcd : ''}</span>
+  const manaBtn = `<button class="skillbar-btn potion mana ${potReady && !mpFull ? 'ready' : 'empty'} ${pcd > 0 ? 'cooling' : ''}" ${hoverTip(manaTip)} onclick="useManaPotion()">
+      <span class="sb-key">2</span><span class="sb-icon">${MANA_POTION_SVG}</span><span class="sb-info">${pcd > 0 ? Math.ceil(pcd) + 's' : ''}</span>${cdDial('pot')}
     </button>`;
   let num = 0;
   const skillsHtml = skills.map((s) => {
     const cd = skillCd(s.id);
-    const ready = cd === 0 && player.mp >= s.mp && player.hp > 0;
+    const ready = cd <= 0 && player.mp >= s.mp && player.hp > 0;
     // Potions hold keys 1–2, so the first seven learned actives map to keys 3–9;
     // any beyond that are click/tap only (a deep build can learn more actives
     // than there are keys). The first active also answers to R / the ⚡ button.
@@ -17094,9 +17192,9 @@ function renderSkillBar() {
     const keyHint = idx === 1 ? (key ? `${key} or R` : 'R') : key;
     // Desktop names the number/R key; touch (no keyboard, reached by long-press) says "tap to cast".
     const castHint = touchUI() ? ' · tap to cast' : (keyHint ? ` · press ${keyHint}` : '');
-    const tip = `<div class='ht-name' style='color:#e6c34a'>${dlIcon(s.icon,16)||''} ${s.name}</div><div class='ht-line'>${s.desc}</div><div class='ht-sub'>${s.mp} MP · ${s.cd}-turn cooldown${castHint}</div>`;
-    return `<button class="skillbar-btn ${idx === 1 ? 'baseline ' : ''}${ready ? 'ready' : 'disabled'}" ${hoverTip(tip)} onclick="castSkillById('${s.id}')">
-      <span class="sb-key">${key}</span><span class="sb-icon">${dlIcon(s.icon,24)||''}</span><span class="sb-info">${cd > 0 ? cd : s.mp + 'MP'}</span>
+    const tip = `<div class='ht-name' style='color:#e6c34a'>${dlIcon(s.icon,16)||''} ${s.name}</div><div class='ht-line'>${s.desc}</div><div class='ht-sub'>${s.mp} MP · ${s.cd}s cooldown${castHint}</div>`;
+    return `<button class="skillbar-btn ${idx === 1 ? 'baseline ' : ''}${ready ? 'ready' : 'disabled'} ${cd > 0 ? 'cooling' : ''}" ${hoverTip(tip)} onclick="castSkillById('${s.id}')">
+      <span class="sb-key">${key}</span><span class="sb-icon">${dlIcon(s.icon,24)||''}</span><span class="sb-info">${cd > 0 ? Math.ceil(cd) + 's' : s.mp + 'MP'}</span>${cdDial('sk:' + s.id)}
     </button>`;
   }).join('');
   // Desktop only: a TOWN button on the far left of the bar (the header's TOWN
@@ -18073,7 +18171,10 @@ function loadGame() {
     // Potions used to be hoarded consumables; they're a cooldown-gated skill now.
     // Drop the old counters from older saves and seed the shared potion cooldown.
     delete player.healPotions; delete player.manaPotions; delete player.healthPotionsBought;
-    if (player.potionCd == null) player.potionCd = 0;
+    // Cooldowns are transient combat state and now measured in seconds (older
+    // saves stored them as world-turns); clear the potion cooldown on load so no
+    // stale turn-count lingers as a wrong seconds value.
+    player.potionCd = 0;
     // Real-time movement adds stamina (sprint/dash) and momentum/cooldown fields.
     // Seed them on older saves — and repair a NaN stamina a prior buggy build may
     // have persisted — or sprint stays dead and dashing goes free/unlimited.
@@ -18127,7 +18228,9 @@ function loadGame() {
     // Migrate saves that predate the skill tree.
     if (player.skillPoints == null) player.skillPoints = 0;
     if (!player.skills || typeof player.skills !== 'object') player.skills = {};
-    if (!player.skillCds || typeof player.skillCds !== 'object') player.skillCds = {};
+    // Skill cooldowns are now tracked in seconds (older saves used world-turns);
+    // start fresh on load so no stale turn-count is misread as a seconds value.
+    player.skillCds = {};
     // The old always-on baseline class skill is gone, so its standalone cooldown
     // is dropped — `skillCd` is no longer read (kept on the object only so older
     // code paths don't choke on undefined).
@@ -19685,7 +19788,7 @@ if (hadSave) {
 }
 log('Progress auto-saves automatically as you play.');
 log('Open 🎒 BAG to view your loot; press the pad\'s USE button to grab items.');
-log(`Tap the ❤️ or 🔷 flask to quaff a ${logPotion('Potion')} — they're a skill now, free to use but share a 3-turn cooldown.`);
+log(`Tap the ❤️ or 🔷 flask to quaff a ${logPotion('Potion')} — they're a skill now, free to use but share a 5-second cooldown.`);
 log('⌨️ Keys: Q health potion · E mana potion · R primary skill · 3–9 skills · T town · B open bag · Space/F use.');
 log('⚡ You start with a skill point — open 🎒 BAG ▸ SKILLS to learn your first active, then tap ⚡ (or press R) to cast it.');
 log('⚡ Each item has a Power value; your total Power blends level, gear, and attributes.');
@@ -19779,6 +19882,41 @@ function updatePlayerCombat(dt) {
   player.atkCd = playerAttackInterval();
 }
 
+// Skill & potion cooldowns burn down in real seconds (the same dt clock the
+// attack cooldown uses), so their on-screen numbers read as a plain seconds
+// countdown instead of abstract world-turns. Floored at 0 so they never undershoot.
+function tickCooldowns(dt) {
+  if (player.potionCd > 0) { player.potionCd -= dt; if (player.potionCd < 0) player.potionCd = 0; }
+  if (player.skillCds) for (const k in player.skillCds) {
+    if (player.skillCds[k] > 0) { player.skillCds[k] -= dt; if (player.skillCds[k] < 0) player.skillCds[k] = 0; }
+  }
+}
+
+// Drive the live cooldown dials each frame: sweep the grey overlay from full to
+// empty and show the countdown (whole seconds, then one decimal under 1s). When
+// a skill/potion finishes recharging, refresh the bar so it reads as ready.
+function updateCooldownDials() {
+  const bar = document.getElementById('skill-bar');
+  if (!bar) return;
+  let finished = false;
+  const dials = bar.querySelectorAll('.sb-cd');
+  for (let i = 0; i < dials.length; i++) {
+    const el = dials[i], btn = el.parentNode, id = el.getAttribute('data-cd');
+    let rem = 0, total = 1;
+    if (id === 'pot') { rem = player.potionCd || 0; total = POTION_CD; }
+    else if (id && id.indexOf('sk:') === 0) { const sid = id.slice(3); rem = skillCd(sid); total = skillCdMax[sid] || rem || 1; }
+    if (rem > 0.05) {
+      if (!btn.classList.contains('cooling')) btn.classList.add('cooling');
+      const frac = total > 0 ? Math.max(0, Math.min(1, rem / total)) : 0;
+      el.style.setProperty('--cd-frac', frac.toFixed(3));
+      el.textContent = rem >= 1 ? String(Math.ceil(rem)) : rem.toFixed(1);
+    } else if (btn.classList.contains('cooling')) {
+      finished = true; // came off cooldown — rebuild so it reads as ready
+    }
+  }
+  if (finished) renderSkillBar();
+}
+
 // Slide every enemy sprite toward its logic cell each frame so cell-to-cell steps
 // read as smooth motion. Big displacements (knockback, blink, a 2-tile dash) snap
 // rather than drift through walls. Lazy-inits fx/fy for foes spawned mid-floor.
@@ -19815,9 +19953,8 @@ function enemyAttackInterval(e) {
 let _worldAcc = 0, _saveTick = 0;
 // One "turn" of world upkeep, on a fixed real-time cadence.
 function worldTick() {
-  // Cooldowns & transient combat buffs count down.
-  if (player.skillCds) for (const k in player.skillCds) if (player.skillCds[k] > 0) player.skillCds[k]--;
-  if (player.potionCd > 0) player.potionCd--;
+  // Transient combat buffs (War Cry, Sanctuary, …) age out per world-tick. Skill
+  // and potion cooldowns now burn down in real seconds instead — see tickCooldowns().
   for (const k in combatBuffs) { const b = combatBuffs[k]; if (b && b.t > 0) { b.t--; if (b.t <= 0) delete combatBuffs[k]; } }
   // The hero's own upkeep first (DoT, regen) — this damage never breaks a portal.
   tickStatusEffects();
@@ -19860,11 +19997,13 @@ function gameLoop(ts) {
   if (!rtPaused()) {
     updatePlayer(dt);              // free 8-dir movement may trigger stairs/town/death…
     if (!rtPaused()) updatePlayerCombat(dt);
+    if (!rtPaused()) tickCooldowns(dt);   // skill / potion cooldowns burn down in seconds
     if (!rtPaused()) stepWorldClock(dt);
     if (!rtPaused()) { updateTraps(dt); updateProjectiles(dt); }
   }
   updateActorRender(dt);
   renderStaminaBar();              // stamina drains/refills continuously — keep the END bar live
+  updateCooldownDials();           // animate the skill/potion cooldown dials in real time
   updateHaloVignette();            // the danger halo is a DOM overlay — pulse it every frame
   draw();
 }
