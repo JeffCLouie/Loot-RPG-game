@@ -12577,17 +12577,23 @@ function move(dx, dy) {
 function playerSolidCell(cx, cy) {
   if (cx < 0 || cy < 0 || cx >= MAP_W || cy >= MAP_H) return true;
   const t = mapData[cy][cx];
-  if (t === 10) { mapData[cy][cx] = 0; log('🧱 You smash through a cracked wall!', 'loot'); return false; }
-  if (t === 11) {
-    if (hasKey) { hasKey = false; mapData[cy][cx] = 0; log('🔑 You unlock the vault door!', 'important'); return false; }
-    return true; // barred without a key
-  }
+  if (t === 10) return true;            // cracked wall — solid until smashed (see breakAhead)
+  if (t === 11) return true;            // locked door — solid until unlocked (see breakAhead)
   if (!isFloorPassable(t)) return true;
   if (bossWallAt(cx, cy)) return true;
   if (merchant && merchant.x === cx && merchant.y === cy) return true;
   if (mystic && mystic.x === cx && mystic.y === cy) return true;
   if (getEnemyAt(cx, cy)) return true;
   return false;
+}
+// Smash a cracked wall / unlock a vault door the hero is deliberately pushing INTO
+// (an axis-blocked cell directly in the press direction). Kept out of the pure
+// collision test so a glancing corner never spends the one-time vault key.
+function breakAhead(cx, cy) {
+  if (cx < 0 || cy < 0 || cx >= MAP_W || cy >= MAP_H) return;
+  const t = mapData[cy][cx];
+  if (t === 10) { mapData[cy][cx] = 0; log('🧱 You smash through a cracked wall!', 'loot'); }
+  else if (t === 11 && hasKey) { hasKey = false; mapData[cy][cx] = 0; log('🔑 You unlock the vault door!', 'important'); }
 }
 // Would the hero's body (a box of half-size PLAYER_R) overlap a solid cell when
 // its centre is at (px,py)? Tests the four corners — resolving X and Y separately
@@ -12616,10 +12622,21 @@ function updatePlayer(dt) {
   player.faceDy = vy === 0 ? 0 : Math.sign(vy);
   const preX = player.x, preY = player.y;
   const stepLen = PLAYER_SPEED * dt;
+  // X axis: move if clear; if blocked while pressing into a cracked wall / vault
+  // door, break through that specific cell (once) and proceed.
   const tx = player.fx + vx * stepLen;
-  if (!playerBoxBlocked(tx, player.fy)) player.fx = tx;   // smash/unlock fires inside the test
+  if (!playerBoxBlocked(tx, player.fy)) player.fx = tx;
+  else if (vx !== 0) {
+    breakAhead(player.x + Math.sign(vx), player.y);
+    if (!playerBoxBlocked(player.fx + vx * stepLen, player.fy)) player.fx += vx * stepLen;
+  }
+  // Y axis (same, using the possibly-updated X).
   const ty = player.fy + vy * stepLen;
   if (!playerBoxBlocked(player.fx, ty)) player.fy = ty;
+  else if (vy !== 0) {
+    breakAhead(player.x, player.y + Math.sign(vy));
+    if (!playerBoxBlocked(player.fx, player.fy + vy * stepLen)) player.fy += vy * stepLen;
+  }
   player.fx = Math.max(0.5, Math.min(MAP_W - 0.5, player.fx));
   player.fy = Math.max(0.5, Math.min(MAP_H - 0.5, player.fy));
   player.x = Math.floor(player.fx);
@@ -18569,7 +18586,10 @@ if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => draw
 // (panelOpen always true) must NOT count, or web players could never move.
 const RT_BLOCKING_OVERLAYS = ['title-overlay','class-overlay','hc-death-overlay','death-overlay',
   'shop-overlay','mystic-overlay','town-overlay','settings-menu','version-overlay','howto-overlay',
-  'playtime-overlay','autoloot-overlay'];
+  'playtime-overlay','autoloot-overlay',
+  // Reachable mid-dungeon (e.g. from the ⚙️ menu or on a tier conquest) — these
+  // close the settings menu, so they must pause the world on their own.
+  'conquest-overlay','slots-overlay','account-overlay','lb-overlay','graveyard-overlay'];
 function rtPaused() {
   if (gameHalted || inTown || player.hp <= 0) return true;
   for (const id of RT_BLOCKING_OVERLAYS) {
@@ -18634,7 +18654,10 @@ function worldTick() {
   // mid-pass (a death-warp or boss kill swaps the enemies array).
   runMinionTurn();
   const serial = floorSerial;
-  for (const e of enemies) {
+  // Snapshot the living foes: a boss that summons mid-pass must NOT let the fresh
+  // minions act on this same tick (matches the old turn loop).
+  const acting = enemies.filter(e => !e.dead);
+  for (const e of acting) {
     if (floorSerial !== serial) break;
     if (!e.dead) enemyAct(e);
   }
