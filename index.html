@@ -928,6 +928,32 @@
   .skillbar-btn.slot-drop-hot, .lt-slot.slot-drop-hot { border-color: #ffd86a !important; box-shadow: 0 0 8px #ffd86a99; transform: translateY(-2px); }
   .skillbar-btn[draggable="true"] { cursor: grab; }
   .skillbar-btn[draggable="true"]:active { cursor: grabbing; }
+
+  /* ── IN-TOWN SKILL TRAY ──
+     In town the bar stays put so you can see your kit and rearrange slots, but it
+     parks as a solid tray over a clean strip (not the town plaza behind it) and
+     lifts above the town/shop/mystic menus' backdrops. Those menus reserve exactly
+     the tray's height (--town-bar-reserve, measured in JS) at their own bottom so
+     they end above it and nothing overlaps. */
+  #skill-bar.in-town {
+    z-index: 235;
+    background: #15101f;
+    border-top: 1px solid var(--frame);
+    box-shadow: 0 -5px 16px rgba(0,0,0,0.55);
+    padding-top: 6px; padding-bottom: 6px;
+  }
+  /* Locked potions in town: greyed and inert — no ready pulse, no press feedback. */
+  .skillbar-btn.town-locked { opacity: 0.4; filter: grayscale(0.7); cursor: not-allowed; animation: none; }
+  .skillbar-btn.town-locked:active { transform: none; background: #6a1a2a; }
+  .skillbar-btn.town-locked.mana:active { background: #1a2a6a; }
+  /* Keep the town menus (and the shop/mystic sub-menus) clear of the parked tray. */
+  body.town-bar #town-overlay,
+  body.town-bar #shop-overlay,
+  body.town-bar #mystic-overlay { padding-bottom: var(--town-bar-reserve, 16px); }
+  body.town-bar #town-modal,
+  body.town-bar #shop-modal,
+  body.town-bar #mystic-modal { max-height: min(80vh, calc(100vh - var(--town-bar-reserve, 0px) - 20px)); }
+
   /* On touch devices the cast bar is your only way to fire spells/potions, so make
      the buttons and their icons noticeably bigger for easier tapping. (Desktop has
      its own larger sizing in the wide-layout media query above.) */
@@ -2173,6 +2199,17 @@
       border-radius: 0;
       box-shadow: none;
     }
+    /* In town the parked skill tray sits above the town menu (still tucked under
+       the loot drawer); the menus end above it by reserving its height as a bottom
+       gap, so the menu column shrinks rather than overlapping the tray. The full
+       -height web modal then fills the shortened overlay, so its cap is cleared. */
+    body.town-bar #town-overlay,
+    body.town-bar #shop-overlay,
+    body.town-bar #mystic-overlay { bottom: var(--town-bar-reserve, 0); padding-bottom: 0; }
+    body.town-bar #town-modal,
+    body.town-bar #shop-modal,
+    body.town-bar #mystic-modal { max-height: none; }
+    #skill-bar.in-town { z-index: 246; bottom: 0; }
 
     /* Desktop header is a centred two-row grid, truly centred in the viewport:
          row 1   HP — Name — MP        row 2   Power — Level — Gold
@@ -7570,6 +7607,7 @@ document.addEventListener('click', (e) => {
 
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
+  { date: '2026-06-30', size: 'small', v: 'Skill bar stays in town', by: 'Claude', notes: ['Your skill bar no longer vanishes when you step into town — it parks as a tray along the bottom so you can see your kit and rearrange your slots while you shop and plan. The town menu now ends just above it instead of covering it, and the tray sits on its own clean strip.', 'The Health and Mana potions on that tray are greyed out and locked while you\'re in town: there\'s nothing to fight, and resting already restores you for free, so a potion can\'t be wasted there. They light back up the moment you take the gate back down.'] },
   { date: '2026-06-30', size: 'small', v: 'Tidier SKILLS tab on desktop', by: 'Claude', notes: ['On the wide desktop layout, the SKILLS tab no longer repeats the row of skill slots above the tree. Your bottom skill bar is already on screen there — you can drag a learned skill straight onto it, or rearrange the slots in place — so the second copy was redundant clutter.', 'On phones and tablets the slot tray stays exactly as it was: it\'s the comfortable place to tap a slot and assign a skill, and the only slot editor available while you\'re in town.'] },
   { date: '2026-06-30', size: 'medium', v: 'Might fuels Endurance + Sprint toggle', by: 'Claude', notes: ['Might now does more than raise Attack power: it also DEEPENS your Endurance pool and SPEEDS its recharge. A mighty hero sprints longer and recovers stamina sooner, so pouring points (or stacking +Might gear) into it pays off for footwork, not just damage. The HERO sheet now lists your Max Endurance and Endurance regen.', 'New Sprint setting in the ⚙️ menu: leave it on HOLD to sprint only while Shift is down, or flip it to TOGGLE so a single tap of Shift latches auto-sprint on (tap again to stop) — sprint without keeping a finger on the key. Your choice is remembered across sessions.'] },
   { date: '2026-06-30', size: 'medium', v: 'Drag-and-drop skill slots', by: 'Claude', notes: ['The skill bar now shows every hotkey slot (keys 1–9), empty ones included, as a dashed open slot — so you can see at a glance how many skills you can bind and where the gaps are. Slot 1 is still the gold primary the R key / ⚡ button cast.', 'Drag a learned active skill straight from its node in the SKILLS tab onto a slot to bind it, and drag a slot onto another to rearrange — including onto an empty slot to move it there. A learned skill that isn\'t in any slot reads as "off the bar" (🚫) and simply isn\'t keyed until you slot it.', 'A new loadout tray sits above the ACTIVE tree showing all your slots together, so the skills and the slots are side by side to drag between. On touch (or as a quick desktop path) just tap any slot to pick which learned skill fills it, or clear it. Your slot layout is saved with the character; existing heroes keep their current bar.'] },
@@ -7856,7 +7894,7 @@ function resizeCanvas() {
   canvas.height = canvas.offsetHeight;
 }
 resizeCanvas();
-window.addEventListener('resize', () => { resizeCanvas(); draw(); });
+window.addEventListener('resize', () => { resizeCanvas(); if (inTown) syncTownBarReserve(); draw(); });
 
 // On the web/desktop layout the loot drawer is a permanent column, so it's
 // always open and tapping the map should not close it.
@@ -8170,7 +8208,7 @@ applyDpadSettings();
 function syncWebPanel() {
   if (isWebLayout()) { panelOpen = true; renderPanel(); }
 }
-WEB_MQ.addEventListener('change', () => { syncWebPanel(); resizeCanvas(); draw(); });
+WEB_MQ.addEventListener('change', () => { syncWebPanel(); resizeCanvas(); if (inTown) renderSkillBar(); draw(); });
 
 // ══════════════════════════════════════════
 // MAP GENERATION
@@ -9880,6 +9918,9 @@ function openTownHub() {
     ? `<div class="town-blurb town-blurb-revived">💀 You were slain and revived here in <b>Town</b>. Stock up if you like — then take the <b>🌀 Dungeon Gate</b> below (or the ✕ above) to head back down and keep questing.</div>`
     : `<div class="town-blurb">A safe haven away from the dungeon. Pick a service, then take the Dungeon Gate when you're ready to delve again.</div>`;
   setTownContent(`${blurb}<div class="town-menu">${tiles}${gateTile}</div>`);
+  // Render the bar in its town form (potions locked) and measure the gap the menu
+  // reserves for it, now that the town overlay is open.
+  renderSkillBar();
 }
 // Return from a service panel to the hub menu (also used by the backdrop tap).
 function townBack() {
@@ -11113,7 +11154,7 @@ function enterDungeonAt(diff, floor) {
   maybeFloorEvent();
   sfx('stairs');
   log(`🌀 You step through the gate into ${floorLabel()}.`, 'important');
-  updateBars(); draw(); saveGame();
+  updateBars(); renderSkillBar(); draw(); saveGame();
 }
 
 // ── GAMBLER — wager gold for a random piece of loot ──
@@ -16929,6 +16970,7 @@ const POTION_CD = 5;            // shared cooldown — 5 real seconds between si
 function healPotionAmount() { return Math.max(1, Math.round(player.maxHp * HEAL_PERCENT)); }
 function potionReady() { return (player.potionCd || 0) <= 0; }
 function useHealthPotion() {
+  if (inTown) return;               // potions are locked in town (see renderSkillBar) — no free heals
   if (portalChanneling()) return;   // held while a town portal channels (tap TOWN to break off)
   if (!potionReady()) { log(`⏳ Potions recharge — ${Math.ceil(player.potionCd)}s left.`); return; }
   if (player.hp >= player.maxHp) { log('Already at full health.'); return; }
@@ -16944,6 +16986,7 @@ function useHealthPotion() {
 const MANA_PERCENT = 0.25;
 function manaPotionAmount() { return Math.max(10, Math.round(player.maxMp * MANA_PERCENT)); }
 function useManaPotion() {
+  if (inTown) return;               // potions are locked in town (see renderSkillBar) — no free refills
   if (portalChanneling()) return;   // held while a town portal channels (tap TOWN to break off)
   if (!potionReady()) { log(`⏳ Potions recharge — ${Math.ceil(player.potionCd)}s left.`); return; }
   if (player.mp >= player.maxMp) { log('Already at full mana.'); return; }
@@ -17813,28 +17856,34 @@ function renderSkillBar() {
   // cancels the drop (the world clock re-renders the bar every tick). Hold the
   // current markup steady until the drag ends — skillDragEnd / the drop re-render.
   if (skillDrag) return;
-  // Hide the bar only in town. Out in the dungeon it always renders, even with
-  // no active skills learned yet, because the far-left Health/Mana potion
-  // buttons are baseline kit every hero needs from the start.
-  if (inTown) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+  // The bar still renders in town — you can see your kit and rearrange slots there
+  // — but it parks as a solid tray the town menu leaves room for (see
+  // syncTownBarReserve), and its potions go inert. Out in the dungeon it's the live
+  // combat bar, and it always renders even before any active is learned because the
+  // Health/Mana potions are baseline kit.
+  const town = inTown;
   bar.style.display = 'flex';
+  bar.classList.toggle('in-town', town);
+  document.body.classList.toggle('town-bar', town);
   // Potion skills pinned to the far left of the bar: Health (Q) then Mana (E).
   // They're unlimited but share a 5-second cooldown, so the info slot shows the
-  // remaining seconds when recharging (blank when ready).
+  // remaining seconds when recharging (blank when ready). In town they're locked —
+  // rendered greyed and click-dead — so a potion can't be spent where there's
+  // nothing to fight and resting already restores you for free.
   const pcd = player.potionCd || 0;
   const potReady = pcd <= 0;
   const hpFull = player.hp >= player.maxHp;
   const mpFull = player.mp >= player.maxMp;
-  const urgent = potReady && player.hp < player.maxHp * 0.35;
-  const healHint = touchUI() ? 'tap to drink' : 'press ' + kbLabel('healthPotion');
-  const manaHint = touchUI() ? 'tap to drink' : 'press ' + kbLabel('manaPotion');
-  const healTip = `<div class='ht-name' style='color:var(--hp)'>❤️ Health Potion</div><div class='ht-line'>Quaff to restore a burst of health.</div><div class='ht-sub'>${healHint} · ${POTION_CD}-second cooldown</div>`;
-  const manaTip = `<div class='ht-name' style='color:var(--mp)'>🔷 Mana Potion</div><div class='ht-line'>Quaff to restore a burst of mana.</div><div class='ht-sub'>${manaHint} · ${POTION_CD}-second cooldown</div>`;
+  const urgent = !town && potReady && player.hp < player.maxHp * 0.35;
+  const healHint = town ? 'locked in town' : (touchUI() ? 'tap to drink' : 'press ' + kbLabel('healthPotion'));
+  const manaHint = town ? 'locked in town' : (touchUI() ? 'tap to drink' : 'press ' + kbLabel('manaPotion'));
+  const healTip = `<div class='ht-name' style='color:var(--hp)'>❤️ Health Potion</div><div class='ht-line'>${town ? 'Saved for the dungeon — rest in town to heal for free instead.' : 'Quaff to restore a burst of health.'}</div><div class='ht-sub'>${healHint}${town ? '' : ` · ${POTION_CD}-second cooldown`}</div>`;
+  const manaTip = `<div class='ht-name' style='color:var(--mp)'>🔷 Mana Potion</div><div class='ht-line'>${town ? 'Saved for the dungeon — rest in town to refill for free instead.' : 'Quaff to restore a burst of mana.'}</div><div class='ht-sub'>${manaHint}${town ? '' : ` · ${POTION_CD}-second cooldown`}</div>`;
   const cdDial = (key) => `<span class="sb-cd" data-cd="${key}"></span>`;
-  const healBtn = `<button class="skillbar-btn potion ${potReady && !hpFull ? 'ready' : 'empty'} ${urgent ? 'urgent' : ''} ${pcd > 0 ? 'cooling' : ''}" ${hoverTip(healTip)} onclick="useHealthPotion()">
+  const healBtn = `<button class="skillbar-btn potion ${town ? 'town-locked' : (potReady && !hpFull ? 'ready' : 'empty')} ${urgent ? 'urgent' : ''} ${pcd > 0 ? 'cooling' : ''}" ${hoverTip(healTip)} ${town ? '' : 'onclick="useHealthPotion()"'}>
       <span class="sb-key">${kbLabel('healthPotion')}</span><span class="sb-icon">${HEAL_POTION_SVG}</span><span class="sb-info" id="heal-label">${pcd > 0 ? Math.ceil(pcd) + 's' : ''}</span>${cdDial('pot')}
     </button>`;
-  const manaBtn = `<button class="skillbar-btn potion mana ${potReady && !mpFull ? 'ready' : 'empty'} ${pcd > 0 ? 'cooling' : ''}" ${hoverTip(manaTip)} onclick="useManaPotion()">
+  const manaBtn = `<button class="skillbar-btn potion mana ${town ? 'town-locked' : (potReady && !mpFull ? 'ready' : 'empty')} ${pcd > 0 ? 'cooling' : ''}" ${hoverTip(manaTip)} ${town ? '' : 'onclick="useManaPotion()"'}>
       <span class="sb-key">${kbLabel('manaPotion')}</span><span class="sb-icon">${MANA_POTION_SVG}</span><span class="sb-info">${pcd > 0 ? Math.ceil(pcd) + 's' : ''}</span>${cdDial('pot')}
     </button>`;
   // Every hotkey slot is rendered, filled or empty (keys 1–9; slot 1 is the gold
@@ -17872,8 +17921,10 @@ function renderSkillBar() {
   // opening it channels a town portal in real time, so while it's charging the
   // button shows the countdown and a cyan pulse.
   // Hidden on touch — mobile keeps TOWN in the bottom control bar, unchanged.
+  // Also hidden while in town: a "go to town" button is meaningless once you're
+  // already there (you leave via the Dungeon Gate in the town menu).
   let townBtn = '';
-  if (!touchUI()) {
+  if (!touchUI() && !town) {
     const ch = portalChanneling();
     const townTip = ch
       ? `<div class='ht-name'>🌀 Town Portal</div><div class='ht-line'>Opening… ${portalCharge} turn${portalCharge === 1 ? '' : 's'} left. A foe's hit shatters it.</div><div class='ht-sub'>press ${kbLabel('portal')} to cancel</div>`
@@ -17883,6 +17934,20 @@ function renderSkillBar() {
     </button>`;
   }
   bar.innerHTML = townBtn + healBtn + manaBtn + skillsHtml;
+  syncTownBarReserve();
+}
+
+// In town the skill bar parks as a bottom tray; the town/shop/mystic menus reserve
+// exactly its height at their own bottom so they never overlap it. Measure the
+// parked bar and publish that height as --town-bar-reserve for the overlay CSS.
+// Outside town it clears the variable and is otherwise a no-op.
+function syncTownBarReserve() {
+  const root = document.documentElement;
+  const bar = document.getElementById('skill-bar');
+  if (!inTown || !bar || bar.style.display === 'none') { root.style.removeProperty('--town-bar-reserve'); return; }
+  const top = bar.getBoundingClientRect().top;
+  const reserve = Math.max(0, Math.round(window.innerHeight - top + 6));
+  root.style.setProperty('--town-bar-reserve', reserve + 'px');
 }
 
 // The potion flasks used by the skill-bar Health (red) and Mana (blue) buttons.
