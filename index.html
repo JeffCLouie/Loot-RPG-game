@@ -156,6 +156,27 @@
     pointer-events: none; opacity: 0.9;
   }
 
+  /* Minimap: a small top-down sketch of the whole floor, pinned to the top-left
+     of the map. The canvas's internal resolution is one device pixel per tile
+     (set by JS); CSS scales that up into a fixed box with crisp, pixelated
+     edges. Floats slightly transparent over the map like the other overlays and
+     never catches the pointer, so map taps pass straight through. */
+  #minimap {
+    position: absolute; top: 8px; left: 8px; z-index: 40;
+    width: 108px; height: 108px;
+    /* This is also a <canvas>, so the generic `canvas` rules (which place the
+       main map into grid column 2 on desktop) would otherwise capture it and
+       shift its positioning origin. Reset that placement and sizing so it stays
+       a plain overlay anchored to the game-wrap corner. */
+    grid-column: auto; grid-row: auto; aspect-ratio: auto;
+    justify-self: auto; align-self: auto; flex: none;
+    image-rendering: pixelated;
+    border: 1px solid rgba(232,194,103,0.34); border-radius: 7px;
+    background: rgba(20,14,30,0.62);
+    box-shadow: 0 1px 5px rgba(0,0,0,0.55);
+    pointer-events: none; opacity: 0.9;
+  }
+
   /* Danger halo: a pulsing edge glow that signals low HP and player status
      effects. Sits above every panel/menu (but below the rotate gate) so it
      reads over the bag, shops and HUD. Colour + opacity are driven per-frame
@@ -557,6 +578,25 @@
     border-top: 1px solid var(--border);
   }
   @media (pointer: coarse) { #dpad-settings { display: flex; } }
+  /* Cursor picker is the opposite: only useful where there's a real mouse. */
+  #cursor-settings {
+    display: none;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 2px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+  }
+  @media (hover: hover) and (pointer: fine) { #cursor-settings { display: flex; } }
+  #cursor-style-row {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: 8px;
+    padding-bottom: 6px;
+    scrollbar-width: thin;
+    max-width: 100%;
+    min-width: 0;
+  }
   .settings-dpad-label {
     font-family: 'Courier New', monospace;
     font-size: 10px;
@@ -2321,10 +2361,15 @@
       box-shadow: inset 0 1px 0 rgba(232,194,103,0.22), 0 -3px 10px rgba(0,0,0,0.5);
     }
     /* Show the map-corner floor / foes readout (mobile keeps these in header). */
+    /* The map area starts after the log column on desktop, so the minimap shifts
+       right by it to stay pinned to the play area's top-left corner. */
+    #minimap { left: calc(var(--log-col) + 10px); }
     #map-info {
       display: flex; flex-direction: column; gap: 4px;
       position: absolute; z-index: 50; pointer-events: none;
-      top: 8px; left: calc(var(--log-col) + 10px);
+      /* Sits just below the minimap (108px box + border) so the two stack
+         tidily in the corner instead of overlapping. */
+      top: 124px; left: calc(var(--log-col) + 10px);
     }
     /* On PC there's room for a bigger HUD: bump the stat / gold / chip fonts and
        bars up so health, mana, floor, level, etc. are easier to read. */
@@ -2825,7 +2870,7 @@
     <div class="xp-track"><div class="xp-fill" id="xp-bar" style="width:0%"></div></div>
   </div>
   <div class="hud-item" id="enemies-hud" data-tip="<div class='ht-name'><span data-spr='ui_foes'></span> Foes Remaining</div><div class='ht-line'>How many enemies are still alive on this floor. The stairs down stay sealed (🔒) until every foe is cleared (🔓).</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()"><span data-spr="ui_foes"></span> <span class="hud-val" id="enemies-num">0</span> <span id="clear-status">🔒</span></div>
-  <div class="hud-item" id="power-hud" data-tip="<div class='ht-name'><span data-spr='ui_power'></span> Power</div><div class='ht-line'>A rough measure of your overall strength, combining your level, equipped gear, spent attributes and skills.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()"><span data-spr="ui_power"></span> <span class="hud-val" id="power-num">0</span></div>
+  <div class="hud-item" id="power-hud" data-tip="<div class='ht-name'><span data-spr='ui_power'></span> Power</div><div class='ht-line'>A rough measure of your overall strength, combining your level, equipped gear, attributes and skills.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()"><span data-spr="ui_power"></span> <span class="hud-val" id="power-num">0</span></div>
   <div class="hud-item" id="pact-hud" style="display:none" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">🔮 <span class="hud-val" id="pact-num"></span></div>
   <div class="hud-item" id="food-hud" style="display:none" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()"></div>
   <div id="gold-display" data-tip="<div class='ht-name' style='color:var(--gold)'>💰 Gold</div><div class='ht-line'>The dungeon's main currency. Spend it at the town shops, the Forge, the Enchanter, and the Stash.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">💰 <span id="gold-count">0</span>g</div>
@@ -2851,6 +2896,10 @@
          right-aligned (effects fill in from the right corner). Populated by
          renderStatusStrip(); hidden when nothing is active. -->
     <div id="buff-overlay" style="display:none"></div>
+    <!-- Minimap: a small top-down sketch of the whole floor pinned to the
+         top-left of the map. Drawn each frame by drawMinimap(); hidden in town
+         and before a floor exists. Decorative/informational only — no clicks. -->
+    <canvas id="minimap" style="display:none"></canvas>
     <!-- Active skills (every learned tree active; the first is the R-keyed
          primary). Sits between the map and the log so it's reachable in the
          thumb zone on mobile. Populated by renderSkillBar(); hidden in town /
@@ -2954,9 +3003,6 @@
         <button class="settings-item sound-action" id="sfx-action" onclick="toggleSfx()">
           <span class="action-icon" id="sfx-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a9 9 0 0 1 0 14"/></svg></span><span class="action-label">SFX</span>
         </button>
-        <button class="settings-item zoom-action" onclick="toggleZoom()">
-          <span class="action-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span><span class="action-label" id="zoom-label">WIDE</span>
-        </button>
         <button class="settings-item unstuck-action" onclick="unstuck()" data-tip="<div class='ht-name'>🌀 Unstuck</div><div class='ht-line'>Warp to a random open spot elsewhere on the floor.</div><div class='ht-sub'>use if you get wedged in</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
           <span class="action-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5"/><path d="M4 20 21 3"/><path d="M21 16v5h-5"/><path d="m15 15 6 6"/><path d="M4 4l5 5"/></svg></span><span class="action-label">UNSTUCK</span>
         </button>
@@ -2991,6 +3037,12 @@
         <button class="settings-item sprint-action" id="sprint-action" onclick="toggleSprintMode()" data-tip="<div class='ht-name'>🏃 Sprint Mode</div><div class='ht-line'><b>HOLD:</b> sprint only while Shift is down.<br><b>TOGGLE:</b> tap Shift to auto-sprint, tap again to stop — no need to hold.</div>" onmouseenter="showHoverTip(event,this)" onmouseleave="hideHoverTip()">
           <span class="action-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="13 19 22 12 13 5"/><polyline points="2 19 11 12 2 5"/></svg></span><span class="action-label" id="sprint-label">SPRINT: HOLD</span>
         </button>
+        <!-- Mouse-pointer picker. Shown only on mouse (fine pointer); populated by
+             renderCursorControls() when the menu opens. -->
+        <div id="cursor-settings">
+          <div class="settings-dpad-label">CURSOR</div>
+          <div class="settings-dpad-row" id="cursor-style-row"></div>
+        </div>
         <!-- Movement-pad position & opacity. Hidden on desktop (no touch d-pad);
              populated by renderDpadControls() when the menu opens. -->
         <div id="dpad-settings">
@@ -3804,15 +3856,68 @@ spriteSheet.onload = () => { spriteReady = true; try { document.documentElement.
 // d-pad, loot rows etc. all use it too. Only two semantic cursors are kept: text
 // fields keep the I-beam (`text`) for typing, and disabled controls keep
 // `not-allowed`. Falls back to `auto` until the atlas has loaded or if generation fails.
+// Pointer options, ALL drawn from the existing DawnLike atlas so the cursor
+// always matches the game's art style. Each is a 16px atlas tile baked to a 32px
+// PNG; `flip` mirrors it so the point lands at the top-left (the click hotspot at
+// 0,0). The default is the classic blade.
+const CURSOR_OPTIONS = [
+  { id: 'blade',  name: 'Blade',  idx: 1482, flip: true },
+  { id: 'sword',  name: 'Sword',  idx: 67,   flip: true },
+  { id: 'dagger', name: 'Dagger', idx: 69,   flip: true },
+  { id: 'spear',  name: 'Spear',  idx: 73,   flip: true },
+  { id: 'scythe', name: 'Scythe', idx: 74,   flip: true },
+  { id: 'staff',  name: 'Staff',  idx: 70,   flip: true },
+  { id: 'axe',    name: 'Axe',    idx: 68,   flip: true },
+  { id: 'mace',   name: 'Mace',   idx: 72,   flip: true },
+  { id: 'bow',    name: 'Bow',    idx: 71,   flip: true },
+  { id: 'key',    name: 'Key',    idx: 86,   flip: true },
+];
+let cursorChoice = 'blade';
+try { const _cc = localStorage.getItem('cursorChoice'); if (_cc) cursorChoice = _cc; } catch (e) {}
+function cursorOption() { return CURSOR_OPTIONS.find(o => o.id === cursorChoice) || CURSOR_OPTIONS[0]; }
+function setCursorChoice(id) {
+  if (!CURSOR_OPTIONS.some(o => o.id === id)) return;
+  cursorChoice = id;
+  try { localStorage.setItem('cursorChoice', id); } catch (e) {}
+  applyGameCursor();
+  renderCursorControls();
+  if (typeof sfx === 'function') sfx('click');
+}
+// A picker swatch showing an atlas tile the same way the cursor will look (same
+// flip), reusing the shared atlas-backed .dl-ic span.
+function cursorSwatchIcon(idx, flip) {
+  const cols = ATLAS_COLS, rows = (spriteSheet.naturalHeight || 2672) / ATLAS_TS;
+  const col = idx % cols, row = (idx / cols) | 0;
+  const t = flip ? 'transform:scaleX(-1);' : '';
+  return `<span class="dl-ic dl-fill" style="${t}background-size:${cols * 100}% ${rows * 100}%;` +
+    `background-position:${(col / (cols - 1) * 100).toFixed(3)}% ${(row / (rows - 1) * 100).toFixed(3)}%"></span>`;
+}
+function renderCursorControls() {
+  const row = document.getElementById('cursor-style-row');
+  if (!row) return;
+  row.innerHTML = CURSOR_OPTIONS.map(o =>
+    `<div class="dp-sw ${cursorChoice === o.id ? 'sel' : ''}" title="${o.name}" onclick="setCursorChoice('${o.id}')">`
+    + `<div class="dp-sw-face">${cursorSwatchIcon(o.idx, o.flip)}</div></div>`).join('');
+}
+
+// Custom mouse cursor: a DawnLike atlas tile (chosen in ⚙️ → CURSOR, default a
+// blade), flipped so its tip points up-left like a normal pointer, baked to a
+// crisp 32px PNG. It replaces BOTH the stock OS arrow and the hand/finger pointer
+// shown over clickable things — forced onto every element via an injected
+// stylesheet so buttons, the d-pad, loot rows etc. all use it too. Only two
+// semantic cursors are kept: text fields keep the I-beam (`text`) for typing, and
+// disabled controls keep `not-allowed`. Falls back to `auto` until the atlas has
+// loaded or if generation fails.
 function applyGameCursor() {
   if (!spriteReady) return;
-  const SRC_IDX = 1482, OUT = 32; // 16px atlas tile scaled 2x to a standard cursor size
-  const sx = (SRC_IDX % ATLAS_COLS) * ATLAS_TS, sy = ((SRC_IDX / ATLAS_COLS) | 0) * ATLAS_TS;
+  const opt = cursorOption();
+  const OUT = 32; // 16px atlas tile scaled 2x to a standard cursor size
+  const sx = (opt.idx % ATLAS_COLS) * ATLAS_TS, sy = ((opt.idx / ATLAS_COLS) | 0) * ATLAS_TS;
   const c = document.createElement('canvas'); c.width = OUT; c.height = OUT;
   const g = c.getContext('2d'); g.imageSmoothingEnabled = false;
-  g.translate(OUT, 0); g.scale(-1, 1); // flip horizontally
+  if (opt.flip) { g.translate(OUT, 0); g.scale(-1, 1); } // flip so the tip points up-left
   g.drawImage(spriteSheet, sx, sy, ATLAS_TS, ATLAS_TS, 0, 0, OUT, OUT);
-  // After the flip the blade tip sits at the top-left, so the click hotspot is (0,0).
+  // The point sits at the top-left, so the click hotspot is (0,0).
   const cur = 'url(' + c.toDataURL('image/png') + ') 0 0, auto';
   document.documentElement.style.cursor = cur; // default + fallback for any unstyled node
   // Force the blade over clickable elements too: they set their own `cursor: pointer`,
@@ -4446,15 +4551,29 @@ const HERO = '🧙';
 // Every equippable item has a single "power" number summarising how strong it is:
 // each stat is worth a weighted amount, plus a flat bonus for its rarity tier.
 // The player's overall power is built from their level, attributes, and gear.
-const STAT_POWER_WEIGHTS = { ATK:3, DEF:2, SPD:2, LCK:1.5, HP:1, MP:1, CRIT:1.5, ACC:0.9, CRITDMG:1, REGEN:5, DMG:3,
+const STAT_POWER_WEIGHTS = { ATK:3, DEF:2, SPD:1.5, LCK:1.5, HP:0.2, MP:0.25, CRIT:1.5, ACC:0.9, CRITDMG:1, REGEN:5, DMG:3,
   // Rating stats (CRIT/DODGE/BLOCK/DR/ACC/SPD) are now larger flat numbers that
   // scale with item level, so their per-point power weight is lowered to keep an
-  // item's overall Power sane and comparable to the old %-stat era.
+  // item's overall Power sane and comparable to the old %-stat era. SPD matches
+  // DODGE (1.5): both feed evasion rating 1:1, so an equal value is equal Power.
+  // HP and MP are the two big resource POOLS — they roll several times larger than
+  // any other stat (AFFIX_CURVES flat 6 / 4), so they carry a small per-point weight
+  // (0.2 / 0.25); otherwise one HP roll alone would out-power a whole weapon's damage.
   LEECH:5, MPLEECH:3, HPKILL:1, MPKILL:1, THORNS:1, DR:1.5, BLOCK:1.2, DODGE:1.5, IDMG:4, DBLSTRIKE:5,
   CLEAVE:2, BOSSDMG:2, EXEC:2, PEN:2, GOLDFIND:1, XPGAIN:1, MAGICFIND:2, MATFIND:1, SPELLPWR:3,
   CDR:4, MCR:3, BLEED:3, STUNPWR:2, ATKSPD:4 };
-// Per-point power weight of a raised attribute carried on an item (e.g. +13 Might).
-const ATTR_POWER_WEIGHT = 6;
+// Base per-point power weight of an attribute — the class-INDEPENDENT half: every
+// attribute feeds a family of derived stats (HP, MP, crit, evasion, regen…) that's
+// the same for everyone. On top of this, a class earns EXTRA Power for points in the
+// attribute it deals damage with (see attrPowerWeight), so the same +Might is worth
+// more to a Warrior than a Mage. Used identically for spent attributes (playerPower)
+// and gear affixes (itemPower), so a point is worth the same Power spent or geared.
+const ATTR_POWER_WEIGHT = 3;
+// Power credited per point of bonus Attack an attribute grants THIS class through the
+// damage system (attrDamage / dmgAttrs: primary ×2.4, secondary ×0.8, universal Might
+// ×0.6 per point). Lighter than the ATK gear-stat weight (3) on purpose, so a damage
+// attribute clearly matters to its class without Power collapsing into a damage meter.
+const ATTR_DMG_POWER = 1.2;
 // A small flat nudge per rarity — kept low on purpose so an item's power is
 // driven mostly by its (item-level-scaled) stats. This is what lets a deep
 // common eventually out-power an early legendary instead of the tier bonus
@@ -4672,7 +4791,33 @@ const MATERIAL_MIN_DIFF = { scrap: 1, glimmer: 2, core: 3, chaos: 4 };
 function activeDifficulty() { return inTown ? diffOf(Math.max(1, dungeonReturn || 1)) : currentDifficulty(); }
 function materialUnlocked(k) { return activeDifficulty() >= (MATERIAL_MIN_DIFF[k] || 1); }
 
-// Total power of a single item: weighted sum of its stats + a rarity bonus.
+// Per-point power weight of an attribute FOR THE CURRENT CLASS. Every attribute is
+// worth the class-independent ATTR_POWER_WEIGHT (its derived-stat package); the
+// class's damage attributes turn points into real Attack on top (attrDamage), so a
+// point in your primary/secondary damage stat — or any Might, which always lends a
+// little Attack — is worth more Power to you than to a class that can't hit with it.
+function attrPowerWeight(key) {
+  let w = ATTR_POWER_WEIGHT;
+  const { primary, secondary } = classDmgAttrs();
+  if (key === primary)        w += ATTR_DMG_PRIMARY   * ATTR_DMG_POWER;
+  else if (key === secondary) w += ATTR_DMG_SECONDARY * ATTR_DMG_POWER;
+  else if (key === 'might')   w += ATTR_FX.atkPerMight * ATTR_DMG_POWER; // universal Might dab
+  return w;
+}
+// Per-point power weight of a gear STAT for the current class. Most stats are
+// class-neutral (their table weight); Spell Power is scaled by how much the class
+// actually casts (CLASS_SPELL_RELIANCE), so a caster values a Spell Power roll fully
+// while it's near-dead weight on a pure-martial Warrior or Rogue.
+function statPowerWeight(key) {
+  let w = STAT_POWER_WEIGHTS[key] || 1;
+  if (key === 'SPELLPWR') w *= (CLASS_SPELL_RELIANCE[player.class] ?? 1);
+  return w;
+}
+
+// Total power of a single item, AS THIS CLASS would wield it: weighted sum of its
+// stats + attributes + a rarity bonus. The same item can be worth different Power to
+// different classes (a +Might affix or a Spell Power roll lands differently), which
+// is the point — Power should track the item's real impact on this hero.
 function itemPower(item) {
   if (!item || !item.stats) return 0;
   let p = 0;
@@ -4681,12 +4826,13 @@ function itemPower(item) {
       const [lo, hi] = String(v).split('-').map(Number);
       p += ((lo + hi) / 2) * STAT_POWER_WEIGHTS.DMG;
     } else if (typeof v === 'number') {
-      p += v * (STAT_POWER_WEIGHTS[k] || 1);
+      p += v * statPowerWeight(k);
     }
   }
-  // Attribute affixes (+Might, +Luck, …) add to an item's power too.
-  if (item.attrs) for (const v of Object.values(item.attrs)) {
-    if (typeof v === 'number') p += v * ATTR_POWER_WEIGHT;
+  // Attribute affixes (+Might, +Luck, …) add to an item's power too, weighted by how
+  // much THIS class gains from that attribute (attrPowerWeight).
+  if (item.attrs) for (const [k, v] of Object.entries(item.attrs)) {
+    if (typeof v === 'number') p += v * attrPowerWeight(k);
   }
   p += TIER_POWER_BONUS[item.tier] || 0;
   return Math.max(0, Math.round(p));
@@ -4733,16 +4879,33 @@ function attrDamage() {
 // reads negative.
 function critDamageMult() { return Math.max(0, 2.0 + totalStat('CRITDMG') / 100 + skillBonus('critDmg')); }
 
-// The player's overall power: a blend of level, spent attributes, and equipped gear.
+// The player's overall power: a blend of level, attributes, and equipped gear.
 // Red/ignored pieces (requirement no longer met) don't count — they give nothing.
 function playerPower() {
   let p = player.level * 10;
   const active = activeSlots();
   for (const slot of SLOT_KEYS) if (active[slot]) p += itemPower(equipped[slot]);
-  const spent = ATTR_KEYS.reduce((s, k) => s + (player.attributes?.[k] || 0), 0);
-  p += spent * 3;
+  // Every allocated attribute point counts — the starting ATTR_BASE block AND points
+  // spent on level-up — each weighted by how much THIS class gains from it
+  // (attrPowerWeight), exactly like a gear attribute affix, so a point is worth the
+  // same Power spent or geared and a damage-stat build reads stronger than an off-stat one.
+  for (const k of ATTR_KEYS) p += (player.attributes?.[k] || 0) * attrPowerWeight(k);
   p += spentSkillPoints() * 5; // skill-tree investment shows up in Power too
   return Math.round(p);
+}
+
+// The true Power swing from equipping `item` into its slot — what the bag/shop
+// "upgrade" arrows compare against. Beyond the piece it replaces, equipping a
+// two-handed weapon also STRANDS an incompatible off-hand (loadItem stows it), so
+// that off-hand's power belongs in the baseline. Without this, a 2H weapon could
+// flag as a green upgrade while actually LOWERING your Power once the off-hand drops.
+function equipUpgradeDelta(item) {
+  if (!item || !item.slot) return 0;
+  let baseline = equipped[item.slot] ? itemPower(equipped[item.slot]) : 0;
+  if (item.slot === 'weapon' && equipped.offhand && offhandEquipError(equipped.offhand, item)) {
+    baseline += itemPower(equipped.offhand);
+  }
+  return itemPower(item) - baseline;
 }
 
 // Max HP/MP are derived from level + attributes so the formula stays consistent
@@ -5539,6 +5702,11 @@ function equipLockReason(item) {
 // dealt multiplier only applies to physical hits (see applyOffenseMods).
 const CLASS_DMG_DEALT = { warrior: 1.10, rogue: 1.12, mage: 1.00, templar: 1.00 };
 const CLASS_DMG_TAKEN = { warrior: 0.90, rogue: 0.95, mage: 0.90, templar: 0.85 };
+// How much each class leans on spell damage, used only to value the Spell Power gear
+// stat in Power (statPowerWeight): a Mage lives on spells, a Templar casts holy
+// smites alongside melee, and a Warrior/Rogue barely cast — so Spell Power is near-
+// dead weight for them and shouldn't pad their Power as if it were a caster's.
+const CLASS_SPELL_RELIANCE = { warrior: 0.25, rogue: 0.25, mage: 1.0, templar: 0.7 };
 function classDmgDealtMult() {
   const base = CLASS_DMG_DEALT[player.class] || 1;
   return base * (1 + skillBonus('dmgDealt'));
@@ -7024,18 +7192,11 @@ try {
   audio.sfxMuted   = s === null ? legacy : s === 'off';
 } catch (e) {}
 
-// ── ZOOM ── how many tiles span the shorter axis of the play area. Fewer
-// tiles = bigger tiles. The zoom button cycles through these stops; each step
-// adds one tile to every side (a wider perimeter). Default is the first stop.
-// Persisted per device as an index into ZOOM_STOPS.
-const ZOOM_KEY = 'dungeonLootZoom';
-const ZOOM_STOPS = [13, 15, 17];
-const ZOOM_LABELS = ['WIDE', 'WIDER', 'WIDEST'];
-let zoomLevel = 0;
-try {
-  const z = parseInt(localStorage.getItem(ZOOM_KEY), 10);
-  if (z >= 0 && z < ZOOM_STOPS.length) zoomLevel = z;
-} catch (e) {}
+// ── VIEW ── how many tiles span the shorter axis of the play area. Fewer tiles
+// = bigger tiles, so the game reads well at default browser zoom. This was once
+// an adjustable Wide / Wider / Widest setting; it's now fixed at the most
+// zoomed-in stop (Wide), which is the only view everyone wanted.
+const VIEW_TILES = 13;
 
 // Lazily create the AudioContext and the gain graph (master → sfx / music).
 function audioInit() {
@@ -7681,24 +7842,6 @@ function updateSoundButtons() { updateMusicButton(); updateSfxButton(); }
 // Back-compat for any lingering "all sound" caller (e.g. an old title toggle).
 function toggleSound() { toggleMusic(); toggleSfx(); }
 
-// Cycle the play-area zoom through ZOOM_STOPS (wraps back to the default at the
-// end). Each step widens the view by one tile on every side. Persist the
-// choice, redraw immediately, and refresh the button.
-function toggleZoom() {
-  zoomLevel = (zoomLevel + 1) % ZOOM_STOPS.length;
-  try { localStorage.setItem(ZOOM_KEY, String(zoomLevel)); } catch (e) {}
-  sfx('click');
-  updateZoomButton();
-  draw();
-}
-function updateZoomButton() {
-  const ic = document.getElementById('zoom-icon');
-  const lbl = document.getElementById('zoom-label');
-  // Magnifier fills in as the view widens, hinting "press again for more".
-  if (ic) ic.textContent = zoomLevel === 0 ? '🔍' : '🔎';
-  if (lbl) lbl.textContent = ZOOM_LABELS[zoomLevel];
-}
-
 // Flip the sprint control between HOLD and TOGGLE. Switching to HOLD also drops
 // any latched auto-sprint so it can't stay stuck on. Persisted so the choice
 // survives reloads.
@@ -7723,7 +7866,7 @@ function toggleSettingsMenu(e) {
   if (e) e.stopPropagation();
   const menu = document.getElementById('settings-menu');
   if (!menu) return;
-  if (menu.classList.toggle('open')) { sfx('click'); renderDpadControls(); }
+  if (menu.classList.toggle('open')) { sfx('click'); renderDpadControls(); renderCursorControls(); }
 }
 document.addEventListener('click', (e) => {
   const menu = document.getElementById('settings-menu');
@@ -7735,6 +7878,8 @@ document.addEventListener('click', (e) => {
 // ── VERSION HISTORY ── newest first; short plain-English notes.
 const CHANGELOG = [
   { date: '2026-06-30', size: 'big', v: 'Bottom command bar on desktop', by: 'Claude', notes: ['On desktop, every vital readout moved off the top and into one command bar across the bottom, under the map. Big flanking Health (left) and Mana (right) bars are now the most prominent things on screen — bold, glowing, with the numbers right on them — hugging the log and loot panels.', 'Your name, Power and gold sit in the middle above a slim endurance bar, all your skill slots run across the centre, and one long experience bar — broken into segments — stretches along the very bottom. The old top stat strip is gone, so the play area runs cleaner.', 'The bar lives in the space between the side panels and reflows with them: collapse the log and the whole bar widens to match. Touch devices are untouched and keep their existing layout.'] },
+  { date: '2026-06-30', size: 'medium', v: 'Minimap + fixed map view', by: 'Claude', notes: ['A minimap now sits in the top-left of the dungeon view, sketching the whole floor at a glance — walls, water, lava, doors, shrines, teleporters and the all-important down-stairs (in bright green) — with live dots for you (ringed gold), foes (bosses bigger), allies, chests, loose coins, and the merchant, mystic and quest NPCs. It tucks away while you\'re in town.', 'The map view is now fixed at the most zoomed-in setting. The old Wide / Wider / Widest control has been retired from the ⚙️ menu, since the closest view is the one players kept it on.'] },
+  { date: '2026-06-30', size: 'medium', v: 'Power score retuned for the new stats', by: 'Claude', notes: ['The POWER number was audited and recalibrated to match the current attribute and rating systems, so it reflects your real strength more honestly. Nothing about combat changes — only how Power is tallied and displayed.', 'Power is now class-aware: the same item can be worth different Power to different heroes, because it makes a different difference. A +Might piece is worth more to a Warrior than a Mage (it actually makes the Warrior hit harder), a +Spirit piece flips that, and a Spell Power roll counts for a caster but is near-dead weight on a pure-martial Warrior or Rogue. Your damage attribute is now visibly the one that moves your Power most.', 'An attribute point is also worth the same Power whether you spent it on level-up or it came rolled on gear (a +attribute affix used to quietly count for double). The Power tooltip and Hero sheet are reworded to match.', 'Max HP and Max MP rolls on gear no longer dominate the score — a single big HP roll used to be worth more than an entire weapon’s damage. Speed and Evasion gear now report equal Power for an equal benefit, since they do the same thing.', 'The bag and shop ↑ upgrade arrow now accounts for the off-hand a two-handed weapon makes you set down, so a green “upgrade” won’t secretly lower your Power once the off-hand is stowed.'] },
   { date: '2026-06-30', size: 'small', v: 'Dungeon Gate is the only way down', by: 'Claude', notes: ['The ✕ in the corner of the town menus no longer drops you back into the dungeon. The Town menu lost its ✕ entirely, and the town Merchant and Mystic panels now show only ← back to the hub — their ✕ is hidden while you\'re in town.', 'To head back down you now take the 🌀 Dungeon Gate, where you pick your floor and difficulty, so you can\'t accidentally bail out of town onto your old return floor by tapping the corner. Pressing Esc in a town panel steps back toward the hub instead of leaving. A Merchant or Mystic you meet while wandering the dungeon still has its ✕ to dismiss the panel.'] },
   { date: '2026-06-30', size: 'small', v: 'Skill bar stays in town', by: 'Claude', notes: ['On the desktop layout your skill bar no longer vanishes when you step into town — it parks as a tray along the bottom so you can see your kit and rearrange your slots while you shop and plan. The town menu ends just above it instead of covering it, and the tray sits on its own clean strip. (On phones nothing changes: the SKILLS tab already shows your slot row, so the bar stays tucked away in town there.)', 'The Health and Mana potions on that tray are greyed out and locked while you\'re in town: there\'s nothing to fight, and resting already restores you for free, so a potion can\'t be wasted there. They light back up the moment you take the gate back down.'] },
   { date: '2026-06-30', size: 'small', v: 'Tidier SKILLS tab on desktop', by: 'Claude', notes: ['On the wide desktop layout, the SKILLS tab no longer repeats the row of skill slots above the tree. Your bottom skill bar is already on screen there — you can drag a learned skill straight onto it, or rearrange the slots in place — so the second copy was redundant clutter.', 'On phones and tablets the slot tray stays exactly as it was: it\'s the comfortable place to tap a slot and assign a skill, and the only slot editor available while you\'re in town.'] },
@@ -9746,7 +9891,7 @@ function renderShop() {
       // buyer can spot upgrades at a glance, just like loot in the bag.
       const ip = itemPower(s.item);
       const equippedHere = equipped[s.item.slot];
-      const delta = ip - (equippedHere ? itemPower(equippedHere) : 0);
+      const delta = equipUpgradeDelta(s.item);
       isUpgrade = delta > 0;
       sub += ` <span class="item-power">⚡${ip}</span>`;
       if (equippedHere) sub += `  ${statDiffLine(s.item)}`;
@@ -12863,8 +13008,6 @@ function draw() {
 
   // ── FOLLOW CAMERA ──
   // Aim to show ~VIEW_TILES across the shorter axis, so tiles are large.
-  // Fewer tiles = bigger tiles, so the game reads well at default browser zoom.
-  const VIEW_TILES = ZOOM_STOPS[zoomLevel];
   const tw = Math.ceil(Math.min(W, H) / VIEW_TILES);
   const th = tw;
 
@@ -13837,6 +13980,77 @@ function draw() {
   vg.addColorStop(1, 'rgba(8,6,18,0.55)');
   ctx.fillStyle = vg;
   ctx.fillRect(0, 0, cw, ch);
+
+  drawMinimap();
+}
+
+// ── MINIMAP ──────────────────────────────────────────────────────────────────
+// A small top-down sketch of the whole current floor, painted into the #minimap
+// canvas each frame. The canvas is sized to one device pixel per tile and CSS
+// scales that box up with crisp, pixelated edges. Walls / floor / liquids /
+// specials are read straight from mapData (same tile values gameState()'s ASCII
+// map uses); the hero, foes, allies, chests, coins, NPCs and the stairs are
+// dotted on top so the floor's shape and where everything sits read at a glance.
+// Hidden in town and before a floor exists. Purely informational — no clicks.
+let _mmCanvas = null, _mmCtx = null;
+const MM_TCOL = {
+  0:  '#5b566f',  // floor
+  1:  '#272233',  // wall
+  2:  '#7be06a',  // stairs down — the goal, bright green
+  3:  '#5fd0c2',  // fountain
+  5:  '#c79bff',  // shrine
+  6:  '#3a6fb0',  // water
+  7:  '#d6602f',  // lava
+  9:  '#e069d6',  // teleporter
+  10: '#2f2940',  // cracked wall
+  11: '#9a6a3a',  // door
+  12: '#6fc4ff',  // stairs up
+};
+function drawMinimap() {
+  const el = _mmCanvas || (_mmCanvas = document.getElementById('minimap'));
+  if (!el) return;
+  // Nothing meaningful to show (town, title screen, between floors): hide it.
+  if (inTown || !Array.isArray(mapData) || !mapData.length || !MAP_W || !MAP_H) {
+    if (el.style.display !== 'none') el.style.display = 'none';
+    return;
+  }
+  if (el.style.display === 'none') el.style.display = 'block';
+  const PX = 3;                              // device pixels per tile
+  const w = MAP_W * PX, h = MAP_H * PX;
+  if (el.width !== w) el.width = w;           // a resize also clears, so only when it changes
+  if (el.height !== h) el.height = h;
+  const m = _mmCtx || (_mmCtx = el.getContext('2d'));
+  m.clearRect(0, 0, w, h);
+
+  // Terrain layer.
+  for (let y = 0; y < MAP_H; y++) {
+    const row = mapData[y]; if (!row) continue;
+    for (let x = 0; x < MAP_W; x++) {
+      const c = MM_TCOL[row[x]];
+      if (!c) continue;
+      m.fillStyle = c;
+      m.fillRect(x * PX, y * PX, PX, PX);
+    }
+  }
+
+  // Markers, drawn a touch larger than a tile so they pop against the floor.
+  const dot = (x, y, color, s) => {
+    if (x == null || y == null) return;
+    m.fillStyle = color;
+    m.fillRect(Math.round(x * PX + PX / 2 - s / 2), Math.round(y * PX + PX / 2 - s / 2), s, s);
+  };
+  (groundGold || []).forEach(g => dot(g.x, g.y, '#caa83a', PX));                 // coins (dim gold)
+  (groundItems || []).forEach(g => dot(g.x, g.y, '#fff3c4', PX + 1));            // chests (bright)
+  (minions || []).forEach(a => dot(a.x, a.y, '#67d6ff', PX));                    // allies
+  (enemies || []).forEach(e => { if (e && !e.dead) dot(e.x, e.y, e.isBoss ? '#ff3b3b' : '#ff5a5a', e.isBoss ? PX + 3 : PX + 1); });
+  if (merchant) dot(merchant.x, merchant.y, '#69e07a', PX + 1);
+  if (mystic)   dot(mystic.x, mystic.y, '#9a8bff', PX + 1);
+  if (quest && quest.npc) dot(quest.npc.x, quest.npc.y, '#ffd24b', PX + 1);
+  // Hero last so it's always on top, ringed white so it reads on a busy floor.
+  if (player) {
+    dot(player.x, player.y, '#fff', PX + 3);
+    dot(player.x, player.y, '#ffd24b', PX + 1);
+  }
 }
 
 function spawnFloatingText(x, y, text, color) {
@@ -17485,7 +17699,7 @@ function renderPanel() {
       // flag upgrades and show the power swing (▲+5 / ▼-2).
       const ip = equipable ? itemPower(item) : 0;
       const equippedHere = equipable ? equipped[item.slot] : null;
-      const delta = equipable ? ip - (equippedHere ? itemPower(equippedHere) : 0) : 0;
+      const delta = equipable ? equipUpgradeDelta(item) : 0;
       const isUpgrade = equipable && delta > 0;
       const pwr = equipable ? `<span class="item-power">⚡${ip}</span>` : '';
       const diff = equipable ? `<div class="item-diff">${statDiffLine(item)}</div>` : '';
@@ -20840,8 +21054,6 @@ function refreshTitleToggles() {
   // lines up with the other tiles.
   if (si) si.textContent = audio.muted ? '\u{1F507}' : '\u{1F50A}';
   if (sl) sl.textContent = 'Sound';
-  const zl = document.getElementById('t-zoom-lbl');
-  if (zl) zl.textContent = 'Zoom: ' + (ZOOM_LABELS[zoomLevel] || 'Wide');
 }
 // ── ACHIEVEMENTS ── derived purely from the active hero's save state (deepest
 // floor, level, gold, difficulties conquered), so no event hooks are needed.
@@ -20968,7 +21180,6 @@ function closeNewRun() { const ov = document.getElementById('newrun-overlay'); i
 function openSlotsFromNewRun() { closeNewRun(); openSlots(); }
 function confirmTitleNewRun() { closeNewRun(); closeTitle(); wipeSave(); }   // wipeSave() reloads into a fresh hero
 function titleSound() { toggleSound(); refreshTitleToggles(); }
-function titleZoom() { toggleZoom(); refreshTitleToggles(); }
 
 // Load the hardcore death ledger + earned feats BEFORE the save, so loadGame() can
 // recognise (and refuse to load) a hero who has already permanently died.
@@ -21027,7 +21238,6 @@ log('🌍 Terrain tiles from "[LPC] Terrains" by bluecarrot16 & LPC contributors
 // browsers won't let sound start until the player interacts, so the first
 // gesture resumes the context and kicks off the looping music.
 updateSoundButtons();
-updateZoomButton();
 updateSprintButton();
 ['pointerdown', 'keydown', 'touchstart'].forEach(ev =>
   window.addEventListener(ev, audioUnlock, { passive: true }));
