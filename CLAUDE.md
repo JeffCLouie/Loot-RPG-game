@@ -175,6 +175,10 @@ misplay. Whenever you add or change a mechanic:
   fields, handle older saves gracefully (migrate or reset cleanly).
 - The Diablo 2-style loot tiers (grey → white → green → blue → purple → orange →
   red) communicate rarity by **color only** — do not re-add text rarity labels.
+- **Minimum font size, game-wide:** no DOM text below `0.9rem` and no canvas
+  text below `10px` — smaller is unreadable on phones. Floor dynamic canvas
+  font sizes with `Math.max(10, …)`. Applies to every new label, tag, tooltip
+  and on-map text.
 
 ## Layout: no "loners" (orphans & widows)
 
