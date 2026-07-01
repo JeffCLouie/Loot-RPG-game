@@ -175,10 +175,14 @@ misplay. Whenever you add or change a mechanic:
   fields, handle older saves gracefully (migrate or reset cleanly).
 - The Diablo 2-style loot tiers (grey → white → green → blue → purple → orange →
   red) communicate rarity by **color only** — do not re-add text rarity labels.
-- **Minimum font size, game-wide:** no DOM text below `0.9rem` and no canvas
-  text below `10px` — smaller is unreadable on phones. Floor dynamic canvas
-  font sizes with `Math.max(10, …)`. Applies to every new label, tag, tooltip
-  and on-map text.
+- **Typography: use the type scale, respect the floor.** No DOM text below
+  `1.1rem` and no canvas text below `12px` — smaller is unreadable on phones.
+  Floor dynamic canvas font sizes with `Math.max(12, …)`. The DOM scale is
+  deliberate — pick the tier that matches the role, don't invent in-between
+  sizes: `1.1rem` fine print (hotkey tags, badges) · `1.2rem` secondary
+  (stat lines, chips, meta) · `1.3rem` body (descriptions, buttons, lists) ·
+  `1.4rem` emphasized body · `1.5rem` small headings · `1.6–2rem` section
+  headings/titles · `2.2rem+` display.
 
 ## Layout: no "loners" (orphans & widows)
 
