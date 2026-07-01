@@ -25,33 +25,38 @@ at the site's root URL.
   options, or wait for approval. Make reasonable decisions, implement them, and
   push to `main`. Only stop to ask if a request is genuinely impossible or
   self-contradictory.
-- **Always pull new visual assets from DawnLike.** Every new on-screen game
-  asset — heroes, enemies, bosses, NPCs, summoned minions/allies, items,
-  pickups, projectiles, status icons, and world objects — must be drawn from the
-  DawnLike tileset (DragonDePlatino & DawnBringer, CC-BY 4.0) via the sprite
-  atlas, not as a raw emoji or hand-drawn shape. Add the needed tile to the
-  sprite atlas and render it with `drawSpriteC`, keeping an emoji `drawEmoji`
-  fallback only for when the atlas image hasn't loaded yet. The lone intentional
-  exception is **procedural terrain** (walls, floors, water, lava and similar
-  background tiles), which is deliberately drawn procedurally rather than from
-  DawnLike. If a fitting DawnLike tile genuinely doesn't exist for an asset, say
-  so rather than silently falling back to an emoji.
-  - **This applies in menus and the HUD too, not just the canvas.** Consumables,
-    ingredients, food, currencies, buff/status indicators and any other item
-    imagery shown in DOM panels (the bag, the town shops, the HUD bar, the log)
-    must use a DawnLike atlas tile rendered with `dlIcon(spriteKey, px)` (it
-    returns an inline `<span class="dl-ic">` backed by the atlas), **not** an
-    emoji. Emoji are acceptable only as plain section-header punctuation, never
-    as the icon that represents a game thing.
-  - **How to add tiles to the atlas.** The atlas is a single base64 PNG assigned
-    to `spriteSheet.src`, indexed by `SPRITE_IDX` (`name → tile index`, 16 tiles
-    per row). To add art: pull the source tile from the DawnLike download
-    (Items/, Objects/, Characters/ …), composite it into a free atlas slot with
-    a Chromium/canvas script (load the current atlas, `drawImage` the DawnLike
-    tile into the next free index, growing the PNG height by a 16px row if
-    needed, then `toDataURL`), replace the `spriteSheet.src` string, and add the
-    new `SPRITE_IDX` entries. Pick indices AFTER the current maximum so you never
-    collide with tiles another change already claimed.
+- **All on-screen art is real pixel art — never an emoji as the thing itself.**
+  Every on-screen game asset — heroes, enemies, bosses, NPCs, summoned
+  minions/allies, items, pickups, projectiles, status icons, and world objects —
+  must be actual pixel-art imagery, both on the canvas and in the menus/HUD,
+  never a raw emoji or hand-drawn shape standing in for the asset. Emoji are
+  acceptable only as plain section-header punctuation, never as the icon that
+  represents a game thing. Keep an emoji `drawEmoji`/`dlIcon` fallback only for
+  the brief moment before an image has loaded. **Procedural terrain** (walls,
+  floors, water, lava and similar background tiles) stays deliberately
+  procedural.
+  - **We generate our own art now — no longer restricted to DawnLike.** The
+    existing DawnLike atlas art (DragonDePlatino & DawnBringer, CC-BY 4.0) is
+    still in the game and fine to keep using and extending, but new art should be
+    our own bespoke pixel art rather than pulled from DawnLike. When you add
+    original art, make sure we have the right to ship it.
+  - **Two ways art gets into the game.** (1) Simple single tiles live in the
+    sprite atlas — a single base64 PNG assigned to `spriteSheet.src`, indexed by
+    `SPRITE_IDX` (`name → tile index`, 16 tiles per row) — and render via
+    `drawSpriteC` (canvas) or `dlIcon(spriteKey, px)` (DOM panels). To add one,
+    composite the tile into a free atlas slot with a Chromium/canvas script
+    (load the current atlas, `drawImage` into the next free index after the
+    current maximum, grow the PNG by a 16px row if needed, `toDataURL`), swap the
+    `spriteSheet.src` string, and add the `SPRITE_IDX` entries. (2) Multi-frame
+    or larger art (e.g. the hero walk-cycle sheets) loads as its own embedded
+    base64 `Image` with a ready flag and is drawn frame-by-frame with
+    `ctx.drawImage` — see `heroWalkSheet` / `drawHeroWalk` for the pattern.
+  - **Menus and the HUD count too.** Consumables, ingredients, food, currencies,
+    buff/status indicators and any other item imagery shown in DOM panels (the
+    bag, the town shops, the HUD bar, the log) must use real sprite imagery — an
+    atlas tile via `dlIcon(spriteKey, px)` (it returns an inline
+    `<span class="dl-ic">` backed by the atlas) or a bespoke sprite — **not** an
+    emoji as the icon that represents a game thing.
 
 ## Workflow Claude should follow
 
