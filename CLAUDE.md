@@ -119,6 +119,12 @@ The in-game Version History popup is driven by the `CHANGELOG` array in
   without leaning on another game for meaning.
 - Keep the same shape as existing entries (`date`, `size`, `v`, `by`, `notes`)
   and add new releases at the top of the array (newest-first).
+- **Add an entry for every user-facing change you ship**, in the same commit, so
+  the Version tab never falls behind.
+- **Be maximally concise — notes are for skimming, not reading.** Cut every
+  non-essential word: drop leading articles/possessives ("The achievement badges
+  moved…" → "Achievement badges move…"), use present-tense fragments over full
+  sentences, and drop hedges/filler. Keep each note to roughly one line.
 
 ## Keep the AI-play API in sync (`gameState()` / `gameGuide()`)
 
