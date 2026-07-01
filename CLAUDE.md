@@ -175,10 +175,6 @@ misplay. Whenever you add or change a mechanic:
   fields, handle older saves gracefully (migrate or reset cleanly).
 - The Diablo 2-style loot tiers (grey → white → green → blue → purple → orange →
   red) communicate rarity by **color only** — do not re-add text rarity labels.
-- **UI scale:** the html root font-size multiplies by `--ui-scale` (the
-  ⚙ Settings → UI SIZE knob, 80%–250%, stored in `localStorage`). Device
-  defaults live as CSS var fallbacks: 100% on phones, 200% on desktop. Keep
-  fixed-px containers tolerant of larger text where feasible.
 - **Typography: use the type scale, respect the floor.** No DOM text below
   `1.1rem` and no canvas text below `12px` — smaller is unreadable on phones.
   Floor dynamic canvas font sizes with `Math.max(12, …)`. The DOM scale is
