@@ -21,10 +21,12 @@ at the site's root URL.
   the game stays trivially shareable and hostable.
 - **Pull the latest `main` before starting new work** to minimize merge
   conflicts.
-- **Don't check in — just do the work.** Don't ask for confirmation, present
-  options, or wait for approval. Make reasonable decisions, implement them, and
-  push to `main`. Only stop to ask if a request is genuinely impossible or
-  self-contradictory.
+- **Work on a branch and open a PR — never commit straight to `main`.** Don't ask
+  for confirmation, present options, or wait for approval on the *work itself*:
+  make reasonable decisions and implement them. But land every change through a
+  feature branch and a pull request into `main` (never a direct push to `main`),
+  so GitHub gates the merge and any conflict surfaces to be resolved deliberately.
+  Only stop to ask if a request is genuinely impossible or self-contradictory.
 - **All on-screen art is real pixel art — never an emoji as the thing itself.**
   Every on-screen game asset — heroes, enemies, bosses, NPCs, summoned
   minions/allies, items, pickups, projectiles, status icons, and world objects —
@@ -156,22 +158,26 @@ caught instead of silently accumulating. It exits non-zero on any ERROR.
 
 When asked to make a change:
 
-1. Pull the latest `main`.
+1. Fetch and branch off the latest `origin/main` (e.g. `claude/<short-topic>`) —
+   never work directly on `main`.
 2. Make the edit in `index.html`.
 3. If the change adds or alters a gameplay mechanic, update `gameState()` and
    `gameGuide()` to match (see "Keep the AI-play API in sync" below).
 4. Before committing, verify the JavaScript has no syntax errors (the game
    silently fails to load if it does). There are no automated tests, so this
    check is the only safety net.
-5. Commit with a clear, descriptive message.
-6. Push and merge directly to `main` so Netlify auto-deploys — do not open a PR
-   or wait for approval.
+5. Commit with a clear, descriptive message and push the branch.
+6. Open a pull request into `main` with `gh`. Once it's green / mergeable (or has
+   no CI — the normal state here), merge it yourself so Netlify auto-deploys — no
+   need to wait for manual approval. If GitHub reports the PR is not mergeable
+   (conflicts), resolve them on the branch first (see below), then merge.
 
-## Pull requests: merge and conflicts automatically
+## Pull requests: the standard flow (merge & resolve conflicts yourself)
 
-When work happens on a PR instead of straight on `main` (for example, when a
-task pins development to a feature branch), drive it to a merged state without
-waiting for manual review:
+**Every** change lands via a branch + PR — there is no direct-to-`main` path.
+Drive each PR to a merged state without waiting for manual review, but let GitHub
+gate the merge so conflicts are caught and resolved deliberately instead of
+silently overwritten:
 
 - **Auto-merge new PRs.** Once a PR you opened is pushed and green (or has no CI,
   which is the normal state for this single-file project), merge it into `main`
