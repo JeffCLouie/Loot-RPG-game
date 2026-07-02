@@ -58,6 +58,100 @@ at the site's root URL.
     `<span class="dl-ic">` backed by the atlas) or a bespoke sprite — **not** an
     emoji as the icon that represents a game thing.
 
+## Design system — one source of truth for styling
+
+The game's look is driven by a **shared design-token + component system** so
+every screen stays cohesive and new work matches automatically. Treat this as a
+hard rule, not a suggestion.
+
+### Tokens: never hardcode a color, font, size, radius or spacing
+
+All visual values live as CSS custom properties in the `:root` block at the top
+of the `<style>` in `index.html`. **Do not write a raw hex, rgba, font stack,
+`px` radius or off-scale `rem` in a rule or inline `style=` — reference a
+token.** The tokens are two layers:
+
+- **Primitives** — the raw palette (`--purple-500`, `--red-350`, …). Prefer not
+  to use these directly.
+- **Semantic aliases (use these)** — `--bg`, `--panel`, `--border`, `--frame`,
+  `--text`, `--text-muted`, `--gold`, `--hp`, `--mp`, `--danger`, `--success`,
+  `--warn`, `--info`, `--interactive`, `--btn-text`, the loot tiers
+  (`--junk`…`--unique`), per-service accents (`--accent-teal`), and the
+  translucent `--tint-*` fills. Scales: `--font-ui`, the type scale
+  (`--fs-fine`…`--fs-display-3`), radius (`--radius-xs`…`--radius-pill`), spacing
+  (`--space-1`…`--space-8`), `--shadow-*`, and `--z-*` layers.
+
+If a genuinely new role exists, **add a new semantic token to `:root`** (and, if
+needed, a primitive) rather than hardcoding — then use it. Keep the type-scale
+floor: no DOM text below `--fs-fine` (1.1rem = 11px on the 10px root), no canvas
+text below 12px (`Math.max(12, …)`).
+
+Canvas drawing reads colors from the JS palette mirror **`PALETTE`** (defined
+near the top of the `<script>`), which mirrors the UI-semantic tokens
+(`PALETTE.hp`, `.mp`, `.gold`, `.xp`, tiers, `.text`, …). Use it for
+UI-semantic canvas colors. Genuinely bespoke pixel-art, particle, and
+procedural-terrain colors stay art (as with the pixel-art rule above) — they are
+not "styles."
+
+### Components & layout templates: reuse, don't reinvent
+
+Compose menus from the canonical components so arrangement is consistent across
+(and within) screens:
+
+- **Action rows** — a service/item row is `icon · info · button`, built as
+  `.shop-row` containing a `.loot-icon`, a `.shop-row-info`
+  (`.shop-row-name` + `.shop-row-sub`), and a **`.act-btn`**. The cost is **baked
+  into the button** (e.g. `120g`); add `.short` when unaffordable (turns red,
+  disable it), `.is-active` for an owned/current/maxed state (gold), or a verb/
+  state word (`Free`, `TAKE`, `MAX`, 🔒) when there's no gold cost. Do **not**
+  reintroduce a separate faint price span + verb button.
+- **Rows with buttons aren't whole-bar clickable** — add `.has-actions` to any
+  row that carries its own `.act-btn`(s); only the button acts. Put multiple
+  buttons in a `.row-actions` wrapper. Reserve whole-row `onclick` for
+  single-target navigation rows (e.g. picking which item to enchant).
+- **Modal chrome** — every popup's title bar is a **`.modal-head`** with a
+  `.modal-head__flank` (left) + centered `.modal-head__title` +
+  `.modal-head__flank.right`. Navigation is a real **`.modal-nav-btn`**, never a
+  bare glyph:
+  - **Back** sits in the **left** flank and returns to whatever opened the modal.
+  - **Close (✕)** sits in the **right** flank and dismisses a standalone overlay
+    back to gameplay.
+  - Rule: opened **from another menu** → show Back; **standalone** overlay →
+    show Close; the **town hub shows neither** (you leave via the dungeon
+    portal). A screen with a parent shows Back to it (e.g. Keybindings → Back to
+    Settings), not a Close.
+  - **Titles are always centered** (the equal-width flanks keep them centered
+    with 0, 1 or 2 buttons present).
+- **Backdrop / z-index / scrim** use the shared `--scrim` and `--z-*` tokens.
+  Blocking event cards (death, hardcore death, conquest, greed, reset-run) keep
+  **no** Back/Close on purpose — the player must choose an action.
+
+### Overriding a template — always ask first
+
+The whole point of the system is a cohesive look, so **do not quietly one-off a
+templated style or layout.** If a request would override a token, a component
+class, or a layout convention for just one spot:
+
+1. **Point out** that the game uses shared tokens/templates to keep every screen
+   cohesive, and that a local override will drift from the rest.
+2. **Ask which they want:**
+   - **Change it everywhere** — update the token or component so the whole game
+     moves together (this is the default and almost always the right answer), or
+   - **A deliberate one-off exception** — if they truly want just this spot
+     different, do it, but add a brief code comment saying it's an intentional
+     exception and why.
+
+Never assume a one-off is fine. Some collaborators will actively override
+templates ad hoc; it is your job to surface the cohesion cost and get an
+explicit choice before fragmenting the system.
+
+### Guard
+
+Run `node tools/styles-lint.js` before committing UI changes — it flags
+hardcoded hex colors in CSS (an error), hex in inline `style=` attributes, and
+off-scale font-sizes / raw `rgba()` that bypass the token system, so drift is
+caught instead of silently accumulating. It exits non-zero on any ERROR.
+
 ## Workflow Claude should follow
 
 When asked to make a change:
